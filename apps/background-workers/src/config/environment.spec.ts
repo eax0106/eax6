@@ -20,6 +20,8 @@ function environment(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 describe("loadExecutorWorkerEnvironment", () => {
   it("keeps local Temporal unversioned without Cloud credentials", () => {
     expect(loadExecutorWorkerEnvironment(environment())).toEqual({
+      runtimeMode: "mock",
+      configSource: "local-file",
       temporalAddress: "temporal.internal:7233",
       temporalNamespace: "engine",
       temporalApiKey: undefined,

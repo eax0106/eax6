@@ -13,7 +13,6 @@ from src.agent_auto_creation.instructions_client import (
 from src.capability_resolver import NodeRequirement, ToolRequirement
 
 
-
 def test_rejects_an_interpolated_alter_authored_system_prompt() -> None:
     with pytest.raises(ValueError, match="registered module-level constant"):
         _alter_authored_system_message(f"{_SYSTEM_PROMPT}\ncapability=tenant text")
