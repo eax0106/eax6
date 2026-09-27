@@ -1,5 +1,6 @@
 import { MiddlewareConsumer, Module, NestModule } from "@nestjs/common";
 import { StaffController } from "./staff.controller";
+import { StaffSessionController } from "./staff-session.controller";
 import { StaffAuthMiddleware } from "./staff.middleware";
 import { StaffRepository } from "./staff.repository";
 import { StaffService } from "./staff.service";
@@ -10,7 +11,7 @@ import { sharedPool } from "../db/shared-pool";
 
 @Module({
   imports: [AdminAuditModule],
-  controllers: [StaffController, SupportAccessController],
+  controllers: [StaffController, StaffSessionController, SupportAccessController],
   providers: [
     {
       provide: StaffRepository,
@@ -24,6 +25,6 @@ import { sharedPool } from "../db/shared-pool";
 })
 export class StaffModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(StaffAuthMiddleware).forRoutes(StaffController);
+    consumer.apply(StaffAuthMiddleware).forRoutes(StaffController, StaffSessionController);
   }
 }

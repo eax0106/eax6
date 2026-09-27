@@ -5,6 +5,7 @@ import { AuthLayout } from "@/layout/auth-layout"
 import { SignIn } from "@/features/auth/pages/sign-in"
 import { SignUp } from "@/features/auth/pages/sign-up"
 import { AuthCallback } from "@/features/auth/pages/auth-callback"
+import { StaffCallback } from "@/features/admin/pages/staff-callback"
 import { OnboardingWizard } from "@/features/onboarding/pages/onboarding-wizard"
 import { Dashboard } from "@/features/dashboard/pages"
 import { Home, ConversationsList, ConversationDetail } from "@/features/conversations/pages"
@@ -184,6 +185,12 @@ export const router = createBrowserRouter([
   {
     path: "/",
     element: <Navigate to="/app/home" replace />,
+  },
+  {
+    // Staff sign-in lands here (task B1.0); staff are not tenant users, so
+    // this sits outside /app and its tenant session.
+    path: "/staff/callback",
+    element: <StaffCallback />,
   },
   {
     path: "/auth",

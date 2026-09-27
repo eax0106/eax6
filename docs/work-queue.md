@@ -22,6 +22,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 ### Track B — platform wiring
 | # | Item | Status |
 |---|---|---|
+| B1.0 | Staff sign-in for the admin console: nothing issued the staff cookie, so no admin screen could ever authenticate. PKCE against the staff Auth0 tenant, cookie only for recognised staff, live-mode gate and callback page. | done (this PR) |
 | B1.1 | admin-tenants | todo |
 | B1.2 | admin-users | todo |
 | B1.3 | audit | todo |
@@ -90,5 +91,6 @@ policy from #212 lifted for it only when its live adapter is verified.
 | 6.1b | Auth0 tenant (real sign-in), EC2 size and monthly cost approval, domain for HTTPS |
 | 6.2b | Temporal Cloud account and API key in Secrets Manager |
 | 5.2 live proof | GitHub OAuth app, client id/secret in Secrets Manager |
+| B1 live proof | A staff Auth0 tenant with a PKCE app (callback `<origin>/staff/callback`), and each staff member added to `staff_users` |
 | C30 | Build §16's four approval modes, or amend §16; plus open question 8 (notification channel) |
 | C32 | Grant this repository write on the GHCR packages, rename our images, or turn `images` publishing off here |

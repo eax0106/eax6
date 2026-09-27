@@ -3,9 +3,30 @@ import { Outlet, Navigate } from "react-router-dom"
 import { AdminSidebar } from "./admin-sidebar"
 import { usePermissions } from "@/features/permissions/hooks/usePermissions"
 import { Topbar } from "@/layout/topbar"
+import { isLiveApi } from "@/api/http"
+import { StaffGate } from "./staff-gate"
 
 export function AdminLayout() {
+  // Live: staff session from the staff identity provider. Mock: the demo permission.
+  if (isLiveApi) {
+    return (
+      <StaffGate>
+        <AdminShell />
+      </StaffGate>
+    )
+  }
+  return <MockAdminLayout />
+}
+
+function MockAdminLayout() {
   const { can } = usePermissions()
+  if (!can("admin.access")) {
+    return <Navigate to="/app" replace />
+  }
+  return <AdminShell />
+}
+
+function AdminShell() {
   const [collapsed, setCollapsed] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -20,11 +41,6 @@ export function AdminLayout() {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
-
-  // Requires admin.access to even render this layout
-  if (!can("admin.access")) {
-    return <Navigate to="/app" replace />
-  }
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-50 overflow-hidden font-sans">
