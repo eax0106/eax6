@@ -175,6 +175,7 @@ Some behaviour can only be measured against a real model. The local recipe
 
 Live golden sets in the repository run only when their variable is set:
 `PLANNER_TOOL_NAMING_LIVE_MODEL_GATEWAY` (intelligence-service) and
+`AGENT_INSTRUCTIONS_LIVE_MODEL_GATEWAY` (intelligence-service), and
 `AGENT_IDENTITY_LIVE_MODEL_GATEWAY` (orchestration-service). The gateway caches
 answers per tenant by prompt similarity, so a live evaluation must plan as a
 fresh tenant each run, or it replays earlier answers.

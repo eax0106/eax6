@@ -175,7 +175,11 @@ function fakeDispatchClient(): {
   };
 }
 
-const CONFIG = { taskQueue: "conversation-lifecycle", idleTimeoutSeconds: 1_800 };
+const CONFIG = {
+  taskQueue: "conversation-lifecycle",
+  idleTimeoutSeconds: 1_800,
+  historyRolloverEventCount: 500,
+};
 
 describe("ConversationDispatchService", () => {
   it("creates a new conversation for a first-time subject and dispatches the message", async () => {

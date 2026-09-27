@@ -225,19 +225,21 @@ export interface WorkflowEdge {
   label?: string
 }
 
+/**
+ * A compiled version of a workflow, as the Deployment Manager reads it.
+ * The statuses are the lifecycle service's own, and `trafficPercent` is set
+ * only while a version is serving as the canary.
+ */
 export interface WorkflowVersion {
   id: string
-  workflowId: string
   version: number
+  status: "compiled" | "tested" | "canary" | "promoted" | "rolled_back" | "retired"
+  dagSchemaVersion: string
+  trafficPercent: number | null
+  evaluationRunId: string | null
+  testedAt: string | null
+  evaluationFailedAt: string | null
   createdAt: string
-  createdBy: {
-    id: string
-    name: string
-    avatarUrl?: string
-  }
-  summary?: string
-  nodes: WorkflowNode[]
-  edges: WorkflowEdge[]
 }
 
 export interface NodePortDefinition {

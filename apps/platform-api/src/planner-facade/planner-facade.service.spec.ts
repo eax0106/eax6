@@ -1,7 +1,7 @@
 import { PlannerClient, type PlannerHttpClient } from "@alterx/adapters";
 import { describe, expect, it, vi } from "vitest";
 
-import { PlannerFacadeService } from "./planner-facade.service";
+import { compilerServiceAddress, PlannerFacadeService } from "./planner-facade.service";
 import { TenantDataResidencyError, type TenantResidencyRepository } from "./tenant-residency.repository";
 import { WorkflowSafeguardsError, type WorkflowSafeguardsService } from "./workflow-safeguards.service";
 import { CompilerServiceClient } from "./compiler-client";
@@ -382,5 +382,34 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const understandBody = http.calls[0]!.body as { tenant_id: string; workspace_id: string };
     expect(understandBody.tenant_id).toBe(TENANT_ID);
     expect(understandBody.workspace_id).toBe(WORKSPACE_ID);
+  });
+});
+
+describe("compilerServiceAddress", () => {
+  // Every other spec in this file injects a fake CompilerServiceClient, so the
+  // address the real one would have been built with was never asserted. That is
+  // exactly how it came to point at 127.0.0.1:50071, a port nothing binds,
+  // leaving POST /api/v1/workflows/:workflowId/actions/plan unable to complete.
+  it("defaults to the port orchestration-service actually binds the compiler on", () => {
+    expect(compilerServiceAddress({})).toBe("127.0.0.1:50056");
+  });
+
+  it("never defaults into the eval harness port band", () => {
+    // 50050-50069 are real service surfaces; 50070 upwards is the eval
+    // harness, which binds its own servers on ports it chooses per run. A
+    // default in that band answers nothing and times out.
+    const port = Number(compilerServiceAddress({}).split(":")[1]);
+    expect(port).toBeGreaterThanOrEqual(50050);
+    expect(port).toBeLessThan(50070);
+  });
+
+  it("prefers an explicit COMPILER_GRPC_TARGET", () => {
+    expect(compilerServiceAddress({ COMPILER_GRPC_TARGET: "orchestration:50056" })).toBe(
+      "orchestration:50056",
+    );
+  });
+
+  it("falls back to the default when the override is blank", () => {
+    expect(compilerServiceAddress({ COMPILER_GRPC_TARGET: "   " })).toBe("127.0.0.1:50056");
   });
 });

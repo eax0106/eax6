@@ -16,11 +16,13 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
 from collections.abc import Generator
 from concurrent import futures
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn
 
 import grpc
 import psycopg2
@@ -64,6 +66,49 @@ from src.execution.workflow_client import WorkflowEvalClient
 
 SERVICE_ROOT = Path(__file__).parent.parent
 REPO_ROOT = SERVICE_ROOT.parents[1]
+
+
+def _running_in_ci() -> bool:
+    """True on a CI runner. GitHub Actions sets CI=true for every job."""
+    return os.environ.get("CI", "").strip().lower() in {"1", "true", "yes"}
+
+
+def venv_python(app_root: Path) -> Path:
+    """Interpreter inside a sibling app's uv virtualenv, on either platform.
+
+    uv puts it in .venv/bin on POSIX and .venv/Scripts on Windows. The
+    hardcoded POSIX path made every fixture that spawns a sibling service
+    skip silently on Windows, so these tests could not be run at all on a
+    Windows machine and nothing said why.
+    """
+    if sys.platform == "win32":
+        return app_root / ".venv" / "Scripts" / "python.exe"
+    return app_root / ".venv" / "bin" / "python"
+
+
+def missing_prerequisite(reason: str) -> NoReturn:
+    """Skip on a developer machine, fail on CI.
+
+    A missing sibling virtualenv or dist build is an ordinary local setup
+    gap, and skipping over it is right on a laptop. On CI it is a lie: the
+    workflow installs and builds everything before the tests run, so a
+    fixture that skips there reports "fine" about something it never
+    checked.
+
+    That is not hypothetical. #220's regression passed four pull-request
+    checks and sat on a red main for a day, because the affected-graph
+    sweep never built model-gateway on those PRs, and the fixture that
+    needs dist/apps/model-gateway/main.js quietly skipped itself each
+    time. CI now builds every project, so a guard firing there is a real
+    failure.
+    """
+    if _running_in_ci():
+        raise AssertionError(
+            "prerequisite missing on CI, which builds and installs "
+            "everything before tests run, so this is a real failure and "
+            f"not a setup gap: {reason}"
+        )
+    pytest.skip(reason)
 
 # Single-domain tests never exercise the other domains' clients -- an
 # unreachable placeholder is real and honest (never silently mocked), just
@@ -283,9 +328,9 @@ def verification_server_target(
     skipping for every test that merely depends on it.
     """
     verification_root = REPO_ROOT / "apps" / "verification-service"
-    verification_python = verification_root / ".venv" / "bin" / "python"
+    verification_python = venv_python(verification_root)
     if not verification_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/verification-service/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -367,14 +412,14 @@ def verification_severity_server_target() -> Generator[tuple[str, str], None, No
     orchestration_root = REPO_ROOT / "apps" / "orchestration-service"
     migrate_dist = REPO_ROOT / "dist" / "apps" / "orchestration-service" / "eval_migrate_only.js"
     verification_root = REPO_ROOT / "apps" / "verification-service"
-    verification_python = verification_root / ".venv" / "bin" / "python"
+    verification_python = venv_python(verification_root)
     if not migrate_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "orchestration-service eval build not present -- run "
             "`pnpm exec nx run orchestration-service:build` first."
         )
     if not verification_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/verification-service/.venv not present -- run `uv sync` there first."
         )
     with PostgresContainer(image="postgres:16-alpine", dbname="orchestration_db") as postgres:
@@ -428,7 +473,7 @@ def audit_server_target(local_m2m_issuer: LocalM2mIssuer) -> Generator[str, None
     """
     audit_dist = REPO_ROOT / "dist" / "apps" / "audit-service" / "eval_bootstrap.js"
     if not audit_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "audit-service eval build not present -- run "
             "`pnpm exec nx run audit-service:build` first."
         )
@@ -472,9 +517,9 @@ def intelligence_server_target(
     boundary while keeping project golden-set expectations reproducible.
     """
     intelligence_root = REPO_ROOT / "apps" / "intelligence-service"
-    intelligence_python = intelligence_root / ".venv" / "bin" / "python"
+    intelligence_python = venv_python(intelligence_root)
     if not intelligence_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/intelligence-service/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -536,9 +581,9 @@ def ads_core_server_target() -> Generator[str, None, None]:
     this uses a disclosed non-production embedding technique instead of
     ads-core's real Bedrock-backed production entrypoint.
     """
-    ads_core_python = REPO_ROOT / "apps" / "ads-core" / ".venv" / "bin" / "python"
+    ads_core_python = venv_python(REPO_ROOT / "apps" / "ads-core")
     if not ads_core_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/ads-core/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -608,7 +653,7 @@ def orchestration_intent_server_target(
         REPO_ROOT / "dist" / "apps" / "orchestration-service" / "eval_intent_grpc_server.js"
     )
     if not model_gateway_dist.exists() or not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "model-gateway/orchestration-service eval builds not present -- run "
             "`pnpm exec nx run model-gateway:build` and "
             "`pnpm exec nx run orchestration-service:build` first "
@@ -1274,9 +1319,9 @@ def architecture_server_target(
     exists.
     """
     intelligence_root = REPO_ROOT / "apps" / "intelligence-service"
-    intelligence_python = intelligence_root / ".venv" / "bin" / "python"
+    intelligence_python = venv_python(intelligence_root)
     if not intelligence_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/intelligence-service/.venv not present -- run `uv sync` there first"
         )
     with PostgresContainer(
@@ -1734,7 +1779,7 @@ def security_eval_server_target(
         REPO_ROOT / "dist" / "apps" / "orchestration-service" / "eval_security_http_server.js"
     )
     if not model_gateway_dist.exists() or not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "model-gateway/orchestration-service eval builds not present -- run "
             "`pnpm exec nx run model-gateway:build` and "
             "`pnpm exec nx run orchestration-service:build` first."
@@ -1805,9 +1850,9 @@ def ads_core_upload_server_target() -> Generator[str, None, None]:
     validator to accept it -- it's never checked against anything (no
     deletion routes are exercised by this fixture).
     """
-    ads_core_python = REPO_ROOT / "apps" / "ads-core" / ".venv" / "bin" / "python"
+    ads_core_python = venv_python(REPO_ROOT / "apps" / "ads-core")
     if not ads_core_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/ads-core/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -1980,9 +2025,9 @@ def ads_isolation_server_target() -> Generator[str, None, None]:
     -- real Postgres RLS is what's actually under test here, not an
     application-level filter.
     """
-    ads_core_python = REPO_ROOT / "apps" / "ads-core" / ".venv" / "bin" / "python"
+    ads_core_python = venv_python(REPO_ROOT / "apps" / "ads-core")
     if not ads_core_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/ads-core/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -2031,7 +2076,7 @@ def tool_gateway_server_target(
     tool_gateway_root = REPO_ROOT / "apps" / "tool-gateway"
     tool_gateway_dist = REPO_ROOT / "dist" / "apps" / "tool-gateway" / "main.js"
     if not tool_gateway_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "tool-gateway eval build not present -- run "
             "`pnpm exec nx run tool-gateway:build` first."
         )
@@ -2088,7 +2133,7 @@ def tool_gateway_consume_server_target(
         REPO_ROOT / "dist" / "apps" / "tool-gateway" / "eval_credential_grpc_server.js"
     )
     if not tool_gateway_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "tool-gateway eval build not present -- run "
             "`pnpm exec nx run tool-gateway:build` first."
         )
@@ -2171,7 +2216,7 @@ def platform_credential_server_target() -> Generator[tuple[str, str], None, None
     platform_root = REPO_ROOT / "apps" / "platform-api"
     platform_dist = REPO_ROOT / "dist" / "apps" / "platform-api" / "eval_credential_http_server.js"
     if not platform_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "platform-api eval build not present -- run "
             "`pnpm exec nx run platform-api:build` first."
         )
@@ -2228,7 +2273,7 @@ def idempotency_replay_server_targets() -> Generator[tuple[str, str, str], None,
     platform_root = REPO_ROOT / "apps" / "platform-api"
     platform_dist = REPO_ROOT / "dist" / "apps" / "platform-api" / "eval_credential_http_server.js"
     if not platform_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "platform-api eval build not present -- run "
             "`pnpm exec nx run platform-api:build` first."
         )
@@ -2300,9 +2345,9 @@ def ingestion_server_target() -> Generator[tuple[str, str], None, None]:
     for everything else this test never exercises.
     """
     ads_core_root = REPO_ROOT / "apps" / "ads-core"
-    ads_core_python = ads_core_root / ".venv" / "bin" / "python"
+    ads_core_python = venv_python(ads_core_root)
     if not ads_core_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/ads-core/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -2378,9 +2423,9 @@ def policy_server_target() -> Generator[tuple[str, str], None, None]:
     exercising the real security boundary.
     """
     memory_service_root = REPO_ROOT / "apps" / "memory-service"
-    memory_service_python = memory_service_root / ".venv" / "bin" / "python"
+    memory_service_python = venv_python(memory_service_root)
     if not memory_service_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/memory-service/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -2470,9 +2515,9 @@ def memory_drift_server_target() -> Generator[tuple[str, str], None, None]:
     module doc.
     """
     memory_service_root = REPO_ROOT / "apps" / "memory-service"
-    memory_service_python = memory_service_root / ".venv" / "bin" / "python"
+    memory_service_python = venv_python(memory_service_root)
     if not memory_service_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/memory-service/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
@@ -2571,7 +2616,7 @@ def run_visibility_server_target() -> Generator[tuple[str, str], None, None]:
         / "eval_run_visibility_http_server.js"
     )
     if not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "orchestration-service eval build not present -- run "
             "`pnpm exec nx run orchestration-service:build` first."
         )
@@ -2620,7 +2665,7 @@ def workflow_read_server_target() -> Generator[tuple[str, str], None, None]:
         / "eval_workflow_read_http_server.js"
     )
     if not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "orchestration-service eval build not present -- run "
             "`pnpm exec nx run orchestration-service:build` first."
         )
@@ -2657,20 +2702,30 @@ def agent_binding_server_target(
     for agent_selection_binding, backed by a real, live model-gateway
     (production main.ts, default local-file config source, mock runtime mode) so
     SelectionBindingEngine.bind()'s real GrpcEmbeddingClient.embed() call
-    actually succeeds -- see agent_binding_client.py's own module doc for
-    why mock config source needs no live LLM key here (only the
-    embedding provider is exercised, not the model provider).
+    actually succeeds.
+
+    Mock config source is enough for the embedding provider but no longer
+    for the whole operation. Since #220, creating a persona for a no-match
+    node drafts its instructions through the model
+    (AgentInstructionsClient.draft_instructions), so the model provider is
+    exercised too and needs a live key. Without one the router answers 503
+    and the case cannot complete, which is why agent_selection_binding sits
+    in the live-key bucket of
+    test_tenant_isolation_golden_set_executes_for_real_where_wired rather
+    than among the operations asserted to pass unconditionally. The earlier
+    version of this docstring claimed only the embedding provider was
+    exercised; that stopped being true in #220.
     """
     intelligence_root = REPO_ROOT / "apps" / "intelligence-service"
-    intelligence_python = intelligence_root / ".venv" / "bin" / "python"
+    intelligence_python = venv_python(intelligence_root)
     if not intelligence_python.exists():
-        pytest.skip(
+        missing_prerequisite(
             "apps/intelligence-service/.venv not present -- run `uv sync` there first "
             "(same real dependency this test always needed, just not eval-service's own venv)"
         )
     model_gateway_dist = REPO_ROOT / "dist" / "apps" / "model-gateway" / "main.js"
     if not model_gateway_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "model-gateway build not present -- run "
             "`pnpm exec nx run model-gateway:build` first."
         )
@@ -2772,7 +2827,7 @@ def project_read_server_target() -> Generator[tuple[str, str], None, None]:
         / "eval_project_read_http_server.js"
     )
     if not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "orchestration-service eval build not present -- run "
             "`pnpm exec nx run orchestration-service:build` first."
         )
@@ -2968,7 +3023,6 @@ def test_tenant_isolation_golden_set_executes_for_real_where_wired(
             "ads_upload_download",
             "workflow_get",
             "workflow_update",
-            "agent_selection_binding",
             "project_get",
             "project_deploy",
         )
@@ -2978,33 +3032,49 @@ def test_tenant_isolation_golden_set_executes_for_real_where_wired(
         # platform_credential_delete, idempotency_replay, policy_read,
         # recovery_node_lookup, run_stream_subscribe, verification_score_node,
         # audit_event_read, memory_drift_observations, ads_upload_download,
-        # workflow_get, workflow_update, agent_selection_binding, project_get,
-        # project_deploy are real and must always pass regardless of
-        # whether a real LLM key is available. All 20 of 20 tenant-
-        # isolation cases HARD-7g targeted are real.
-        assert len(real_results) == 19
+        # workflow_get, workflow_update, project_get, project_deploy are real
+        # and must always pass regardless of whether a real LLM key is
+        # available. All 20 of 20 tenant-isolation cases HARD-7g targeted are
+        # real; two of the 20 additionally need a live key, below.
+        assert len(real_results) == 18
         assert all(row.verdict == "pass" for row in real_results)
 
-        # model_gateway_cache is real but, like injection's LLM-dependent
-        # suites, needs a real live ANTHROPIC_API_KEY/OPENAI_API_KEY to
-        # populate the real cache in the first place -- its pass/fail is
-        # not asserted here (same pattern as
+        # Two operations are real but, like injection's LLM-dependent suites,
+        # need a real live ANTHROPIC_API_KEY/OPENAI_API_KEY before they can
+        # succeed. Their pass/fail is not asserted here (same pattern as
         # test_injection_golden_set_executes_for_real's ssrf/upload-only
-        # assertion), it just must never fall into the "unsupported
+        # assertion); they must only never fall into the "unsupported
         # operation" bucket below.
+        #
+        #   model_gateway_cache needs a live key to populate the real cache in
+        #   the first place.
+        #
+        #   agent_selection_binding joined them in #220, which replaced the
+        #   template persona description with one drafted by the model:
+        #   AgentAutoCreationEngine now calls
+        #   AgentInstructionsClient.draft_instructions() through model-gateway,
+        #   and selection_binding's router answers 503 when that is
+        #   unavailable. This fixture runs model-gateway with
+        #   ALTER_CONFIG_SOURCE=mock and no live key, so binding a
+        #   no-match node cannot complete here. Refusing to bind is the
+        #   intended behaviour -- #220 exists so that an auto-created agent
+        #   never carries template instructions -- so the assertion moved
+        #   rather than the engine gaining a fallback.
+        #
         # On a real exception (e.g. no live LLM key -> unreachable target),
         # the generic per-case except clause's details dict only has
         # "error" (embedding the operation name inline via repr), not a
         # top-level "operation" key -- check both shapes.
+        live_key_operations = ("model_gateway_cache", "agent_selection_binding")
         live_key_dependent_results = [
             row
             for row in results
-            if row.details.get("operation") == "model_gateway_cache"
-            or "'model_gateway_cache'" in row.details.get("error", "")
+            if row.details.get("operation") in live_key_operations
+            or any(f"'{name}'" in row.details.get("error", "") for name in live_key_operations)
         ]
-        assert len(live_key_dependent_results) == 1
-        live_key_error = live_key_dependent_results[0].details.get("error", "")
-        assert "unsupported operation" not in live_key_error
+        assert len(live_key_dependent_results) == len(live_key_operations)
+        for row in live_key_dependent_results:
+            assert "unsupported operation" not in row.details.get("error", "")
 
         excluded = [*real_results, *live_key_dependent_results]
         unsupported_results = [row for row in results if row not in excluded]
@@ -3138,7 +3208,7 @@ def recovery_server_target() -> Generator[tuple[str, str], None, None]:
         REPO_ROOT / "dist" / "apps" / "orchestration-service" / "eval_recovery_grpc_server.js"
     )
     if not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "orchestration-service eval build not present -- run "
             "`pnpm exec nx run orchestration-service:build` first."
         )
@@ -3322,7 +3392,7 @@ def trigger_registry_server_target() -> Generator[tuple[str, str], None, None]:
         / "eval_trigger_registry_http_server.js"
     )
     if not orchestration_dist.exists():
-        pytest.skip(
+        missing_prerequisite(
             "orchestration-service eval build not present -- run "
             "`pnpm exec nx run orchestration-service:build` first."
         )

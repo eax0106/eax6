@@ -68,12 +68,12 @@ describe("RunService", () => {
 
   it("aggregates all five real sub-resources without reshaping opaque items", async () => {
     const executionA = {
-      node_execution_id: "node_018f47a5-7b2c-7d10-8f11-123456789abc",
+      id: "node_018f47a5-7b2c-7d10-8f11-123456789abc",
       result: { answer: 42 },
       engine_extension: "kept",
     };
     const executionB = {
-      node_execution_id: "node_018f47a5-7b2c-7d10-8f11-123456789abd",
+      id: "node_018f47a5-7b2c-7d10-8f11-123456789abd",
       result: null,
     };
     const verification = { verification_id: "ver_1", score: 0.98 };

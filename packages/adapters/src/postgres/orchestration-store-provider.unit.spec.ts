@@ -441,3 +441,40 @@ describe("sharedOrchestrationPoolFactory", () => {
     void systemScoped.end();
   });
 });
+
+describe("static connections require TLS", () => {
+  const remote = "postgresql://svc:pw@db.managed-postgres.example.com/orchestration_db";
+
+  function captureConfig(connectionString: string): PoolConfig | undefined {
+    let captured: PoolConfig | undefined;
+    new PostgresOrchestrationStoreProvider(
+      { authentication: "static", connectionString, migrationsFolder },
+      {
+        poolFactory: (config) => {
+          captured = config;
+          return { on: vi.fn() } as unknown as Pool;
+        },
+      },
+    );
+    return captured;
+  }
+
+  it("refuses a remote connection string that does not ask for TLS", () => {
+    expect(() => captureConfig(remote)).toThrow(/sslmode/);
+    expect(() => captureConfig(`${remote}?sslmode=disable`)).toThrow(/sslmode/);
+  });
+
+  it("verifies the certificate when the connection string requires TLS", () => {
+    expect(captureConfig(`${remote}?sslmode=verify-full`)?.ssl).toEqual({
+      rejectUnauthorized: true,
+    });
+  });
+
+  it.each([
+    ["loopback, as testcontainers and the local stack use", "postgresql://u:p@127.0.0.1:5433/orchestration_db"],
+    ["a container DNS name, as compose services use", "postgresql://u:p@engine-db:5432/orchestration_db"],
+    ["a private address, as one VPC or host network uses", "postgresql://u:p@10.0.3.17:5432/orchestration_db"],
+  ])("connects without TLS over %s", (_name, connectionString) => {
+    expect(captureConfig(connectionString)?.ssl).toBeUndefined();
+  });
+});

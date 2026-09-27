@@ -375,6 +375,9 @@ describe("WorkflowController routes", () => {
     expect(workflowDeferredCapabilities).toEqual([]);
     const workflowVersionId = "wfv_018f47a5-7b2c-7d10-8f11-123456789abc";
     const actionCases = [
+      // test-version first: a compiled version cannot be promoted or
+      // canaried until it has been tested, and nothing exposed this route.
+      ["test-version", { workflowVersionId }],
       ["promote-version", { workflowVersionId }],
       ["start-canary", { workflowVersionId, trafficPercent: 10 }],
       ["rollback", { workflowVersionId }],

@@ -1,0 +1,51 @@
+# Build context for docker/Dockerfile.node and docker/Dockerfile.python.
+#
+# Two jobs. The first is size: the workspace carries several node_modules trees
+# and five Python virtualenvs, and every one of them is rebuilt inside the image
+# from a lockfile, so shipping them into the context only slows the build.
+#
+# The second job matters more. A file that reaches the context can end up in an
+# image layer, and an image layer is readable by anyone who can pull the image.
+# Nothing holding a credential may enter: the .env files, Terraform variable
+# files and state, and the AWS profile directory are excluded for that reason
+# and not for size. Keep new secret-bearing paths on this list.
+
+# Dependency trees and virtualenvs -- rebuilt from lockfiles inside the image
+node_modules
+**/node_modules
+.venv
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# Build output -- rebuilt inside the image
+dist
+**/dist
+.nx
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+coverage
+**/coverage
+
+# Never in an image layer
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/terraform.tfvars
+infrastructure/terraform/state
+infrastructure/terraform/**/.terraform
+**/*.tfstate
+**/*.tfstate.*
+.aws
+**/*.pem
+**/*.p12
+
+# Repository plumbing the build never reads
+.git
+.github
+.vscode
+.idea
+**/*.log

@@ -26,6 +26,13 @@ export interface TemporalConnectionConfig {
   readonly namespace: string;
   readonly apiKey?: string;
   readonly taskQueue: string;
+  readonly workerDeployment?: TemporalWorkerDeploymentConfig;
+  readonly minimumRetentionDays?: number;
+}
+
+export interface TemporalWorkerDeploymentConfig {
+  readonly deploymentName: string;
+  readonly buildId: string;
 }
 
 export class TemporalConfigurationError extends Error {

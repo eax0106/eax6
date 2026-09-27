@@ -24,6 +24,7 @@ export interface OrchestrationTenantStore {
 export interface ConversationDispatchServiceConfig {
   readonly taskQueue: string;
   readonly idleTimeoutSeconds: number;
+  readonly historyRolloverEventCount: number;
 }
 
 type ConversationChannel = IncomingConversationMessage["channel"];
@@ -84,6 +85,7 @@ export class ConversationDispatchService {
           tenantId,
           conversationId: resolved.conversationId,
           idleTimeoutSeconds: this.config.idleTimeoutSeconds,
+          historyRolloverEventCount: this.config.historyRolloverEventCount,
         },
         signalName: "message",
         signalPayload: { ...signalPayload },

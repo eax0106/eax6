@@ -21,6 +21,7 @@ from testcontainers.community.postgres import PostgresContainer
 from alembic import command
 from src.agent_auto_creation import (
     AgentAutoCreationEngine,
+    AgentInstructionsClient,
     CreatePersonaRequest,
     CreatePersonaResponse,
     PersonaCreationValidationError,
@@ -64,6 +65,23 @@ class FakeEmbeddingClient:
     async def embed(self, *, tenant_id: str, text: str) -> EmbeddingResult:
         self.calls.append((tenant_id, text))
         return EmbeddingResult(vector=self.vector, model_id=self.model_id)
+
+
+class FakeInstructionsClient(AgentInstructionsClient):
+    def __init__(self, instructions: Sequence[str]) -> None:
+        self.instructions = list(instructions)
+        self.calls: list[tuple[str, str, str, NodeRequirement]] = []
+
+    async def draft_instructions(
+        self,
+        *,
+        tenant_id: str,
+        run_id: str,
+        node_key: str,
+        requirement: NodeRequirement,
+    ) -> str:
+        self.calls.append((tenant_id, run_id, node_key, requirement))
+        return self.instructions.pop(0)
 
 
 def vector(first: float, second: float = 0.0) -> list[float]:
@@ -197,6 +215,78 @@ class TestCreatePersonaContract:
 
 
 class TestAgentAutoCreationIntegration:
+    async def test_persists_model_drafted_instructions_on_agent_and_version(
+        self,
+        db_session: AsyncSession,
+    ) -> None:
+        requirement = NodeRequirement(
+            capabilities=["analysis.reasoning", "document.synthesis"],
+            model_alias="STANDARD",
+        )
+        drafted = (
+            "You are an analysis.reasoning and document.synthesis specialist. "
+            "Work only from supplied context, check every conclusion, and state uncertainty."
+        )
+        instructions_client = FakeInstructionsClient([drafted])
+        engine = AgentAutoCreationEngine(
+            db_session,
+            FakeEmbeddingClient(vector(1.0)),
+            instructions_client=instructions_client,
+        )
+
+        outcome = await engine.create_for_no_match(
+            true_no_match(), create_request(requirement), run_id=RUN_ID
+        )
+
+        assert isinstance(outcome, CreatePersonaResponse)
+        stored = (
+            (
+                await db_session.execute(
+                    text(
+                        """
+SELECT a.persona_description, av.persona_description AS version_instructions
+FROM agents AS a
+JOIN agent_versions AS av ON av.agent_id = a.id AND av.tenant_id = a.tenant_id
+WHERE a.id = :agent_id
+"""
+                    ),
+                    {"agent_id": outcome.agent_id},
+                )
+            )
+            .mappings()
+            .one()
+        )
+        assert stored["persona_description"] == drafted
+        assert stored["version_instructions"] == drafted
+        assert json.loads(outcome.persona_json)["persona_description"] == drafted
+        assert instructions_client.calls == [(TENANT_A, RUN_ID, "node.one", requirement)]
+
+    async def test_conflict_returns_the_winners_drafted_instructions(
+        self,
+        db_session: AsyncSession,
+    ) -> None:
+        requirement = NodeRequirement(capabilities=["analysis.reasoning"])
+        instructions_client = FakeInstructionsClient(
+            ["Winner instructions.", "Losing caller instructions."]
+        )
+        engine = AgentAutoCreationEngine(
+            db_session,
+            FakeEmbeddingClient(vector(1.0)),
+            instructions_client=instructions_client,
+        )
+
+        first = await engine.create_for_no_match(
+            true_no_match(), create_request(requirement), run_id=RUN_ID
+        )
+        second = await engine.create_for_no_match(
+            true_no_match(), create_request(requirement), run_id=RUN_ID
+        )
+
+        assert isinstance(first, CreatePersonaResponse)
+        assert isinstance(second, CreatePersonaResponse)
+        assert json.loads(first.persona_json)["persona_description"] == ("Winner instructions.")
+        assert json.loads(second.persona_json)["persona_description"] == ("Winner instructions.")
+
     @pytest.mark.parametrize(
         "reason",
         ["agent_not_required", "preferred_agent_unavailable"],
@@ -206,9 +296,7 @@ class TestAgentAutoCreationIntegration:
         db_session: AsyncSession,
         reason: str,
     ) -> None:
-        no_match = NoAgentMatch.model_validate(
-            {"node_key": "node.one", "reason": reason}
-        )
+        no_match = NoAgentMatch.model_validate({"node_key": "node.one", "reason": reason})
         embedding_client = FakeEmbeddingClient(vector(1.0))
         engine = AgentAutoCreationEngine(db_session, embedding_client)
         request = CreatePersonaRequest(
@@ -248,9 +336,7 @@ class TestAgentAutoCreationIntegration:
         assert isinstance(outcome, CreatePersonaResponse)
         assert outcome.agent_version == 1
         assert uuid.UUID(outcome.agent_id.removeprefix("agt_")).version == 7
-        assert embedding_client.calls == [
-            (TENANT_A, "analysis.reasoning\ndocument.synthesis")
-        ]
+        assert embedding_client.calls == [(TENANT_A, "analysis.reasoning\ndocument.synthesis")]
 
         result = await db_session.execute(
             text(
@@ -298,8 +384,7 @@ WHERE a.id = :agent_id
         assert row["tier"] == "ADVANCED"
         assert row["status"] == "draft"
         assert row["persona_description"] == (
-            "Specialist agent for capabilities: "
-            "analysis.reasoning, document.synthesis."
+            "Specialist agent for capabilities: analysis.reasoning, document.synthesis."
         )
         assert uuid.UUID(str(row["version_id"]).removeprefix("agtv_")).version == 7
         assert uuid.UUID(str(row["embedding_id"]).removeprefix("cemb_")).version == 7
@@ -307,9 +392,7 @@ WHERE a.id = :agent_id
         assert row["is_published"] is True
         assert row["capabilities"] == ["analysis.reasoning", "document.synthesis"]
         assert row["model_alias"] == "ADVANCED"
-        assert row["tools"] == [
-            {"name": "search.web", "permissions": ["web:read"]}
-        ]
+        assert row["tools"] == [{"name": "search.web", "permissions": ["web:read"]}]
         assert row["version_persona_description"] == row["persona_description"]
         assert row["capability_description"] == row["persona_description"]
         assert row["embedding_metadata"] == {
@@ -338,9 +421,7 @@ WHERE a.id = :agent_id
         embedding_client = FakeEmbeddingClient(vector(1.0))
         engine = AgentAutoCreationEngine(db_session, embedding_client)
 
-        outcome = await engine.create_for_no_match(
-            true_no_match(), create_request(requirement)
-        )
+        outcome = await engine.create_for_no_match(true_no_match(), create_request(requirement))
 
         assert isinstance(outcome, NoAgentMatch)
         assert outcome.reason == "no_agent_at_required_tier"
@@ -360,9 +441,7 @@ WHERE a.id = :agent_id
             db_session, FakeEmbeddingClient(vector(1.0)), maximum_tier="CEILING"
         )
 
-        outcome = await engine.create_for_no_match(
-            true_no_match(), create_request(requirement)
-        )
+        outcome = await engine.create_for_no_match(true_no_match(), create_request(requirement))
 
         assert isinstance(outcome, CreatePersonaResponse)
         tier = await db_session.scalar(
@@ -396,13 +475,9 @@ WHERE a.id = :agent_id
         )
         engine = AgentAutoCreationEngine(db_session, FakeEmbeddingClient(vector(1.0)))
 
-        first = await engine.create_for_no_match(
-            true_no_match(), create_request(requirement)
-        )
+        first = await engine.create_for_no_match(true_no_match(), create_request(requirement))
         counts_after_first = await table_counts(db_session)
-        second = await engine.create_for_no_match(
-            true_no_match(), create_request(requirement)
-        )
+        second = await engine.create_for_no_match(true_no_match(), create_request(requirement))
 
         assert isinstance(first, CreatePersonaResponse)
         assert isinstance(second, CreatePersonaResponse)
@@ -422,12 +497,8 @@ WHERE a.id = :agent_id
         forwards = NodeRequirement(capabilities=["a.one", "b.two"], model_alias="FAST")
         backwards = NodeRequirement(capabilities=["b.two", "a.one"], model_alias="FAST")
 
-        first = await engine.create_for_no_match(
-            true_no_match(), create_request(forwards)
-        )
-        second = await engine.create_for_no_match(
-            true_no_match(), create_request(backwards)
-        )
+        first = await engine.create_for_no_match(true_no_match(), create_request(forwards))
+        second = await engine.create_for_no_match(true_no_match(), create_request(backwards))
 
         assert isinstance(first, CreatePersonaResponse)
         assert isinstance(second, CreatePersonaResponse)
@@ -448,9 +519,7 @@ WHERE a.id = :agent_id
             capability_profile_json=requirement.model_dump_json(exclude_none=True),
         )
 
-        first = await engine.create_for_no_match(
-            true_no_match(), create_request(requirement)
-        )
+        first = await engine.create_for_no_match(true_no_match(), create_request(requirement))
         second = await engine.create_for_no_match(true_no_match(), other_workspace)
 
         assert isinstance(first, CreatePersonaResponse)
@@ -583,9 +652,7 @@ WHERE a.id = :agent_id
         existing = await creation_engine.create_for_no_match(
             true_no_match(),
             create_request(
-                NodeRequirement(
-                    capabilities=["analysis.reasoning"], model_alias="STANDARD"
-                )
+                NodeRequirement(capabilities=["analysis.reasoning"], model_alias="STANDARD")
             ),
         )
         assert isinstance(existing, CreatePersonaResponse)
@@ -593,16 +660,12 @@ WHERE a.id = :agent_id
         before = await table_counts(db_session)
         outcome = await binding_engine.bind(
             binding_request(
-                NodeRequirement(
-                    capabilities=["analysis.reasoning"], model_alias="ADVANCED"
-                )
+                NodeRequirement(capabilities=["analysis.reasoning"], model_alias="ADVANCED")
             ),
             binding_context(),
         )
 
-        assert outcome == NoAgentMatch(
-            node_key="node.one", reason="no_agent_at_required_tier"
-        )
+        assert outcome == NoAgentMatch(node_key="node.one", reason="no_agent_at_required_tier")
         assert await table_counts(db_session) == before
 
     async def test_a_created_agent_satisfies_the_tier_that_created_it(
@@ -623,9 +686,7 @@ WHERE a.id = :agent_id
         binding_engine = SelectionBindingEngine(
             db_session,
             embedding_client,
-            persona_creation_engine=AgentAutoCreationEngine(
-                db_session, embedding_client
-            ),
+            persona_creation_engine=AgentAutoCreationEngine(db_session, embedding_client),
         )
 
         first = await binding_engine.bind(binding_request(requirement), binding_context())
@@ -667,9 +728,7 @@ WHERE a.id = :agent_id
             NodeRequirement(capabilities=[]),
             NodeRequirement(
                 capabilities=["analysis.reasoning"],
-                preferred_agent_id=(
-                    "agt_018f47a5-7b2c-7d10-8f11-123456789abc"
-                ),
+                preferred_agent_id=("agt_018f47a5-7b2c-7d10-8f11-123456789abc"),
             ),
         ],
     )

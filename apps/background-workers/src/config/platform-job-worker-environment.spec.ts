@@ -21,15 +21,48 @@ describe("loadPlatformJobWorkerEnvironment", () => {
       temporalNamespace: "platform",
       temporalApiKey: undefined,
       taskQueue: "platform-jobs",
+      workerDeployment: undefined,
+      minimumRetentionDays: undefined,
     });
   });
 
   it("includes a trimmed API key when present", () => {
     expect(
       loadPlatformJobWorkerEnvironment(
-        environment({ TEMPORAL_API_KEY: "  secret-key  " }),
+        environment({
+          TEMPORAL_API_KEY: "  secret-key  ",
+          PLATFORM_TEMPORAL_WORKER_DEPLOYMENT_NAME: " platform-workers ",
+          TEMPORAL_WORKER_BUILD_ID: " git-sha-123 ",
+        }),
       ).temporalApiKey,
     ).toBe("secret-key");
+  });
+
+  it("uses a versioned deployment and validates retention for Temporal Cloud", () => {
+    expect(
+      loadPlatformJobWorkerEnvironment(
+        environment({
+          TEMPORAL_API_KEY: "secret-key",
+          PLATFORM_TEMPORAL_WORKER_DEPLOYMENT_NAME: "platform-workers",
+          TEMPORAL_WORKER_BUILD_ID: "git-sha-123",
+          PLATFORM_TEMPORAL_MINIMUM_RETENTION_DAYS: "30",
+        }),
+      ),
+    ).toMatchObject({
+      workerDeployment: {
+        deploymentName: "platform-workers",
+        buildId: "git-sha-123",
+      },
+      minimumRetentionDays: 30,
+    });
+  });
+
+  it("refuses Cloud startup without deployment identity", () => {
+    expect(() =>
+      loadPlatformJobWorkerEnvironment(
+        environment({ TEMPORAL_API_KEY: "secret-key" }),
+      ),
+    ).toThrow(PlatformJobWorkerConfigurationError);
   });
 
   it("throws PlatformJobWorkerConfigurationError when a required field is missing", () => {
@@ -53,6 +86,8 @@ describe("loadPlatformJobWorkerEnvironment", () => {
       temporalNamespace: "platform",
       temporalApiKey: undefined,
       taskQueue: "platform-jobs",
+      workerDeployment: undefined,
+      minimumRetentionDays: undefined,
     });
   });
 });

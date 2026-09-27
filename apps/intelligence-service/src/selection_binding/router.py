@@ -26,6 +26,12 @@ from src.agent_auto_creation.engine import (
     AgentAutoCreationEngine,
     PersonaCreationValidationError,
 )
+from src.agent_auto_creation.instructions_client import (
+    AgentInstructionsClient,
+    AgentInstructionsError,
+    AgentInstructionsUnavailableError,
+    ModelGatewayAgentInstructionsClient,
+)
 from src.capability_registry.repository import CapabilityRegistryRepository
 from src.capability_resolver.models import NodeType
 from src.db.session import get_db_session
@@ -57,20 +63,27 @@ from src.selection_binding.policy_client import HttpRoutingPolicyClient, Routing
 
 _default_embedding_client: EmbeddingClient | None = None
 _default_policy_client: HttpRoutingPolicyClient | None = None
+_default_instructions_client: ModelGatewayAgentInstructionsClient | None = None
 
 
 @asynccontextmanager
 async def selection_binding_lifespan(app: FastAPI) -> AsyncIterator[None]:
     del app
-    global _default_embedding_client, _default_policy_client
+    global _default_embedding_client, _default_policy_client, _default_instructions_client
 
     from ..config import get_settings
 
     settings = get_settings()
+    token_provider = lazy_auth0_m2m_token_provider_from_settings(settings)
     client = GrpcEmbeddingClient(
         settings.model_gateway_grpc_target,
         timeout_seconds=settings.model_gateway_grpc_timeout_seconds,
-        access_token_provider=lazy_auth0_m2m_token_provider_from_settings(settings),
+        access_token_provider=token_provider,
+    )
+    instructions_client = ModelGatewayAgentInstructionsClient(
+        settings.model_gateway_grpc_target,
+        timeout_seconds=settings.model_gateway_grpc_timeout_seconds,
+        access_token_provider=token_provider,
     )
     # Real shared internal-service credential (memory-service's
     # verify_service_token validates its SHA-256 hash) -- the hardcoded
@@ -85,11 +98,14 @@ async def selection_binding_lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     _default_embedding_client = client
     _default_policy_client = policy_client
+    _default_instructions_client = instructions_client
     try:
         yield
     finally:
         await client.close()
         _default_embedding_client = None
+        await instructions_client.close()
+        _default_instructions_client = None
         await policy_client.close()
         _default_policy_client = None
 
@@ -110,9 +126,18 @@ def get_policy_client() -> RoutingPolicyClient:
     return _default_policy_client
 
 
+def get_instructions_client() -> AgentInstructionsClient:
+    if _default_instructions_client is None:
+        raise RuntimeError(
+            "AgentInstructionsClient not initialised -- call selection_binding_lifespan first"
+        )
+    return _default_instructions_client
+
+
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
 EmbeddingClientDep = Annotated[EmbeddingClient, Depends(get_embedding_client)]
 PolicyClientDep = Annotated[RoutingPolicyClient, Depends(get_policy_client)]
+InstructionsClientDep = Annotated[AgentInstructionsClient, Depends(get_instructions_client)]
 
 router = APIRouter(prefix="/selection-binding", tags=["selection-binding"])
 
@@ -145,12 +170,14 @@ async def bind_agent_model_tool(
     session: SessionDep,
     embedding_client: EmbeddingClientDep,
     policy_client: PolicyClientDep,
+    instructions_client: InstructionsClientDep,
 ) -> BindingOutcome:
     from ..config import get_settings
 
     persona_creation_engine = AgentAutoCreationEngine(
         session,
         embedding_client,
+        instructions_client=instructions_client,
         maximum_tier=get_settings().agent_auto_creation_max_tier,
     )
     engine = SelectionBindingEngine(
@@ -184,6 +211,12 @@ async def bind_agent_model_tool(
     except EmbeddingTransportUnavailableError as exc:
         await session.rollback()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except AgentInstructionsUnavailableError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except AgentInstructionsError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception:
         await session.rollback()
         raise

@@ -402,6 +402,51 @@ describe("createPlatformJobHandlers", () => {
     expect(result).toEqual({ valid: true, checkedEvents: 12 });
   });
 
+  it("relays a full audit chain verification to the genesis-walk route", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ valid: true, checkedEvents: 4_200 }),
+      text: async () => "",
+    })) as unknown as typeof fetch;
+    const handlers = createPlatformJobHandlers({
+      auditServiceInternalBaseUrl: "http://audit-service.internal",
+      auditChainVerifyServiceToken: "real-token",
+      fetchImpl,
+    });
+
+    const result = await handlers.get("platform.audit-chain-full-verify")!({});
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://audit-service.internal/internal/audit-events/verify-chain/full",
+      { method: "POST", headers: { authorization: "Bearer real-token" } },
+    );
+    expect(result).toEqual({ valid: true, checkedEvents: 4_200 });
+  });
+
+  it("surfaces a broken full audit chain as a job failure", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        valid: false,
+        checkedEvents: 100,
+        issue: "previous-hash-mismatch",
+        eventId: "aud_old",
+      }),
+      text: async () => "",
+    })) as unknown as typeof fetch;
+    const handlers = createPlatformJobHandlers({
+      auditServiceInternalBaseUrl: "http://audit-service.internal",
+      auditChainVerifyServiceToken: "real-token",
+      fetchImpl,
+    });
+
+    await expect(handlers.get("platform.audit-chain-full-verify")!({})).rejects.toThrow(
+      /previous-hash-mismatch/,
+    );
+  });
+
   it("real surfaces a broken audit chain as a job failure, not a silent success", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

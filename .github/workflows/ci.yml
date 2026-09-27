@@ -180,13 +180,28 @@ jobs:
       # affected's graph-diff computation can in principle miss a
       # cross-project edge case, so the branch that actually lands on main
       # still gets the exhaustive check.
-      - name: full monorepo sweep
+      - name: full lint and typecheck sweep
         if: github.event_name != 'pull_request'
-        run: pnpm exec nx run-many -t lint,typecheck,build --all --parallel=2
+        run: pnpm exec nx run-many -t lint,typecheck --all --parallel=2
 
-      - name: affected monorepo sweep
+      - name: affected lint and typecheck sweep
         if: github.event_name == 'pull_request'
-        run: pnpm exec nx affected -t lint,typecheck,build --parallel=2
+        run: pnpm exec nx affected -t lint,typecheck --parallel=2
+
+      # build is deliberately --all on every event, never affected. The
+      # integration fixtures in apps/eval-service/tests spawn real sibling
+      # services out of dist/apps/<app>/main.js and apps/<app>/.venv, and
+      # until now they skipped themselves when those were absent. On a pull
+      # request that touched neither model-gateway nor orchestration-service,
+      # affected never built them, so those fixtures skipped and the suite
+      # reported green: that is how #220's regression passed four PR checks
+      # while main was red for a day. Those guards now fail on CI instead of
+      # skipping (tests/conftest.py, missing_prerequisite), so the build has
+      # to produce everything the tests reach for. Nx caches build output and
+      # the workflow restores that cache, so the extra projects are mostly
+      # cache hits rather than extra minutes.
+      - name: build all projects
+        run: pnpm exec nx run-many -t build --all --parallel=2
 
       # platform-api:test needs a migrated DATABASE_URL (real Postgres-backed
       # specs, e.g. entitlement/credential guards) -- excluded here so it

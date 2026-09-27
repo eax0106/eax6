@@ -32,7 +32,7 @@ import {
   mockCredentials, mockWhatsAppChannels, mockMemoryConfig
 } from "./mock/data"
 import { 
-  type Workflow, type WorkflowSafeguards, type Run, type DashboardSummary, 
+  type Workflow, type WorkflowSafeguards, type WorkflowVersion, type Run, type DashboardSummary, 
   type Workspace, type Member, type WorkspaceRole, type TenantDataResidency,
   type TenantDataResidencySettings,
   type Profile, type Session,
@@ -336,6 +336,38 @@ class ApiClient {
       await live.workflowAction(_id, "activate")
       return
     }
+    await delay(MOCK_DELAY)
+  }
+
+  // C8, the Deployment Manager: a workflow's real version history and the
+  // three things the lifecycle contract lets you do to a version.
+  async getWorkflowVersions(id: string): Promise<WorkflowVersion[]> {
+    if (isLiveApi) return live.getWorkflowVersions(id)
+    await delay(MOCK_DELAY)
+    return []
+  }
+
+  async testWorkflowVersion(id: string, versionId: string): Promise<void> {
+    if (isLiveApi) return live.testWorkflowVersion(id, versionId)
+    await delay(MOCK_DELAY)
+  }
+
+  async promoteWorkflowVersion(id: string, versionId: string): Promise<void> {
+    if (isLiveApi) return live.promoteWorkflowVersion(id, versionId)
+    await delay(MOCK_DELAY)
+  }
+
+  async startWorkflowVersionCanary(
+    id: string,
+    versionId: string,
+    trafficPercent: number,
+  ): Promise<void> {
+    if (isLiveApi) return live.startWorkflowVersionCanary(id, versionId, trafficPercent)
+    await delay(MOCK_DELAY)
+  }
+
+  async rollbackWorkflowVersion(id: string, versionId: string): Promise<void> {
+    if (isLiveApi) return live.rollbackWorkflowVersion(id, versionId)
     await delay(MOCK_DELAY)
   }
 

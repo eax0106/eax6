@@ -303,6 +303,32 @@ export class WorkflowController {
     );
   }
 
+  // A deployment starts here: promote-version and start-canary below both
+  // refuse a version that has not been tested, and nothing exposed this.
+  @Post(":workflowId/actions/test-version")
+  @RequireWorkspaceRole(...operateRoles)
+  @Idempotent()
+  async testVersion(
+    @Param("workflowId") workflowId: string,
+    @Body() body: unknown,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<WorkflowActionResult> {
+    const instance = `/api/v1/workflows/${workflowId}/actions/test-version`;
+    return project(
+      await this.workflows.testVersion(
+        workflowId,
+        parseWorkflowInput(workflowVersionActionSchema, body, instance),
+        requireActor(actor, instance),
+        traceparent,
+        idempotencyKey!,
+      ),
+      reply,
+    );
+  }
+
   @Post(":workflowId/actions/promote-version")
   @RequireWorkspaceRole(...operateRoles)
   @Idempotent()

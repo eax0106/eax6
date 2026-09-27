@@ -318,3 +318,37 @@ describe("PostgresAuditStoreProvider IAM authentication", () => {
     ).toThrow(field);
   });
 });
+
+describe("static connections require TLS", () => {
+  const remote = "postgresql://svc:pw@db.managed-postgres.example.com/audit_db";
+
+  function captureConfig(connectionString: string): PoolConfig | undefined {
+    let captured: PoolConfig | undefined;
+    new PostgresAuditStoreProvider(
+      { authentication: "static", connectionString, migrationsFolder: "apps/audit-service/drizzle" },
+      {
+        poolFactory: (config) => {
+          captured = config;
+          return { on: vi.fn() } as unknown as Pool;
+        },
+      },
+    );
+    return captured;
+  }
+
+  it("refuses a remote connection string that does not ask for TLS", () => {
+    expect(() => captureConfig(remote)).toThrow(/sslmode/);
+  });
+
+  it("verifies the certificate when the connection string requires TLS", () => {
+    expect(captureConfig(`${remote}?sslmode=require`)?.ssl).toEqual({ rejectUnauthorized: true });
+  });
+
+  it.each([
+    ["loopback", "postgresql://u:p@localhost:5433/audit_db"],
+    ["a container DNS name", "postgresql://u:p@audit-db:5432/audit_db"],
+    ["a private address", "postgresql://u:p@172.18.0.4:5432/audit_db"],
+  ])("connects without TLS over %s", (_name, connectionString) => {
+    expect(captureConfig(connectionString)?.ssl).toBeUndefined();
+  });
+});

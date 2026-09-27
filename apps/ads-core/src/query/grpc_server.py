@@ -39,7 +39,13 @@ def serve() -> None:
     adsq_pb2_grpc.add_AdsqServiceServicer_to_server(  # type: ignore[no-untyped-call]
         AdsqGrpcService(service), server
     )
-    server.add_insecure_port(os.environ.get("ADS_Q_GRPC_BIND_ADDRESS", "0.0.0.0:50057"))
+    # 50050, not 50057: sandbox-service's SANDBOX_GRPC_BIND_ADDRESS also
+    # defaults to 0.0.0.0:50057, so on a single host -- the documented local
+    # stack, and any one-VPS deployment -- whichever of the two started
+    # second could not bind. Real service surfaces now occupy 50050-50069
+    # contiguously; 50070 upwards belongs to the eval harness, which binds
+    # its own servers on ports it chooses per run.
+    server.add_insecure_port(os.environ.get("ADS_Q_GRPC_BIND_ADDRESS", "0.0.0.0:50050"))
     server.start()
     try:
         server.wait_for_termination()

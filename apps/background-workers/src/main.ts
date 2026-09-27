@@ -40,6 +40,7 @@ import {
   BENCHMARK_SWEEP_JOB_TYPE,
   DRIFT_SWEEP_JOB_TYPE,
   AUDIT_CHAIN_VERIFY_JOB_TYPE,
+  AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
 } from "./platform-jobs/scheduled-job-types";
 
 const { parsePort, scopedValue } = createEnvironmentValidators(
@@ -77,7 +78,14 @@ async function bootstrap(): Promise<void> {
         ...(environment.temporalApiKey === undefined
           ? {}
           : { apiKey: environment.temporalApiKey }),
+        ...(environment.workerDeployment === undefined
+          ? {}
+          : { workerDeployment: environment.workerDeployment }),
+        ...(environment.minimumRetentionDays === undefined
+          ? {}
+          : { minimumRetentionDays: environment.minimumRetentionDays }),
       },
+      conversationTaskQueue: environment.conversationTaskQueue,
       nodeexec: {
         address: environment.nodeexecAddress,
         protoPath: NODEEXEC_PROTO_PATH,
@@ -177,6 +185,15 @@ async function bootstrap(): Promise<void> {
         ...(platformJobsEnvironment.temporalApiKey === undefined
           ? {}
           : { apiKey: platformJobsEnvironment.temporalApiKey }),
+        ...(platformJobsEnvironment.workerDeployment === undefined
+          ? {}
+          : { workerDeployment: platformJobsEnvironment.workerDeployment }),
+        ...(platformJobsEnvironment.minimumRetentionDays === undefined
+          ? {}
+          : {
+              minimumRetentionDays:
+                platformJobsEnvironment.minimumRetentionDays,
+            }),
       },
     },
     createPlatformJobHandlers({
@@ -267,6 +284,14 @@ async function bootstrap(): Promise<void> {
   );
   auditChainVerifyRunner.start();
 
+  const auditChainFullVerifyRunner = new IntervalJobSchedulerRunner(
+    digestDurableExecution,
+    AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
+    "audit-chain-full-verify",
+    platformJobsConfig.auditChainFullVerifyIntervalMs,
+  );
+  auditChainFullVerifyRunner.start();
+
   app.enableShutdownHooks();
   app.getHttpAdapter().getInstance().addHook("onClose", () => {
     worker.shutdown();
@@ -280,6 +305,7 @@ async function bootstrap(): Promise<void> {
     void benchmarkSweepRunner.stop();
     void driftSweepRunner.stop();
     void auditChainVerifyRunner.stop();
+    void auditChainFullVerifyRunner.stop();
   });
 
   await app.listen(

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.agent_auto_creation.instructions_client import AgentInstructionsClient
 from src.agent_auto_creation.models import (
     CreatePersonaRequest,
     CreatePersonaResponse,
@@ -20,9 +21,7 @@ from src.selection_binding import (
     embedding_vector_literal,
 )
 
-_SET_TENANT_CONTEXT = text(
-    "SELECT set_config('app.current_tenant_id', :tenant_id, true)"
-)
+_SET_TENANT_CONTEXT = text("SELECT set_config('app.current_tenant_id', :tenant_id, true)")
 
 # Created at the tier the requirement asked for, not at a fixed 'STANDARD'.
 # selection_binding filters candidates on agents.tier with a >= comparison, so
@@ -56,6 +55,8 @@ _SELECT_EXISTING_AGENT = text(
     """
 SELECT
   a.id AS agent_id,
+  a.tier AS tier,
+  a.persona_description AS persona_description,
   (
     SELECT MAX(av.version_number)
     FROM agent_versions AS av
@@ -85,6 +86,8 @@ def _auto_creation_key(requirement: NodeRequirement) -> str:
     """
     canonical = json.dumps(sorted(requirement.capabilities), separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 # A freshly auto-created agent has never run for real -- it starts 'draft'
 # (both selection_binding queries include drafts, so it can still be
 # matched and accumulate real performance_records) and is promoted to
@@ -121,13 +124,14 @@ class PersonaCreationValidationError(ValueError):
 
 
 class AgentAutoCreationEngine:
-    """Create one immediately-bindable STANDARD persona for a true no-match."""
+    """Create one immediately-bindable persona for a true capability gap."""
 
     def __init__(
         self,
         session: AsyncSession,
         embedding_client: EmbeddingClient,
         *,
+        instructions_client: AgentInstructionsClient | None = None,
         maximum_tier: str = "ADVANCED",
     ) -> None:
         if maximum_tier not in _TIER_RANK:
@@ -136,12 +140,15 @@ class AgentAutoCreationEngine:
             )
         self._session = session
         self._embedding_client = embedding_client
+        self._instructions_client = instructions_client
         self._maximum_tier = maximum_tier
 
     async def create_for_no_match(
         self,
         no_match: NoAgentMatch,
         request: CreatePersonaRequest,
+        *,
+        run_id: str | None = None,
     ) -> PersonaCreationOutcome:
         if no_match.reason != "no_eligible_agent":
             return no_match
@@ -167,7 +174,19 @@ class AgentAutoCreationEngine:
                 reason="no_agent_at_required_tier",
             )
 
-        persona_description = _persona_description(requirement)
+        if self._instructions_client is None:
+            persona_description = _persona_description(requirement)
+        else:
+            if run_id is None:
+                raise PersonaCreationValidationError(
+                    "run_id is required to draft agent instructions"
+                )
+            persona_description = await self._instructions_client.draft_instructions(
+                tenant_id=request.tenant_id,
+                run_id=run_id,
+                node_key=no_match.node_key,
+                requirement=requirement,
+            )
         embedding_text = "\n".join(requirement.capabilities)
         embedding_result = await self._embedding_client.embed(
             tenant_id=request.tenant_id,
@@ -213,15 +232,19 @@ class AgentAutoCreationEngine:
             # it created rather than writing a second version and embedding
             # against an agent this call does not own.
             existing = (
-                await self._session.execute(
-                    _SELECT_EXISTING_AGENT,
-                    {
-                        "tenant_id": tenant_uuid,
-                        "workspace_id": workspace_uuid,
-                        "auto_creation_key": auto_creation_key,
-                    },
+                (
+                    await self._session.execute(
+                        _SELECT_EXISTING_AGENT,
+                        {
+                            "tenant_id": tenant_uuid,
+                            "workspace_id": workspace_uuid,
+                            "auto_creation_key": auto_creation_key,
+                        },
+                    )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             if existing is None:
                 # The index refused the insert, so a row matching this key must
                 # exist. Not finding it means the two disagree -- report it
@@ -230,10 +253,15 @@ class AgentAutoCreationEngine:
                 raise PersonaCreationValidationError(
                     "auto-creation conflicted on an agent that cannot be read back"
                 )
+            existing_persona = {
+                "capability_profile": requirement.model_dump(exclude_none=True),
+                "persona_description": existing["persona_description"],
+                "tier": existing["tier"],
+            }
             return CreatePersonaResponse(
                 agent_id=existing["agent_id"],
                 agent_version=existing["agent_version"] or 1,
-                persona_json=persona_json,
+                persona_json=json.dumps(existing_persona, separators=(",", ":"), sort_keys=True),
             )
         await self._session.execute(
             _INSERT_AGENT_VERSION,

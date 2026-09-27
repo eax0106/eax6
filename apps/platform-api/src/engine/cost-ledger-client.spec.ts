@@ -31,10 +31,28 @@ const context: EngineCallerContext = {
   permissions: ["runs:read"],
   traceparent: "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01",
 };
+const bareContext: EngineCallerContext = {
+  ...context,
+  tenantId: context.tenantId.slice("ten_".length),
+  workspaceId: context.workspaceId.slice("ws_".length),
+};
 
 const runId = "run_018f47a5-7b2c-7d10-8f11-123456789abc";
 
 describe("CostLedgerClient", () => {
+  it("normalizes bare platform IDs at the cost-ledger boundary", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, {
+      node_costs: [],
+    }));
+    const client = new CostLedgerClient(config, authProvider(), fetchImpl);
+    await client.getNodeCosts(runId, bareContext);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `https://costs.test/costs/by-run/${runId}?tenantId=${context.tenantId}&workspaceId=${context.workspaceId}`,
+      expect.any(Object),
+    );
+  });
+
   it("gets the real scoped route and returns only validated node costs", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, {
       node_costs: [
@@ -116,7 +134,7 @@ describe("CostLedgerClient", () => {
       startAt: "2026-01-01T00:00:00.000Z",
       endAt: "2026-02-01T00:00:00.000Z",
       dimensions: ["mode", "provider"],
-    }, context)).resolves.toBe("{\"groups\":[]}");
+    }, bareContext)).resolves.toBe("{\"groups\":[]}");
 
     expect(fetchImpl).toHaveBeenCalledWith(
       `https://costs.test/costs/summary?tenantId=${context.tenantId}&workspaceId=${context.workspaceId}&startAt=2026-01-01T00%3A00%3A00.000Z&endAt=2026-02-01T00%3A00%3A00.000Z&dimensions=mode&dimensions=provider`,
@@ -135,10 +153,10 @@ describe("CostLedgerClient", () => {
         resource: "claude",
         expectedQuantity: 2,
       }],
-    }, context)).resolves.toMatchObject({ currency: "INR" });
+    }, bareContext)).resolves.toMatchObject({ currency: "INR" });
     const request = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(JSON.parse(String(request?.body))).toMatchObject({
-      tenantId: context.tenantId.slice(4),
+      tenantId: bareContext.tenantId,
       mode: "workflow",
     });
 

@@ -93,7 +93,7 @@ describe.sequential("RunService per-node cost aggregation", () => {
     const detail = await new RunService(engineStub(), costClient).detail(RUN, actor(), undefined);
 
     expect(detail.body.node_executions).toEqual([
-      { node_execution_id: NODE, node_cost_minor: "37" },
+      { id: NODE, node_cost_minor: "37" },
     ]);
   });
 
@@ -111,8 +111,8 @@ describe.sequential("RunService per-node cost aggregation", () => {
 function actor() {
   return {
     user_id: "usr_018f4d6e-2b4a-7a3e-8c1a-1234567890a5",
-    tenant_id: TENANT_A,
-    workspace_id: WORKSPACE_A,
+    tenant_id: TENANT_A.slice("ten_".length),
+    workspace_id: WORKSPACE_A.slice("ws_".length),
     session_id: "session",
     auth_time: 1_700_000_000,
     roles: ["viewer"],
@@ -127,7 +127,7 @@ function engineStub(): EngineClient {
       if (path.endsWith("/outcome")) return { status: 200, body: {} };
       return {
         status: 200,
-        body: { data: path.includes("node-executions") ? [{ node_execution_id: NODE }] : [], page: { next_cursor: null, has_more: false, limit: 200 } },
+        body: { data: path.includes("node-executions") ? [{ id: NODE }] : [], page: { next_cursor: null, has_more: false, limit: 200 } },
       };
     },
   } as unknown as EngineClient;

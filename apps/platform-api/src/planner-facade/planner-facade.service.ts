@@ -46,6 +46,28 @@ export type PlanWorkflowResult =
   | { type: "clarification"; questions: readonly string[] }
   | { type: "compiled"; versionId: string };
 
+/**
+ * Where orchestration-service serves the workflow compiler.
+ *
+ * orchestration-service binds it per COMPILER_GRPC_BIND_ADDRESS, which
+ * defaults to 0.0.0.0:50056. This used to default to 127.0.0.1:50071 and read
+ * an override named ORCHESTRATION_GRPC_URL that appeared exactly once in the
+ * repository -- on that line -- and was set nowhere, in no environment file, CI
+ * job, document or Terraform stack. So the wrong default always applied, and
+ * POST /api/v1/workflows/:workflowId/actions/plan could not complete: a gRPC
+ * dial at a port nothing binds times out rather than failing fast, so it
+ * looked like slowness rather than a wrong address.
+ *
+ * 50050 to 50069 are the real service surfaces. 50070 upwards belongs to the
+ * eval harness, which binds its own servers on ports it picks per run -- which
+ * is why 50071 looked plausible and answered nothing.
+ */
+export function compilerServiceAddress(
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  return environment.COMPILER_GRPC_TARGET?.trim() || "127.0.0.1:50056";
+}
+
 @Injectable()
 export class PlannerFacadeService {
   private readonly plannerClient: PlannerClient;
@@ -77,15 +99,13 @@ export class PlannerFacadeService {
       createFetchPlannerHttpClient(() => this.m2mTokenProvider.getAccessToken())
     );
 
-    // 50051 is model-gateway's gRPC port -- the compiler lives in
-    // orchestration-service, bound per .env.local's
-    // COMPILER_GRPC_BIND_ADDRESS.
-    const compilerAddress = process.env.ORCHESTRATION_GRPC_URL || "127.0.0.1:50071";
     this.compilerClient = compilerClient ?? new CompilerServiceClient({
-      address: compilerAddress,
+      address: compilerServiceAddress(),
       protoPath: getCompilerProtoPath(),
     });
   }
+
+
 
   async planWorkflow(input: PlanWorkflowInput): Promise<PlanWorkflowResult> {
     const runId = `run_${randomUUID().slice(0, 14)}7${randomUUID().slice(15)}`;

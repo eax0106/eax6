@@ -163,6 +163,7 @@ describe.sequential("Ingress phase (INGR-1..8) exit checks", () => {
     const dispatchService = new ConversationDispatchService(store, harness.dispatchClient, {
       taskQueue: TASK_QUEUE,
       idleTimeoutSeconds: 1_800,
+      historyRolloverEventCount: 500,
     });
 
     const body = whatsappPayload([
@@ -200,7 +201,12 @@ describe.sequential("Ingress phase (INGR-1..8) exit checks", () => {
       workflowId: `${workflowId}-child`,
       workflowType: WORKFLOW_TYPE,
       taskQueue: TASK_QUEUE,
-      input: { tenantId: TENANT_ID, conversationId: "exit-check-child-conv", idleTimeoutSeconds: 5 },
+      input: {
+        tenantId: TENANT_ID,
+        conversationId: "exit-check-child-conv",
+        idleTimeoutSeconds: 5,
+        historyRolloverEventCount: 500,
+      },
     });
     await pollUntil(
       () => harness.query<readonly string[]>(workflowId, "childRunIds"),
@@ -218,6 +224,7 @@ describe.sequential("Ingress phase (INGR-1..8) exit checks", () => {
     const dispatchService = new ConversationDispatchService(store, harness.dispatchClient, {
       taskQueue: TASK_QUEUE,
       idleTimeoutSeconds: 1_800,
+      historyRolloverEventCount: 500,
     });
 
     const body = whatsappPayload([
@@ -259,6 +266,7 @@ describe.sequential("Ingress phase (INGR-1..8) exit checks", () => {
     const dispatchService = new ConversationDispatchService(store, harness.dispatchClient, {
       taskQueue: TASK_QUEUE,
       idleTimeoutSeconds: 1_800,
+      historyRolloverEventCount: 500,
     });
 
     const earlier = String(Math.floor(NOW.getTime() / 1000) - 120);

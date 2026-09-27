@@ -65,7 +65,7 @@ export function sessionGatewayEnvironment(
     ...(env.AUTH0_JWKS_URL ? { auth0JwksUrl: env.AUTH0_JWKS_URL } : {}),
   };
 
-  if (env.ALTER_ENV?.trim() === "local") {
+  if (resolveDatabaseAuthentication(env) === "static") {
     return {
       ...base,
       databaseAuthentication: "static",
@@ -86,6 +86,39 @@ export function sessionGatewayEnvironment(
     databaseName: requiredEnvironment(env, "ORCHESTRATION_DATABASE_NAME"),
     databaseUser: requiredEnvironment(env, "ORCHESTRATION_DATABASE_USER"),
   };
+}
+
+/**
+ * Which database authentication this deployment uses.
+ *
+ * IAM stays the default outside local, so an Aurora deployment keeps its
+ * keyless connection. A Postgres reached with a password -- a container on EC2,
+ * or a provider with no AWS IAM -- takes its credential from
+ * ORCHESTRATION_DATABASE_URL, and a deployment asks for it by setting
+ * ORCHESTRATION_DATABASE_AUTHENTICATION (or DATABASE_AUTHENTICATION) to
+ * "static". The store then requires that URL to ask for TLS, because the
+ * password travels with it -- see staticPoolConfig in @alterx/adapters.
+ */
+export function resolveDatabaseAuthentication(
+  env: NodeJS.ProcessEnv,
+): "static" | "iam" {
+  const requested = (
+    env.ORCHESTRATION_DATABASE_AUTHENTICATION ?? env.DATABASE_AUTHENTICATION
+  )?.trim();
+  if (requested !== undefined && requested !== "" && requested !== "static" && requested !== "iam") {
+    throw new Error(
+      "Invalid Session Gateway configuration: DATABASE_AUTHENTICATION must be static or iam",
+    );
+  }
+  if (env.ALTER_ENV?.trim() === "local") {
+    if (requested === "iam") {
+      throw new Error(
+        "Invalid Session Gateway configuration: DATABASE_AUTHENTICATION cannot be iam in the local environment",
+      );
+    }
+    return "static";
+  }
+  return requested === "static" ? "static" : "iam";
 }
 
 export function internalM2mTokenProvider() {

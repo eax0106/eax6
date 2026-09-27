@@ -1,12 +1,31 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
-import { Worker, type NativeConnection } from "@temporalio/worker";
+import {
+  Worker,
+  type NativeConnection,
+  type WorkerOptions,
+} from "@temporalio/worker";
 
 import type { ExecutorActivities } from "./activities/executor-activities";
 import type { PlatformJobActivities } from "./activities/platform-job-activities";
 import type { TriggerDispatchActivities } from "./activities/trigger-dispatch-activities";
 import type { TemporalConnectionConfig } from "./durable-execution-provider";
+
+export function temporalWorkerVersioningOptions(
+  config: TemporalConnectionConfig,
+): Pick<WorkerOptions, "workerDeploymentOptions"> | Record<string, never> {
+  if (config.workerDeployment === undefined) {
+    return {};
+  }
+  return {
+    workerDeploymentOptions: {
+      version: config.workerDeployment,
+      useWorkerVersioning: true,
+      defaultVersioningBehavior: "PINNED",
+    },
+  };
+}
 
 function foundationWorkflowsPath(): string {
   const basePath = join(
@@ -27,6 +46,7 @@ export function createFoundationWorker(
     namespace: config.namespace,
     taskQueue: config.taskQueue,
     workflowsPath: foundationWorkflowsPath(),
+    ...temporalWorkerVersioningOptions(config),
   });
 }
 
@@ -49,6 +69,7 @@ export function createConversationLifecycleWorker(
     namespace: config.namespace,
     taskQueue: config.taskQueue,
     workflowsPath: conversationLifecycleWorkflowsPath(),
+    ...temporalWorkerVersioningOptions(config),
   });
 }
 
@@ -80,6 +101,7 @@ export function createExecutorWorker(
     taskQueue: config.taskQueue,
     workflowsPath: executorWorkflowsPath(),
     activities,
+    ...temporalWorkerVersioningOptions(config),
   });
 }
 
@@ -106,5 +128,6 @@ export function createPlatformJobsWorker(
     taskQueue: config.taskQueue,
     workflowsPath: platformJobWorkflowsPath(),
     activities,
+    ...temporalWorkerVersioningOptions(config),
   });
 }

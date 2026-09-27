@@ -104,7 +104,7 @@ export function loadAuditEnvironment(
     deletionServiceTokenReference: requireValue(environment, "DELETION_SERVICE_TOKEN_REF"),
   };
 
-  if (alterEnvironment === "local") {
+  if (resolveDatabaseAuthentication(environment, alterEnvironment) === "static") {
     return {
       ...baseEnvironment,
       databaseAuthentication: "static",
@@ -120,4 +120,41 @@ export function loadAuditEnvironment(
     databaseName: requireValue(environment, "DATABASE_NAME"),
     databaseUser: requireValue(environment, "DATABASE_USER"),
   };
+}
+
+/**
+ * Which database authentication a deployment uses.
+ *
+ * IAM stays the default outside local, so every existing Aurora deployment
+ * keeps its keyless connection. A Postgres reached with a password instead --
+ * a container on EC2, or a provider with no AWS IAM -- is asked for by setting
+ * DATABASE_AUTHENTICATION=static -- never by inference, so an
+ * environment that means to use IAM can never silently fall back to a
+ * password. Local is static because that is the only mode it has.
+ */
+function resolveDatabaseAuthentication(
+  environment: NodeJS.ProcessEnv,
+  alterEnvironment: string,
+): "static" | "iam" {
+  const requested = scopedValue(
+    environment,
+    "AUDIT_DATABASE_AUTHENTICATION",
+    "DATABASE_AUTHENTICATION",
+  )?.trim();
+  if (requested !== undefined && requested !== "" && requested !== "static" && requested !== "iam") {
+    throw new AuditConfigurationError(
+      "DATABASE_AUTHENTICATION",
+      "must be static or iam",
+    );
+  }
+  if (alterEnvironment === "local") {
+    if (requested === "iam") {
+      throw new AuditConfigurationError(
+        "DATABASE_AUTHENTICATION",
+        "cannot be iam in the local environment",
+      );
+    }
+    return "static";
+  }
+  return requested === "static" ? "static" : "iam";
 }

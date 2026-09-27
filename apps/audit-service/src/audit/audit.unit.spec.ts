@@ -251,6 +251,41 @@ describe("AuditService chain verification", () => {
 });
 
 describe("AuditService.verifyChainIncremental", () => {
+  it("leaves historical rows to the full-chain verifier once they are checkpointed", async () => {
+    const first = storedEvent(
+      "018f47a2-7b11-7b11-8a11-1234567890b1",
+      auditGenesisHash(),
+    );
+    const second = storedEvent(
+      "018f47a2-7b11-7b11-8a11-1234567890b2",
+      first.entryHash,
+    );
+    const corruptFirst = {
+      ...first,
+      context: { request_id: "tampered-after-checkpoint" },
+    };
+    const store: AuditStoreProvider = {
+      ...createMockAuditStoreProvider(),
+      readGlobalChain: vi.fn(async () => [corruptFirst, second]),
+      readChainSince: vi.fn(async () => []),
+      getChainCheckpoint: vi.fn(async () => ({
+        lastEntryHash: second.entryHash,
+        checkedEvents: 2,
+        verifiedAt: new Date("2026-07-24T07:00:00.000Z"),
+      })),
+    };
+    const service = new AuditService(store);
+
+    await expect(service.verifyChainIncremental(500)).resolves.toEqual({
+      valid: true,
+      checkedEvents: 0,
+    });
+    await expect(service.verifyChain()).resolves.toMatchObject({
+      valid: false,
+      issue: "hash-mismatch",
+    });
+  });
+
   it("returns valid/0 with no checkpoint advance when there is nothing new", async () => {
     const store = createMockAuditStoreProvider();
     const service = new AuditService(store);

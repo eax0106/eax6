@@ -79,6 +79,7 @@ describe.sequential("conversationLifecycleWorkflow", () => {
       tenantId: "tnt_test",
       conversationId: "conv_test",
       idleTimeoutSeconds: 60,
+      historyRolloverEventCount: 500,
       ...overrides,
     };
   }
@@ -112,6 +113,54 @@ describe.sequential("conversationLifecycleWorkflow", () => {
       await handle.signal("close");
       await handle.result();
       await expect(handle.query("status")).resolves.toBe("closed");
+    } finally {
+      await stopWorker(running);
+    }
+  });
+
+  it("continues as new before history grows without losing recent state", async () => {
+    const taskQueue = "conversation-lifecycle-history-rollover";
+    const running = startWorker(
+      await createConversationLifecycleWorker(
+        config(taskQueue),
+        environment.nativeConnection,
+      ),
+    );
+    const workflowId = "conversation-lifecycle-history-rollover-workflow";
+
+    try {
+      const handle = await environment.client.workflow.start(WORKFLOW_TYPE, {
+        taskQueue,
+        workflowId,
+        args: [
+          input({
+            historyRolloverEventCount: 2,
+          }),
+        ],
+      });
+      const firstRunId = handle.firstExecutionRunId;
+
+      await handle.signal("message", message("rollover-1"));
+      await handle.signal("message", message("rollover-2"));
+
+      await pollUntil(
+        () => handle.describe(),
+        (description) => description.runId !== firstRunId,
+      );
+      await expect(
+        handle.query<readonly IncomingConversationMessage[]>("messages"),
+      ).resolves.toMatchObject([
+        { messageId: "rollover-1" },
+        { messageId: "rollover-2" },
+      ]);
+
+      await handle.signal("message", message("rollover-1"));
+      await expect(
+        handle.query<readonly IncomingConversationMessage[]>("messages"),
+      ).resolves.toHaveLength(2);
+
+      await handle.signal("close");
+      await handle.result();
     } finally {
       await stopWorker(running);
     }
