@@ -1121,12 +1121,14 @@ export interface BenchmarkResult {
 export interface AdminTenant {
   id: string;
   name: string;
-  slug: string;
+  // Live mode fills only what platform-api serves (task B1.1); the counts,
+  // spend and slug are demo-mode data with no backend yet.
+  slug?: string;
   status: "active" | "suspended" | "restricted" | "trial" | "closed";
-  plan: string;
-  memberCount: number;
-  workflowCount: number;
-  runCount30d: number;
+  plan?: string;
+  memberCount?: number;
+  workflowCount?: number;
+  runCount30d?: number;
   currentSpend?: number;
   createdAt: string;
   lastActiveAt?: string;

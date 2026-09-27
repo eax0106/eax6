@@ -5,6 +5,7 @@ import { ENTITLEMENT_PROVIDER, type EntitlementProvider } from "../entitlements/
 import { AdminTenantsRepository } from "./admin-tenants.repository";
 import { AdminTenantHttpError } from "./problem";
 import type {
+  AdminTenantActionView,
   AdminTenantDetailView,
   AdminTenantView,
   EntitlementOverrideInput,
@@ -66,6 +67,11 @@ export class AdminTenantsService {
         limits: effective.limits,
       },
     };
+  }
+
+  async actions(id: string): Promise<AdminTenantActionView[]> {
+    await this.requireTenant(id, `/api/v1/admin/tenants/${id}/actions`);
+    return this.repository.listActions(id);
   }
 
   async suspend(

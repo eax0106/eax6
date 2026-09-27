@@ -53,17 +53,17 @@ export function TenantList() {
                       <div className="font-medium text-slate-200 group-hover:text-primary transition-colors">
                         {t.name}
                       </div>
-                      <div className="text-xs text-slate-500">{t.slug}</div>
+                      {t.slug && <div className="text-xs text-slate-500">{t.slug}</div>}
                     </Link>
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={t.status} />
                   </TableCell>
                   <TableCell>
-                    <span className="capitalize text-slate-300">{t.plan}</span>
+                    <span className="capitalize text-slate-300">{t.plan ?? "—"}</span>
                   </TableCell>
-                  <TableCell className="text-right text-slate-300">{t.memberCount}</TableCell>
-                  <TableCell className="text-right text-slate-300">{t.runCount30d.toLocaleString()}</TableCell>
+                  <TableCell className="text-right text-slate-300">{t.memberCount ?? "—"}</TableCell>
+                  <TableCell className="text-right text-slate-300">{t.runCount30d?.toLocaleString() ?? "—"}</TableCell>
                   <TableCell className="text-right">
                     <StatusBadge status={t.riskState || "normal"} />
                   </TableCell>

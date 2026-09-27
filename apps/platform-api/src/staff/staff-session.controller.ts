@@ -97,8 +97,12 @@ export class StaffSessionController {
 
   @Get()
   @RequireStaffRole(...staffRoles)
-  session(@StaffActorContext() staff: StaffActor | undefined): { email: string; roles: readonly string[] } {
-    return { email: staff?.email ?? "", roles: staff?.roles ?? [] };
+  session(@StaffActorContext() staff: StaffActor | undefined): {
+    staffUserId: string;
+    email: string;
+    roles: readonly string[];
+  } {
+    return { staffUserId: staff?.staff_user_id ?? "", email: staff?.email ?? "", roles: staff?.roles ?? [] };
   }
 
   @Post("logout")

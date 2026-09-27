@@ -1,4 +1,7 @@
 import type { AdminTenant, AdminNote } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-tenants"
+import type { SupportGrant } from "../live-admin-tenants"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -16,23 +19,27 @@ const MOCK_NOTES: Record<string, AdminNote[]> = {
 
 export class AdminTenantsService {
   async list(): Promise<AdminTenant[]> {
+    if (isLiveApi) return live.listTenants()
     await delay(400)
     return MOCK_TENANTS
   }
 
-  async get(id: string): Promise<AdminTenant> {
+  async get(id: string, grantId?: string): Promise<AdminTenant> {
+    if (isLiveApi) return live.getTenant(id, grantId)
     await delay(300)
     const tenant = MOCK_TENANTS.find(t => t.id === id)
     if (!tenant) throw new Error("Tenant not found")
     return tenant
   }
 
-  async getNotes(id: string): Promise<AdminNote[]> {
+  async getNotes(id: string, grantId?: string): Promise<AdminNote[]> {
+    if (isLiveApi) return live.getTenantTimeline(id, grantId)
     await delay(200)
     return MOCK_NOTES[id] || []
   }
 
   async addNote(id: string, body: string): Promise<AdminNote> {
+    if (isLiveApi) throw new Error("Tenant notes are not available yet: platform-api has no notes store")
     await delay(300)
     const newNote: AdminNote = {
       id: `note-${Date.now()}`,
@@ -47,6 +54,7 @@ export class AdminTenantsService {
   }
 
   async suspend(id: string, reason: string): Promise<AdminTenant> {
+    if (isLiveApi) return live.suspendTenant(id, reason)
     await delay(500)
     const idx = MOCK_TENANTS.findIndex(t => t.id === id)
     if (idx === -1) throw new Error("Not found")
@@ -56,6 +64,7 @@ export class AdminTenantsService {
   }
 
   async restore(id: string, reason: string): Promise<AdminTenant> {
+    if (isLiveApi) return live.reinstateTenant(id)
     await delay(500)
     const idx = MOCK_TENANTS.findIndex(t => t.id === id)
     if (idx === -1) throw new Error("Not found")
@@ -65,11 +74,23 @@ export class AdminTenantsService {
   }
 
   async restrict(id: string, reason: string): Promise<AdminTenant> {
+    if (isLiveApi) throw new Error("Restricting a tenant is not available: platform-api has no restricted state")
     await delay(500)
     const idx = MOCK_TENANTS.findIndex(t => t.id === id)
     if (idx === -1) throw new Error("Not found")
     MOCK_TENANTS[idx] = { ...MOCK_TENANTS[idx], status: "restricted", riskState: "review" }
     await this.addNote(id, `Restricted. Reason: ${reason}`)
     return MOCK_TENANTS[idx]
+  }
+
+  /** Live: this staff member's active tenant:read grant. Demo mode needs none. */
+  async activeGrant(tenantId: string): Promise<SupportGrant | undefined> {
+    if (isLiveApi) return live.activeTenantGrant(tenantId)
+    return { id: "jit_demo", tenantId, expiresAt: new Date(Date.now() + 3_600_000).toISOString() }
+  }
+
+  async requestAccess(tenantId: string, reasonText: string, minutes: number): Promise<SupportGrant> {
+    if (isLiveApi) return live.requestTenantAccess(tenantId, reasonText, minutes)
+    return { id: "jit_demo", tenantId, expiresAt: new Date(Date.now() + minutes * 60_000).toISOString() }
   }
 }

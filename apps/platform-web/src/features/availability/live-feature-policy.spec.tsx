@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 import { MemoryRouter } from "react-router-dom"
 import {
+  adminSectionFor,
   isLiveFeatureAvailable,
   type LiveFeature,
 } from "./live-feature-policy"
@@ -11,7 +12,8 @@ afterEach(cleanup)
 
 describe("live feature availability", () => {
   const unfinishedFeatures: LiveFeature[] = [
-    "admin-console",
+    "admin-users",
+    "admin-audit",
     "benchmarks",
     "discovery",
     "notifications",
@@ -23,6 +25,17 @@ describe("live feature availability", () => {
 
   it.each(unfinishedFeatures)("hides %s in live mode", (feature) => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(false)
+  })
+
+  it("shows admin tenants in live mode once its adapter is wired (Track B1.1)", () => {
+    expect(isLiveFeatureAvailable("admin-tenants", true)).toBe(true)
+  })
+
+  it("maps admin console paths to their section", () => {
+    expect(adminSectionFor("/app/admin")).toBe("admin-tenants")
+    expect(adminSectionFor("/app/admin/tenants/ten_1")).toBe("admin-tenants")
+    expect(adminSectionFor("/app/admin/incidents/inc_1")).toBe("admin-incidents")
+    expect(adminSectionFor("/app/admin/feature-flags")).toBe("admin-feature-flags")
   })
 
   it("renders children when the selected adapter is truthful", () => {

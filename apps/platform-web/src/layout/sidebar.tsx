@@ -97,7 +97,7 @@ const getNavGroups = (t: any): NavGroup[] => [
   },
   {
     label: "Admin",
-    items: [{ name: "Admin Console", href: "/app/admin", icon: Shield, feature: "admin-console" }],
+    items: [{ name: "Admin Console", href: "/app/admin", icon: Shield, feature: "admin-tenants" }],
   },
 ]
 

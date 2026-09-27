@@ -29,7 +29,7 @@ describe("StaffGate", () => {
   afterEach(() => cleanup())
 
   it("renders the console for a signed-in staff member", async () => {
-    vi.mocked(getStaffSession).mockResolvedValue({ email: "ops@alter.example", roles: ["staff_admin"] })
+    vi.mocked(getStaffSession).mockResolvedValue({ staffUserId: "stf_1", email: "ops@alter.example", roles: ["staff_admin"] })
     renderGate()
     expect(await screen.findByText("admin console")).toBeTruthy()
   })
