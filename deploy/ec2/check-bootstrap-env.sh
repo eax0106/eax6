@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Proves bootstrap.sh's step 2 -- the .env the EC2 services run with -- without
+# a host: runs it in a bash 5 container on a copy of the repository, with the
+# AWS CLI stubbed, and asserts every rewrite rule. Prints "bootstrap-env-ok".
+set -euo pipefail
+repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+# One tar reading the list on stdin: xargs would split a long list into
+# several archives, and the reader stops at the first one's end.
+(cd "$repo" && git ls-files -z | tar --null -T - -cf -) | tar xf - -C "$work"
+mkdir -p "$work/deploy/ec2"
+cp "$repo/deploy/ec2/bootstrap.sh" "$repo/deploy/ec2/operator.env.example" "$work/deploy/ec2/"
+printf 'ALTER_ENV=dev\n' >"$work/deploy/ec2/host.env"
+sed -e 's/=<[^>]*>/=value/' \
+    -e 's#^ALTER_DOMAIN=.*#ALTER_DOMAIN=app.example.test#' \
+    -e 's#^AUTH0_DOMAIN=.*#AUTH0_DOMAIN=tenant.example.auth0.com#' \
+    "$work/deploy/ec2/operator.env.example" >"$work/deploy/ec2/operator.env"
+mkdir -p "$work/stub"
+printf '#!/bin/sh\necho stubbed-secret-value\n' >"$work/stub/aws"
+chmod +x "$work/stub/aws"
+
+# The container runs as root; ownership goes back to the caller so the 0600
+# files can be read below (Docker Desktop hides this on macOS, Linux does not).
+docker run --rm -v "$work:/repo" -w /repo/deploy/ec2 -e PATH="/repo/stub:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+  -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+  bash:5 bash -c 'apk add --no-cache openssl python3 >/dev/null; bash bootstrap.sh --env-only;
+    chown "$HOST_UID:$HOST_GID" .env .env.base' >/dev/null
+
+env_file="$work/deploy/ec2/.env"
+fail() { echo "FAIL $*"; exit 1; }
+value() { awk -F= -v k="$1" '$1==k{v=substr($0,length(k)+2)} END{print v}' "$env_file"; }
+grep -qE '^AWS_ENDPOINT_URL=' "$env_file" && fail "AWS_ENDPOINT_URL survived (would route AWS calls to LocalStack)"
+grep -qE '^AWS_EC2_METADATA_DISABLED=' "$env_file" && fail "AWS_EC2_METADATA_DISABLED survived (would hide the instance role)"
+grep -qE '^[A-Za-z_][A-Za-z0-9_]*=.*\$\{' "$env_file" && fail "unexpanded \${...} left: $(grep -m1 -E '^[A-Za-z_][A-Za-z0-9_]*=.*\$\{' "$env_file")"
+grep -qE '^[A-Za-z_][A-Za-z0-9_]*=<' "$env_file" && fail "placeholder left: $(grep -m1 -E '^[A-Za-z_][A-Za-z0-9_]*=<' "$env_file")"
+[[ "$(value ACTOR_TOKEN_SIGNING_KEY_REF)" == /alter/dev/* ]] || fail "environment reference not moved to /alter/dev/"
+[[ "$(value DELETION_SERVICE_TOKEN_REF)" == alter/dev/* ]] || fail "unslashed environment reference not moved"
+[[ "$(value TAVILY_API_KEY_SECRET_REF)" == /alter/local/tool-gateway/tavily-api-key ]] || fail "shared vendor reference was rewritten"
+[[ "$(value ALTER_ENV)" == dev ]] || fail "ALTER_ENV is $(value ALTER_ENV)"
+[[ "$(value RUNTIME_MODE)" == real && "$(value ALTER_CONFIG_SOURCE)" == appconfig ]] || fail "not real/appconfig"
+[[ "$(value DATABASE_AUTHENTICATION)" == static ]] || fail "not static database authentication"
+[[ "$(value AUTH0_JWKS_URL)" == https://tenant.example.auth0.com/.well-known/jwks.json ]] || fail "JWKS URL not derived"
+[[ "$(value TEMPORAL_API_KEY)" == stubbed-secret-value ]] || fail "Temporal key not resolved from its secret"
+[[ "$(value ENGINE_DB_PORT)" =~ ^[0-9]+$ ]] || fail "ENGINE_DB_PORT not a number: $(value ENGINE_DB_PORT)"
+[[ -n "$(value MODEL_GATEWAY_APPCONFIG_APPLICATION_ID)" ]] || fail "scoped AppConfig identifiers missing"
+[[ "$(stat -c %a "$env_file" 2>/dev/null || stat -f %Lp "$env_file")" == 600 ]] || fail ".env is not 0600"
+echo "bootstrap-env-ok"
