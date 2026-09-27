@@ -107,6 +107,25 @@ jobs:
         # C16 fixes), this fails the gate.
         run: scripts/check-stack-health-script.sh
 
+      - name: set up terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.7
+          terraform_wrapper: false
+
+      - name: ec2 mvp terraform validate
+        # Task 6.1. The single-EC2 root is validated on every run so a change
+        # to it cannot sit broken until the next launch. No credentials: init
+        # without a backend, validate only.
+        run: |
+          terraform -chdir=infrastructure/ec2-mvp init -backend=false -input=false
+          terraform -chdir=infrastructure/ec2-mvp validate
+
+      - name: ec2 bootstrap env check
+        # Task 6.1. Runs bootstrap.sh's .env step in a bash 5 container with the
+        # AWS CLI stubbed and asserts every rewrite the EC2 services depend on.
+        run: bash deploy/ec2/check-bootstrap-env.sh
+
       - name: migration rollback pairing check
         run: scripts/check-migration-rollback-pairing.sh
 

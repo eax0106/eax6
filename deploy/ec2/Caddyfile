@@ -1,0 +1,13 @@
+# One origin: the web bundle, with /api/ proxied to platform-api on loopback.
+# Caddy obtains and renews the certificate for ALTER_DOMAIN itself.
+{$ALTER_DOMAIN} {
+	encode gzip
+	handle /api/* {
+		reverse_proxy 127.0.0.1:{$PLATFORM_API_PORT}
+	}
+	handle {
+		root * /srv/web
+		try_files {path} /index.html
+		file_server
+	}
+}
