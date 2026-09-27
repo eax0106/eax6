@@ -36,7 +36,6 @@ const unfinishedLiveFeatures = new Set<LiveFeature>([
   "admin-deployments",
   "admin-incidents",
   "admin-system-status",
-  "admin-audit",
   "admin-policies",
   "admin-security",
   "admin-billing",

@@ -1,4 +1,6 @@
 import type { AuditEvent } from "../types"
+import { isLiveApi } from "../http"
+import { listAuditEvents } from "../live-admin-audit"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -26,6 +28,7 @@ const MOCK_AUDITS = generateMockAudits()
 
 export class AuditService {
   async list(filters?: Record<string, string>): Promise<AuditEvent[]> {
+    if (isLiveApi) return listAuditEvents(filters)
     await delay(400)
     let filtered = MOCK_AUDITS
     if (filters?.tenantId) {
