@@ -611,6 +611,30 @@ secret reference per service stops it at startup; a broken AppConfig id fails th
 
 ---
 
+### 2026-09-28 — 4.1 reproduced here at 35/36; C31 was a misdiagnosis; Phase 4 closed
+
+**Measured on our stack, three live runs, cache flushed between them: 35/36 (0.972), zero
+fallbacks**, ~25 s each against Bedrock. Path: eval-service `PlannerClient` → intelligence-service
+→ model-gateway booted by `run-service-aws.sh` on the real `alterx-engine` AppConfig policy →
+`apac.amazon.nova-lite-v1:0`. The one miss is v1's "Coordinate a deployment across several
+regions" (labelled iterative, answered manager_worker) — the same miss #173 reported.
+
+**C31's cause was wrong.** The deployed aliases already named inference profiles. The 2026-09-22
+17/36 matches #173's own row for "mock issuer not running: 17/36, 28 fallbacks", and the script
+used then (`run-model-gateway-aws.sh`) was starting the gateway in mock mode. Stopping the gateway
+now reproduces exactly 17/36 with 28 fallbacks. Recorded as withdrawn-by-measurement, like C27 and
+C28: the pattern again is a cause named from a plausible story, not from following the path.
+
+**The measurement is now a check**, `apps/eval-service/tests/test_planner_strategy_live.py`, run
+when `PLANNER_STRATEGY_LIVE_BASE_URL` is set. It fails on any keyword fallback before it looks at
+the score, because the fallback's 17/36 is a number that reads as a weak model.
+
+**A local-only trap found on the way:** restarting `scripts/local-mock-auth0/server.js` mints a new
+signing key, and a running intelligence-service keeps presenting its cached token, so every model
+call falls back until that service restarts. Restart the callers with the issuer.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.

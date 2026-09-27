@@ -378,11 +378,13 @@ creating agents.
 
 ## Phase 4 — rebuild the two brains
 
+**PHASE 4 CLOSED 2026-09-28.** 4.1 reproduced here at 35/36; 4.2 at 24/24 twice; 4.3 golden sets written before the rewrites.
+
 *3–5 weeks · the real product risk.* L6 is the strongest layer in the system and is being
 handed decisions made by string matching. These are rewrites, not repairs — and safe to
 schedule late, because what L6 consumes is a plan, not the Planner.
 
-- [!] **4.1 planner rewrite — IMPORTED (PR #16), NOT REPRODUCED HERE.** Their model-backed
+- [x] **4.1 planner rewrite — CLOSED 2026-09-28: reproduced here at 35/36 (0.972), zero fallbacks, three live runs.** Measured by `apps/eval-service/tests/test_planner_strategy_live.py` (eval PlannerClient → intelligence-service → model-gateway on real AppConfig → Bedrock `apac.amazon.nova-lite-v1:0`), which fails on any keyword fallback as well as below 0.90; with the gateway stopped it reads 17/36, 28 fallbacks, and fails. The one miss is the same v1 case theirs missed. **Previously recorded:** IMPORTED (PR #16), NOT REPRODUCED HERE. Their model-backed
       selection with keyword fallback scores 35/36 on their machine. Here: **27/36 on Qwen** (our
       task 1.5 binding) and **17/36 on Nova Lite with all 28 calls falling back** — exactly the
       pre-rewrite keyword score. **Every Nova model in `ap-south-1` is `INFERENCE_PROFILE` only and
@@ -761,7 +763,7 @@ demo.
       auto-approve, not skip-on-timeout, not approve-once-then-promote. The imported code places a
       gate before qualifying external side effects — placement without modes. Found during the
       #172–#193 import. Decide whether §16 gets built or amended; Track D owns the second option.
-- [ ] **C31 [+] bind the model aliases to invocable ids, then re-measure 4.1.** Every Nova model in
+- [x] **C31 [+] bind the model aliases to invocable ids, then re-measure 4.1.** **CLOSED 2026-09-28 AS A MISDIAGNOSIS.** The deployed aliases already name inference profiles (`apac.amazon.nova-lite-v1:0` etc.), and 4.1 clears the floor on them. The 17/36 of 2026-09-22 was the path never reaching a model: #173's own table shows 17/36 with 28 fallbacks when the issuer is down, and `run-model-gateway-aws.sh` was starting the gateway in mock mode (found in 1.6). The keeper stays true: a fallback hid an outage as a score. Every Nova model in
       `ap-south-1` needs an inference profile ARN; a bare id fails every call and the keyword
       fallback hides it. Bind `STANDARD` to a working profile, re-run the planner golden set, close
       4.1 only if it clears 0.90 here. **The finding worth keeping: a fallback masking a total
@@ -816,9 +818,7 @@ Everything below is also a numbered item elsewhere in this file. Updated after P
 `alter-x-4-` #216–#232, which leaves nothing of theirs unimported as of `4e73a08`.
 
 **Blocking the demo**
-- [ ] **C31 — bind the model aliases to invocable ids, then re-measure 4.1.** Nova in `ap-south-1` is
-      inference-profile only; a bare id fails every call and the keyword fallback hides it.
-- [ ] **4.1** stays open until that re-measure clears 0.90 **on our hardware**.
+- [x] **C31 / 4.1** — closed 2026-09-28: 35/36 here, zero fallbacks; C31 was a misdiagnosis.
 - [ ] **C29 slice 2b** — carry success criteria to the producing node and the gate.
 - [ ] **C30 — §16's four approval modes do not exist in code.** Build §16, or amend it in Track D.
 
