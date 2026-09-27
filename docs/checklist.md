@@ -65,6 +65,8 @@ issue. No code has changed.
 
 ## Phase 1 — buy and wire the two providers
 
+**PHASE 1 CLOSED 2026-09-28.** 1.0–1.6 all done; the phase's done-when was met on 2026-09-09 and its last reproducibility gap closed with PR #19.
+
 *1–2 weeks · highest leverage in the plan.* Eight components are judged "works, quality
 unproven" purely because the local mock answers everything. It has already produced three
 false readings.
@@ -150,7 +152,7 @@ false readings.
       model output reliability, not something Phase 1 committed to fixing — worth its own
       ticket, not chased here.
 
-- [ ] **1.6 [+] finish reproducibility for the gateway services.** audit-service and
+- [x] **1.6 [+] finish reproducibility for the gateway services.** **CLOSED 2026-09-28, PR #19 (`bf58fa9`): all four gateway services boot real from `.env.local.example` — `bash scripts/run-service-aws.sh <service> --check` prints `<service> boot-ok` for model-gateway, tool-gateway, sandbox-service and provisioning-service, re-run on main after merge. No purchase was needed: Anthropic/OpenAI became optional failovers, the admin-token reference was misnamed, provisioning reads no AppConfig, sandbox reads the engine-wide tool policy (version 2 adds `browser.verify_render`), and two addresses were never committed. Detail in memoryalter 2026-09-28.** audit-service and
       cost-ledger-service bring up from committed configuration; model-gateway, tool-gateway,
       sandbox-service and provisioning-service do not. **Corrected 2026-09-09 — the vendor
       list was incomplete.** Verified directly against each service's environment schema

@@ -574,6 +574,43 @@ verified identical to the stash before it was dropped. Never stash mid-merge.
 
 ---
 
+### 2026-09-28 — 1.6 closed and Phase 1 concluded (PR #19); the blockers were config, not purchases
+
+**Built by the CEO session on Havish's explicit instruction** ("I want you alone to build it"),
+named for this task only.
+
+**Re-measured, the recorded blockers were mostly wrong.** Only one of the five "vendor purchases"
+was ever needed to boot, and it did not need buying:
+1. **Anthropic/OpenAI** were hard-required references for optional failovers behind Bedrock;
+   `main.ts` already tolerated a missing secret. Now optional; the committed file no longer names
+   two secrets that do not exist.
+2. **The committed admin-token reference was misnamed** (`platform-admin-token` vs the real
+   `platform-admin-service-token`). That alone stopped model-gateway from booting from committed
+   config, and nobody had noticed because nobody booted it from the committed file.
+3. **`run-model-gateway-aws.sh` had been starting the gateway in mock mode** since the C2 split
+   retired `MODEL_GATEWAY_CONFIG_SOURCE`. It looked real. Replaced by `run-service-aws.sh`.
+4. **provisioning-service reads no AppConfig.** "Needs an AppConfig application" was stale.
+5. **sandbox-service** now reads the tool-gateway policy: the policy is one engine-wide document,
+   and a second copy could only drift. Its one permission, `browser.verify_render`, was absent, so
+   every call was denied; added as hosted version 2 of `alterx-tool-gateway/local/tool-gateway-policy`
+   (AWS change, outside the diff).
+6. **tool-gateway's own 2026-09-10 closure did not hold from the committed file**:
+   `AUDIT_SERVICE_GRPC_ADDRESS` was never in it. `ARTIFACT_CONTENT_SERVICE_ADDRESS` was also missing
+   for sandbox, required even in mock mode.
+
+**The finding worth keeping: a boot proved nothing about AppConfig.** Services read AppConfig
+lazily, so a bogus application id still produced a clean boot and a healthy `/health`. The check
+now fetches and schema-validates the policy with the committed identifiers; the negative control
+that passed before that change fails after it. Same shape as C31: a check that cannot see the
+path it claims to cover.
+
+**Evidence.** `bash scripts/run-service-aws.sh <service> --check` prints `boot-ok` for all four,
+live, from `.env.local.example`, re-run on main after the merge. `check-reference-resolution.sh`
+now covers the admin token and every committed AppConfig triple. Negative controls: one broken
+secret reference per service stops it at startup; a broken AppConfig id fails the check.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.
