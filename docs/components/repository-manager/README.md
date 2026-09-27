@@ -19,7 +19,8 @@ Declared surface for managing repositories. Nothing is known about its intended 
 
 ## Where the code lives
 
-**Nowhere.** No implementation exists in this repository.
+- `apps/platform-api/src/repositories`
+- `apps/platform-web/src/features/settings/pages/repositories.tsx`
 
 ## Current state
 
@@ -36,6 +37,10 @@ Not in the design log. **Needs a scope decision before an engineering one** (dec
 **Cut.** Declared, never implemented, and unlike Deployment Manager it has no backend contract to build against. Nobody has stated what it is for.
 
 **Decided, not executed.** Cutting means removing or deprecating the declaration — a note is not a cut. Task 5.2 stays open until it is gone.
+
+## Decision — 2026-09-28 · design log §33 amended · **BUILT, STANDALONE**
+
+Havish reinstated it for v1 with a written purpose: link GitHub repositories through the workspace's own GitHub OAuth connection and read their branches and open pull requests. Code: `apps/platform-api/src/repositories`, migration `0021_repository_bindings`, `apps/platform-web/src/features/settings/pages/repositories.tsx`. Read-only against GitHub; bindings hold identifiers, never tokens. Creation, transfer and writes stay with Project Mode (out of v1, §23).
 
 Note that **Deployment Manager is not cut**: its backend contract is real (`DeployctlService`, three RPCs) and only the surface is missing. It remains task 5.3.
 

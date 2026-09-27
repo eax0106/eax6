@@ -405,6 +405,8 @@ Both were declared as contracts with nothing behind them. Both are cut from the 
 - **Repository Manager.** Declared, never implemented, and unlike Deployment Manager it has no backend contract to build against. Nobody has stated what it is for.
 
 **Cutting means removing or deprecating the declaration, not writing a note.** A contract that remains generates clients, appears in counts, and sits inside every estimate of remaining work — which is the cost that made this worth deciding at all. If either returns later it returns as a scoped addition with a named vendor or a written purpose, never as a rediscovered obligation.
+
+**Amended 2026-09-28 (Havish): the Repository Manager returns to v1, standalone.** It returns exactly as this section required — with a written purpose and a named vendor. **Purpose:** a workspace links GitHub repositories reachable through its own GitHub OAuth connection and reads their branches and open pull requests. **Vendor:** GitHub, through the existing OAuth Hub connector (scopes `read:user repo`), so no GitHub App is introduced. **Scope boundary:** read-only against GitHub; bindings store identifiers, never tokens; no repository creation, transfer or write — those belong to Project Mode, which stays out of v1 (§23). Voice stays cut.
 ---
 
 ## Status as of 2026-09-01

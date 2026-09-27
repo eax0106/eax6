@@ -1261,3 +1261,40 @@ export interface FeatureFlag {
   updatedAt: string;
   updatedBy: UserSummary;
 }
+
+// Repository Manager (task 5.2): a workspace's links to GitHub repositories,
+// read through one of its own GitHub connections. Branches and pull requests
+// are live reads, never stored.
+export interface RepositoryBinding {
+  id: string
+  connectionId: string
+  fullName: string
+  defaultBranch: string
+  private: boolean
+  htmlUrl: string
+  createdAt: string
+}
+
+export interface AvailableRepository {
+  fullName: string
+  defaultBranch: string
+  private: boolean
+  htmlUrl: string
+}
+
+export interface RepositoryBranch {
+  name: string
+  commitSha: string
+  protected: boolean
+}
+
+export interface RepositoryPullRequest {
+  number: number
+  title: string
+  draft: boolean
+  author: string | null
+  headBranch: string
+  baseBranch: string
+  htmlUrl: string
+  updatedAt: string
+}

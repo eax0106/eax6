@@ -26,6 +26,7 @@ import { IntegrationModule } from "./integrations";
 import { TriggerModule } from "./triggers";
 import { BillingModule } from "./billing";
 import { EnvVarModule } from "./env-vars";
+import { RepositoryModule } from "./repositories";
 import { CostsModule } from "./costs/costs.module";
 import { WhatsappModule } from "./channels/whatsapp/whatsapp.module";
 import { MarketplaceModule } from "./marketplace";
@@ -77,6 +78,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     BillingModule,
     CostsModule,
     EnvVarModule,
+    RepositoryModule,
     WhatsappModule,
     MarketplaceModule,
     PublisherModule,

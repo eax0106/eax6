@@ -101,3 +101,52 @@ describe("IntegrationService.runHealthSweep", () => {
     );
   });
 });
+
+describe("IntegrationService.accessTokenFor", () => {
+  function serviceWith(record: OAuthConnectionRecord, uses: string[]) {
+    const connections = new Map([[`${tenantId}:${workspaceId}:${record.id}`, record]]);
+    const repository = {
+      ...fakeRepository(connections),
+      recordUse: async (_tenant: string, _id: string, _actor: string, action: string) => {
+        uses.push(action);
+        return "audit-id";
+      },
+    } as unknown as IntegrationRepository;
+    return new IntegrationService(
+      repository,
+      fakeSecrets,
+      { fetchAccountId: async () => "acct" } as unknown as OAuthHttpClient,
+      connectorConfig,
+      300,
+      undefined,
+    );
+  }
+
+  it("releases a connected connection's token and audits the release", async () => {
+    const uses: string[] = [];
+    const service = serviceWith(connectionRecord("conn-1"), uses);
+    await expect(
+      service.accessTokenFor(tenantId, workspaceId, "conn-1", "github", "usr_1", "repository_access", "/i"),
+    ).resolves.toBe("token-value");
+    expect(uses).toEqual(["repository_access"]);
+  });
+
+  it.each([
+    ["another connector", { connector: "google" as const }],
+    ["a revoked connection", { status: "revoked" as const }],
+  ])("refuses %s and releases nothing", async (_label, override) => {
+    const uses: string[] = [];
+    const service = serviceWith({ ...connectionRecord("conn-1"), ...override }, uses);
+    await expect(
+      service.accessTokenFor(tenantId, workspaceId, "conn-1", "github", "usr_1", "repository_access", "/i"),
+    ).rejects.toMatchObject({ response: expect.objectContaining({ status: 409 }) });
+    expect(uses).toEqual([]);
+  });
+
+  it("does not reach another workspace's connection", async () => {
+    const service = serviceWith(connectionRecord("conn-1"), []);
+    await expect(
+      service.accessTokenFor(tenantId, "ws_other", "conn-1", "github", "usr_1", "repository_access", "/i"),
+    ).rejects.toMatchObject({ response: expect.objectContaining({ status: 404 }) });
+  });
+});

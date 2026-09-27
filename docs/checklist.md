@@ -409,6 +409,8 @@ against a real provider.
 
 ## Phase 5 — build what does not exist
 
+**PHASE 5 CLOSED 2026-09-28.** 5.1 voice cut and removed; 5.2 repository manager built standalone; 5.3 deployment manager imported (their #218/#219).
+
 *4–8 weeks · scope depends on decisions.* Both need a product decision before an
 engineering one. See 0.6.
 
@@ -419,7 +421,7 @@ engineering one. See 0.6.
       implementation under `apps/`. Needs a telephony vendor, a number-provisioning story,
       and a decision about whether voice ships at all. **The design log never mentions voice
       once** — not deferred like Project Mode, simply absent.
-- [ ] **5.2 repository manager** — **decision made 2026-09-08: CUT** (design log §33).
+- [x] **5.2 repository manager** — **BUILT 2026-09-28, standalone (design log §33 amended by Havish):** `apps/platform-api/src/repositories` (bindings table 0021 with tenant RLS, GitHub read client acting as the workspace's own OAuth connection, routes to list/link/unlink and read branches and open pull requests) and the Repositories settings page. Read-only against GitHub; no token stored. Live proof against GitHub waits on registering a GitHub OAuth app (handoff). **Previously:** decision made 2026-09-08: CUT (design log §33).
       *Decided, not executed.* Remove or deprecate the declaration. C9. No backend contract to build
       against.
 - [x] **5.3 deployment manager** **CLOSED 2026-09-27 — their #218/#219, imported in PR #18: version lifecycle and real rollback.** — surface only. C8. The backend contract is real
@@ -785,6 +787,13 @@ demo.
       project and workflow routes lives in `EnforcingRbacModule`; only the revive-platform integration
       suite binds it (PR #17). A regression in the resolver would pass every other test.
 
+- [ ] **C35 [+] vitest hangs whenever the repository-root `.env.local` exists.** Found 2026-09-28:
+      any vitest run (platform-api, model-gateway) sits at 100% CPU with no output after Vite loads
+      env files; moving `.env.local` aside makes the same spec pass in seconds. Every developer who
+      follows AGENTS.md has that file. Likely Vite's env expansion on the file's many
+      `${VAR:-default}` values; not yet proven. Workaround: set `envDir` for test configs, or run
+      tests with `.env.local` moved.
+
 ---
 
 ## Track D [+] — design-log conformance, after the builds
@@ -824,7 +833,7 @@ Everything below is also a numbered item elsewhere in this file. Updated after P
 
 **Decisions waiting on Havish**
 - [ ] **6.1** — EC2 + Docker + Bedrock MVP (their #232) or AWS-native first.
-- [ ] **5.2** — repository manager: remove the declaration, or scope it with Project Mode (§23, §33).
+- [x] **5.2** — built standalone 2026-09-28; live GitHub proof needs the GitHub OAuth app registered.
 - [ ] **C32** — image publishing collides with `alter-x-4-`'s packages.
 - [ ] **Tell Surya and Satwik that building moves to alterengine-6.** Every week it waits adds an import.
 

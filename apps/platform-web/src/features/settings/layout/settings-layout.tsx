@@ -1,5 +1,5 @@
 import { NavLink, Outlet } from "react-router-dom"
-import { Shield, User, MonitorSmartphone, Globe, Building2, Users, Key, ScrollText, LifeBuoy, MapPinned } from "lucide-react"
+import { Shield, User, MonitorSmartphone, Globe, Building2, Users, Key, ScrollText, LifeBuoy, MapPinned, GitBranch } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const personalNavItems = [
@@ -14,6 +14,7 @@ const workspaceNavItems = [
   { name: "Members", href: "/app/settings/members", icon: Users },
   { name: "Roles", href: "/app/settings/roles", icon: Key },
   { name: "Data residency", href: "/app/settings/data-residency", icon: MapPinned },
+  { name: "Repositories", href: "/app/settings/repositories", icon: GitBranch },
   { name: "Audit Logs", href: "/app/settings/audit", icon: ScrollText },
   { name: "Support Access", href: "/app/settings/support", icon: LifeBuoy },
 ]

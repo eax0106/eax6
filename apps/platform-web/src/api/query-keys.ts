@@ -46,6 +46,12 @@ export const queryKeys = {
     language: ["settings", "language"] as const,
     dataResidency: ["settings", "data-residency"] as const,
   },
+  repositories: {
+    list: ["repositories", "list"] as const,
+    available: (connectionId: string) => ["repositories", "available", connectionId] as const,
+    branches: (id: string) => ["repositories", id, "branches"] as const,
+    pulls: (id: string) => ["repositories", id, "pulls"] as const,
+  },
   humanActions: {
     list: (filters?: any) => ["humanActions", "list", filters] as const,
     detail: (id: string) => ["humanActions", "detail", id] as const,
