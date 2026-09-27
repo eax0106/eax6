@@ -20,7 +20,13 @@ import { MarketplaceAdminService } from "./services/marketplace-admin"
 import { FeatureFlagsService } from "./services/feature-flags"
 import { SupportAccessService } from "./services/support-access"
 import { isLiveApi } from "./http"
-import type { HumanActionFilters } from "./types"
+import type {
+  AvailableRepository,
+  HumanActionFilters,
+  RepositoryBinding,
+  RepositoryBranch,
+  RepositoryPullRequest,
+} from "./types"
 import * as live from "./live"
 import { 
   mockWorkflows, mockRuns, mockDashboardSummary, 
@@ -1262,7 +1268,67 @@ class ApiClient {
     if (idx > -1) mockWhatsAppChannels.splice(idx, 1)
   }
 
+
+  // Repository Manager (task 5.2). Mock mode keeps an in-memory list so the
+  // page is usable without a GitHub connection; live mode calls platform-api.
+  async getRepositories(): Promise<RepositoryBinding[]> {
+    if (isLiveApi) return live.getRepositories()
+    await delay(MOCK_DELAY)
+    return [...mockRepositoryBindings]
+  }
+
+  async getAvailableRepositories(connectionId: string): Promise<AvailableRepository[]> {
+    if (isLiveApi) return live.getAvailableRepositories(connectionId)
+    await delay(MOCK_DELAY)
+    return mockAvailableRepositories
+  }
+
+  async bindRepository(connectionId: string, fullName: string): Promise<RepositoryBinding> {
+    if (isLiveApi) return live.bindRepository(connectionId, fullName)
+    await delay(MOCK_DELAY)
+    const repo = mockAvailableRepositories.find((candidate) => candidate.fullName === fullName)
+    if (!repo) throw new Error("The repository does not exist or this connection cannot see it")
+    if (mockRepositoryBindings.some((binding) => binding.fullName === fullName)) {
+      throw new Error(`${fullName} is already linked to this workspace`)
+    }
+    const binding: RepositoryBinding = {
+      id: `rep_${crypto.randomUUID()}`,
+      connectionId,
+      fullName: repo.fullName,
+      defaultBranch: repo.defaultBranch,
+      private: repo.private,
+      htmlUrl: repo.htmlUrl,
+      createdAt: new Date().toISOString(),
+    }
+    mockRepositoryBindings.push(binding)
+    return binding
+  }
+
+  async unbindRepository(id: string): Promise<void> {
+    if (isLiveApi) return live.unbindRepository(id)
+    await delay(MOCK_DELAY)
+    const index = mockRepositoryBindings.findIndex((binding) => binding.id === id)
+    if (index > -1) mockRepositoryBindings.splice(index, 1)
+  }
+
+  async getRepositoryBranches(id: string): Promise<RepositoryBranch[]> {
+    if (isLiveApi) return live.getRepositoryBranches(id)
+    await delay(MOCK_DELAY)
+    return [{ name: "main", commitSha: "0000000", protected: true }]
+  }
+
+  async getRepositoryPullRequests(id: string): Promise<RepositoryPullRequest[]> {
+    if (isLiveApi) return live.getRepositoryPullRequests(id)
+    await delay(MOCK_DELAY)
+    return []
+  }
 }
+
+const mockRepositoryBindings: RepositoryBinding[] = []
+const mockAvailableRepositories: AvailableRepository[] = [
+  { fullName: "demo/website", defaultBranch: "main", private: false, htmlUrl: "https://github.com/demo/website" },
+  { fullName: "demo/api", defaultBranch: "main", private: true, htmlUrl: "https://github.com/demo/api" },
+]
 
 
 const apiClient = new ApiClient();

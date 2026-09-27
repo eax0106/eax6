@@ -69,6 +69,7 @@ import { KycPage } from "@/features/seller/pages/kyc"
 import { NotificationCentrePage } from "@/features/notifications/pages/notification-centre"
 import { NotificationPreferencesPage } from "@/features/settings/pages/notification-preferences"
 import { DataResidencySettings } from "@/features/settings/pages/data-residency"
+import { RepositorySettings } from "@/features/settings/pages/repositories"
 import { DiscoveryPage } from "@/features/discovery/pages/discovery-page"
 import { BenchmarkListPage } from "@/features/benchmarks/pages/benchmark-list"
 import { CreateBenchmarkPage } from "@/features/benchmarks/pages/create-benchmark"
@@ -357,6 +358,7 @@ export const router = createBrowserRouter([
           { path: "members", element: <MembersPage /> },
           { path: "roles", element: <RolesPage /> },
           { path: "data-residency", element: <DataResidencySettings /> },
+          { path: "repositories", element: <RepositorySettings /> },
           { path: "audit", element: <RequirePermission permission="audit.read"><SettingsAudit /></RequirePermission> },
           { path: "support", element: <SettingsSupport /> },
         ]

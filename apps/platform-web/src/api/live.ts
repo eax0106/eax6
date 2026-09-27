@@ -1,6 +1,10 @@
 import { apiDelete, apiGet, apiGetWithEtag, apiPatch, apiPost, apiPut, mutationKey } from "./http"
 import { compileDag } from "./compile-dag"
 import type {
+  AvailableRepository,
+  RepositoryBinding,
+  RepositoryBranch,
+  RepositoryPullRequest,
   HumanActionFilters,
   Artifact,
   DashboardOverview,
@@ -1598,4 +1602,78 @@ function mapHumanActionStatus(value: unknown, type: HumanActionType): HumanActio
   if (value === "approved" || value === "rejected" || value === "answered" || value === "resolved") return "resolved"
   if (value === "expired" || value === "cancelled") return "expired"
   return "open"
+}
+
+// --- Repository Manager (task 5.2) -----------------------------------------
+
+function mapRepositoryBinding(value: unknown): RepositoryBinding {
+  const item = value as AnyRecord
+  return {
+    id: asString(item.id),
+    connectionId: asString(item.connection_id),
+    fullName: asString(item.full_name),
+    defaultBranch: asString(item.default_branch),
+    private: item.private === true,
+    htmlUrl: asString(item.html_url),
+    createdAt: asString(item.created_at),
+  }
+}
+
+export async function getRepositories(): Promise<RepositoryBinding[]> {
+  const body = await apiGet<unknown>("/api/v1/repositories")
+  return (Array.isArray(body) ? body : []).map(mapRepositoryBinding)
+}
+
+export async function getAvailableRepositories(connectionId: string): Promise<AvailableRepository[]> {
+  const body = await apiGet<unknown>(
+    `/api/v1/repositories/available?connection_id=${encodeURIComponent(connectionId)}`,
+  )
+  return (Array.isArray(body) ? body : []).map((value) => {
+    const item = value as AnyRecord
+    return {
+      fullName: asString(item.full_name),
+      defaultBranch: asString(item.default_branch),
+      private: item.private === true,
+      htmlUrl: asString(item.html_url),
+    }
+  })
+}
+
+export async function bindRepository(connectionId: string, fullName: string): Promise<RepositoryBinding> {
+  return mapRepositoryBinding(
+    await apiPost<unknown>(
+      "/api/v1/repositories",
+      { connection_id: connectionId, full_name: fullName },
+      { idempotencyKey: mutationKey("repository-bind") },
+    ),
+  )
+}
+
+export async function unbindRepository(id: string): Promise<void> {
+  await apiDelete(`/api/v1/repositories/${encodeURIComponent(id)}`)
+}
+
+export async function getRepositoryBranches(id: string): Promise<RepositoryBranch[]> {
+  const body = await apiGet<unknown>(`/api/v1/repositories/${encodeURIComponent(id)}/branches`)
+  return (Array.isArray(body) ? body : []).map((value) => {
+    const item = value as AnyRecord
+    return { name: asString(item.name), commitSha: asString(item.commit_sha), protected: item.protected === true }
+  })
+}
+
+export async function getRepositoryPullRequests(id: string): Promise<RepositoryPullRequest[]> {
+  const body = await apiGet<unknown>(`/api/v1/repositories/${encodeURIComponent(id)}/pulls`)
+  return (Array.isArray(body) ? body : []).map((value) => {
+    const item = value as AnyRecord
+    return {
+      number: Number(item.number),
+      title: asString(item.title),
+      draft: item.draft === true,
+      author: typeof item.author === "string" ? item.author : null,
+      headBranch: asString(item.head_branch),
+      baseBranch: asString(item.base_branch),
+      htmlUrl: asString(item.html_url),
+      updatedAt: asString(item.updated_at),
+    }
+  })
 }

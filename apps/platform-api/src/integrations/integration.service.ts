@@ -326,6 +326,36 @@ export class IntegrationService {
     return project(updated);
   }
 
+  /**
+   * A connection's access token, for another platform-api module that acts
+   * through it (the Repository Manager reads GitHub as the workspace's own
+   * connection). Only a connected connection of the expected connector is
+   * released, and every release is written to the connection's use audit, the
+   * same trail a health check leaves.
+   */
+  async accessTokenFor(
+    tenantId: string,
+    workspaceId: string,
+    id: string,
+    connector: ConnectorId,
+    actorId: string,
+    purpose: string,
+    instance: string,
+  ): Promise<string> {
+    const record = await this.requireConnection(tenantId, workspaceId, id, instance);
+    if (record.connector !== connector || record.status !== "connected") {
+      throw new IntegrationHttpError(
+        409,
+        "INTEGRATION_CONNECTION_UNUSABLE",
+        `Connection is not a connected ${connector} connection`,
+        instance,
+      );
+    }
+    const token = await this.readToken(tenantId, workspaceId, id, instance);
+    await this.repository.recordUse(tenantId, id, actorId, purpose);
+    return token.access_token;
+  }
+
   async runHealthSweep(
     actorId: string,
   ): Promise<{ readonly connectionsProcessed: number; readonly connectionsFailed: number }> {

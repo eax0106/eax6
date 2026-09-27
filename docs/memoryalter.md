@@ -635,6 +635,32 @@ call falls back until that service restarts. Restart the callers with the issuer
 
 ---
 
+### 2026-09-28 — Havish's decisions for Phases 5 and 6, and the Repository Manager built
+
+**Decisions (Havish, 2026-09-28):**
+1. **Repository Manager is built for v1, standalone** — design log §33 amended. Read-only GitHub
+   through the workspace's OAuth connection; Project Mode stays out (§23).
+2. **6.1 deploys to a single EC2 server first** (Docker + Bedrock, as their #232 set up); AWS-native
+   later.
+3. **6.2 uses Temporal Cloud, pay-as-you-go** ($0 minimum, $50 per million actions, $150 new-account
+   credit; startup program to be applied for). Self-hosting on one EC2 was rejected: one disk loss
+   would lose every in-flight run, which defeats the substrate.
+4. **Sign-offs:** Havish is CEO and gives the promotion-gate approval; he asked to proceed and ship.
+
+**What Claude may not do, recorded so nobody waits on it:** create the Temporal Cloud account,
+register the GitHub OAuth app, or enter their keys. Those are Havish's; each is a few minutes, and
+the secrets go into Secrets Manager under the names the code already reads.
+
+**5.2 built** (`apps/platform-api/src/repositories`, migration 0021, settings page). A new
+`IntegrationService.accessTokenFor` releases a connection's token to another module only for a
+connected connection of the expected connector, and audits each release; its refusal tests fail
+when the check is removed. Tested against a fake GitHub and a real Postgres (RLS); the live GitHub
+proof needs the OAuth app registered.
+
+**C35 found on the way:** vitest hangs whenever the root `.env.local` exists.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.
