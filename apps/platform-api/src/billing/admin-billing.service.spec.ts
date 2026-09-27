@@ -1,6 +1,7 @@
 import { createMockBillingProvider, type BillingProvider } from "@alterx/shared-clients";
 import { describe, expect, it, vi } from "vitest";
 import { AdminAuditService } from "../admin-audit";
+import { AdminBillingRepository } from "./admin-billing.repository";
 import { AdminBillingService } from "./admin-billing.service";
 import { BillingHttpError } from "./problem";
 
@@ -13,6 +14,7 @@ describe("AdminBillingService", () => {
     const service = new AdminBillingService(
       provider,
       { record } as unknown as AdminAuditService,
+      {} as AdminBillingRepository,
     );
 
     await expect(service.refund("stf_billing", {
@@ -37,6 +39,7 @@ describe("AdminBillingService", () => {
     const service = new AdminBillingService(
       provider,
       { record } as unknown as AdminAuditService,
+      {} as AdminBillingRepository,
     );
 
     await service.resolveDispute("stf_billing", "disp_123", {
@@ -65,6 +68,7 @@ describe("AdminBillingService", () => {
     const service = new AdminBillingService(
       provider,
       { record } as unknown as AdminAuditService,
+      {} as AdminBillingRepository,
     );
 
     await expect(service.refund("stf_billing", {

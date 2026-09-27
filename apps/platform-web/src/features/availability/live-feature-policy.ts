@@ -32,8 +32,6 @@ export const liveFeatureNames: Record<LiveFeature, string> = {
 
 const unfinishedLiveFeatures = new Set<LiveFeature>([
   "admin-deployments",
-  "admin-billing",
-  "admin-marketplace",
   "benchmarks",
   "discovery",
   "notifications",
