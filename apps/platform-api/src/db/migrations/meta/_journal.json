@@ -183,6 +183,13 @@
       "when": 1789790400000,
       "tag": "0021_repository_bindings",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789876800000,
+      "tag": "0022_admin_users",
+      "breakpoints": true
     }
   ]
 }

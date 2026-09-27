@@ -1,4 +1,6 @@
 import type { AdminUser, AdminNote } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-users"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -16,11 +18,13 @@ const MOCK_NOTES: Record<string, AdminNote[]> = {
 
 export class AdminUsersService {
   async list(): Promise<AdminUser[]> {
+    if (isLiveApi) return live.listUsers()
     await delay(300)
     return MOCK_USERS
   }
 
   async get(id: string): Promise<AdminUser> {
+    if (isLiveApi) return live.getUser(id)
     await delay(200)
     const user = MOCK_USERS.find(u => u.id === id)
     if (!user) throw new Error("User not found")
@@ -28,11 +32,13 @@ export class AdminUsersService {
   }
 
   async getNotes(id: string): Promise<AdminNote[]> {
+    if (isLiveApi) return live.getUserTimeline(id)
     await delay(100)
     return MOCK_NOTES[id] || []
   }
 
   async addNote(id: string, body: string): Promise<AdminNote> {
+    if (isLiveApi) throw new Error("User notes are not available yet: platform-api has no notes store")
     await delay(300)
     const newNote: AdminNote = {
       id: `note-${Date.now()}`,
@@ -47,6 +53,7 @@ export class AdminUsersService {
   }
 
   async suspend(id: string, reason: string): Promise<AdminUser> {
+    if (isLiveApi) return live.suspendUser(id, reason)
     await delay(400)
     const idx = MOCK_USERS.findIndex(u => u.id === id)
     if (idx === -1) throw new Error("Not found")
@@ -56,6 +63,7 @@ export class AdminUsersService {
   }
 
   async restore(id: string, reason: string): Promise<AdminUser> {
+    if (isLiveApi) return live.reinstateUser(id)
     await delay(400)
     const idx = MOCK_USERS.findIndex(u => u.id === id)
     if (idx === -1) throw new Error("Not found")
@@ -65,6 +73,7 @@ export class AdminUsersService {
   }
 
   async lockSessions(id: string, reason: string): Promise<void> {
+    if (isLiveApi) return live.revokeUserSessions(id, reason)
     await delay(500)
     await this.addNote(id, `Sessions locked. Reason: ${reason}`)
   }

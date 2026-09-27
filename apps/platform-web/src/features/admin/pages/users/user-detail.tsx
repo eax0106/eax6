@@ -103,8 +103,8 @@ export function UserDetail() {
         </Card>
         <Card className="p-4 bg-slate-900 border-slate-800">
           <p className="text-sm text-slate-400">MFA Status</p>
-          <p className={`text-lg font-medium mt-1 ${user.mfaEnabled ? "text-emerald-400" : "text-amber-400"}`}>
-            {user.mfaEnabled ? "Enabled" : "Disabled"}
+          <p className={`text-lg font-medium mt-1 ${user.mfaEnabled === undefined ? "text-slate-500" : user.mfaEnabled ? "text-emerald-400" : "text-amber-400"}`}>
+            {user.mfaEnabled === undefined ? "—" : user.mfaEnabled ? "Enabled" : "Disabled"}
           </p>
         </Card>
       </div>

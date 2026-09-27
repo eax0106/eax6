@@ -41,6 +41,7 @@ import { StaffModule } from "./staff";
 import { CliModule } from "./cli";
 import { SystemHealthModule } from "./system-health/system-health.module";
 import { AdminTenantsModule } from "./admin-tenants";
+import { AdminUsersModule } from "./admin-users";
 import { AdminPolicyModule } from "./admin-policy";
 import { BenchmarksModule } from "./benchmarks";
 import { AuditEventsModule } from "./audit-events";
@@ -92,6 +93,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     CliModule,
     SystemHealthModule,
     AdminTenantsModule,
+    AdminUsersModule,
     AdminPolicyModule,
     BenchmarksModule,
     AuditEventsModule,

@@ -24,7 +24,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 |---|---|---|
 | B1.0 | Staff sign-in for the admin console: nothing issued the staff cookie, so no admin screen could ever authenticate. PKCE against the staff Auth0 tenant, cookie only for recognised staff, live-mode gate and callback page. | done (this PR) |
 | B1.1 | admin-tenants: list, detail behind the support-grant gate (staff admin self-grant with reason and duration), suspend, reinstate, action history as the timeline; admin console gated per section | done (this PR) |
-| B1.2 | admin-users | todo |
+| B1.2 | admin-users: suspension now enforced (session store accepts only active users), cross-tenant list and detail, suspend (revokes every session), reinstate, revoke sessions, append-only history, audit | done (this PR) |
 | B1.3 | audit | todo |
 | B1.4 | feature-flags | todo |
 | B1.5 | incidents | todo |
@@ -94,4 +94,5 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B1 live proof | A staff Auth0 tenant with a PKCE app (callback `<origin>/staff/callback`), and each staff member added to `staff_users` |
 | C30 | Build §16's four approval modes, or amend §16; plus open question 8 (notification channel) |
 | C32 | Grant this repository write on the GHCR packages, rename our images, or turn `images` publishing off here |
+| B1.2 gaps | Admin user screens show MFA and risk state in demo only; user notes (write) have no backend. Build or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |

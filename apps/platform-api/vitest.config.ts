@@ -28,6 +28,7 @@ export default defineConfig({
       "apps/platform-api/src/idempotency/**/*.integration.spec.ts",
       "apps/platform-api/src/credentials/**/*.integration.spec.ts",
       "apps/platform-api/src/env-vars/**/*.integration.spec.ts",
+      "apps/platform-api/src/admin-users/**/*.integration.spec.ts",
       "apps/platform-api/src/billing/**/*.integration.spec.ts",
       "apps/platform-api/src/admin-tenants/**/*.integration.spec.ts",
       "apps/platform-api/src/entitlements/**/*.integration.spec.ts",
