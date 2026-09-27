@@ -142,6 +142,36 @@ export class IncidentService {
     return complete;
   }
 
+  /**
+   * Operational status (task B1.5). An incident leaves draft for
+   * investigating, then moves freely between investigating, monitoring and
+   * resolved -- resolved can reopen -- and never returns to draft.
+   */
+  async setStatus(
+    id: string,
+    staffUserId: string,
+    to: Exclude<AdminIncident["status"], "draft">,
+    reason: string,
+  ): Promise<AdminIncident> {
+    const current = await this.get(id);
+    if (current.status === to) return current;
+    if (current.status === "draft" && to !== "investigating") {
+      throw conflict(id, "A draft incident moves to investigating first");
+    }
+    const updated = await this.incidents.setStatus(id, current.status, to);
+    if (!updated) throw conflict(id, "Incident status changed concurrently; reload and retry");
+    await this.audit.record({
+      actorType: "admin",
+      actorRef: staffUserId,
+      action: `incident.status.${to}`,
+      targetType: "incident",
+      targetRef: id,
+      reasonCode: reason.slice(0, 100),
+      scope: "incidents:write",
+    });
+    return updated;
+  }
+
   private async throwStateOrNotFound(id: string, detail: string): Promise<never> {
     if (!(await this.incidents.find(id))) throw notFound(id);
     throw conflict(id, detail);

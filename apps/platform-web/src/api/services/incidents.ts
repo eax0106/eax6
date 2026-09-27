@@ -1,4 +1,6 @@
 import type { Incident } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-ops"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -10,11 +12,13 @@ const MOCK_INCIDENTS: Incident[] = [
 
 export class IncidentsService {
   async list(): Promise<Incident[]> {
+    if (isLiveApi) return live.listIncidents()
     await delay(300)
     return MOCK_INCIDENTS
   }
 
   async get(id: string): Promise<Incident> {
+    if (isLiveApi) return live.getIncident(id)
     await delay(200)
     const inc = MOCK_INCIDENTS.find(i => i.id === id)
     if (!inc) throw new Error("Not found")
@@ -22,6 +26,7 @@ export class IncidentsService {
   }
 
   async update(id: string, updates: Partial<Incident>): Promise<Incident> {
+    if (isLiveApi) { if (!updates.status) throw new Error("Only the incident status can be changed here"); return live.setIncidentStatus(id, updates.status) }
     await delay(400)
     const inc = MOCK_INCIDENTS.find(i => i.id === id)
     if (!inc) throw new Error("Not found")

@@ -5,6 +5,7 @@ import {
   IncidentIdSchema,
   type ProblemDetails,
 } from "@alterx/contracts";
+import { z } from "zod";
 import { RequireStaffRole } from "../rbac/decorators";
 import type { RbacRequest } from "../rbac/types";
 import { IncidentExceptionFilter } from "./incident-exception.filter";
@@ -12,6 +13,12 @@ import { IncidentService } from "./incident.service";
 import { IncidentHttpError } from "./problem";
 
 const readRoles = ["staff_admin", "staff_support", "staff_billing_ops", "staff_security"] as const;
+const SetIncidentStatusRequestSchema = z
+  .object({
+    status: z.enum(["investigating", "monitoring", "resolved"]),
+    reason: z.string().trim().min(1).max(1_000),
+  })
+  .strict();
 
 @Controller("/api/v1/admin/incidents")
 @UseFilters(IncidentExceptionFilter)
@@ -59,6 +66,19 @@ export class IncidentController {
       parse(IncidentIdSchema, rawId, instance),
       requireStaff(request, instance),
       parse(IncidentApprovalRequestSchema, body, instance),
+    );
+  }
+
+  @Post(":id/actions/set-status")
+  @RequireStaffRole("staff_admin")
+  setStatus(@Param("id") rawId: string, @Body() body: unknown, @Req() request: RbacRequest) {
+    const instance = `/api/v1/admin/incidents/${rawId}/actions/set-status`;
+    const input = parse(SetIncidentStatusRequestSchema, body, instance);
+    return this.incidents.setStatus(
+      parse(IncidentIdSchema, rawId, instance),
+      requireStaff(request, instance),
+      input.status,
+      input.reason,
     );
   }
 

@@ -91,6 +91,21 @@ export class IncidentRepository implements OnModuleDestroy {
     return result.rows[0] ? mapRow(result.rows[0]) : undefined;
   }
 
+  /** Moves status only if it is still `from`, so concurrent staff edits cannot overwrite each other. */
+  async setStatus(
+    id: string,
+    from: AdminIncident["status"],
+    to: AdminIncident["status"],
+  ): Promise<AdminIncident | undefined> {
+    const result = await this.pool.query<IncidentRow>(
+      `UPDATE admin_incidents SET status = $3, updated_at = clock_timestamp()
+       WHERE id = $1 AND status = $2
+       RETURNING ${columns}`,
+      [id, from, to],
+    );
+    return result.rows[0] ? mapRow(result.rows[0]) : undefined;
+  }
+
   async claimPublishing(id: string): Promise<AdminIncident | undefined> {
     const result = await this.pool.query<IncidentRow>(
       `UPDATE admin_incidents

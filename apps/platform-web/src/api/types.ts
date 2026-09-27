@@ -1221,7 +1221,8 @@ export interface Incident {
   id: string;
   title: string;
   severity: "sev1" | "sev2" | "sev3" | "sev4";
-  status: "investigating" | "identified" | "monitoring" | "resolved";
+  // "draft": an incident not yet declared (live, B1.5).
+  status: "draft" | "investigating" | "identified" | "monitoring" | "resolved";
   startedAt: string;
   resolvedAt?: string;
   commander?: UserSummary;
