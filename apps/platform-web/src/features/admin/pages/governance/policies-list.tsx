@@ -72,8 +72,8 @@ export function PoliciesList() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <div className="text-sm text-slate-300">{new Date(p.updatedAt).toLocaleDateString()}</div>
-                    <div className="text-xs text-slate-500">{p.updatedBy.name}</div>
+                    <div className="text-sm text-slate-300">{p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : "—"}</div>
+                    <div className="text-xs text-slate-500">{p.updatedBy?.name ?? ""}</div>
                   </TableCell>
                 </TableRow>
               ))

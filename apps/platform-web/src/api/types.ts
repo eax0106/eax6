@@ -1237,8 +1237,9 @@ export interface PlatformPolicy {
   description: string;
   scope: "global" | "tenant";
   config: Record<string, unknown>;
-  updatedAt: string;
-  updatedBy: UserSummary;
+  // Model alias bindings carry no change timestamp in live mode (B1.6).
+  updatedAt?: string;
+  updatedBy?: UserSummary;
 }
 
 export interface SecurityReviewItem {

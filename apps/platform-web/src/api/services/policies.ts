@@ -1,4 +1,6 @@
 import type { PlatformPolicy } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-controls"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -10,11 +12,13 @@ const MOCK_POLICIES: PlatformPolicy[] = [
 
 export class PoliciesService {
   async list(): Promise<PlatformPolicy[]> {
+    if (isLiveApi) return live.listPolicies()
     await delay(300)
     return MOCK_POLICIES
   }
 
   async update(id: string, updates: Partial<PlatformPolicy>): Promise<PlatformPolicy> {
+    if (isLiveApi) throw new Error("Editing policies here is not available yet: change plan limits and model aliases through their own admin routes")
     await delay(400)
     const pol = MOCK_POLICIES.find(p => p.id === id)
     if (!pol) throw new Error("Not found")
