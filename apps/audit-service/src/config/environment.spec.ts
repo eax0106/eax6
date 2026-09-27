@@ -193,3 +193,62 @@ describe("loadAuditEnvironment", () => {
     expect(loaded).not.toHaveProperty("databaseUrl");
   });
 });
+
+describe("database authentication selection", () => {
+  // Neon has no AWS IAM authentication, so a deployed environment must be able
+  // to ask for password (static) auth. IAM stays the default outside local so
+  // no existing Aurora deployment changes behaviour by upgrading.
+  const deployed = {
+    ALTER_ENV: "staging",
+    ALTER_SERVICE_NAME: "audit-service",
+    ALTER_REGION: "ap-south-1",
+    ALTER_CONFIG_SOURCE: "local-file",
+    AUDIT_ARCHIVE_BUCKET_PARAM: "/alter/staging/audit/archive-bucket",
+    ADS_DELETION_BASE_URL: "http://ads-core.internal:8000",
+    ORCHESTRATION_DELETION_BASE_URL: "http://orchestration-service.internal:3000",
+    DELETION_PSEUDONYM_KEY_REF: "/alter/staging/audit-service/system/deletion-pseudonym-key",
+    DELETION_SERVICE_TOKEN_REF: "/alter/staging/audit-service/system/deletion-service-token",
+    DATABASE_HOST: "audit-db.internal",
+    DATABASE_PORT: "5432",
+    DATABASE_NAME: "audit_db",
+    DATABASE_USER: "audit_service",
+  };
+
+  it("still defaults a deployed environment to IAM", () => {
+    expect(loadAuditEnvironment({ ...deployed })).toMatchObject({
+      databaseAuthentication: "iam",
+      databaseHost: "audit-db.internal",
+    });
+  });
+
+  it("selects static auth when a deployed environment asks for it", () => {
+    expect(
+      loadAuditEnvironment({
+        ...deployed,
+        DATABASE_AUTHENTICATION: "static",
+        DATABASE_SECRET_REF: "/alter/staging/audit-service/system/database_credentials",
+      }),
+    ).toMatchObject({
+      databaseAuthentication: "static",
+      databaseSecretReference: "/alter/staging/audit-service/system/database_credentials",
+    });
+  });
+
+  it("requires the credential reference when static auth is selected", () => {
+    expect(() =>
+      loadAuditEnvironment({ ...deployed, DATABASE_AUTHENTICATION: "static" }),
+    ).toThrow(AuditConfigurationError);
+  });
+
+  it("rejects an unknown authentication mode", () => {
+    expect(() =>
+      loadAuditEnvironment({ ...deployed, DATABASE_AUTHENTICATION: "password" }),
+    ).toThrow(/must be static or iam/);
+  });
+
+  it("refuses IAM in the local environment, which has no signer", () => {
+    expect(() =>
+      loadAuditEnvironment(environment({ DATABASE_AUTHENTICATION: "iam" })),
+    ).toThrow(/cannot be iam in the local environment/);
+  });
+});

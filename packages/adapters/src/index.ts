@@ -144,6 +144,7 @@ export {
   type PostgresOrchestrationStoreIamConfig,
   type PostgresOrchestrationStoreStaticConfig,
 } from "./postgres/orchestration-store-provider";
+export { StaticConnectionError, staticPoolConfig } from "./postgres/static-connection";
 export {
   PostgresCostStoreProvider,
   POSTGRES_COST_FEATURE_DECISION,

@@ -441,3 +441,36 @@ describe("sharedOrchestrationPoolFactory", () => {
     void systemScoped.end();
   });
 });
+
+describe("static connections require TLS", () => {
+  const remote = "postgresql://svc:pw@ep-x-pooler.ap-southeast-1.aws.neon.tech/orchestration_db";
+
+  function captureConfig(connectionString: string): PoolConfig | undefined {
+    let captured: PoolConfig | undefined;
+    new PostgresOrchestrationStoreProvider(
+      { authentication: "static", connectionString, migrationsFolder },
+      {
+        poolFactory: (config) => {
+          captured = config;
+          return { on: vi.fn() } as unknown as Pool;
+        },
+      },
+    );
+    return captured;
+  }
+
+  it("refuses a remote connection string that does not ask for TLS", () => {
+    expect(() => captureConfig(remote)).toThrow(/sslmode/);
+    expect(() => captureConfig(`${remote}?sslmode=disable`)).toThrow(/sslmode/);
+  });
+
+  it("verifies the certificate when the connection string requires TLS", () => {
+    expect(captureConfig(`${remote}?sslmode=verify-full`)?.ssl).toEqual({
+      rejectUnauthorized: true,
+    });
+  });
+
+  it("leaves a loopback connection alone, so local and testcontainers still connect", () => {
+    expect(captureConfig("postgresql://u:p@127.0.0.1:5433/orchestration_db")?.ssl).toBeUndefined();
+  });
+});
