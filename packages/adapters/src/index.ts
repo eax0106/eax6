@@ -36,6 +36,7 @@ export {
   TemporalConfigurationError,
   TemporalDurableExecutionProvider,
   type TemporalConnectionConfig,
+  type TemporalWorkerDeploymentConfig,
 } from "./temporal/durable-execution-provider";
 export {
   ConversationDispatchClient,
@@ -143,6 +144,7 @@ export {
   type PostgresOrchestrationStoreIamConfig,
   type PostgresOrchestrationStoreStaticConfig,
 } from "./postgres/orchestration-store-provider";
+export { StaticConnectionError, staticPoolConfig } from "./postgres/static-connection";
 export {
   PostgresCostStoreProvider,
   POSTGRES_COST_FEATURE_DECISION,

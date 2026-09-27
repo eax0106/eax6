@@ -17,6 +17,7 @@ import { AuditService } from "./audit.service";
 const TOKEN = "audit-internal-query-token";
 const queryEvents = vi.fn();
 const recordEvent = vi.fn();
+const verifyChain = vi.fn();
 const verifyChainIncremental = vi.fn();
 
 describe("AuditQueryController RFC 9457 internal surface", () => {
@@ -26,7 +27,10 @@ describe("AuditQueryController RFC 9457 internal surface", () => {
     const moduleRef = await Test.createTestingModule({
       controllers: [AuditQueryController],
       providers: [
-        { provide: AuditService, useValue: { queryEvents, recordEvent, verifyChainIncremental } },
+        {
+          provide: AuditService,
+          useValue: { queryEvents, recordEvent, verifyChain, verifyChainIncremental },
+        },
         {
           provide: AUDIT_QUERY_SERVICE_TOKEN_HASH,
           useValue: createHash("sha256").update(TOKEN).digest("hex"),
@@ -41,6 +45,7 @@ describe("AuditQueryController RFC 9457 internal surface", () => {
   beforeEach(() => {
     queryEvents.mockReset();
     recordEvent.mockReset();
+    verifyChain.mockReset();
     verifyChainIncremental.mockReset();
   });
 
@@ -214,6 +219,58 @@ describe("AuditQueryController RFC 9457 internal surface", () => {
     );
     expect(response.statusCode).toBe(400);
     expect(verifyChainIncremental).not.toHaveBeenCalled();
+  });
+
+  it("runs the full chain verification from genesis for an authenticated caller", async () => {
+    verifyChain.mockResolvedValue({ valid: true, checkedEvents: 8 });
+
+    const response = await postVerifyChain(
+      "/internal/audit-events/verify-chain/full",
+      `Bearer ${TOKEN}`,
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ valid: true, checkedEvents: 8 });
+    expect(verifyChain).toHaveBeenCalledOnce();
+    expect(verifyChainIncremental).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unauthenticated full-chain verification", async () => {
+    const response = await postVerifyChain("/internal/audit-events/verify-chain/full");
+
+    expect(response.statusCode).toBe(401);
+    expect(verifyChain).not.toHaveBeenCalled();
+  });
+
+  it("returns a full-chain integrity finding as 200", async () => {
+    verifyChain.mockResolvedValue({
+      valid: false,
+      checkedEvents: 4,
+      issue: "hash-mismatch",
+      eventId: "aud_018f47a2-7b11-7b11-8a11-1234567890ab",
+    });
+
+    const response = await postVerifyChain(
+      "/internal/audit-events/verify-chain/full",
+      `Bearer ${TOKEN}`,
+    );
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ valid: false, issue: "hash-mismatch" });
+  });
+
+  it("sanitizes an unexpected full-chain verification failure", async () => {
+    verifyChain.mockRejectedValue(
+      new Error("database error containing connection-string-secret"),
+    );
+    const response = await postVerifyChain(
+      "/internal/audit-events/verify-chain/full",
+      `Bearer ${TOKEN}`,
+    );
+
+    const problem = ProblemDetailsSchema.parse(response.json());
+    expect(problem).toMatchObject({ status: 500, error_code: "AUDIT_QUERY_INTERNAL_ERROR" });
+    expect(JSON.stringify(problem)).not.toContain("connection-string-secret");
   });
 
   function postVerifyChain(url: string, authorization?: string) {

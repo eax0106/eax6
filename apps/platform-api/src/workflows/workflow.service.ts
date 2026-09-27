@@ -143,6 +143,23 @@ export class WorkflowService {
     );
   }
 
+  /**
+   * The first step of a deployment: a compiled version has to be tested
+   * before it can be promoted or sent out as a canary. The engine has had
+   * this action since the lifecycle was written and nothing exposed it, so
+   * a freshly compiled version could not be deployed through this API at
+   * all -- promote and canary each refuse anything that is not "tested".
+   */
+  testVersion(
+    workflowId: string,
+    input: WorkflowVersionActionInput,
+    actor: ActorContext,
+    traceparent: string | undefined,
+    idempotencyKey: string,
+  ): Promise<EngineResponse<WorkflowActionResult>> {
+    return this.versionAction(workflowId, "test-version", input, actor, traceparent, idempotencyKey);
+  }
+
   promoteVersion(
     workflowId: string,
     input: WorkflowVersionActionInput,
@@ -223,7 +240,7 @@ export class WorkflowService {
 
   private versionAction(
     workflowId: string,
-    action: "promote-version" | "start-canary" | "rollback",
+    action: "test-version" | "promote-version" | "start-canary" | "rollback",
     input: WorkflowVersionActionInput | StartCanaryInput,
     actor: ActorContext,
     traceparent: string | undefined,

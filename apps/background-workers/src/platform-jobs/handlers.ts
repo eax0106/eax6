@@ -273,16 +273,19 @@ function createAuditChainVerifySweepHandler(
   baseUrl: string,
   serviceToken: string,
   fetchImpl: typeof fetch,
+  full: boolean,
 ): PlatformJobHandler {
   return async (): Promise<JsonValue> => {
-    const response = await fetchImpl(`${baseUrl}/internal/audit-events/verify-chain`, {
+    const route = full
+      ? "/internal/audit-events/verify-chain/full"
+      : "/internal/audit-events/verify-chain";
+    const label = full ? "full audit chain verify" : "audit chain verify sweep";
+    const response = await fetchImpl(`${baseUrl}${route}`, {
       method: "POST",
       headers: { authorization: `Bearer ${serviceToken}` },
     });
     if (!response.ok) {
-      throw new Error(
-        `audit chain verify sweep failed: HTTP ${response.status} ${await response.text()}`,
-      );
+      throw new Error(`${label} failed: HTTP ${response.status} ${await response.text()}`);
     }
     const result = (await response.json()) as {
       valid: boolean;
@@ -403,6 +406,16 @@ export function createPlatformJobHandlers(
         dependencies.auditServiceInternalBaseUrl,
         dependencies.auditChainVerifyServiceToken,
         fetchImpl,
+        false,
+      ),
+    );
+    handlers.set(
+      "platform.audit-chain-full-verify",
+      createAuditChainVerifySweepHandler(
+        dependencies.auditServiceInternalBaseUrl,
+        dependencies.auditChainVerifyServiceToken,
+        fetchImpl,
+        true,
       ),
     );
   }

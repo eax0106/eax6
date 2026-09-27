@@ -8,12 +8,17 @@ import type {
   TriggerDispatchActivities,
 } from "./activities/trigger-dispatch-activities";
 import type { TemporalConnectionConfig } from "./durable-execution-provider";
-import { createExecutorWorker } from "./worker";
+import { assertTemporalNamespaceReady } from "./namespace-readiness";
+import {
+  createConversationLifecycleWorker,
+  createExecutorWorker,
+} from "./worker";
 import { BlackboardClient, type BlackboardClientConfig } from "../grpc/blackboard-client";
 import { NodeExecutionClient, type NodeExecutionClientConfig } from "../grpc/nodeexec-client";
 
 export interface ExecutorWorkerBootstrapConfig {
   readonly temporal: TemporalConnectionConfig;
+  readonly conversationTaskQueue: string;
   readonly nodeexec: NodeExecutionClientConfig;
   readonly blackboard: BlackboardClientConfig;
 }
@@ -44,6 +49,11 @@ export async function startExecutorWorker(
       ? {}
       : { apiKey: config.temporal.apiKey, tls: true }),
   });
+  await assertTemporalNamespaceReady(
+    connection,
+    config.temporal.namespace,
+    config.temporal.minimumRetentionDays,
+  );
 
   const nodeExecutionClient = new NodeExecutionClient(config.nodeexec);
   const blackboardClient = new BlackboardClient(config.blackboard);
@@ -54,10 +64,18 @@ export async function startExecutorWorker(
       options.triggerDispatch.publishTriggerDispatchEvent;
   }
   const worker = await createExecutorWorker(config.temporal, connection, activities);
+  const conversationWorker = await createConversationLifecycleWorker(
+    { ...config.temporal, taskQueue: config.conversationTaskQueue },
+    connection,
+  );
 
   void worker.run();
+  void conversationWorker.run();
 
   return {
-    shutdown: () => worker.shutdown(),
+    shutdown: () => {
+      worker.shutdown();
+      conversationWorker.shutdown();
+    },
   };
 }

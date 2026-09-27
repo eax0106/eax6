@@ -37,6 +37,20 @@ async function seed(pool: Pool): Promise<void> {
   );
 }
 
+/**
+ * The image CI pins, overridable so the same tenant-isolation proof can run
+ * against the Postgres major version a deployment target runs: CI pins 16.6,
+ * and RLS behaviour proven on one major version is not proven on another. The suite asserts the server it reached matches what was asked
+ * for, so an ignored override cannot pass as a proof of the other version.
+ */
+const POSTGRES_IMAGE = process.env.POSTGRES_TEST_IMAGE ?? "postgres:16.6-alpine";
+
+function requestedMajorVersion(image: string): number {
+  const match = /postgres:(\d+)/.exec(image);
+  if (match === null) throw new Error(`cannot read a major version from ${image}`);
+  return Number(match[1]);
+}
+
 describe.sequential("conversation_goal_states RLS integration", () => {
   let container: StartedPostgreSqlContainer;
   let adminPool: Pool;
@@ -47,7 +61,7 @@ describe.sequential("conversation_goal_states RLS integration", () => {
   const password = randomBytes(24).toString("hex");
 
   beforeAll(async () => {
-    container = await new PostgreSqlContainer("postgres:16.6-alpine")
+    container = await new PostgreSqlContainer(POSTGRES_IMAGE)
       .withDatabase("orchestration_db")
       .withUsername("orchestration_test_admin")
       .withPassword(randomBytes(24).toString("hex"))
@@ -88,7 +102,10 @@ describe.sequential("conversation_goal_states RLS integration", () => {
       },
       { pool: rolePool },
     );
-  });
+    // Long enough to pull the image on a cold cache: the default 10s hook
+    // timeout fails before a not-yet-pulled Postgres image is even available,
+    // which reads as a tenant-isolation failure rather than a slow download.
+  }, 300_000);
 
   afterAll(async () => {
     await roleProvider?.close();
@@ -98,6 +115,13 @@ describe.sequential("conversation_goal_states RLS integration", () => {
     }
     await provider?.close();
     await container?.stop();
+  });
+
+  it("runs against the Postgres major version this suite was asked for", async () => {
+    const result = await adminPool.query<{ major: string }>(
+      "SELECT current_setting('server_version_num')::int / 10000 AS major",
+    );
+    expect(Number(result.rows[0]?.major)).toBe(requestedMajorVersion(POSTGRES_IMAGE));
   });
 
   it("forces RLS on conversation_goal_states", async () => {

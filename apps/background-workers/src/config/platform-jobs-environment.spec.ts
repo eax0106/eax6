@@ -48,6 +48,7 @@ describe("loadPlatformJobsEnvironment", () => {
       auditServiceInternalBaseUrl: "http://audit-service.internal",
       auditChainVerifyServiceTokenRef: "env:AUDIT_CHAIN_VERIFY_SERVICE_TOKEN",
       auditChainVerifyIntervalMs: 15 * 60 * 1000,
+      auditChainFullVerifyIntervalMs: 7 * 24 * 60 * 60 * 1000,
     });
   });
 
@@ -140,6 +141,13 @@ describe("loadPlatformJobsEnvironment", () => {
     expect(
       loadPlatformJobsEnvironment(environment({ AUDIT_CHAIN_VERIFY_INTERVAL_MS: "5000" }))
         .auditChainVerifyIntervalMs,
+    ).toBe(5000);
+  });
+
+  it("accepts a real custom full audit chain verify interval", () => {
+    expect(
+      loadPlatformJobsEnvironment(environment({ AUDIT_CHAIN_FULL_VERIFY_INTERVAL_MS: "5000" }))
+        .auditChainFullVerifyIntervalMs,
     ).toBe(5000);
   });
 

@@ -1,0 +1,83 @@
+# syntax=docker/dockerfile:1.7
+
+# One Dockerfile, five images -- one per Python service.
+#
+# Unlike the Node services, these do not share a dependency tree: each has its
+# own pyproject.toml and uv.lock, and a single shared virtualenv would have to
+# satisfy all five resolutions at once. So the app is a build argument:
+#
+#   docker build -f docker/Dockerfile.python --build-arg APP=eval-service .
+#
+# Non-root and a read-only root filesystem are set for the same reason as in
+# Dockerfile.node: infrastructure/terraform/modules/service imposes both on
+# every deployed task with no opt-out.
+
+ARG APP
+
+# uv is copied from its own published image rather than installed with pip. The
+# version is unpinned because CI does not pin it either (astral-sh/setup-uv@v5
+# with no version input); pinning both together is a follow-up, not something to
+# do here alone and leave the two disagreeing.
+FROM ghcr.io/astral-sh/uv:latest AS uv
+
+# ---------------------------------------------------------------- build
+FROM python:3.12-slim-bookworm AS build
+
+ARG APP
+COPY --from=uv /uv /bin/uv
+
+# Byte-compile on install and copy rather than link: the virtualenv is built in
+# one stage and read in another, where a hardlink to the uv cache would dangle.
+ENV UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy
+
+WORKDIR /app/apps/${APP}
+
+# The lockfile and manifest first, so editing source does not re-resolve the
+# dependency tree. This works here, unlike in the Node image, because a single
+# app's two files can be named without a glob.
+COPY apps/${APP}/pyproject.toml apps/${APP}/uv.lock ./
+
+# --no-dev drops pytest, mypy, ruff and grpcio-tools. That is safe because the
+# generated protobuf stubs are committed, so nothing at runtime regenerates
+# them; `uv run python scripts/generate_protos.py --check` stays a CI job.
+#
+# One sync, before the source copy, is enough. None of the five declares a
+# build-system, so uv treats each as a virtual project and installs only its
+# dependencies -- the app's own modules are imported from the working directory,
+# which is why the runtime stage sets PYTHONPATH.
+RUN --mount=type=cache,target=/root/.cache/uv,sharing=locked \
+    uv sync --frozen --no-dev
+
+COPY apps/${APP}/ ./
+
+# ---------------------------------------------------------------- runtime
+FROM python:3.12-slim-bookworm AS runtime
+
+ARG APP
+
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --create-home --uid 10001 alter
+
+# The virtualenv is on PATH, so the commands below are the ones the Nx serve and
+# migrate targets run, minus the `uv run` prefix that resolved them locally.
+ENV PATH=/app/apps/${APP}/.venv/bin:$PATH \
+    PYTHONPATH=/app/apps/${APP} \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    TMPDIR=/tmp
+
+COPY --from=build --chown=alter:alter /app /app
+
+WORKDIR /app/apps/${APP}
+USER alter
+
+# The HTTP app. Three of the five also serve gRPC from a second entry point,
+# `python -m src.grpc_server` -- eval-service, memory-service and
+# verification-service -- reached by overriding this command. Same image
+# either way, so a service that serves both runs as two containers from one
+# image. See docker/README.md for the ports each gRPC surface answers on.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

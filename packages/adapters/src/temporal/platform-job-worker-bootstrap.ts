@@ -5,6 +5,7 @@ import {
   type PlatformJobHandler,
 } from "./activities/platform-job-activities";
 import type { TemporalConnectionConfig } from "./durable-execution-provider";
+import { assertTemporalNamespaceReady } from "./namespace-readiness";
 import { createPlatformJobsWorker } from "./worker";
 
 export interface PlatformJobWorkerBootstrapConfig {
@@ -32,6 +33,11 @@ export async function startPlatformJobsWorker(
       ? {}
       : { apiKey: config.temporal.apiKey, tls: true }),
   });
+  await assertTemporalNamespaceReady(
+    connection,
+    config.temporal.namespace,
+    config.temporal.minimumRetentionDays,
+  );
 
   const activities = createPlatformJobActivities(handlers);
   const worker = await createPlatformJobsWorker(

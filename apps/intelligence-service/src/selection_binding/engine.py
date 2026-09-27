@@ -35,14 +35,17 @@ class PersonaCreationEngine(Protocol):
     (agent_auto_creation imports from selection_binding at module level)."""
 
     async def create_for_no_match(
-        self, no_match: NoAgentMatch, request: "CreatePersonaRequest"
+        self,
+        no_match: NoAgentMatch,
+        request: "CreatePersonaRequest",
+        *,
+        run_id: str | None = None,
     ) -> "CreatePersonaResponse | NoAgentMatch": ...
+
 
 _EMBEDDING_DIMENSIONS = 512
 
-_SET_TENANT_CONTEXT = text(
-    "SELECT set_config('app.current_tenant_id', :tenant_id, true)"
-)
+_SET_TENANT_CONTEXT = text("SELECT set_config('app.current_tenant_id', :tenant_id, true)")
 
 # 'draft' agents (see agent_auto_creation.engine's _INSERT_AGENT) are
 # eligible here on purpose -- excluding them would mean a freshly
@@ -513,7 +516,7 @@ class SelectionBindingEngine:
             capability_profile_json=requirement.model_dump_json(exclude_none=True),
         )
         outcome = await self._persona_creation_engine.create_for_no_match(
-            no_match, persona_request
+            no_match, persona_request, run_id=request.run_id
         )
         if isinstance(outcome, NoAgentMatch):
             return outcome
@@ -586,9 +589,7 @@ class SelectionBindingEngine:
 
 def _requirement_for_node(request: BindAgentModelToolRequest) -> NodeRequirement:
     try:
-        requirements = NodeRequirements.model_validate_json(
-            request.node_requirements_json
-        )
+        requirements = NodeRequirements.model_validate_json(request.node_requirements_json)
     except (json.JSONDecodeError, ValidationError, ValueError) as error:
         raise BindingValidationError(
             "node_requirements_json must match NodeRequirements"
@@ -615,13 +616,9 @@ def _database_uuid(prefixed_id: str, expected_prefix: str) -> str:
 def embedding_vector_literal(values: Sequence[float]) -> str:
     vector = list(values)
     if len(vector) != _EMBEDDING_DIMENSIONS:
-        raise EmbeddingResultError(
-            f"embedding must contain exactly {_EMBEDDING_DIMENSIONS} values"
-        )
+        raise EmbeddingResultError(f"embedding must contain exactly {_EMBEDDING_DIMENSIONS} values")
     if any(
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
+        isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
         for value in vector
     ):
         raise EmbeddingResultError("embedding values must be finite numbers")

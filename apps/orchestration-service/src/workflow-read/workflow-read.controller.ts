@@ -92,6 +92,25 @@ export class WorkflowReadController {
     }
   }
 
+  @Get(":id/versions")
+  async versions(
+    @Req() request: SessionGatewayRequest,
+    @Param("id") workflowId: string,
+    @Query("cursor") cursor?: string,
+    @Query("limit") rawLimit?: string,
+  ) {
+    try {
+      return await this.service.listVersions(
+        requiredTenantId(request),
+        workflowId,
+        cursor,
+        rawLimit === undefined ? 50 : Number(rawLimit),
+      );
+    } catch (error: unknown) {
+      throw mapWorkflowError(error, request.url);
+    }
+  }
+
   @Patch(":id")
   async update(
     @Req() request: SessionGatewayRequest,

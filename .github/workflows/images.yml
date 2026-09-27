@@ -1,0 +1,218 @@
+name: images
+
+# Builds the container images and, on main and tags, pushes them to GHCR.
+#
+# Separate from ci.yml on purpose. ci.yml is the merge gate and runs on every
+# pull request; this runs the slow part -- six image builds -- only where it
+# earns the time: every push to main, every release tag, and a pull request that
+# actually touches something an image contains. A Terraform-only or docs-only
+# pull request builds nothing.
+#
+# The registry is GHCR rather than ECR because ECR does not exist yet: no AWS
+# account has been created. Switching to ECR later is this file's `registry` and
+# login step, not a redesign -- the tags already follow the scheme
+# modules/ecr's lifecycle policy keeps (`sha-` and `v` prefixes).
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/**"
+      - "packages/**"
+      - "docker/**"
+      - ".dockerignore"
+      - "pnpm-lock.yaml"
+      - "**/uv.lock"
+      - ".github/workflows/images.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # The list of images is derived from the repository rather than written here,
+  # so a new service cannot be silently left without one. That is not
+  # hypothetical: ECR declared ten repositories for fourteen services until
+  # #224, and nothing reported it.
+  catalogue:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.derive.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: derive the image list from the apps on disk
+        id: derive
+        run: |
+          set -euo pipefail
+
+          # A Python service owns a pyproject.toml and gets its own image,
+          # because each resolves its own uv.lock and they cannot share a
+          # virtualenv. Everything else is a Node service and shares one image.
+          python_apps=""
+          node_apps=""
+          for dir in apps/*/; do
+            app="$(basename "$dir")"
+            [ "$app" = "platform-web" ] && continue   # ships as a static bundle
+            if [ -f "${dir}pyproject.toml" ]; then
+              python_apps="${python_apps} ${app}"
+            else
+              node_apps="${node_apps} ${app}"
+            fi
+          done
+          python_apps="$(echo $python_apps | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
+          node_apps="$(echo $node_apps | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
+
+          echo "python: ${python_apps}"
+          echo "node:   ${node_apps}"
+
+          # The Node image resolves a service name to a command from a list
+          # inside its entrypoint. A Node app missing from that list cannot be
+          # started even though the image contains its build, so the mismatch
+          # has to fail here rather than at `docker run`.
+          declared="$(grep '^SERVICES=' docker/node-entrypoint.sh | cut -d'"' -f2 | tr ' ' '\n' | sort | tr '\n' ' ' | sed 's/ $//')"
+          if [ "${declared}" != "${node_apps}" ]; then
+            echo "::error::docker/node-entrypoint.sh SERVICES does not match the Node apps on disk."
+            echo "  entrypoint: ${declared}"
+            echo "  on disk:    ${node_apps}"
+            exit 1
+          fi
+
+          entries='{"name":"node","dockerfile":"docker/Dockerfile.node","app":""}'
+          for app in ${python_apps}; do
+            entries="${entries},{\"name\":\"${app}\",\"dockerfile\":\"docker/Dockerfile.python\",\"app\":\"${app}\"}"
+          done
+          echo "matrix={\"include\":[${entries}]}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: catalogue
+    runs-on: ubuntu-latest
+    strategy:
+      # One job per image, so wall-clock time is the slowest image rather than
+      # the sum of all six. fail-fast off because knowing which images break is
+      # worth more than stopping at the first.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.catalogue.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Pull requests build and throw away. Only main and tags push, so a
+      # branch cannot publish an image under a name main will later reuse.
+      - name: log in to the registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: tags
+        id: tags
+        run: |
+          set -euo pipefail
+          image="${REGISTRY}/${{ github.repository_owner }}/alter-${{ matrix.name }}"
+          image="$(echo "$image" | tr '[:upper:]' '[:lower:]')"
+          tags="${image}:sha-${GITHUB_SHA::7}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tags="${tags},${image}:${GITHUB_REF_NAME}"
+          elif [ "${GITHUB_REF_NAME}" = "main" ]; then
+            tags="${tags},${image}:main"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      # Loaded into the local daemon rather than pushed from here, for two
+      # reasons. The start check below needs the image present, and with
+      # `push: true, load: false` -- what this did first -- it was absent, so
+      # every `docker run` exited 125 and the check reported a wrong exit code
+      # instead of a missing image. And publishing belongs after the check, not
+      # before: an image that cannot start should never reach the registry.
+      - name: build ${{ matrix.name }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          build-args: |
+            ${{ matrix.app && format('APP={0}', matrix.app) || '' }}
+          load: true
+          push: false
+          tags: ${{ steps.tags.outputs.tags }}
+          provenance: false
+          # Scoped per image so one image's layers cannot evict another's. The
+          # Actions cache is 10GB for the whole repository; if these six start
+          # thrashing it, drop mode to min and keep only the expensive layers.
+          cache-from: type=gha,scope=image-${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=image-${{ matrix.name }}
+
+      # The image has to start, not merely build. A Node image whose entrypoint
+      # is not executable, or a Python image whose module does not import, both
+      # build clean and fail at `docker run` -- and both have to fail here
+      # instead. Read-only with a writable /tmp is how modules/service runs it.
+      - name: the image starts
+        run: |
+          set -euo pipefail
+          image="$(echo "${{ steps.tags.outputs.tags }}" | cut -d, -f1)"
+          if [ "${{ matrix.name }}" = "node" ]; then
+            # No argument is a usage error, exit 64; a real service name gets
+            # far enough to fail on absent configuration, which is correct.
+            status=0
+            docker run --rm --read-only --tmpfs /tmp "$image" >/dev/null 2>&1 || status=$?
+            [ "$status" -eq 64 ] || { echo "::error::expected exit 64 with no service name, got ${status}"; exit 1; }
+            docker run --rm --read-only --tmpfs /tmp "$image" sh -c 'test -f dist/apps/platform-api/main.js'
+          else
+            docker run --rm --read-only --tmpfs /tmp "$image" python -c "import src.main"
+          fi
+          echo "${{ matrix.name }} starts read-only and non-root"
+
+      # Only now, and only off a pull request. A branch cannot publish under a
+      # name main will later reuse, and nothing reaches the registry that has
+      # not already started.
+      - name: publish ${{ matrix.name }}
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          echo "${{ steps.tags.outputs.tags }}" | tr ',' '\n' | while read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "pushing ${tag}"
+            docker push "$tag"
+          done
+
+  # Six images at roughly 350MB each is about 2GB per push to main. Public
+  # packages cost nothing to store, but nothing prunes them either, so this
+  # keeps the recent history and drops the rest.
+  prune:
+    needs: [catalogue, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.catalogue.outputs.matrix) }}
+    steps:
+      - name: drop untagged versions of alter-${{ matrix.name }}
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: alter-${{ matrix.name }}
+          package-type: container
+          delete-only-untagged-versions: true
+          min-versions-to-keep: 0
+        continue-on-error: true
+
+      - name: keep the last 10 tagged versions of alter-${{ matrix.name }}
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: alter-${{ matrix.name }}
+          package-type: container
+          min-versions-to-keep: 10
+        continue-on-error: true

@@ -134,7 +134,7 @@ export function loadCostLedgerEnvironment(
     pseudonymKeyReference: requireValue(environment, "COST_PSEUDONYM_KEY_REF"),
   };
 
-  if (alterEnvironment === "local") {
+  if (resolveDatabaseAuthentication(environment, alterEnvironment) === "static") {
     return {
       ...baseEnvironment,
       databaseAuthentication: "static",
@@ -151,4 +151,39 @@ export function loadCostLedgerEnvironment(
     databaseUser: requireValue(environment, "DATABASE_USER"),
     region: requireValue(environment, "ALTER_REGION"),
   };
+}
+
+/**
+ * Which database authentication a deployment uses. IAM stays the default
+ * outside local, so an existing Aurora deployment keeps its keyless
+ * connection; a Postgres reached with a password (a container on EC2, or a
+ * provider with no AWS IAM) is asked for
+ * explicitly with DATABASE_AUTHENTICATION=static. Same rule as
+ * audit-service's reader.
+ */
+function resolveDatabaseAuthentication(
+  environment: NodeJS.ProcessEnv,
+  alterEnvironment: string,
+): "static" | "iam" {
+  const requested = scopedValue(
+    environment,
+    "COST_DATABASE_AUTHENTICATION",
+    "DATABASE_AUTHENTICATION",
+  )?.trim();
+  if (requested !== undefined && requested !== "" && requested !== "static" && requested !== "iam") {
+    throw new CostLedgerConfigurationError(
+      "DATABASE_AUTHENTICATION",
+      "must be static or iam",
+    );
+  }
+  if (alterEnvironment === "local") {
+    if (requested === "iam") {
+      throw new CostLedgerConfigurationError(
+        "DATABASE_AUTHENTICATION",
+        "cannot be iam in the local environment",
+      );
+    }
+    return "static";
+  }
+  return requested === "static" ? "static" : "iam";
 }

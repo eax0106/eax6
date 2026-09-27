@@ -11,6 +11,7 @@ export interface ConversationDispatchEnvironment {
   readonly temporalApiKey: string | undefined;
   readonly taskQueue: string;
   readonly idleTimeoutSeconds: number;
+  readonly historyRolloverEventCount: number;
 }
 
 export class ConversationDispatchConfigurationError extends Error {
@@ -38,6 +39,20 @@ function parseIdleTimeoutSeconds(value: string | undefined): number {
   return parsed;
 }
 
+function parseHistoryRolloverEventCount(value: string | undefined): number {
+  if (value === undefined || value.trim().length === 0) {
+    return 500;
+  }
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new ConversationDispatchConfigurationError(
+      "CONVERSATION_HISTORY_ROLLOVER_EVENT_COUNT",
+      "must be a positive integer",
+    );
+  }
+  return parsed;
+}
+
 export function loadConversationDispatchEnvironment(
   environment: NodeJS.ProcessEnv,
 ): ConversationDispatchEnvironment {
@@ -48,6 +63,9 @@ export function loadConversationDispatchEnvironment(
     taskQueue: requireValue(environment, "CONVERSATION_LIFECYCLE_TASK_QUEUE"),
     idleTimeoutSeconds: parseIdleTimeoutSeconds(
       environment.CONVERSATION_IDLE_TIMEOUT_SECONDS,
+    ),
+    historyRolloverEventCount: parseHistoryRolloverEventCount(
+      environment.CONVERSATION_HISTORY_ROLLOVER_EVENT_COUNT,
     ),
   };
 }

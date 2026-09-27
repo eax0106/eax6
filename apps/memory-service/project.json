@@ -18,6 +18,13 @@
         "cwd": "apps/memory-service"
       }
     },
+    "serve-grpc": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "uv run python -m src.grpc_server",
+        "cwd": "apps/memory-service"
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

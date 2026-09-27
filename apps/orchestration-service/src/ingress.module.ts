@@ -158,6 +158,8 @@ import { RunLauncherModule } from "./run-launcher.module";
         return new ConversationDispatchService(store, dispatchClient, {
           taskQueue: dispatchConfig.taskQueue,
           idleTimeoutSeconds: dispatchConfig.idleTimeoutSeconds,
+          historyRolloverEventCount:
+            dispatchConfig.historyRolloverEventCount,
         });
       },
     },

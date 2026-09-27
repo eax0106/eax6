@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1.7
+
+# One image runs all nine Node services.
+#
+# They share a build (tsc across the whole workspace) and a runtime (Node 22
+# plus the pnpm workspace's linked node_modules), so nine near-identical images
+# would multiply the registry push and the pull on every host without isolating
+# anything from anything. Which service a container runs is decided by its
+# command: the entrypoint takes the service name as its first argument. See
+# docker/README.md for the nine names.
+#
+# Non-root and a read-only root filesystem are not choices made here.
+# infrastructure/terraform/modules/service sets both on every task and offers no
+# way to turn them off, so a service that writes outside /tmp or a mounted
+# volume cannot be deployed -- which means it must not work here either.
+
+# ---------------------------------------------------------------- build
+FROM node:22-bookworm-slim AS build
+
+# NX_DAEMON off because the daemon outlives the RUN step that starts it and has
+# nothing to serve afterwards.
+ENV CI=1 \
+    NX_DAEMON=false \
+    PNPM_HOME=/pnpm \
+    PATH=/pnpm:$PATH
+
+WORKDIR /app
+RUN corepack enable
+
+# The whole workspace in one COPY. The usual trick -- copy every package.json
+# first so the install layer caches independently of source edits -- does not
+# work in this repository: Docker flattens a COPY glob, so `apps/*/package.json`
+# collapses into a single file. The pnpm store cache mount below recovers most
+# of what that layering would have saved.
+COPY . .
+
+RUN --mount=type=cache,target=/pnpm/store,sharing=locked \
+    pnpm config set store-dir /pnpm/store && \
+    pnpm install --frozen-lockfile
+
+# nx.json gives every build target `dependsOn: ["^build"]`, so this one command
+# also builds the six workspace packages the apps import from source. The five
+# Python services are built by docker/Dockerfile.python, and platform-web is
+# absent on purpose: it ships as a static bundle, not a container.
+RUN pnpm exec nx run-many -t build --projects=audit-service,background-workers,cost-ledger-service,model-gateway,orchestration-service,platform-api,provisioning-service,sandbox-service,tool-gateway
+
+# ---------------------------------------------------------------- runtime
+FROM node:22-bookworm-slim AS runtime
+
+# tini reaps the children a PID 1 Node process leaves behind, and makes the
+# SIGTERM that ECS or compose sends on shutdown reach Node instead of being
+# swallowed by the init slot.
+RUN apt-get update \
+ && apt-get install --no-install-recommends -y tini \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV NODE_ENV=production \
+    TMPDIR=/tmp
+
+# Dev dependencies stay. drizzle-kit and tsx are devDependencies, and every
+# database migration in this repository runs through one of them, so a pruned
+# image could serve the nine services and never migrate a single schema. The
+# cost is roughly the size of the dev tree; prune it when that starts to matter
+# more than keeping one image for both jobs.
+COPY --from=build --chown=node:node /app /app
+
+# Set here rather than relied on from the checkout: the repository is worked on
+# from Windows as well, where the executable bit does not survive, and an
+# entrypoint that is not executable fails the container at start with nothing
+# useful in its logs.
+RUN chmod +x /app/docker/node-entrypoint.sh
+
+WORKDIR /app
+USER node
+
+ENTRYPOINT ["/usr/bin/tini", "--", "/app/docker/node-entrypoint.sh"]

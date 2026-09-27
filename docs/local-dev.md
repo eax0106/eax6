@@ -193,21 +193,29 @@ docker compose --env-file .env.local exec -T engine-db sh -c \
 # audit_service|audit_events
 ```
 
-## Run cost-ledger-service migrations
+## Run cost-ledger-service
 
 cost-ledger-service owns its own `cost-db` cluster, started above. Its first
 migration creates the `cost_ledger_provisioner` role with `BYPASSRLS`, which
 needs superuser or `CREATEROLE` -- `cost-db`'s `POSTGRES_USER` is that
 superuser via the official image's initdb, same as `platform-db`/`ads-db`/
-`engine-db`. Apply and verify migrations directly (full `serve` boot also
-needs a LocalStack `database_credentials` secret for `cost-ledger-service`,
-not yet seeded here -- future work, same as audit-service's app-level
-observability wiring above):
+`engine-db`. The LocalStack ready hook seeds both secrets the service needs:
+`database_credentials`, containing the local `cost-db` connection string, and
+`pseudonym_key`. Start the service from the same shared environment file used
+by the dependency stack; startup applies the migrations automatically:
 
 ```bash
-docker compose --env-file .env.local exec -T cost-db sh -c \
-  'PGPASSWORD="$COST_DB_PASSWORD" psql -U cost_ledger_service -d cost_db \
-  -v ON_ERROR_STOP=1 -f - ' < apps/cost-ledger-service/drizzle/0001_create_billing_rollups.sql
+set -a
+source .env.local
+set +a
+pnpm nx run cost-ledger-service:serve
+```
+
+In another terminal, verify both the HTTP service and the migrated database:
+
+```bash
+curl --fail --silent http://127.0.0.1:3022/health
+# {"status":"ok","service":"cost-ledger-service"}
 docker compose --env-file .env.local exec -T cost-db sh -c \
   'PGPASSWORD="$COST_DB_PASSWORD" psql -U cost_ledger_service -d cost_db -Atc \
   "SELECT rolname FROM pg_roles WHERE rolname = '"'"'cost_ledger_provisioner'"'"';"'
@@ -272,8 +280,9 @@ curl --fail --silent http://127.0.0.1:8000/health
 ```
 
 Depends on engine-db (Postgres, port 5433 â€” `intelligence_db`), model-gateway
-gRPC (default `localhost:50051`), sandbox-service gRPC (default `localhost:50057`),
-and memory-service HTTP (default `http://localhost:8002`). Auth0 M2M credentials
+gRPC (default `localhost:50051`), ads-core's ADSQ gRPC (default
+`localhost:50050`), and memory-service HTTP (default
+`http://localhost:8002`). Auth0 M2M credentials
 are optional for local (`AUTH0_M2M_*` can be empty when `ALTER_ENV=local`).
 
 ## Run memory-service
@@ -659,7 +668,9 @@ service owns.
   token-free Community release `4.14.0`; newer releases require an account and
   conflict with this stack's zero-account contract.
 - Temporal container is official `temporalio/temporal` CLI dev server with
-  bundled Web UI.
+  bundled Web UI. It is intentionally disposable; production namespace,
+  retention, history rollover, and versioned-worker rollout requirements are
+  in [`runbooks/temporal-production.md`](runbooks/temporal-production.md).
 - Tracing is a real `grafana/tempo` OTLP receiver (gRPC 4317 / HTTP 4318,
   local disk storage) with `grafana/grafana` wired to it as a datasource for
   browsing traces -- not a passive console-only collector. Shared mock
@@ -711,10 +722,6 @@ wiring remains a future service integration task.
 `model-gateway`, ports 5001/5002) are not started by the dependency stack's
 `docker compose` command above â€” model-gateway's mock mode works without them,
 but real Presidio requires manually starting those containers.
-
-`cost-ledger-service`'s own HTTP boot still needs a LocalStack
-`database_credentials` secret to be seeded before full serve can succeed
-(migration-only path is documented above).
 
 `background-workers` and `eval-service` effectively cannot function without
 most of the platform already running (Temporal, SQS, 10+ downstream services

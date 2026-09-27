@@ -55,6 +55,7 @@ describe.sequential("ConversationDispatchClient", () => {
       tenantId: "tnt_test",
       conversationId: "conv_test",
       idleTimeoutSeconds: 60,
+      historyRolloverEventCount: 500,
       ...overrides,
     };
   }

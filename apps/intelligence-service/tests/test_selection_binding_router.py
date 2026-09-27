@@ -20,7 +20,7 @@ from src.config import get_settings
 from src.db.session import get_db_session
 from src.main import app
 from src.selection_binding import EmbeddingResult
-from src.selection_binding.router import get_embedding_client
+from src.selection_binding.router import get_embedding_client, get_instructions_client
 
 SERVICE_ROOT = Path(__file__).parent.parent
 PGVECTOR_IMAGE = "pgvector/pgvector:pg16"
@@ -43,6 +43,11 @@ class FakeEmbeddingClient:
 
     async def embed(self, *, tenant_id: str, text: str) -> EmbeddingResult:
         return EmbeddingResult(vector=self.vector, model_id=TEST_MODEL_ID)
+
+
+class FakeInstructionsClient:
+    async def draft_instructions(self, **kwargs: object) -> str:
+        return "Handle text.generation work from supplied context and check the result."
 
 
 def vector(first: float) -> list[float]:
@@ -192,9 +197,8 @@ class TestBindAgentModelToolRoute:
         so the real router wiring (AgentAutoCreationEngine injected into
         SelectionBindingEngine, see selection_binding/router.py) creates one
         and returns it bound, rather than a bare no-match."""
-        app.dependency_overrides[get_embedding_client] = lambda: FakeEmbeddingClient(
-            vector(1.0)
-        )
+        app.dependency_overrides[get_embedding_client] = lambda: FakeEmbeddingClient(vector(1.0))
+        app.dependency_overrides[get_instructions_client] = FakeInstructionsClient
         try:
             response = client.post(
                 "/selection-binding/bind-agent-model-tool",
@@ -202,6 +206,7 @@ class TestBindAgentModelToolRoute:
             )
         finally:
             del app.dependency_overrides[get_embedding_client]
+            del app.dependency_overrides[get_instructions_client]
 
         assert response.status_code == 200
         body = response.json()

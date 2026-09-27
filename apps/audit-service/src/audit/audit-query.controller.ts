@@ -140,6 +140,21 @@ export class AuditQueryController {
     }
   }
 
+  // Weekly defense in depth for the incremental verifier above. A checkpoint
+  // makes the frequent path cheap, but it also puts already-checkpointed
+  // history outside that path's view. This endpoint deliberately walks from
+  // genesis so later tampering with old rows cannot remain permanently hidden.
+  @Post("verify-chain/full")
+  @HttpCode(200)
+  async verifyFullChain(@Headers("authorization") auth?: string) {
+    this.authorize(auth);
+    try {
+      return await this.audit.verifyChain();
+    } catch {
+      throw new HttpException(problem("/internal/audit-events/verify-chain/full", 500), 500);
+    }
+  }
+
   @Post()
   @HttpCode(201)
   async record(

@@ -97,8 +97,8 @@ export class CostLedgerClient {
     }
 
     const query = new URLSearchParams({
-      tenantId: context.tenantId,
-      workspaceId: context.workspaceId,
+      tenantId: prefixedId("ten", context.tenantId),
+      workspaceId: prefixedId("ws", context.workspaceId),
     });
     let response: Response;
     try {
@@ -163,7 +163,7 @@ export class CostLedgerClient {
       "/costs/estimate",
       context,
       instance,
-      { tenantId: context.tenantId.slice(4), ...input },
+      { tenantId: bareId("ten", context.tenantId), ...input },
     );
     return parseEstimate(response, instance);
   }
@@ -184,8 +184,8 @@ export class CostLedgerClient {
     }
 
     const query = new URLSearchParams({
-      tenantId: context.tenantId,
-      workspaceId: context.workspaceId,
+      tenantId: prefixedId("ten", context.tenantId),
+      workspaceId: prefixedId("ws", context.workspaceId),
     });
     if (summary) {
       query.set("startAt", summary.startAt);
@@ -222,6 +222,14 @@ export class CostLedgerClient {
       throw new EngineProblemError(upstreamProblem(502, instance, "UPSTREAM_SERVICE_ERROR"));
     }
   }
+}
+
+function prefixedId(prefix: "ten" | "ws", id: string): string {
+  return id.startsWith(`${prefix}_`) ? id : `${prefix}_${id}`;
+}
+
+function bareId(prefix: "ten" | "ws", id: string): string {
+  return id.startsWith(`${prefix}_`) ? id.slice(prefix.length + 1) : id;
 }
 
 async function parseNodeCosts(response: Response, runId: string): Promise<NodeCostsResponse> {

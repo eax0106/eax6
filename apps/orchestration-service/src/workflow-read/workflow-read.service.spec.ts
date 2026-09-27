@@ -17,11 +17,29 @@ interface WorkflowRow {
   updated_at: string;
 }
 
-function createFakeStore(seed: readonly WorkflowRow[] = []): {
+interface WorkflowVersionRow {
+  id: string;
+  tenant_id: string;
+  workflow_id: string;
+  version: number;
+  status: string;
+  dag_schema_version: string;
+  traffic_percent: number | null;
+  evaluation_run_id: string | null;
+  tested_at: string | null;
+  evaluation_failed_at: string | null;
+  created_at: string;
+}
+
+function createFakeStore(
+  seed: readonly WorkflowRow[] = [],
+  versionSeed: readonly WorkflowVersionRow[] = [],
+): {
   readonly store: OrchestrationTenantStore;
   readonly workflows: Map<string, WorkflowRow>;
 } {
   const workflows = new Map<string, WorkflowRow>(seed.map((row) => [row.id, row]));
+  const versions = [...versionSeed];
 
   const store: OrchestrationTenantStore = {
     async withTenant(_tenantId, operation) {
@@ -31,6 +49,25 @@ function createFakeStore(seed: readonly WorkflowRow[] = []): {
           values: readonly unknown[] = [],
         ) {
           const sql = statement.replace(/\s+/g, " ").trim();
+
+          if (sql.includes("FROM workflow_versions")) {
+            const [queryTenantId, workflowId, cursor, rawLimit] = values as [
+              string,
+              string,
+              number | null,
+              number,
+            ];
+            const rows = versions
+              .filter(
+                (row) =>
+                  row.tenant_id === queryTenantId &&
+                  row.workflow_id === workflowId &&
+                  (cursor === null || row.version < cursor),
+              )
+              .sort((left, right) => right.version - left.version)
+              .slice(0, rawLimit);
+            return { rowCount: rows.length, rows: rows as unknown as readonly TRow[] };
+          }
 
           if (sql.includes("FROM workflows WHERE tenant_id = $1 AND workspace_id = $2")) {
             const [queryTenantId, workspaceId, cursor, rawLimit] = values as [string, string, string | null, number];
@@ -230,5 +267,136 @@ describe("WorkflowReadService", () => {
     await expect(service.getWorkflow("", WORKFLOW_A)).rejects.toBeInstanceOf(
       WorkflowValidationError,
     );
+  });
+});
+
+// C8: the Deployment Manager reads a workflow's version history from here.
+// platform-api has proxied GET /api/v1/workflows/:id/versions to this
+// service since it was written, and the route never existed.
+describe("WorkflowReadService.listVersions", () => {
+  const TENANT_B_BARE = "018f4d6e-bbbb-7bbb-8bbb-bbbbbbbbbbbb";
+
+  function version(
+    number: number,
+    overrides: Partial<WorkflowVersionRow> = {},
+  ): WorkflowVersionRow {
+    return {
+      id: `wfv_018f4d6e-aaaa-7aaa-8aaa-00000000000${number}`,
+      tenant_id: TENANT_A_BARE,
+      workflow_id: WORKFLOW_A,
+      version: number,
+      status: "compiled",
+      dag_schema_version: "v1",
+      traffic_percent: null,
+      evaluation_run_id: null,
+      tested_at: null,
+      evaluation_failed_at: null,
+      created_at: `2026-09-0${number}T00:00:00.000Z`,
+      ...overrides,
+    };
+  }
+
+  it("returns a workflow's versions newest first, the order a history reads in", async () => {
+    const { store } = createFakeStore(
+      [],
+      [version(1), version(3, { status: "promoted" }), version(2)],
+    );
+    const service = new WorkflowReadService(store);
+
+    const page = await service.listVersions(TENANT_A, WORKFLOW_A, undefined, 50);
+
+    expect(page.data.map((item) => item.version)).toEqual([3, 2, 1]);
+    expect(page.data[0]).toMatchObject({ status: "promoted", dagSchemaVersion: "v1" });
+    expect(page.page).toEqual({ next_cursor: null, has_more: false, limit: 50 });
+  });
+
+  it("carries the fields a deployment screen reads, and not the compiled DAG", async () => {
+    const { store } = createFakeStore(
+      [],
+      [
+        version(1, {
+          status: "canary",
+          traffic_percent: 10,
+          evaluation_run_id: "run_018f4d6e-aaaa-7aaa-8aaa-00000000000e",
+          tested_at: "2026-09-01T01:00:00.000Z",
+        }),
+      ],
+    );
+    const service = new WorkflowReadService(store);
+
+    const page = await service.listVersions(TENANT_A, WORKFLOW_A, undefined, 50);
+
+    expect(page.data[0]).toEqual({
+      id: "wfv_018f4d6e-aaaa-7aaa-8aaa-000000000001",
+      workflowId: WORKFLOW_A,
+      version: 1,
+      status: "canary",
+      dagSchemaVersion: "v1",
+      trafficPercent: 10,
+      evaluationRunId: "run_018f4d6e-aaaa-7aaa-8aaa-00000000000e",
+      testedAt: "2026-09-01T01:00:00.000Z",
+      evaluationFailedAt: null,
+      createdAt: "2026-09-01T00:00:00.000Z",
+    });
+  });
+
+  it("pages on the version number it last returned", async () => {
+    const { store } = createFakeStore([], [version(1), version(2), version(3)]);
+    const service = new WorkflowReadService(store);
+
+    const first = await service.listVersions(TENANT_A, WORKFLOW_A, undefined, 2);
+    expect(first.data.map((item) => item.version)).toEqual([3, 2]);
+    expect(first.page).toMatchObject({ next_cursor: "2", has_more: true });
+
+    const second = await service.listVersions(
+      TENANT_A,
+      WORKFLOW_A,
+      first.page.next_cursor ?? undefined,
+      2,
+    );
+    expect(second.data.map((item) => item.version)).toEqual([1]);
+    expect(second.page.has_more).toBe(false);
+  });
+
+  it("never returns another tenant's versions", async () => {
+    const { store } = createFakeStore(
+      [],
+      [version(1, { tenant_id: TENANT_B_BARE }), version(2)],
+    );
+    const service = new WorkflowReadService(store);
+
+    const page = await service.listVersions(TENANT_A, WORKFLOW_A, undefined, 50);
+
+    expect(page.data.map((item) => item.version)).toEqual([2]);
+  });
+
+  it("never returns another workflow's versions", async () => {
+    const { store } = createFakeStore(
+      [],
+      [version(1, { workflow_id: "wf_018f4d6e-aaaa-7aaa-8aaa-aaaaaaaaaaad" }), version(2)],
+    );
+    const service = new WorkflowReadService(store);
+
+    const page = await service.listVersions(TENANT_A, WORKFLOW_A, undefined, 50);
+
+    expect(page.data.map((item) => item.version)).toEqual([2]);
+  });
+
+  it.each([0, 201, 1.5])("refuses limit %s", async (limit) => {
+    const { store } = createFakeStore([], [version(1)]);
+    const service = new WorkflowReadService(store);
+
+    await expect(
+      service.listVersions(TENANT_A, WORKFLOW_A, undefined, limit),
+    ).rejects.toBeInstanceOf(WorkflowValidationError);
+  });
+
+  it("refuses a cursor that is not a version number", async () => {
+    const { store } = createFakeStore([], [version(1)]);
+    const service = new WorkflowReadService(store);
+
+    await expect(
+      service.listVersions(TENANT_A, WORKFLOW_A, "wfv_something", 50),
+    ).rejects.toBeInstanceOf(WorkflowValidationError);
   });
 });

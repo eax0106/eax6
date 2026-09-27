@@ -147,13 +147,21 @@ export class RunService {
       ...run,
       body: {
         run: run.body,
-        node_executions: executions.map((execution) => ({
-          ...execution,
-          node_cost_minor:
-            typeof execution.node_execution_id === "string"
-              ? (costsByNode.get(execution.node_execution_id) ?? "0")
-              : "0",
-        })),
+        node_executions: executions.map((execution) => {
+          const nodeExecutionId =
+            typeof execution.id === "string"
+              ? execution.id
+              : typeof execution.node_execution_id === "string"
+                ? execution.node_execution_id
+                : undefined;
+          return {
+            ...execution,
+            node_cost_minor:
+              nodeExecutionId === undefined
+                ? "0"
+                : (costsByNode.get(nodeExecutionId) ?? "0"),
+          };
+        }),
         verification_results: verification,
         recovery_actions: recovery,
         quality_gates: qualityGates,

@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { Signer } from "@aws-sdk/rds-signer";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
+
+import { staticPoolConfig } from "./static-connection";
 import {
   Pool,
   type PoolConfig,
@@ -156,7 +158,7 @@ function createPoolConfig(
 ): PoolConfig {
   if (config.authentication === "static") {
     requireConfig("connectionString", config.connectionString);
-    return { connectionString: config.connectionString };
+    return staticPoolConfig(config.connectionString);
   }
 
   requireConfig("host", config.host);

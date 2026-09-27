@@ -50,6 +50,29 @@ export interface WorkflowPage {
   };
 }
 
+/**
+ * A page of versions for the Deployment Manager. The rows carry the
+ * deployment-shaped fields the screen reads (traffic share, evaluation
+ * result) on top of WorkflowVersion, and leave out the compiled DAG, which
+ * is large and which nothing in a list renders.
+ */
+export interface WorkflowVersionSummary
+  extends Omit<WorkflowVersion, "compiledDag" | "tenantId"> {
+  readonly trafficPercent: number | null;
+  readonly evaluationRunId: string | null;
+  readonly testedAt: string | null;
+  readonly evaluationFailedAt: string | null;
+}
+
+export interface WorkflowVersionPage {
+  readonly data: readonly WorkflowVersionSummary[];
+  readonly page: {
+    readonly next_cursor: string | null;
+    readonly has_more: boolean;
+    readonly limit: number;
+  };
+}
+
 interface OrchestrationTransactionLike {
   query<TRow extends Record<string, unknown> = Record<string, unknown>>(
     statement: string,
@@ -73,6 +96,34 @@ type WorkflowRow = {
   readonly created_at: string;
   readonly updated_at: string;
 };
+
+type WorkflowVersionSummaryRow = {
+  readonly id: string;
+  readonly workflow_id: string;
+  readonly version: number;
+  readonly status: WorkflowVersionStatus;
+  readonly dag_schema_version: string;
+  readonly traffic_percent: number | null;
+  readonly evaluation_run_id: string | null;
+  readonly tested_at: string | null;
+  readonly evaluation_failed_at: string | null;
+  readonly created_at: string;
+};
+
+function versionSummaryFromRow(row: WorkflowVersionSummaryRow): WorkflowVersionSummary {
+  return {
+    id: row.id,
+    workflowId: row.workflow_id,
+    version: row.version,
+    status: row.status,
+    dagSchemaVersion: row.dag_schema_version,
+    trafficPercent: row.traffic_percent,
+    evaluationRunId: row.evaluation_run_id,
+    testedAt: row.tested_at,
+    evaluationFailedAt: row.evaluation_failed_at,
+    createdAt: row.created_at,
+  };
+}
 
 function fromRow(row: WorkflowRow): Workflow {
   return {
@@ -219,6 +270,59 @@ export class WorkflowReadService {
         data: rows.map(fromRow),
         page: {
           next_cursor: hasMore ? (rows.at(-1)?.id ?? null) : null,
+          has_more: hasMore,
+          limit,
+        },
+      };
+    });
+  }
+
+  /**
+   * The versions of one workflow, newest first, which is the order a person
+   * reads a deployment history in -- unlike listWorkflows, whose cursor is an
+   * id because its order is arbitrary. Version numbers are unique per
+   * workflow and monotonic, so paging on the number needs no tiebreak.
+   *
+   * platform-api has proxied GET /api/v1/workflows/:id/versions to this
+   * service since it was written; the route simply never existed here, so
+   * every call reached an engine 404.
+   */
+  async listVersions(
+    tenantId: string,
+    workflowId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<WorkflowVersionPage> {
+    requireNonEmpty("tenantId", tenantId);
+    requireNonEmpty("workflowId", workflowId);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+      throw new WorkflowValidationError("limit must be an integer from 1 to 200");
+    }
+    const cursorVersion = cursor === undefined ? undefined : Number(cursor);
+    if (
+      cursorVersion !== undefined &&
+      (!Number.isInteger(cursorVersion) || cursorVersion < 1)
+    ) {
+      throw new WorkflowValidationError("cursor must be a version number");
+    }
+    const bareTenant = bareTenantUuid(tenantId);
+    return this.store.withTenant(bareTenant, async (tx) => {
+      const result = await tx.query<WorkflowVersionSummaryRow>(
+        `SELECT id, workflow_id, version, status, dag_schema_version, traffic_percent,
+                evaluation_run_id, tested_at, evaluation_failed_at, created_at
+         FROM workflow_versions
+         WHERE tenant_id = $1 AND workflow_id = $2
+           AND ($3::int IS NULL OR version < $3)
+         ORDER BY version DESC
+         LIMIT $4`,
+        [bareTenant, workflowId, cursorVersion ?? null, limit + 1],
+      );
+      const hasMore = result.rows.length > limit;
+      const rows = result.rows.slice(0, limit);
+      return {
+        data: rows.map(versionSummaryFromRow),
+        page: {
+          next_cursor: hasMore ? String(rows.at(-1)?.version ?? "") : null,
           has_more: hasMore,
           limit,
         },
@@ -433,7 +537,16 @@ export class WorkflowReadService {
   }
 }
 
-export type WorkflowVersionStatus = "compiled" | "canary" | "promoted" | "rolled_back" | "retired";
+// "tested" has been a real status since 0035 added the test gate, and
+// WorkflowLifecycleService writes it; this union had never caught up, so a
+// tested version typed as something it is not.
+export type WorkflowVersionStatus =
+  | "compiled"
+  | "tested"
+  | "canary"
+  | "promoted"
+  | "rolled_back"
+  | "retired";
 
 export interface WorkflowVersion {
   readonly id: string;

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     intelligence_db_url: str = "postgresql+asyncpg://intelligence_service:intelligence_local@localhost:5433/intelligence_db"
     intelligence_db_url_sync: str = "postgresql+psycopg2://intelligence_service:intelligence_local@localhost:5433/intelligence_db"
     intelligence_drift_reader_db_url: str = "postgresql+asyncpg://intelligence_drift_reader:intelligence_drift_reader_local@localhost:5433/intelligence_db"
-    adsq_grpc_target: str = "localhost:50057"
+    adsq_grpc_target: str = "localhost:50050"
     adsq_grpc_timeout_seconds: float = 3.0
     model_gateway_grpc_target: str = "localhost:50051"
     model_gateway_grpc_timeout_seconds: float = 15.0

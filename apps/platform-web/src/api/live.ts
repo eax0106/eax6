@@ -19,6 +19,7 @@ import type {
   WebhookEndpoint,
   Workflow,
   WorkflowSafeguards,
+  WorkflowVersion,
   Workspace,
   WorkspaceRole,
   TenantDataResidency,
@@ -297,6 +298,89 @@ export async function workflowAction(id: string, action: string, body: unknown =
   return apiPost(`/api/v1/workflows/${encodeURIComponent(id)}/actions/${action}`, body, {
     idempotencyKey: mutationKey(`workflow-${action}`),
   })
+}
+
+// C8: a workflow's deployment history. Versions come back newest first and
+// carry the status the lifecycle service moves them through -- compiled,
+// tested, canary, promoted, rolled_back, retired.
+export async function getWorkflowVersions(workflowId: string): Promise<WorkflowVersion[]> {
+  const body = await apiGet<unknown>(
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}/versions?limit=50`,
+  )
+  return asArray(body, "data").map(mapWorkflowVersion)
+}
+
+// A deployment starts here: promote and canary each refuse a version that
+// has not been tested.
+export async function testWorkflowVersion(
+  workflowId: string,
+  workflowVersionId: string,
+): Promise<void> {
+  await apiPost(
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}/actions/test-version`,
+    { workflowVersionId },
+    { idempotencyKey: mutationKey("workflow-test-version") },
+  )
+}
+
+export async function promoteWorkflowVersion(
+  workflowId: string,
+  workflowVersionId: string,
+): Promise<void> {
+  await apiPost(
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}/actions/promote-version`,
+    { workflowVersionId },
+    { idempotencyKey: mutationKey("workflow-promote-version") },
+  )
+}
+
+export async function startWorkflowVersionCanary(
+  workflowId: string,
+  workflowVersionId: string,
+  trafficPercent: number,
+): Promise<void> {
+  await apiPost(
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}/actions/start-canary`,
+    { workflowVersionId, trafficPercent },
+    { idempotencyKey: mutationKey("workflow-start-canary") },
+  )
+}
+
+export async function rollbackWorkflowVersion(
+  workflowId: string,
+  workflowVersionId: string,
+): Promise<void> {
+  await apiPost(
+    `/api/v1/workflows/${encodeURIComponent(workflowId)}/actions/rollback`,
+    { workflowVersionId },
+    { idempotencyKey: mutationKey("workflow-rollback") },
+  )
+}
+
+function mapWorkflowVersion(item: AnyRecord): WorkflowVersion {
+  return {
+    id: asString(item.id),
+    version: Number(item.version ?? 0),
+    status: mapWorkflowVersionStatus(item.status),
+    dagSchemaVersion: String(item.dagSchemaVersion ?? item.dag_schema_version ?? ""),
+    trafficPercent:
+      item.trafficPercent ?? item.traffic_percent ?? null,
+    evaluationRunId: item.evaluationRunId ?? item.evaluation_run_id ?? null,
+    testedAt: item.testedAt ?? item.tested_at ?? null,
+    evaluationFailedAt: item.evaluationFailedAt ?? item.evaluation_failed_at ?? null,
+    createdAt: asDate(item.createdAt ?? item.created_at),
+  }
+}
+
+function mapWorkflowVersionStatus(value: unknown): WorkflowVersion["status"] {
+  return value === "compiled" ||
+    value === "tested" ||
+    value === "canary" ||
+    value === "promoted" ||
+    value === "rolled_back" ||
+    value === "retired"
+    ? value
+    : "compiled"
 }
 
 export async function getRuns(): Promise<Run[]> {
