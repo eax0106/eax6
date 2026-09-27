@@ -12,7 +12,7 @@ afterEach(cleanup)
 
 describe("live feature availability", () => {
   const unfinishedFeatures: LiveFeature[] = [
-    "admin-audit",
+    "admin-incidents",
     "benchmarks",
     "discovery",
     "notifications",
@@ -26,7 +26,7 @@ describe("live feature availability", () => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(false)
   })
 
-  it.each(["admin-tenants", "admin-users"] as const)("shows %s in live mode once its adapter is wired (Track B1)", (feature) => {
+  it.each(["admin-tenants", "admin-users", "admin-audit", "admin-feature-flags", "admin-providers", "admin-policies", "admin-system-status"] as const)("shows %s in live mode once its adapter is wired (Track B1)", (feature) => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(true)
   })
 

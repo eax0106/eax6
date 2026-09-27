@@ -1,4 +1,6 @@
 import type { ProviderDefinition } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-controls"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -12,11 +14,13 @@ const MOCK_PROVIDERS: ProviderDefinition[] = [
 
 export class ProvidersService {
   async list(): Promise<ProviderDefinition[]> {
+    if (isLiveApi) return live.listProviders()
     await delay(300)
     return MOCK_PROVIDERS
   }
 
   async get(id: string): Promise<ProviderDefinition> {
+    if (isLiveApi) { const found = (await live.listProviders()).find((p) => p.id === id); if (!found) throw new Error("Provider not found"); return found }
     await delay(200)
     const provider = MOCK_PROVIDERS.find(p => p.id === id)
     if (!provider) throw new Error("Not found")
@@ -24,6 +28,7 @@ export class ProvidersService {
   }
 
   async enable(id: string): Promise<ProviderDefinition> {
+    if (isLiveApi) return live.setProviderActive(id, true)
     await delay(400)
     const p = MOCK_PROVIDERS.find(p => p.id === id)
     if (!p) throw new Error("Not found")
@@ -32,6 +37,7 @@ export class ProvidersService {
   }
 
   async disable(id: string): Promise<ProviderDefinition> {
+    if (isLiveApi) return live.setProviderActive(id, false)
     await delay(400)
     const p = MOCK_PROVIDERS.find(p => p.id === id)
     if (!p) throw new Error("Not found")
@@ -40,6 +46,7 @@ export class ProvidersService {
   }
 
   async markMaintenance(id: string): Promise<ProviderDefinition> {
+    if (isLiveApi) throw new Error("Maintenance mode is not available: platform-api has no provider maintenance state")
     await delay(400)
     const p = MOCK_PROVIDERS.find(p => p.id === id)
     if (!p) throw new Error("Not found")

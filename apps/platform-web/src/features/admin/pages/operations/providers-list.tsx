@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { isLiveApi } from "@/api/http"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
@@ -96,7 +97,8 @@ export function ProvidersList() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {p.status !== "maintenance" && (
+                      {/* Live: platform-api has no maintenance state (B1.7). */}
+                      {!isLiveApi && p.status !== "maintenance" && (
                         <Button 
                           variant="ghost" 
                           size="icon" 

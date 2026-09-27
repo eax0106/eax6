@@ -1179,7 +1179,8 @@ export interface AuditEvent {
     name: string;
   };
   action: string;
-  category: "authentication" | "workspace" | "workflow" | "run" | "human_action" | "connection" | "knowledge" | "billing" | "marketplace" | "support" | "security" | "admin";
+  // "other": a live event whose action prefix names no known category (B1.3).
+  category: "authentication" | "workspace" | "workflow" | "run" | "human_action" | "connection" | "knowledge" | "billing" | "marketplace" | "support" | "security" | "admin" | "other";
   tenantId?: string;
   target?: {
     type: string;
@@ -1236,8 +1237,9 @@ export interface PlatformPolicy {
   description: string;
   scope: "global" | "tenant";
   config: Record<string, unknown>;
-  updatedAt: string;
-  updatedBy: UserSummary;
+  // Model alias bindings carry no change timestamp in live mode (B1.6).
+  updatedAt?: string;
+  updatedBy?: UserSummary;
 }
 
 export interface SecurityReviewItem {

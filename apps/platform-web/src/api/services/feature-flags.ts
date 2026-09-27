@@ -1,4 +1,6 @@
 import type { FeatureFlag } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-controls"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -11,11 +13,17 @@ const MOCK_FLAGS: FeatureFlag[] = [
 
 export class FeatureFlagsService {
   async list(): Promise<FeatureFlag[]> {
+    if (isLiveApi) return live.listFeatureFlags()
     await delay(200)
     return MOCK_FLAGS
   }
 
   async update(id: string, updates: Partial<FeatureFlag>): Promise<FeatureFlag> {
+    if (isLiveApi) {
+      const current = (await live.listFeatureFlags()).find((flag) => flag.id === id)
+      if (!current) throw new Error("Feature flag not found")
+      return live.updateFeatureFlag(current, updates.enabled ?? current.enabled)
+    }
     await delay(300)
     const flag = MOCK_FLAGS.find(f => f.id === id)
     if (!flag) throw new Error("Not found")
