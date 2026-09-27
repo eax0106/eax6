@@ -49,6 +49,7 @@ reference_vars=(
   TAVILY_API_KEY_SECRET_REF
   BROWSERBASE_API_KEY_REF
   E2B_API_KEY_REF
+  PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF
 )
 
 # Collect the union of existing SSM parameter names and Secrets Manager secret
@@ -80,9 +81,27 @@ for var in "${reference_vars[@]}"; do
   fi
 done
 
+# Committed AppConfig identifiers (task 1.6), one set per service. Each
+# application/environment/profile triple must exist in the account.
+for prefix in MODEL_GATEWAY TOOL_GATEWAY SANDBOX_SERVICE; do
+  app="$(grep -E "^${prefix}_APPCONFIG_APPLICATION_ID=" "$env_file" | head -n1 | cut -d= -f2-)"
+  envid="$(grep -E "^${prefix}_APPCONFIG_ENVIRONMENT_ID=" "$env_file" | head -n1 | cut -d= -f2-)"
+  profile="$(grep -E "^${prefix}_APPCONFIG_CONFIGURATION_PROFILE_ID=" "$env_file" | head -n1 | cut -d= -f2-)"
+  if [[ -z "$app" || -z "$envid" || -z "$profile" ]]; then
+    echo "reference-resolution violation: ${prefix}_APPCONFIG_* is not fully set in $env_file" >&2
+    missing=1
+    continue
+  fi
+  if ! aws appconfig get-environment --application-id "$app" --environment-id "$envid" >/dev/null 2>&1 \
+    || ! aws appconfig get-configuration-profile --application-id "$app" --configuration-profile-id "$profile" >/dev/null 2>&1; then
+    echo "reference-resolution violation: ${prefix}_APPCONFIG_* ($app/$envid/$profile) does not exist in AppConfig" >&2
+    missing=1
+  fi
+done
+
 if [[ "$missing" -ne 0 ]]; then
   echo "reference-resolution check failed: one or more committed references do not resolve" >&2
   exit 1
 fi
 
-echo "reference-resolution check ok: all committed references resolve against real AWS"
+echo "reference-resolution check passed: all committed references resolve against real AWS"
