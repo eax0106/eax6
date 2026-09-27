@@ -62,12 +62,12 @@ export function UserList() {
                     <span className="text-slate-300">{u.tenantIds.length}</span>
                   </TableCell>
                   <TableCell>
-                    <span className={u.mfaEnabled ? "text-emerald-400" : "text-amber-400"}>
-                      {u.mfaEnabled ? "Enabled" : "Disabled"}
+                    <span className={u.mfaEnabled === undefined ? "text-slate-500" : u.mfaEnabled ? "text-emerald-400" : "text-amber-400"}>
+                      {u.mfaEnabled === undefined ? "—" : u.mfaEnabled ? "Enabled" : "Disabled"}
                     </span>
                   </TableCell>
                   <TableCell className="text-right">
-                    <StatusBadge status={u.riskState || "normal"} />
+                    {u.riskState ? <StatusBadge status={u.riskState} /> : <span className="text-slate-500">—</span>}
                   </TableCell>
                 </TableRow>
               ))

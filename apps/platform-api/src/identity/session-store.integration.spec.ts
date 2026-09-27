@@ -39,7 +39,8 @@ describe("PostgreSQL identity tenant isolation", () => {
     await adminClient.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${rolePassword}'`);
     await adminClient.query(`GRANT USAGE ON SCHEMA public TO "${roleName}"`);
     await adminClient.query(
-      `GRANT SELECT, UPDATE ON tenants, user_sessions TO "${roleName}"`,
+      // users: session lookups only accept active users (task B1.2).
+      `GRANT SELECT, UPDATE ON tenants, user_sessions TO "${roleName}"; GRANT SELECT ON users TO "${roleName}"`,
     );
     await adminClient.query(
       `INSERT INTO tenants (id, name, status)
@@ -99,6 +100,28 @@ describe("PostgreSQL identity tenant isolation", () => {
     await expect(store.listActive(tenantB, userId)).resolves.toEqual([
       expect.objectContaining({ id: sessionB, tenantId: tenantB }),
     ]);
+  });
+
+  it("stops accepting a suspended user's tokens, and accepts them again once reinstated", async () => {
+    const store = new PgSessionStore(restrictedPool);
+    await expect(store.findByAccessTokenHash(tenantA, "access-a")).resolves.toEqual(
+      expect.objectContaining({ id: sessionA }),
+    );
+
+    await adminClient.query(`UPDATE users SET status = 'suspended' WHERE id = $1`, [userId]);
+    await expect(store.findByAccessTokenHash(tenantA, "access-a")).resolves.toBeUndefined();
+    await expect(store.findByRefreshTokenHash(tenantA, "refresh-a")).resolves.toBeUndefined();
+
+    await adminClient.query(`UPDATE users SET status = 'active' WHERE id = $1`, [userId]);
+    await expect(store.findByAccessTokenHash(tenantA, "access-a")).resolves.toEqual(
+      expect.objectContaining({ id: sessionA }),
+    );
+  });
+
+  it("rejects a status outside active/suspended", async () => {
+    await expect(
+      adminClient.query(`UPDATE users SET status = 'banned' WHERE id = $1`, [userId]),
+    ).rejects.toThrow(/users_status_known/);
   });
 
   it("persists full reference-only SSO config for the selected tenant", async () => {

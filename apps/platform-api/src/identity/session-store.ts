@@ -179,8 +179,14 @@ export class PgSessionStore implements SessionStore {
   ): Promise<SessionRecord | undefined> {
     const { rows } = await this.withTenant(tenantId, (client) =>
       client.query<SessionRow>(
+        // A suspended user's sessions stop working at once, on every tenant
+        // (task B1.2): nothing else reads users.status.
         `SELECT * FROM user_sessions
          WHERE tenant_id = $1 AND refresh_token_hash = $2 AND revoked_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM users u
+              WHERE u.id = user_sessions.user_id AND u.status = 'active'
+           )
          LIMIT 1`,
         [tenantId, hash],
       ),
@@ -195,8 +201,14 @@ export class PgSessionStore implements SessionStore {
   ): Promise<SessionRecord | undefined> {
     const { rows } = await this.withTenant(tenantId, (client) =>
       client.query<SessionRow>(
+        // A suspended user's sessions stop working at once, on every tenant
+        // (task B1.2): nothing else reads users.status.
         `SELECT * FROM user_sessions
          WHERE tenant_id = $1 AND access_token_hash = $2 AND revoked_at IS NULL
+           AND EXISTS (
+             SELECT 1 FROM users u
+              WHERE u.id = user_sessions.user_id AND u.status = 'active'
+           )
          LIMIT 1`,
         [tenantId, hash],
       ),
