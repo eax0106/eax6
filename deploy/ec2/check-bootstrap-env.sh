@@ -20,8 +20,12 @@ mkdir -p "$work/stub"
 printf '#!/bin/sh\necho stubbed-secret-value\n' >"$work/stub/aws"
 chmod +x "$work/stub/aws"
 
+# The container runs as root; ownership goes back to the caller so the 0600
+# files can be read below (Docker Desktop hides this on macOS, Linux does not).
 docker run --rm -v "$work:/repo" -w /repo/deploy/ec2 -e PATH="/repo/stub:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-  bash:5 bash -c 'apk add --no-cache openssl python3 >/dev/null; bash bootstrap.sh --env-only' >/dev/null
+  -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
+  bash:5 bash -c 'apk add --no-cache openssl python3 >/dev/null; bash bootstrap.sh --env-only;
+    chown "$HOST_UID:$HOST_GID" .env .env.base' >/dev/null
 
 env_file="$work/deploy/ec2/.env"
 fail() { echo "FAIL $*"; exit 1; }
