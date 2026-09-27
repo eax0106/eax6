@@ -237,6 +237,11 @@ jobs:
       - name: migrate platform db
         run: pnpm --filter @alterx/platform-api db:migrate
 
+      - name: ec2 platform db runtime roles check
+        # Task 6.1c. The services connect as platform_app (held to RLS) and
+        # platform_operations (staff plane), never as the superuser.
+        run: bash deploy/ec2/check-platform-db-roles.sh "$DATABASE_URL"
+
       - name: Revive platform request contracts and HTTP database integration
         run: scripts/check-revive-platform.sh
 

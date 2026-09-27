@@ -15,6 +15,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 |---|---|---|
 | 6.1a | Single-EC2 deployment kit: Terraform for the host and every AWS resource LocalStack fakes locally, one compose file, bootstrap, runbook. Proven: terraform validate + real plan (24 resources), compose config, `check-bootstrap-env.sh`. Whole-stack run waits on 6.1b. | done (this PR) |
 | 6.2a | Temporal Cloud wiring in the kit (address, namespace, API key from Secrets Manager, worker deployment name and build id from #222). | done (this PR) |
+| 6.1c | platform_db runtime roles: the kit had platform-api connect as the Postgres superuser, which bypasses row-level security; it now connects as `platform_app` (held to RLS) and the staff plane as `platform_operations` (its `OPERATIONS_*_DATABASE_URL` were configured nowhere, so the security queue and marketplace governance would have answered 503). Proven by `check-platform-db-roles.sh` in CI. | done (this PR) |
 | 6.1b | Launch on EC2 | blocked (accounts + cost, below) |
 | 6.2b | Run against Temporal Cloud | blocked (account) |
 | 6.5 | Load and failure evidence; promotion gate | blocked (needs 6.1b) |

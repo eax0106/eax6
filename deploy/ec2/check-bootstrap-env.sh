@@ -25,7 +25,8 @@ chmod +x "$work/stub/aws"
 docker run --rm -v "$work:/repo" -w /repo/deploy/ec2 -e PATH="/repo/stub:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   bash:5 bash -c 'apk add --no-cache openssl python3 >/dev/null; bash bootstrap.sh --env-only;
-    chown "$HOST_UID:$HOST_GID" .env .env.base' >/dev/null
+    cp .db-roles.env .db-roles.first; bash bootstrap.sh --env-only;
+    chown "$HOST_UID:$HOST_GID" .env .env.base .db-roles.env .db-roles.first' >/dev/null
 
 env_file="$work/deploy/ec2/.env"
 fail() { echo "FAIL $*"; exit 1; }
@@ -45,4 +46,13 @@ grep -qE '^[A-Za-z_][A-Za-z0-9_]*=<' "$env_file" && fail "placeholder left: $(gr
 [[ "$(value ENGINE_DB_PORT)" =~ ^[0-9]+$ ]] || fail "ENGINE_DB_PORT not a number: $(value ENGINE_DB_PORT)"
 [[ -n "$(value MODEL_GATEWAY_APPCONFIG_APPLICATION_ID)" ]] || fail "scoped AppConfig identifiers missing"
 [[ "$(stat -c %a "$env_file" 2>/dev/null || stat -f %Lp "$env_file")" == 600 ]] || fail ".env is not 0600"
+# Task 6.1c: the services never connect as the platform_db superuser.
+roles_file="$work/deploy/ec2/.db-roles.env"
+[[ "$(value DATABASE_URL)" == postgresql://platform_app:*@127.0.0.1:*/platform_db ]] || fail "DATABASE_URL is not the platform_app role: $(value DATABASE_URL | sed 's#:[^:@]*@#:***@#')"
+[[ "$(value MARKETPLACE_DATABASE_URL)" == postgresql://platform_app:* ]] || fail "MARKETPLACE_DATABASE_URL is not the platform_app role"
+[[ "$(value OPERATIONS_PLATFORM_DATABASE_URL)" == postgresql://platform_operations:* ]] || fail "OPERATIONS_PLATFORM_DATABASE_URL is not the platform_operations role"
+[[ "$(value OPERATIONS_MARKETPLACE_DATABASE_URL)" == postgresql://platform_operations:* ]] || fail "OPERATIONS_MARKETPLACE_DATABASE_URL is not the platform_operations role"
+grep -q "$(awk -F= '$1=="PLATFORM_APP_DB_PASSWORD"{print $2}' "$roles_file")" <<<"$(value DATABASE_URL)" || fail "DATABASE_URL does not carry the generated role password"
+cmp -s "$roles_file" "$work/deploy/ec2/.db-roles.first" || fail "role passwords changed on a re-run"
+[[ "$(stat -c %a "$roles_file" 2>/dev/null || stat -f %Lp "$roles_file")" == 600 ]] || fail ".db-roles.env is not 0600"
 echo "bootstrap-env-ok"
