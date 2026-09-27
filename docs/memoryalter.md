@@ -511,6 +511,69 @@ on, and a workflow may add safeguards but never remove one (sections 16 and 5).
 
 ---
 
+### 2026-09-25 — the ancestry repair never reached main; third import done by cherry-pick (PR #17)
+
+**PR #16's `merge -s ours 092f148` was lost.** PR #16 was squash-merged, so it landed as one
+single-parent commit and main's merge base with alter-x-4- stayed at `d5ea2a2`. The 2026-09-24
+master context's "a third import is now an ordinary merge" was wrong. **An ancestry repair only
+survives a merge commit.**
+
+**PR #17 imported #194–#215 (22 commits) by cherry-pick** onto `087ae77`, closed with
+`git merge -s ours 9b86ebf`, and was **merged with a merge commit** (`74406e8`, parents
+`087ae77` + `5fc2473`). Main's merge base with alter-x-4- became `9b86ebf`.
+
+**B4 was built twice.** Their #208 and our PR #12 covered the same ten server files; in each,
+reverse-applying #12 reproduced `092f148` exactly, so theirs was adopted whole. It adds pagination
+and the resolver fix for every project/workflow route answering 403 to its own owner.
+
+**A test that passed for the wrong reason.** Our B4 integration suite imported the non-enforcing
+`RbacModule`, so "project detail refuses another workspace" only ever exercised the service check
+#208 removed. Rebound to the engine-backed workspace resolver production uses: it fails without
+the resolver ("promise resolved instead of rejecting") and passes with it. Opened as **C34** for
+the rest of the specs.
+
+**B6 decided by import:** removal archives through `PATCH /triggers/:id/status` (their #198);
+disable-only by design.
+
+---
+
+### 2026-09-27 — #216–#232 imported as an ordinary merge (PR #18); nothing of theirs left outside
+
+**PR #18 merged with a merge commit** (`229e9b5`): `git merge 4e73a08` on top of `74406e8`, the
+first import to work as a plain merge. **As of `4e73a08` every alter-x-4- commit is in main.**
+
+**Compatibility, not just conflicts.**
+1. Two conflicts, both unions: our C2 `runtimeMode`/`configSource` with their Temporal hardening in
+   `background-workers/src/config/environment.ts`, and our `EmbeddingResult` with their
+   instructions client in a selection-binding test.
+2. **#220 flagged a system prompt `alter_authored` with an inline dict**, skipping the gate every
+   other caller uses. The prompt is a constant, so nothing leaked; it is now registered and built
+   by `_alter_authored_system_message`, pinned by a rejection test seen to fail with the gate off.
+3. **A seam no conflict showed:** #222's spec compared the worker environment to a literal written
+   before our C2 fields existed. Local `nx affected` caught it; fixed in the expectation.
+4. Their `ALTER_ENV === "local"` checks pick the database login method, a different question from
+   `RUNTIME_MODE`, so C15 holds.
+
+**What closed:** 5.3 (their #218/#219), 6.4 (#221). The code half of 6.2 (#222). Bookkeeping
+closures at the same time: 4.2, 4.3, 5.1, 6.3, B6.
+
+**Three new findings.**
+- **C32 — images cannot be published from here.** The imported `images` workflow fails every
+  push with `denied: permission_denied: write_package` on `ghcr.io/havishalterx-eng/alter-*`, names
+  alter-x-4- publishes successfully. Two repositories now claim the same image names. Decision
+  for Havish. `ci` is green on `229e9b5`; `images` is red.
+- **C33 — a Temporal continue-as-new test flaked once on CI** (`pollUntil timed out after
+  10000ms`), passed on rerun and 5/5 locally. Recorded as flaky rather than waved through.
+- **6.1 now starts with a decision.** Their #232 targets one EC2 instance with Docker and Bedrock
+  for the MVP while #231 keeps Aurora with IAM as the default. Made in their repository; ours to
+  decide.
+
+**Process slip, caught.** A `git stash` during the in-progress merge swallowed the merge state; the
+`&&` chain stopped the next step, the stash held everything, and the merge was redone and
+verified identical to the stash before it was dropped. Never stash mid-merge.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.

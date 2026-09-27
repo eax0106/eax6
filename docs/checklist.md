@@ -389,11 +389,11 @@ schedule late, because what L6 consumes is a plan, not the Planner.
       real three-team, twelve-country migration in 28 words does not — **the classification
       is inverted relative to actual scope.** Replace with a model call behind the same
       contract, keeping the keyword path as a fallback for provider outages.
-- [ ] **4.2 synthesizer rewrite.** Returns byte-identical topology, waves, roles and a
+- [x] **4.2 synthesizer rewrite.** **CLOSED 2026-09-27 — proven here at 24/24 twice (2026-09-22).** Returns byte-identical topology, waves, roles and a
       hardcoded `confidence 1.0` whatever the constraints. Make constraints actually shape
       the architecture, and make confidence mean something. **Design log §1 names this the
       product's entire differentiator, and one of only two genuinely unproven pieces.**
-- [ ] **4.3 golden sets** — how you know. Write the planner and architecture golden sets
+- [x] **4.3 golden sets** **CLOSED 2026-09-27 — both sets were written before the rewrites.** — how you know. Write the planner and architecture golden sets
       **before** the rewrite, so the target is fixed in advance rather than fitted
       afterwards.
 
@@ -408,7 +408,7 @@ against a real provider.
 *4–8 weeks · scope depends on decisions.* Both need a product decision before an
 engineering one. See 0.6.
 
-- [ ] **5.1 voice** — **decision made 2026-09-08: CUT** (design log §33). *Decided, not
+- [x] **5.1 voice** **CLOSED 2026-09-27 — executed by their #183; the tree is clean.** — **decision made 2026-09-08: CUT** (design log §33). *Decided, not
       executed.* The declaration still exists, so the six RPCs still generate clients and
       still appear in every count. Remove or deprecate them — a note is not a cut. Six RPCs declared (`BindNumber`, `GetNumberBinding`,
       `ConfigureCallHandling`, `InitiateCall`, `GetAccountHealth`, `GetCapabilities`), no
@@ -418,7 +418,7 @@ engineering one. See 0.6.
 - [ ] **5.2 repository manager** — **decision made 2026-09-08: CUT** (design log §33).
       *Decided, not executed.* Remove or deprecate the declaration. C9. No backend contract to build
       against.
-- [ ] **5.3 deployment manager** — surface only. C8. The backend contract is real
+- [x] **5.3 deployment manager** **CLOSED 2026-09-27 — their #218/#219, imported in PR #18: version lifecycle and real rollback.** — surface only. C8. The backend contract is real
       (`DeployctlService`, three RPCs); only the surface is missing. Cheapest of the three —
       do it first within this phase.
 
@@ -433,19 +433,19 @@ as such, so it stops appearing in counts as pending work.
 single-host stack with LocalStack standing in for AWS. **The local-versus-real gap is where
 the remaining surprises live.**
 
-- [ ] **6.1 real AWS** — the big one. Secrets Manager, SSM, S3, SQS and EventBridge all
+- [ ] **6.1 real AWS** — **decision needed first: their #232 targets one EC2 instance with Docker and Bedrock for the MVP; their #231 keeps Aurora with IAM as the default. Images (#223), ECR (#224), mesh ports (#229) and image CI (#230) are imported.** — the big one. Secrets Manager, SSM, S3, SQS and EventBridge all
       resolve against LocalStack today. Real IAM, cross-account boundaries and regional
       endpoints are where this bites — particularly IAM database authentication, which every
       service declares and none has exercised. *Prove this pattern on one service early,
       not late.*
-- [ ] **6.2 temporal** — durable substrate. Local Temporal is `start-dev`, one process, no
+- [ ] **6.2 temporal** — **code half imported 2026-09-27 (their #222, PR #18): separate queues, continue-as-new, pinned worker versions, retention floor, runbook. Left: a real cluster or Cloud namespace, and running against it.** — durable substrate. Local Temporal is `start-dev`, one process, no
       persistence guarantees. Moving to Cloud or a real cluster changes retention, history
       size limits and worker versioning — all of which the executor workflow assumes are
       generous.
-- [ ] **6.3 approval route** — never verified. The engine's pause and resume work, driven
+- [x] **6.3 approval route** **CLOSED 2026-09-27 — proven by their #188 and re-proven here at 3/3.** — never verified. The engine's pause and resume work, driven
       by a signal. The REST route a person actually uses to send it has never been
       exercised; it needs a properly minted delegation token.
-- [ ] **6.4 chain verification** — audit. Incremental verify resumes from a checkpoint, so a
+- [x] **6.4 chain verification** **CLOSED 2026-09-27 — their #221, imported in PR #18: weekly full verification job and route.** — audit. Incremental verify resumes from a checkpoint, so a
       forgery in checkpointed history is never re-examined. `verifyChain()` exists with **no
       route and no caller**. Schedule it, even weekly.
 - [ ] **6.5 load and failure evidence.** The eval harness already carries chaos scenarios,
@@ -468,7 +468,7 @@ person, Track B competes with the engine rather than running beside it. Take **B
 **B4** early anyway — one lies, the others are additive and safe — and defer the rest until
 the demo runs.
 
-- [ ] **B6 [+] a trigger can never be removed.** B5 made the control refuse honestly, which is
+- [x] **B6 [+] a trigger can never be removed.** **CLOSED 2026-09-25 — removal archives through the status route (their #198); decided disable-only by design, integration-tested here in PR #17.** B5 made the control refuse honestly, which is
       correct and leaves a real product gap: `platform-api`'s trigger controller has no `DELETE`
       at all, so nothing can remove a trigger by any route. Surfaced by PR #12's honest refusal
       rather than fixed by it. Decide whether removal is disable-only by design, or whether the
@@ -765,6 +765,22 @@ demo.
       4.1 only if it clears 0.90 here. **The finding worth keeping: a fallback masking a total
       provider failure reads as a mediocre score, not as an outage.**
 
+- [ ] **C32 [+] container images cannot be published from this repository.** Found 2026-09-27 on the
+      first push after PR #18: the imported `images` workflow builds all images, then every push to
+      `ghcr.io/havishalterx-eng/alter-*` fails with `denied: permission_denied: write_package`. The same
+      workflow publishes those names successfully from `alter-x-4-`, so the packages are almost
+      certainly linked to that repository (not confirmed: the token here cannot read packages). Two
+      repositories now publish the same image names. **Havish's decision:** grant this repository write
+      access to each package, rename ours, or disable the workflow here until building consolidates.
+      Until then `images` is red on every push to `main`; `ci` is unaffected.
+- [ ] **C33 [+] a timing-sensitive Temporal test flakes on CI.** `conversation-lifecycle-workflow.spec.ts`
+      "continues as new before history grows" failed once on PR #18 with `pollUntil timed out after
+      10000ms`, passed on rerun and 5/5 locally; their CI has passed it every time. Code identical to
+      theirs. Make the wait deterministic rather than longer.
+- [ ] **C34 [+] most specs authorize through the non-enforcing `RbacModule`.** Workspace isolation on
+      project and workflow routes lives in `EnforcingRbacModule`; only the revive-platform integration
+      suite binds it (PR #17). A regression in the resolver would pass every other test.
+
 ---
 
 ## Track D [+] — design-log conformance, after the builds
@@ -792,41 +808,27 @@ workflow before Recovery is invoked.
 
 ---
 
-## Open now — the short list, 2026-09-24
+## Open now — the short list, 2026-09-27
 
-Everything below is also a numbered item elsewhere in this file. This block exists because after
-the #172–#193 import the board has 33 open items and the five that actually gate progress are hard
-to find among them.
+Everything below is also a numbered item elsewhere in this file. Updated after PR #18 imported
+`alter-x-4-` #216–#232, which leaves nothing of theirs unimported as of `4e73a08`.
 
-**Blocking a phase**
-- [ ] **C31 — bind the model aliases to invocable ids, then re-measure 4.1.** Smallest item here
-      and it unblocks a whole phase. Nova in `ap-south-1` is inference-profile only; a bare id
-      fails every call and the keyword fallback hides it as a mediocre score rather than an outage.
+**Blocking the demo**
+- [ ] **C31 — bind the model aliases to invocable ids, then re-measure 4.1.** Nova in `ap-south-1` is
+      inference-profile only; a bare id fails every call and the keyword fallback hides it.
 - [ ] **4.1** stays open until that re-measure clears 0.90 **on our hardware**.
+- [ ] **C29 slice 2b** — carry success criteria to the producing node and the gate.
+- [ ] **C30 — §16's four approval modes do not exist in code.** Build §16, or amend it in Track D.
 
-**A design-log mismatch we now run**
-- [ ] **C30 — §16's four approval modes do not exist in code.** Always-block, auto-approve,
-      skip-on-timeout, approve-once-then-promote: none of them. What exists is gate placement
-      before side-effecting tools. Decide: build §16, or amend it in Track D.
-
-**Bookkeeping, roughly an hour, and it makes the board honest**
-- [ ] **4.2** — proven here at 24/24 twice; still shows open.
-- [ ] **4.3** — both golden sets written before the rewrites; provable by inspection.
-- [ ] **5.1 voice** — decided cut 2026-09-08, executed by their #183; the tree is already clean.
-- [ ] **6.3 approval route** — proven by their #188 and re-proven here at 3/3.
-
-**Not on the board because it is not ours to do**
-- [ ] **Tell Surya and Satwik that building moves to alterengine-6.** The import was justified as
-      the last one, and the git-history repair only pays off once. Until they are told, the two
-      trees drift again from their next commit. **Havish's action, not the CEO session's.**
+**Decisions waiting on Havish**
+- [ ] **6.1** — EC2 + Docker + Bedrock MVP (their #232) or AWS-native first.
+- [ ] **5.2** — repository manager: remove the declaration, or scope it with Project Mode (§23, §33).
+- [ ] **C32** — image publishing collides with `alter-x-4-`'s packages.
+- [ ] **Tell Surya and Satwik that building moves to alterengine-6.** Every week it waits adds an import.
 
 **Still true and easy to forget**
-- [ ] **C29** — nothing validates model output against the task's contract; slice 2b is unblocked
-      and now sits on their better Planner, which is why it was paused.
-- [ ] **C8** — the idempotency gate §4 makes mandatory. Newly buildable: their import labels which
-      tools have side effects, which is the prerequisite that was missing.
-- [ ] **Track D** has grown. It must now also judge the product rules adopted from `alter-x-4-`
-      rather than inherit them.
+- [ ] **C8** — the idempotency gate §4 makes mandatory; the side-effect label it needs is in.
+- [ ] **Track D** must judge the rules adopted from `alter-x-4-` (#185–#187, #211, #215, #232), not inherit them.
 
 ---
 
