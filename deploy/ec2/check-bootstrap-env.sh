@@ -6,7 +6,9 @@ set -euo pipefail
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-git -C "$repo" ls-files -z | (cd "$repo" && xargs -0 tar cf -) | tar xf - -C "$work"
+# One tar reading the list on stdin: xargs would split a long list into
+# several archives, and the reader stops at the first one's end.
+(cd "$repo" && git ls-files -z | tar --null -T - -cf -) | tar xf - -C "$work"
 mkdir -p "$work/deploy/ec2"
 cp "$repo/deploy/ec2/bootstrap.sh" "$repo/deploy/ec2/operator.env.example" "$work/deploy/ec2/"
 printf 'ALTER_ENV=dev\n' >"$work/deploy/ec2/host.env"
