@@ -11,7 +11,28 @@ it ships as a static bundle, not a container.
 The nine Node services share one image because they share a build and a runtime;
 the five Python services do not, because each resolves its own `uv.lock`.
 
-## Build
+## Where the images come from
+
+CI builds all six and, on a push to main or a release tag, pushes them to GHCR:
+
+| | |
+|---|---|
+| Registry | `ghcr.io/havishalterx-eng/alter-<image>` |
+| Tags | `sha-<short commit>`, plus `main` or the release tag |
+| Workflow | `.github/workflows/images.yml` |
+
+A pull request builds them without pushing, and only when it touches something
+an image contains, so a Terraform-only or docs-only change builds nothing. The
+image list is derived from the apps on disk rather than written in the workflow,
+and the build fails if `node-entrypoint.sh` and the Node apps on disk disagree
+— a Node app missing from that list cannot be started even though the image
+contains its build.
+
+The registry is GHCR because ECR does not exist yet: no AWS account has been
+created. The tags already follow the scheme `modules/ecr`'s lifecycle policy
+keeps, so moving to ECR is a registry and a login step.
+
+## Build locally
 
 ```bash
 scripts/docker-build.sh
