@@ -144,6 +144,43 @@ describe("loadModelGatewayEnvironment", () => {
     ).toThrow(/MODEL_GATEWAY_EMBEDDING_PROVIDER/);
   });
 
+  it("starts on Bedrock alone when no failover provider is configured", () => {
+    const loaded = loadModelGatewayEnvironment(
+      environment({
+        ALTER_CONFIG_SOURCE: "appconfig",
+        APPCONFIG_APPLICATION_ID: "app-1",
+        APPCONFIG_ENVIRONMENT_ID: "env-1",
+        APPCONFIG_CONFIGURATION_PROFILE_ID: "profile-1",
+        PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF: "secret",
+        PRESIDIO_ANALYZER_URL: "http://presidio-analyzer.local:5001",
+        PRESIDIO_ANONYMIZER_URL: "http://presidio-anonymizer.local:5002",
+        CACHE_REDIS_HOST: "cache.model-gateway.local",
+        CACHE_REDIS_PORT: "6379",
+        ANTHROPIC_API_KEY_SECRET_REF: "  ",
+      }),
+    );
+    expect(loaded).toMatchObject({ runtimeMode: "real", configSource: "appconfig" });
+    expect(loaded).not.toHaveProperty("anthropicApiKeySecretReference");
+    expect(loaded).not.toHaveProperty("openaiApiKeySecretReference");
+  });
+
+  it("still requires the platform admin token reference, which is not a failover", () => {
+    expect(() =>
+      loadModelGatewayEnvironment(
+        environment({
+          ALTER_CONFIG_SOURCE: "appconfig",
+          APPCONFIG_APPLICATION_ID: "app-1",
+          APPCONFIG_ENVIRONMENT_ID: "env-1",
+          APPCONFIG_CONFIGURATION_PROFILE_ID: "profile-1",
+          PRESIDIO_ANALYZER_URL: "http://presidio-analyzer.local:5001",
+          PRESIDIO_ANONYMIZER_URL: "http://presidio-anonymizer.local:5002",
+          CACHE_REDIS_HOST: "cache.model-gateway.local",
+          CACHE_REDIS_PORT: "6379",
+        }),
+      ),
+    ).toThrow(/PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF/);
+  });
+
   it("ignores the local embedding-provider flag in AppConfig mode", () => {
     const appConfigInput = {
       ALTER_ENV: "dev",
@@ -233,30 +270,6 @@ describe("loadModelGatewayEnvironment", () => {
         ANTHROPIC_API_KEY_SECRET_REF: "/alter/dev/model-gateway/system/anthropic_api_key",
         OPENAI_API_KEY_SECRET_REF: "/alter/dev/model-gateway/system/openai_api_key",
         PRESIDIO_ANONYMIZER_URL: "http://presidio-anonymizer.local:5002",
-      },
-    ],
-    [
-      "ANTHROPIC_API_KEY_SECRET_REF",
-      {
-        ALTER_ENV: "dev",
-        ALTER_CONFIG_SOURCE: "appconfig",
-        APPCONFIG_APPLICATION_ID: "app-1",
-        APPCONFIG_ENVIRONMENT_ID: "env-1",
-        APPCONFIG_CONFIGURATION_PROFILE_ID: "profile-1",
-        ANTHROPIC_API_KEY_SECRET_REF: "",
-        OPENAI_API_KEY_SECRET_REF: "/alter/dev/model-gateway/system/openai_api_key",
-      },
-    ],
-    [
-      "OPENAI_API_KEY_SECRET_REF",
-      {
-        ALTER_ENV: "dev",
-        ALTER_CONFIG_SOURCE: "appconfig",
-        APPCONFIG_APPLICATION_ID: "app-1",
-        APPCONFIG_ENVIRONMENT_ID: "env-1",
-        APPCONFIG_CONFIGURATION_PROFILE_ID: "profile-1",
-        ANTHROPIC_API_KEY_SECRET_REF: "/alter/dev/model-gateway/system/anthropic_api_key",
-        OPENAI_API_KEY_SECRET_REF: "",
       },
     ],
     [

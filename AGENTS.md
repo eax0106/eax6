@@ -167,10 +167,12 @@ Some behaviour can only be measured against a real model. The local recipe
    `docker compose --env-file .env.local up -d`.
 2. Start the mock M2M issuer: `node scripts/local-mock-auth0/server.js` (port
    4999; without it the gateway answers UNAUTHENTICATED).
-3. Start the Model Gateway on Bedrock: `sh scripts/run-model-gateway-aws.sh`.
+3. Start the Model Gateway on Bedrock: `bash scripts/run-service-aws.sh model-gateway`.
    It needs a built gateway and AWS credentials with Bedrock access on this
-   machine, in the named profile the script uses (`alter` unless
-   `MODEL_GATEWAY_AWS_PROFILE` says otherwise).
+   machine (the default credential chain, or the profile named by
+   `ALTER_AWS_PROFILE`). The same script starts `tool-gateway`,
+   `sandbox-service` and `provisioning-service`; add `--check` to boot one from
+   the committed `.env.local.example`, prove its `/health` identity, and stop.
 4. Run the live test with `.env.local` loaded and `AWS_ENDPOINT_URL` unset.
 
 Live golden sets in the repository run only when their variable is set:

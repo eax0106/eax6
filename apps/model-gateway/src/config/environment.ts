@@ -19,8 +19,9 @@ export interface ModelGatewayAppConfigEnvironment
   readonly appConfigApplicationId: string;
   readonly appConfigEnvironmentId: string;
   readonly appConfigConfigurationProfileId: string;
-  readonly anthropicApiKeySecretReference: string;
-  readonly openaiApiKeySecretReference: string;
+  /** Optional direct-API failovers; Bedrock is the primary and needs no key. */
+  readonly anthropicApiKeySecretReference?: string;
+  readonly openaiApiKeySecretReference?: string;
   readonly presidioAnalyzerUrl: string;
   readonly presidioAnonymizerUrl: string;
   readonly cacheRedisHost: string;
@@ -66,6 +67,20 @@ const { requireValue, scopedValue, parsePort, parseRequiredPort, parseGrpcAddres
 function optionalAddress(value: string | undefined, defaultAddress: string): string {
   const trimmed = value?.trim();
   return trimmed !== undefined && trimmed.length > 0 ? trimmed : defaultAddress;
+}
+
+/**
+ * A failover provider's secret reference, present only when configured. An
+ * unset reference means "no such failover", so the environment must not
+ * invent a name for a secret that does not exist.
+ */
+function optionalReference<K extends string>(
+  environment: NodeJS.ProcessEnv,
+  field: string,
+  key: K,
+): Partial<Record<K, string>> {
+  const value = environment[field]?.trim();
+  return value ? ({ [key]: value } as Record<K, string>) : {};
 }
 
 export function loadModelGatewayEnvironment(
@@ -198,14 +213,8 @@ export function loadModelGatewayEnvironment(
       environment,
       "APPCONFIG_CONFIGURATION_PROFILE_ID",
     ),
-    anthropicApiKeySecretReference: requireValue(
-      environment,
-      "ANTHROPIC_API_KEY_SECRET_REF",
-    ),
-    openaiApiKeySecretReference: requireValue(
-      environment,
-      "OPENAI_API_KEY_SECRET_REF",
-    ),
+    ...optionalReference(environment, "ANTHROPIC_API_KEY_SECRET_REF", "anthropicApiKeySecretReference"),
+    ...optionalReference(environment, "OPENAI_API_KEY_SECRET_REF", "openaiApiKeySecretReference"),
     presidioAnalyzerUrl: requireValue(environment, "PRESIDIO_ANALYZER_URL"),
     presidioAnonymizerUrl: requireValue(
       environment,

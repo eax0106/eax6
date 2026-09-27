@@ -66,8 +66,9 @@ function createConfigProvider(
 
 async function getSecretOrUndefined(
   secretsProvider: AwsSecretsManagerProvider,
-  referenceId: string,
+  referenceId: string | undefined,
 ): Promise<string | undefined> {
+  if (referenceId === undefined) return undefined;
   try {
     return await secretsProvider.getSecret(referenceId);
   } catch {
