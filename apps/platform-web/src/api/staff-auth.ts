@@ -9,6 +9,7 @@ const stateKey = "alterx_staff_pkce_state"
 export const STAFF_CALLBACK_PATH = "/staff/callback"
 
 export interface StaffSession {
+  staffUserId: string
   email: string
   roles: string[]
 }

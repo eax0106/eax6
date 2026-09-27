@@ -116,7 +116,7 @@ describe("StaffSessionController", () => {
       headers: { "x-test-staff": JSON.stringify({ staff_user_id: "stf_1", identity_ref: "auth0|1", email: "ops@alter.example", roles: ["staff_support"] }) },
     });
     expect(who.statusCode).toBe(200);
-    expect(who.json()).toEqual({ email: "ops@alter.example", roles: ["staff_support"] });
+    expect(who.json()).toEqual({ staffUserId: "stf_1", email: "ops@alter.example", roles: ["staff_support"] });
     expect((await app.inject({ method: "GET", url: "/api/v1/admin/session" })).statusCode).toBe(403);
   });
 

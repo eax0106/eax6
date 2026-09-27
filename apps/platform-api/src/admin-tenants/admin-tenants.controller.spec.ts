@@ -82,6 +82,19 @@ class FakeAdminTenantsRepository {
     return this.tenants.get(id);
   }
 
+  async listActions(tenantId: string) {
+    return this.actions
+      .filter((action) => action.tenantId === tenantId)
+      .map((action, index) => ({
+        id: `taa_${index}`,
+        action: action.action,
+        reason: action.reason,
+        staff_email: "ops@alter.example",
+        occurred_at: new Date(Date.UTC(2026, 8, 28, 0, index)).toISOString(),
+      }))
+      .reverse();
+  }
+
   async setStatus(id: string, status: "active" | "suspended"): Promise<AdminTenantView | undefined> {
     const tenant = this.tenants.get(id);
     if (!tenant) return undefined;
@@ -393,6 +406,37 @@ describe("Admin tenants routes", () => {
     const body = response.json() as { entitlement: { plan: string; limits: EntitlementLimits } };
     expect(body.entitlement.plan).toBe("pro");
     expect(body.entitlement.limits).toEqual(DEFAULT_LIMITS);
+  });
+
+  it("returns a tenant's action history newest first, behind the same grant rule as get()", async () => {
+    const created = await request({
+      method: "POST",
+      url: "/api/v1/admin/tenants",
+      body: { name: "Acme", identity_org_ref: "org-acme", plan: "starter" },
+      staffContext: staff(["staff_admin"]),
+    });
+    const tenantId = (created.json() as AdminTenantView).id;
+    await request({
+      method: "POST",
+      url: `/api/v1/admin/tenants/${tenantId}/actions/suspend`,
+      body: { reason: "abuse report" },
+      staffContext: staff(["staff_admin"]),
+    });
+
+    const blocked = await request({
+      method: "GET",
+      url: `/api/v1/admin/tenants/${tenantId}/actions`,
+      staffContext: staff(["staff_support"]),
+    });
+    expect(blocked.statusCode).toBe(403);
+
+    const history = await request({
+      method: "GET",
+      url: `/api/v1/admin/tenants/${tenantId}/actions`,
+      staffContext: staff(["staff_security"]),
+    });
+    expect(history.statusCode).toBe(200);
+    expect((history.json() as Array<{ action: string }>).map((entry) => entry.action)).toEqual(["suspended", "provisioned"]);
   });
 
   it("404s for an unknown tenant", async () => {

@@ -6,6 +6,7 @@ import { AdminTenantsExceptionFilter } from "./admin-tenants-exception.filter";
 import { AdminTenantsService } from "./admin-tenants.service";
 import { AdminTenantHttpError } from "./problem";
 import type {
+  AdminTenantActionView,
   AdminTenantDetailView,
   AdminTenantView,
 } from "./types";
@@ -73,6 +74,33 @@ export class AdminTenantsController {
   ): Promise<AdminTenantDetailView> {
     const instance = `/api/v1/admin/tenants/${tenantId}`;
     const id = parseTenantId(tenantId, instance);
+    await this.requireTenantRead(request, grantId, id, instance);
+    return this.tenants.get(id);
+  }
+
+  /**
+   * The tenant's staff action history, shown as its timeline in the console.
+   * Same gate as get(): staff_admin/staff_support need an active scoped grant.
+   */
+  @Get(":tenantId/actions")
+  @RequireStaffRole(...readRoles)
+  async actions(
+    @Param("tenantId") tenantId: string,
+    @Headers("x-alter-support-grant") grantId: string | undefined,
+    @Req() request: RbacRequest,
+  ): Promise<AdminTenantActionView[]> {
+    const instance = `/api/v1/admin/tenants/${tenantId}/actions`;
+    const id = parseTenantId(tenantId, instance);
+    await this.requireTenantRead(request, grantId, id, instance);
+    return this.tenants.actions(id);
+  }
+
+  private async requireTenantRead(
+    request: RbacRequest,
+    grantId: string | undefined,
+    tenantId: string,
+    instance: string,
+  ): Promise<void> {
     const staff = requireStaff(request, instance);
     if (staff.roles.some((role) => role === "staff_admin" || role === "staff_support")) {
       if (!grantId?.startsWith("jit_")) {
@@ -83,9 +111,8 @@ export class AdminTenantsController {
           instance,
         );
       }
-      await this.staff.requireAccess(grantId, staff.staff_user_id, id, "tenant:read");
+      await this.staff.requireAccess(grantId, staff.staff_user_id, tenantId, "tenant:read");
     }
-    return this.tenants.get(id);
   }
 
   @Get(":tenantId/support-snapshot")

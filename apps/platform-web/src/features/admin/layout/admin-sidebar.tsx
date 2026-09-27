@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom"
+import { adminSectionFor, isLiveFeatureAvailable } from "@/features/availability/live-feature-policy"
 import { 
   Building2, Users, LifeBuoy, Server, AlertCircle, Shield, 
   Activity, ScrollText, BadgeDollarSign, Store, ToggleLeft, 
@@ -112,7 +113,11 @@ export function AdminSidebar({ collapsed, onToggle, isMobile }: AdminSidebarProp
               </h3>
             )}
             <div className="space-y-0.5 px-2">
-              {group.items.map((item) => {
+              {group.items.filter((item) => {
+                // Live mode lists only sections whose backend is wired (#212, Track B1).
+                const section = adminSectionFor(item.href)
+                return section === undefined || isLiveFeatureAvailable(section)
+              }).map((item) => {
                 const isActive = item.href === "/app/admin" 
                   ? location.pathname === item.href 
                   : location.pathname.startsWith(item.href)

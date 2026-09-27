@@ -17,6 +17,15 @@ export interface AdminTenantDetailView extends AdminTenantView {
   };
 }
 
+/** One append-only staff action on a tenant (tenant_admin_actions), newest first. */
+export interface AdminTenantActionView {
+  id: string;
+  action: string;
+  reason: string | null;
+  staff_email: string;
+  occurred_at: string;
+}
+
 export interface ProvisionTenantInput {
   name: string;
   identity_org_ref: string;

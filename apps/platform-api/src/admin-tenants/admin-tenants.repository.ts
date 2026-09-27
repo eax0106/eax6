@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
-import type { AdminTenantView } from "./types";
+import type {
+  AdminTenantActionView, AdminTenantView } from "./types";
 
 interface TenantRow {
   id: string;
@@ -93,6 +94,36 @@ export class AdminTenantsRepository implements OnModuleDestroy {
        VALUES ($1, $2, $3, $4, $5)`,
       [`taa_${randomUUID()}`, tenantId, staffUserId, action, reason],
     );
+  }
+
+  /**
+   * The tenant's staff action history (tenant_admin_actions is append-only
+   * and has no RLS; it is only reachable through staff routes). Newest first,
+   * capped: this is a timeline, not an export.
+   */
+  async listActions(tenantId: string): Promise<AdminTenantActionView[]> {
+    const result = await this.pool.query<{
+      id: string;
+      action: string;
+      reason: string | null;
+      staff_email: string;
+      occurred_at: Date;
+    }>(
+      `SELECT a.id, a.action, a.reason, s.email AS staff_email, a.occurred_at
+       FROM tenant_admin_actions a
+       JOIN staff_users s ON s.id = a.staff_user_id
+       WHERE a.tenant_id = $1
+       ORDER BY a.occurred_at DESC, a.id DESC
+       LIMIT 100`,
+      [tenantId],
+    );
+    return result.rows.map((row) => ({
+      id: row.id,
+      action: row.action,
+      reason: row.reason,
+      staff_email: row.staff_email,
+      occurred_at: row.occurred_at.toISOString(),
+    }));
   }
 
   async onModuleDestroy(): Promise<void> {
