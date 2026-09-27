@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { isLiveApi } from "@/api/http"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
@@ -93,7 +94,8 @@ export function SecurityQueue() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {i.status === "open" && (
+                      {/* Live: abuse signals have no assignee (B1.8). */}
+                      {!isLiveApi && i.status === "open" && (
                         <Button variant="ghost" size="sm" onClick={() => assignMutation.mutate(i.id)} className="text-primary hover:text-primary hover:bg-primary-soft">
                           <UserCheck className="w-4 h-4 mr-2" /> Investigate
                         </Button>

@@ -1,4 +1,6 @@
 import type { SupportAccessRequest } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-ops"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -10,11 +12,13 @@ const MOCK_REQUESTS: SupportAccessRequest[] = [
 
 export class SupportAccessService {
   async list(): Promise<SupportAccessRequest[]> {
+    if (isLiveApi) return live.listGrants()
     await delay(300)
     return MOCK_REQUESTS
   }
 
   async request(tenantId: string, reason: string, scope: string[]): Promise<SupportAccessRequest> {
+    if (isLiveApi) throw new Error("Grants are created from the tenant page (Request access)")
     await delay(500)
     const req: SupportAccessRequest = {
       id: `req-${Date.now()}`,
@@ -30,6 +34,7 @@ export class SupportAccessService {
   }
 
   async approve(id: string): Promise<SupportAccessRequest> {
+    if (isLiveApi) throw new Error("Grants take effect when a staff admin creates them; there is nothing to approve")
     await delay(400)
     const req = MOCK_REQUESTS.find(r => r.id === id)
     if (!req) throw new Error("Not found")
@@ -40,6 +45,7 @@ export class SupportAccessService {
   }
 
   async endSession(id: string): Promise<SupportAccessRequest> {
+    if (isLiveApi) { await live.revokeGrant(id); const grant = (await live.listGrants()).find((g) => g.id === id); if (!grant) throw new Error("Grant not found"); return grant }
     await delay(300)
     const req = MOCK_REQUESTS.find(r => r.id === id)
     if (!req) throw new Error("Not found")

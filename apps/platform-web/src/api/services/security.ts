@@ -1,4 +1,6 @@
 import type { SecurityReviewItem } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-ops"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -10,11 +12,13 @@ const MOCK_SECURITY: SecurityReviewItem[] = [
 
 export class SecurityService {
   async list(): Promise<SecurityReviewItem[]> {
+    if (isLiveApi) return live.listSignals()
     await delay(300)
     return MOCK_SECURITY
   }
 
   async resolve(id: string, resolution: "resolved" | "dismissed"): Promise<SecurityReviewItem> {
+    if (isLiveApi) return live.reviewSignal(id, resolution)
     await delay(500)
     const sec = MOCK_SECURITY.find(s => s.id === id)
     if (!sec) throw new Error("Not found")
@@ -23,6 +27,7 @@ export class SecurityService {
   }
 
   async assign(id: string): Promise<SecurityReviewItem> {
+    if (isLiveApi) throw new Error("Assigning reviews is not available: platform-api has no assignee on abuse signals")
     await delay(300)
     const sec = MOCK_SECURITY.find(s => s.id === id)
     if (!sec) throw new Error("Not found")

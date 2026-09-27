@@ -27,13 +27,13 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B1.2 | admin-users: suspension now enforced (session store accepts only active users), cross-tenant list and detail, suspend (revokes every session), reinstate, revoke sessions, append-only history, audit | done (this PR) |
 | B1.3 | audit explorer over the audit ledger | done (this PR) |
 | B1.4 | feature flags: list, toggle (reason recorded) | done (this PR) |
-| B1.5 | incidents | todo |
+| B1.5 | incidents: list, detail, and a new status transition route (draft to investigating, then investigating/monitoring/resolved, reopen; conditional on current status, audited) | done (this PR) |
 | B1.6 | policies: plan limits and model alias bindings, read-only | done (this PR) |
 | B1.7 | providers: list, enable/disable (reason recorded); system status reads the same | done (this PR) |
-| B1.8 | security | todo |
-| B1.9 | support-access | todo |
-| B1.10 | usage | todo |
-| B1.11 | deployments (admin service) | todo |
+| B1.8 | security: abuse signals as review items, confirm/dismiss with reason | done (this PR) |
+| B1.9 | support access: JIT grants listed with derived status, end session revokes | done (this PR) |
+| B1.10 | usage | moved to B2: it is the tenant's own usage, budgets and cost estimates, not an admin screen |
+| B1.11 | deployments (admin) | blocked (decision): the page shows platform releases (promote to staging/production) while platform-api only acts on tenant deployments and cannot list them |
 | B2.1 | marketplace-admin | todo |
 | B2.2 | billing-ops | todo |
 | B2.3 | checkout | todo |
@@ -42,6 +42,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.6 | tokenized card setup | todo |
 | B2.7 | invoice PDF | todo |
 | B2.8 | new subscription | todo |
+| B2.9 | usage, budgets, cost estimates (moved from B1.10) | todo |
 | B3.1 | notifications | todo |
 | B3.2 | benchmarks | todo |
 | B3.3 | discovery | todo |
@@ -94,6 +95,8 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B1 live proof | A staff Auth0 tenant with a PKCE app (callback `<origin>/staff/callback`), and each staff member added to `staff_users` |
 | C30 | Build §16's four approval modes, or amend §16; plus open question 8 (notification channel) |
 | C32 | Grant this repository write on the GHCR packages, rename our images, or turn `images` publishing off here |
+| B1.11 | Admin deployments page: build a platform-release view (over the promotion gate and release evidence), or re-scope the page to tenant deployment actions (rollback/suspend/resume), which need a list route? |
+| B1.8 gap | Assigning a security review to a staff member has no backend (hidden in live). Build or drop? |
 | B1.6/B1.7 gaps | Provider "maintenance" state and editing policies from the list page have no backend (hidden in live). Build or drop? |
 | B1.2 gaps | Admin user screens show MFA and risk state in demo only; user notes (write) have no backend. Build or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |

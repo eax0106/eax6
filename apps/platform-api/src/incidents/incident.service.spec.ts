@@ -57,6 +57,26 @@ describe("IncidentService", () => {
     await expect(service.publish(incident.id, "stf_publisher")).rejects.toMatchObject({ status: 409 });
     expect(onPublish).toHaveBeenCalledTimes(1);
   });
+
+  it("moves a draft to investigating, then to resolved, and can reopen; never back to draft", async () => {
+    const repository = new MemoryIncidentRepository();
+    const service = createService(repository, vi.fn());
+    const incident = await service.create("stf_creator", fixture());
+
+    await expect(service.setStatus(incident.id, "stf_admin", "resolved", "done")).rejects.toMatchObject({ status: 409 });
+    await expect(service.setStatus(incident.id, "stf_admin", "investigating", "paged")).resolves.toMatchObject({ status: "investigating" });
+    await expect(service.setStatus(incident.id, "stf_admin", "resolved", "fixed")).resolves.toMatchObject({ status: "resolved" });
+    await expect(service.setStatus(incident.id, "stf_admin", "investigating", "recurred")).resolves.toMatchObject({ status: "investigating" });
+  });
+
+  it("refuses a transition when the status changed underneath it", async () => {
+    const repository = new MemoryIncidentRepository();
+    const service = createService(repository, vi.fn());
+    const incident = await service.create("stf_creator", fixture());
+    await service.setStatus(incident.id, "stf_admin", "investigating", "paged");
+    vi.spyOn(repository, "setStatus").mockResolvedValueOnce(undefined);
+    await expect(service.setStatus(incident.id, "stf_admin", "monitoring", "mitigated")).rejects.toMatchObject({ status: 409 });
+  });
 });
 
 function createService(
@@ -126,6 +146,14 @@ class MemoryIncidentRepository {
       approved_by: staffUserId,
       approved_at: "2026-08-06T00:02:00.000Z",
     });
+  }
+
+  async setStatus(id: string, from: AdminIncident["status"], to: AdminIncident["status"]) {
+    const current = this.records.get(id);
+    if (!current || current.status !== from) return undefined;
+    const updated = { ...current, status: to };
+    this.records.set(id, updated);
+    return updated;
   }
 
   async claimPublishing(id: string) {
