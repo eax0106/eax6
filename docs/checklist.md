@@ -794,6 +794,15 @@ demo.
       `${VAR:-default}` values; not yet proven. Workaround: set `envDir` for test configs, or run
       tests with `.env.local` moved.
 
+- [ ] **C36 [+] §5.2 mechanical read-back.** Verification never confirms an action actually took
+      effect by reading it back. Named in C12 (2026-09-16) as absent; had no board item until now.
+- [ ] **C37 [+] §5.3 end-of-run holistic check.** No judgement over a whole run's result. No match
+      in code by name (2026-09-27); had no board item until now.
+- [ ] **C38 [+] §19 Capability Registry holds reusable workflow templates.** Required from day one;
+      no match in code by name (2026-09-27); had no board item until now.
+- [ ] **C39 [+] §17 Drift Detector outbound suggestion path to the user.** Drift is computed and
+      persisted but never surfaced; had no board item until now.
+
 ---
 
 ## Track D [+] — design-log conformance, after the builds
