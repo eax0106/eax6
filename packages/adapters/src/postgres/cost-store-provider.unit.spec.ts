@@ -11,7 +11,7 @@ const migrationsFolder = "apps/cost-ledger-service/drizzle";
  * string reaching a remote host must ask for TLS.
  */
 describe("PostgresCostStoreProvider static connections", () => {
-  const remote = "postgresql://svc:pw@ep-x-pooler.ap-southeast-1.aws.neon.tech/cost_db";
+  const remote = "postgresql://svc:pw@db.managed-postgres.example.com/cost_db";
 
   function captureConfig(connectionString: string): PoolConfig | undefined {
     let captured: PoolConfig | undefined;
@@ -45,7 +45,11 @@ describe("PostgresCostStoreProvider static connections", () => {
     expect(captureConfig(`${remote}?sslmode=require`)?.ssl).toEqual({ rejectUnauthorized: true });
   });
 
-  it("leaves a loopback connection alone", () => {
-    expect(captureConfig("postgresql://u:p@127.0.0.1:5435/cost_db")?.ssl).toBeUndefined();
+  it.each([
+    ["loopback", "postgresql://u:p@127.0.0.1:5435/cost_db"],
+    ["a container DNS name", "postgresql://u:p@cost-db:5432/cost_db"],
+    ["a private address", "postgresql://u:p@192.168.20.5:5432/cost_db"],
+  ])("connects without TLS over %s", (_name, connectionString) => {
+    expect(captureConfig(connectionString)?.ssl).toBeUndefined();
   });
 });

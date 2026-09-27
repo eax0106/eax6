@@ -149,7 +149,8 @@ export function loadCostLedgerEnvironment(
 /**
  * Which database authentication a deployment uses. IAM stays the default
  * outside local, so an existing Aurora deployment keeps its keyless
- * connection; a managed Postgres without AWS IAM (Neon) is asked for
+ * connection; a Postgres reached with a password (a container on EC2, or a
+ * provider with no AWS IAM) is asked for
  * explicitly with DATABASE_AUTHENTICATION=static. Same rule as
  * audit-service's reader.
  */

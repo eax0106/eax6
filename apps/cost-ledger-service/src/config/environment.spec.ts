@@ -35,7 +35,8 @@ describe("loadCostLedgerEnvironment", () => {
 
 describe("database authentication selection", () => {
   // Same rule as audit-service: IAM stays the default outside local, and a
-  // target without AWS IAM (Neon) asks for password auth explicitly.
+  // target without AWS IAM (a Postgres container) asks for password auth
+  // explicitly.
   const deployed = {
     ALTER_ENV: "staging",
     ALTER_SERVICE_NAME: "cost-ledger-service",

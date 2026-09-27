@@ -92,10 +92,11 @@ export function sessionGatewayEnvironment(
  * Which database authentication this deployment uses.
  *
  * IAM stays the default outside local, so an Aurora deployment keeps its
- * keyless connection. Managed Postgres with no AWS IAM (Neon) is reached with
- * a password from ORCHESTRATION_DATABASE_URL, which a deployment asks for by
- * setting ORCHESTRATION_DATABASE_AUTHENTICATION (or DATABASE_AUTHENTICATION)
- * to "static". The store then requires that URL to ask for TLS, because the
+ * keyless connection. A Postgres reached with a password -- a container on EC2,
+ * or a provider with no AWS IAM -- takes its credential from
+ * ORCHESTRATION_DATABASE_URL, and a deployment asks for it by setting
+ * ORCHESTRATION_DATABASE_AUTHENTICATION (or DATABASE_AUTHENTICATION) to
+ * "static". The store then requires that URL to ask for TLS, because the
  * password travels with it -- see staticPoolConfig in @alterx/adapters.
  */
 export function resolveDatabaseAuthentication(

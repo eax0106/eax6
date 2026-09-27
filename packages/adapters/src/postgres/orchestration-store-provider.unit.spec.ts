@@ -443,7 +443,7 @@ describe("sharedOrchestrationPoolFactory", () => {
 });
 
 describe("static connections require TLS", () => {
-  const remote = "postgresql://svc:pw@ep-x-pooler.ap-southeast-1.aws.neon.tech/orchestration_db";
+  const remote = "postgresql://svc:pw@db.managed-postgres.example.com/orchestration_db";
 
   function captureConfig(connectionString: string): PoolConfig | undefined {
     let captured: PoolConfig | undefined;
@@ -470,7 +470,11 @@ describe("static connections require TLS", () => {
     });
   });
 
-  it("leaves a loopback connection alone, so local and testcontainers still connect", () => {
-    expect(captureConfig("postgresql://u:p@127.0.0.1:5433/orchestration_db")?.ssl).toBeUndefined();
+  it.each([
+    ["loopback, as testcontainers and the local stack use", "postgresql://u:p@127.0.0.1:5433/orchestration_db"],
+    ["a container DNS name, as compose services use", "postgresql://u:p@engine-db:5432/orchestration_db"],
+    ["a private address, as one VPC or host network uses", "postgresql://u:p@10.0.3.17:5432/orchestration_db"],
+  ])("connects without TLS over %s", (_name, connectionString) => {
+    expect(captureConfig(connectionString)?.ssl).toBeUndefined();
   });
 });

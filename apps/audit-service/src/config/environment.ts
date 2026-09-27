@@ -141,9 +141,9 @@ export function loadAuditEnvironment(
  * Which database authentication a deployment uses.
  *
  * IAM stays the default outside local, so every existing Aurora deployment
- * keeps its keyless connection. A managed Postgres that has no AWS IAM
- * (Neon) is reached with a password instead, which a deployment asks for by
- * setting DATABASE_AUTHENTICATION=static -- never by inference, so an
+ * keeps its keyless connection. A Postgres reached with a password instead --
+ * a container on EC2, or a provider with no AWS IAM -- is asked for by setting
+ * DATABASE_AUTHENTICATION=static -- never by inference, so an
  * environment that means to use IAM can never silently fall back to a
  * password. Local is static because that is the only mode it has.
  */

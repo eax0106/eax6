@@ -39,9 +39,8 @@ async function seed(pool: Pool): Promise<void> {
 
 /**
  * The image CI pins, overridable so the same tenant-isolation proof can run
- * against the Postgres major version a deployment target runs -- Neon is 18,
- * CI is 16.6, and RLS behaviour proven on one major version is not proven on
- * the other. The suite asserts the server it reached matches what was asked
+ * against the Postgres major version a deployment target runs: CI pins 16.6,
+ * and RLS behaviour proven on one major version is not proven on another. The suite asserts the server it reached matches what was asked
  * for, so an ignored override cannot pass as a proof of the other version.
  */
 const POSTGRES_IMAGE = process.env.POSTGRES_TEST_IMAGE ?? "postgres:16.6-alpine";

@@ -195,8 +195,8 @@ describe("loadAuditEnvironment", () => {
 });
 
 describe("database authentication selection", () => {
-  // Neon has no AWS IAM authentication, so a deployed environment must be able
-  // to ask for password (static) auth. IAM stays the default outside local so
+  // A Postgres container on EC2 has no AWS IAM authentication, so a deployed
+  // environment must be able to ask for password (static) auth. IAM stays the default outside local so
   // no existing Aurora deployment changes behaviour by upgrading.
   const deployed = {
     ALTER_ENV: "staging",

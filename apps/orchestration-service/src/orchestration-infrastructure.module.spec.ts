@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { resolveDatabaseAuthentication } from "./orchestration-infrastructure.module";
 
 /**
- * Neon has no AWS IAM authentication, so a deployed orchestration-service must
- * be able to reach its database with a password. IAM stays the default outside
+ * A Postgres container has no AWS IAM authentication, so a deployed
+ * orchestration-service must be able to reach its database with a password. IAM stays the default outside
  * local, so an existing Aurora deployment is unaffected; static is only ever
  * chosen because a deployment asked for it, never inferred.
  */
