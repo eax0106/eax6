@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, Req, UseFilters } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, Req, UseFilters } from "@nestjs/common";
 import {
   RefundPaymentRequestSchema,
   ResolveDisputeRequestSchema,
@@ -14,6 +14,12 @@ import { BillingHttpError } from "./problem";
 @UseFilters(BillingExceptionFilter)
 export class AdminBillingController {
   constructor(private readonly billing: AdminBillingService) {}
+
+  @Get("issues")
+  @RequireStaffRole("staff_admin", "staff_billing_ops")
+  issues() {
+    return this.billing.listIssues();
+  }
 
   @Post("refunds")
   @RequireStaffRole("staff_admin", "staff_billing_ops")

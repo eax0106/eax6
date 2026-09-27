@@ -1,5 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
+import { isLiveApi } from "@/api/http"
+import type { MarketplaceReviewItem } from "@/api/services/marketplace-admin"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
@@ -16,7 +18,7 @@ export function MarketplaceAdmin() {
   })
 
   const reviewMutation = useMutation({
-    mutationFn: ({ id, action }: { id: string, action: "approve" | "reject" | "changes_requested" | "suspend" }) => api.admin.marketplace.reviewListing(id, action),
+    mutationFn: ({ item, action }: { item: MarketplaceReviewItem, action: "approve" | "reject" | "changes_requested" | "suspend" }) => api.admin.marketplace.reviewListing(item.id, action, undefined, item.resourceType),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.marketplace.reviewQueue })
   })
 
@@ -34,7 +36,7 @@ export function MarketplaceAdmin() {
               <TableHead className="text-slate-400">Listing</TableHead>
               <TableHead className="text-slate-400">Seller</TableHead>
               <TableHead className="text-slate-400">Type</TableHead>
-              <TableHead className="text-slate-400">Risk Score</TableHead>
+              <TableHead className="text-slate-400">{isLiveApi ? "Trust" : "Risk Score"}</TableHead>
               <TableHead className="text-slate-400">Status</TableHead>
               <TableHead className="text-slate-400 text-right">Actions</TableHead>
             </TableRow>
@@ -68,6 +70,9 @@ export function MarketplaceAdmin() {
                     </Badge>
                   </TableCell>
                   <TableCell>
+                    {!r.risk ? (
+                      <span className="text-sm text-slate-400">{r.trustLevel?.replaceAll("_", " ") ?? "—"}</span>
+                    ) : (
                     <Badge variant="outline" className={
                       r.risk === "high" ? "bg-red-500/10 text-red-400 border-red-500/20" :
                       r.risk === "medium" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
@@ -75,6 +80,7 @@ export function MarketplaceAdmin() {
                     }>
                       {r.risk.toUpperCase()}
                     </Badge>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={
@@ -90,13 +96,15 @@ export function MarketplaceAdmin() {
                     <div className="flex justify-end gap-2">
                       {r.status === "pending_review" && (
                         <>
-                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ id: r.id, action: "approve" })} className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
+                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ item: r, action: "approve" })} className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
                             <Check className="w-4 h-4 mr-2" /> Approve
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ id: r.id, action: "changes_requested" })} className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10">
+                          {!isLiveApi && (
+                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ item: r, action: "changes_requested" })} className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10">
                             <AlertTriangle className="w-4 h-4 mr-2" /> Needs Changes
                           </Button>
-                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ id: r.id, action: "reject" })} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                          )}
+                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ item: r, action: "reject" })} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                             <X className="w-4 h-4 mr-2" /> Reject
                           </Button>
                         </>

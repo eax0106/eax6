@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from "@nestjs/common";
 import type { BillingDispute, BillingProvider, BillingRefund } from "@alterx/shared-clients";
 import type { RefundPaymentRequest, ResolveDisputeRequest } from "@alterx/contracts";
 import { AdminAuditService } from "../admin-audit";
+import { AdminBillingRepository, type BillingIssueView } from "./admin-billing.repository";
 import { BillingHttpError } from "./problem";
 import { BILLING_PROVIDER } from "./tokens";
 
@@ -12,7 +13,12 @@ export class AdminBillingService {
   constructor(
     @Inject(BILLING_PROVIDER) private readonly provider: BillingProvider,
     private readonly audit: AdminAuditService,
+    private readonly repository: AdminBillingRepository,
   ) {}
+
+  listIssues(): Promise<BillingIssueView[]> {
+    return this.repository.listIssues();
+  }
 
   async refund(staffUserId: string, input: RefundPaymentRequest): Promise<BillingRefund> {
     let refund: BillingRefund;

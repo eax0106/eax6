@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
+import { isLiveApi } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
@@ -75,21 +76,28 @@ export function BillingOpsQueue() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium text-slate-200">${i.amount.toFixed(2)}</span>
-                    <span className="text-xs text-slate-500 ml-1">{i.currency}</span>
+                    {i.amount === undefined ? (
+                      <span className="text-slate-500">—</span>
+                    ) : (
+                      <>
+                        <span className="font-medium text-slate-200">${i.amount.toFixed(2)}</span>
+                        <span className="text-xs text-slate-500 ml-1">{i.currency}</span>
+                      </>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={
                       i.status === "resolved" ? "text-emerald-400 border-emerald-400/20" :
                       "text-amber-400 border-amber-400/20"
                     }>
-                      {i.status}
+                      {i.accessState ?? i.status}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-slate-400">
                     {new Date(i.createdAt).toLocaleString()}
                   </TableCell>
                   <TableCell className="text-right">
+                    {!isLiveApi && (
                     <div className="flex justify-end gap-2">
                       {i.status === "open" && i.issue.includes("failed") && (
                         <Button variant="ghost" size="sm" onClick={() => retryMutation.mutate(i.id)} className="text-primary hover:text-primary hover:bg-primary-soft">
@@ -110,6 +118,7 @@ export function BillingOpsQueue() {
                         </Button>
                       )}
                     </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

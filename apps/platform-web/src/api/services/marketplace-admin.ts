@@ -1,11 +1,18 @@
+import { isLiveApi } from "../http"
+import * as live from "../live-admin-commerce"
+
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 export interface MarketplaceReviewItem {
   id: string
+  /** Live mode: which governance resource this is. */
+  resourceType?: "listing" | "tool_manifest"
   listingName: string
   sellerName: string
-  assetType: "workflow" | "plugin" | "agent"
-  risk: "low" | "medium" | "high"
+  assetType: "workflow" | "plugin" | "agent" | "listing" | "tool"
+  /** Demo only: the governance API has no risk score. */
+  risk?: "low" | "medium" | "high"
+  trustLevel?: string
   status: "pending_review" | "approved" | "changes_requested" | "rejected" | "suspended"
   submittedAt: string
   reviewer?: { id: string; name: string }
@@ -19,11 +26,16 @@ const MOCK_REVIEWS: MarketplaceReviewItem[] = [
 
 export class MarketplaceAdminService {
   async reviewQueue(): Promise<MarketplaceReviewItem[]> {
+    if (isLiveApi) return live.listMarketplaceReviews()
     await delay(300)
     return MOCK_REVIEWS
   }
 
-  async reviewListing(id: string, action: "approve" | "reject" | "changes_requested" | "suspend", _reason?: string): Promise<MarketplaceReviewItem> {
+  async reviewListing(id: string, action: "approve" | "reject" | "changes_requested" | "suspend", _reason?: string, resourceType?: MarketplaceReviewItem["resourceType"]): Promise<MarketplaceReviewItem> {
+    if (isLiveApi) {
+      if (action === "changes_requested") throw new Error("Requesting changes is not available")
+      return live.reviewMarketplaceItem({ id, resourceType }, action)
+    }
     await delay(500)
     const rev = MOCK_REVIEWS.find(r => r.id === id)
     if (!rev) throw new Error("Not found")

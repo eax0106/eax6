@@ -16,6 +16,7 @@ import { EntitlementsModule } from "../entitlements/entitlements.module";
 import { AdminAuditModule } from "../admin-audit/admin-audit.module";
 import { StaffAuthMiddleware, StaffModule } from "../staff";
 import { AdminBillingController } from "./admin-billing.controller";
+import { AdminBillingRepository } from "./admin-billing.repository";
 import { AdminBillingService } from "./admin-billing.service";
 import { BillingEtagResolver } from "./billing-etag.resolver";
 import { BillingExceptionFilter } from "./billing-exception.filter";
@@ -37,6 +38,10 @@ import {
     {
       provide: BillingRepository,
       useFactory: () => new BillingRepository(sharedPool(process.env.DATABASE_URL), false),
+    },
+    {
+      provide: AdminBillingRepository,
+      useFactory: () => new AdminBillingRepository(sharedPool(process.env.DATABASE_URL), false),
     },
     {
       provide: BILLING_SECRETS_PROVIDER,
