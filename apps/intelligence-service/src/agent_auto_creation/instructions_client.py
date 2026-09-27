@@ -35,6 +35,15 @@ Return one JSON object only, with exactly this shape:
 """
 
 
+_ALTER_AUTHORED_SYSTEM_PROMPTS = frozenset({_SYSTEM_PROMPT})
+
+
+def _alter_authored_system_message(content: str) -> dict[str, object]:
+    if content not in _ALTER_AUTHORED_SYSTEM_PROMPTS:
+        raise ValueError("alter_authored system prompt must be a registered module-level constant")
+    return {"role": "system", "content": content, "alter_authored": True}
+
+
 @runtime_checkable
 class AgentInstructionsClient(Protocol):
     async def draft_instructions(
@@ -87,11 +96,7 @@ class ModelGatewayAgentInstructionsClient:
         payload = json.dumps(
             {
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": _SYSTEM_PROMPT,
-                        "alter_authored": True,
-                    },
+                    _alter_authored_system_message(_SYSTEM_PROMPT),
                     {
                         "role": "user",
                         "content": requirement.model_dump_json(exclude_none=True),

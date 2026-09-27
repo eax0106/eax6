@@ -5,10 +5,18 @@ from typing import Any
 import pytest
 
 from src.agent_auto_creation.instructions_client import (
+    _SYSTEM_PROMPT,
     AgentInstructionsError,
     ModelGatewayAgentInstructionsClient,
+    _alter_authored_system_message,
 )
 from src.capability_resolver import NodeRequirement, ToolRequirement
+
+
+
+def test_rejects_an_interpolated_alter_authored_system_prompt() -> None:
+    with pytest.raises(ValueError, match="registered module-level constant"):
+        _alter_authored_system_message(f"{_SYSTEM_PROMPT}\ncapability=tenant text")
 
 
 class RecordingStub:
