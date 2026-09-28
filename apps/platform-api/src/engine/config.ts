@@ -8,6 +8,9 @@ const engineConfigSchema = z.object({
   DEPLOYMENT_ADMIN_SERVICE_TOKEN_REF: z.string().min(1),
   AUDIT_SERVICE_BASE_URL: z.string().url(),
   AUDIT_QUERY_SERVICE_TOKEN_REF: z.string().min(1),
+  // ads-core authenticates its callers with the shared internal service
+  // token, not an Auth0 M2M token (apps/ads-core/src/service_auth.py).
+  ADS_CORE_SERVICE_TOKEN_REF: z.string().min(1).optional(),
   ENGINE_M2M_TOKEN_URL: z.string().url(),
   ENGINE_M2M_AUDIENCE: z.string().min(1),
   ENGINE_M2M_CLIENT_ID: z.string().min(1),
@@ -33,6 +36,7 @@ export interface EngineConfig {
   deploymentAdminServiceTokenRef: string;
   auditServiceBaseUrl: string;
   auditQueryServiceTokenRef: string;
+  adsCoreServiceTokenRef?: string;
   m2mTokenUrl: string;
   m2mAudience: string;
   m2mClientId: string;
@@ -51,6 +55,11 @@ export function engineConfigFromEnvironment(
       .join("; ");
     throw new Error(`Invalid Engine client environment: ${detail}`);
   }
+  // Without it every knowledge call reaches ads-core with an M2M token it
+  // does not accept, so production refuses to boot rather than 401 later.
+  if (environment.NODE_ENV === "production" && parsed.data.ADS_CORE_SERVICE_TOKEN_REF === undefined) {
+    throw new Error("Invalid Engine client environment: ADS_CORE_SERVICE_TOKEN_REF is required in production");
+  }
 
   return {
     baseUrl: parsed.data.ENGINE_BASE_URL.replace(/\/+$/, ""),
@@ -60,6 +69,9 @@ export function engineConfigFromEnvironment(
     deploymentAdminServiceTokenRef: parsed.data.DEPLOYMENT_ADMIN_SERVICE_TOKEN_REF,
     auditServiceBaseUrl: parsed.data.AUDIT_SERVICE_BASE_URL.replace(/\/+$/, ""),
     auditQueryServiceTokenRef: parsed.data.AUDIT_QUERY_SERVICE_TOKEN_REF,
+    ...(parsed.data.ADS_CORE_SERVICE_TOKEN_REF === undefined
+      ? {}
+      : { adsCoreServiceTokenRef: parsed.data.ADS_CORE_SERVICE_TOKEN_REF }),
     m2mTokenUrl: parsed.data.ENGINE_M2M_TOKEN_URL,
     m2mAudience: parsed.data.ENGINE_M2M_AUDIENCE,
     m2mClientId: parsed.data.ENGINE_M2M_CLIENT_ID,

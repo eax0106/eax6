@@ -808,6 +808,14 @@ export async function getKnowledgeSources(): Promise<KnowledgeSource[]> {
   return asArray(body, "data").map(mapKnowledgeSource)
 }
 
+/** One source's documents: metadata only, newest first (ads-core GET /ads/documents). */
+export async function getKnowledgeDocuments(sourceId: string): Promise<KnowledgeDocument[]> {
+  const body = await apiGet<unknown>(
+    `/api/v1/ads/documents?limit=200&sourceId=${encodeURIComponent(sourceId)}`,
+  )
+  return asArray(body, "data").map(mapKnowledgeDocument)
+}
+
 export async function getKnowledgeSource(id: string): Promise<KnowledgeSource> {
   return mapKnowledgeSource(await apiGet<unknown>(`/api/v1/ads/sources/${encodeURIComponent(id)}/detail`))
 }
@@ -919,6 +927,22 @@ function confidenceBucket(value: number): "high" | "medium" | "low" {
   if (value >= 0.8) return "high"
   if (value >= 0.5) return "medium"
   return "low"
+}
+
+const DOCUMENT_STATUSES = new Set(["queued", "processing", "indexed", "failed", "excluded"])
+
+function mapKnowledgeDocument(value: unknown): KnowledgeDocument {
+  const item = value as AnyRecord
+  const raw = typeof item.status === "string" ? item.status : ""
+  const status = (DOCUMENT_STATUSES.has(raw) ? raw : "indexed") as KnowledgeDocument["status"]
+  return {
+    id: asString(item.id),
+    sourceId: asString(item.source_id),
+    name: typeof item.title === "string" && item.title.length > 0 ? item.title : asString(item.id),
+    status,
+    createdAt: asString(item.created_at),
+    ...(status === "indexed" && typeof item.updated_at === "string" ? { indexedAt: item.updated_at } : {}),
+  }
 }
 
 function mapKnowledgeSource(value: unknown): KnowledgeSource {

@@ -346,3 +346,81 @@ def test_get_source_workspace_route_is_unchanged_by_the_new_detail_route(
 
     assert response.status_code == 200
     assert response.json() == {"id": source_id, "workspace_id": workspace_uuid}
+
+
+def _scope_of(database: DatabaseHarness, tenant_uuid: str, source_id: str) -> str:
+    with database.engine.begin() as connection:
+        connection.execute(
+            sa.text("SELECT set_config('app.current_tenant_id', :tenant, true)"),
+            {"tenant": tenant_uuid},
+        )
+        return str(
+            connection.scalar(
+                sa.text("SELECT scope_id FROM sources WHERE id = :id"), {"id": source_id}
+            )
+        )
+
+
+def test_list_documents_is_workspace_scoped_and_filters_by_source(
+    client: TestClient, database: DatabaseHarness
+) -> None:
+    tenant_id, tenant_uuid = _tenant()
+    workspace_a = str(uuid.uuid4())
+    workspace_b = str(uuid.uuid4())
+    source_one = _seed_source(database, tenant_uuid=tenant_uuid, workspace_uuid=workspace_a)
+    source_two = _seed_source(database, tenant_uuid=tenant_uuid, workspace_uuid=workspace_a)
+    other = _seed_source(database, tenant_uuid=tenant_uuid, workspace_uuid=workspace_b)
+    for source in (source_one, source_one, source_two):
+        _seed_document_with_chunks(
+            database,
+            tenant_uuid=tenant_uuid,
+            scope_id=_scope_of(database, tenant_uuid, source),
+            source_id=source,
+            chunk_count=1,
+        )
+    _seed_document_with_chunks(
+        database,
+        tenant_uuid=tenant_uuid,
+        scope_id=_scope_of(database, tenant_uuid, other),
+        source_id=other,
+        chunk_count=1,
+    )
+
+    everything = client.get("/ads/documents", headers=_headers(tenant_id, f"ws_{workspace_a}"))
+    assert everything.status_code == 200, everything.text
+    assert len(everything.json()["data"]) == 3
+    assert {row["source_id"] for row in everything.json()["data"]} == {source_one, source_two}
+
+    one_source = client.get(
+        f"/ads/documents?source_id={source_one}", headers=_headers(tenant_id, f"ws_{workspace_a}")
+    )
+    assert one_source.status_code == 200
+    assert [row["source_id"] for row in one_source.json()["data"]] == [source_one, source_one]
+
+
+def test_list_documents_paginates_newest_first(
+    client: TestClient, database: DatabaseHarness
+) -> None:
+    tenant_id, tenant_uuid = _tenant()
+    workspace_uuid = str(uuid.uuid4())
+    source = _seed_source(database, tenant_uuid=tenant_uuid, workspace_uuid=workspace_uuid)
+    scope_id = _scope_of(database, tenant_uuid, source)
+    for _ in range(3):
+        _seed_document_with_chunks(
+            database, tenant_uuid=tenant_uuid, scope_id=scope_id, source_id=source, chunk_count=1
+        )
+
+    first = client.get(
+        "/ads/documents?limit=2", headers=_headers(tenant_id, f"ws_{workspace_uuid}")
+    )
+    assert first.status_code == 200
+    body = first.json()
+    assert len(body["data"]) == 2 and body["page"]["has_more"] is True
+    second = client.get(
+        f"/ads/documents?limit=2&cursor={body['page']['next_cursor']}",
+        headers=_headers(tenant_id, f"ws_{workspace_uuid}"),
+    )
+    rest = second.json()
+    assert len(rest["data"]) == 1 and rest["page"]["has_more"] is False
+    ids = [row["id"] for row in body["data"] + rest["data"]]
+    assert len(set(ids)) == 3

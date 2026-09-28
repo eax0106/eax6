@@ -151,6 +151,8 @@ expand() {
   # platform-api's Engine clients (apps/platform-api/src/engine/config.ts) and
   # the token pairs behind them; each side reads its half.
   printf 'ENGINE_BASE_URL=http://127.0.0.1:%s\nADS_CORE_BASE_URL=http://127.0.0.1:%s\n' "${seen[ORCHESTRATION_PORT]}" "${seen[ADS_CORE_PORT]}"
+  # ads-core accepts only the shared internal service token (service_auth.py).
+  printf 'ADS_CORE_SERVICE_TOKEN_REF=env:INTERNAL_SERVICE_TOKEN\n'
   printf 'COST_LEDGER_BASE_URL=http://127.0.0.1:%s\nAUDIT_SERVICE_BASE_URL=http://127.0.0.1:%s\n' "${seen[COST_PORT]}" "${seen[AUDIT_PORT]}"
   printf 'EVAL_FACADE_TOKEN=%s\nEVAL_FACADE_TOKEN_REF=env:EVAL_FACADE_TOKEN\nEVAL_FACADE_TOKEN_SHA256=%s\n' "$EVAL_FACADE_TOKEN" "$(sha256 "$EVAL_FACADE_TOKEN")"
   printf 'DEPLOYMENT_ADMIN_SERVICE_TOKEN=%s\nDEPLOYMENT_ADMIN_SERVICE_TOKEN_REF=env:DEPLOYMENT_ADMIN_SERVICE_TOKEN\n' "$DEPLOYMENT_ADMIN_SERVICE_TOKEN"

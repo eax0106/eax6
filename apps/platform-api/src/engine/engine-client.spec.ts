@@ -79,6 +79,31 @@ describe("EngineClient", () => {
     expect(authProvider.authorize).toHaveBeenCalledWith(context);
   });
 
+  it("sends knowledge calls to ads-core's own routes with the tenant and workspace it scopes by", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () => jsonResponse(200, { data: [] }));
+    const client = new EngineClient(config, authProvider, fetchImpl, noDelay);
+
+    await client.get("/api/v1/ads/documents?limit=200&source_id=src_1", context);
+    await client.patch("/api/v1/ads/sources/src_1/permissions", { mode: "workspace" }, context, {
+      idempotencyKey: "idem-1",
+      ifMatch: '"etag"',
+    });
+    await client.get("/api/v1/deletion-requests", context);
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      "https://ads.test/ads/documents?limit=200&source_id=src_1",
+      "https://ads.test/ads/sources/src_1/permissions",
+      "https://engine.test/api/v1/deletion-requests",
+    ]);
+    expect(fetchImpl.mock.calls[0]![1].headers).toMatchObject({
+      Authorization: "Bearer m2m-token",
+      "X-Alter-Tenant-Id": context.tenantId,
+      "X-Alter-Workspace-Id": context.workspaceId,
+      "X-Alter-Requester": context.userId,
+    });
+    expect(fetchImpl.mock.calls[2]![1].headers).not.toHaveProperty("X-Alter-Tenant-Id");
+  });
+
   it("forwards mutation concurrency and idempotency headers", async () => {
     const fetchImpl = vi
       .fn()
@@ -145,6 +170,28 @@ describe("EngineClient", () => {
       }),
     );
     expect(deleted).toEqual({ status: 204, body: undefined });
+  });
+
+  it("presents the internal service token, not the M2M token, to ads-core when configured", async () => {
+    const fetchImpl = vi.fn().mockImplementation(async () => jsonResponse(200, { data: [] }));
+    const resolveSecret = vi.fn().mockResolvedValue("internal-token");
+    const client = new EngineClient(
+      { ...config, adsCoreServiceTokenRef: "env:INTERNAL_SERVICE_TOKEN" },
+      authProvider,
+      fetchImpl,
+      noDelay,
+      resolveSecret,
+    );
+
+    await client.get("/api/v1/ads/sources", context);
+    await client.queryAds({ query: "refund", top_k: 5 }, context);
+    await client.get("/api/v1/deletion-requests", context);
+
+    expect(resolveSecret).toHaveBeenCalledWith("env:INTERNAL_SERVICE_TOKEN");
+    expect(fetchImpl.mock.calls[0]![1].headers.Authorization).toBe("Bearer internal-token");
+    expect(fetchImpl.mock.calls[1]![1].headers.Authorization).toBe("Bearer internal-token");
+    expect(fetchImpl.mock.calls[1]![1].headers["X-Alter-Actor-Token"]).toBe("actor-token");
+    expect(fetchImpl.mock.calls[2]![1].headers.Authorization).toBe("Bearer m2m-token");
   });
 
   it("posts ADS queries to ads-core with trusted caller identity and no retry", async () => {

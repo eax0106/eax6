@@ -39,6 +39,8 @@ from .embedding_client import GrpcEmbeddingClient
 from .models import (
     CompleteUploadRequest,
     CreateSourceRequest,
+    DocumentPageResponse,
+    DocumentSummaryResponse,
     IngestionJobResponse,
     IngestionPayload,
     PresignUploadRequest,
@@ -410,6 +412,59 @@ async def put_source_permissions(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(exc),
         ) from exc
+
+
+@router.get(
+    "/documents",
+    response_model=DocumentPageResponse,
+)
+async def list_documents(
+    repository: RepositoryDep,
+    tenant_id: Annotated[str, Header(alias="X-Alter-Tenant-Id")],
+    workspace_id: Annotated[str, Header(alias="X-Alter-Workspace-Id")],
+    source_id: str | None = None,
+    cursor: str | None = None,
+    limit: int = 50,
+) -> DocumentPageResponse:
+    """A workspace's knowledge documents, newest first, optionally for one
+    source -- metadata only; content is reached through retrieval."""
+    if limit < 1 or limit > 200:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="limit must be between 1 and 200",
+        )
+    try:
+        documents, has_more = await run_in_threadpool(
+            repository.list_documents,
+            tenant_uuid=_tenant_uuid(tenant_id),
+            workspace_id=workspace_id,
+            source_id=None if source_id is None else _source_id(source_id),
+            cursor=cursor,
+            limit=limit,
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
+    return DocumentPageResponse(
+        data=tuple(
+            DocumentSummaryResponse(
+                id=document.document_id,
+                source_id=document.source_id,
+                kind=document.kind,
+                title=document.title,
+                status=document.status,
+                current_version=document.current_version,
+                created_at=document.created_at,
+                updated_at=document.updated_at,
+            )
+            for document in documents
+        ),
+        page=SourcePageInfo(
+            next_cursor=documents[-1].document_id if has_more and documents else None,
+            has_more=has_more,
+        ),
+    )
 
 
 @router.get(
