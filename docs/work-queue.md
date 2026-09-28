@@ -61,7 +61,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | # | Item | Status |
 |---|---|---|
 | C29 | slice 2b: criteria to the producing node and the gate | todo |
-| C1 | 11 AST architecture gates with a baseline | todo |
+| C1 | 11 AST architecture gates imported from alterengine--5 into `scripts/gates/`, run in CI against `baseline.json` (722 findings recorded): a new violation fails and so does a fixed one left in the baseline, so the count only ratchets down. Adapted: Cost Ledger paths, generated code skipped, and the two gates whose subject does not exist yet (deletion registry, capability registry) report that single absence instead of crashing | done (this PR) |
 | C3 | deletion registration in CI | todo |
 | C5 | cost ledger records verification verdicts | todo |
 | C8 | side-effect ledger and idempotency gate before Dispatch | todo |

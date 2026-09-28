@@ -199,6 +199,12 @@ jobs:
       # affected's graph-diff computation can in principle miss a
       # cross-project edge case, so the branch that actually lands on main
       # still gets the exhaustive check.
+
+      - name: architecture gates
+        # Task C1. The eleven AST gates from alterengine--5, each held to
+        # scripts/gates/baseline.json: a new violation fails, and so does a
+        # fixed one left in the baseline, so the count only goes down.
+        run: node scripts/gates/run-all.mjs
       - name: full lint and typecheck sweep
         if: github.event_name != 'pull_request'
         run: pnpm exec nx run-many -t lint,typecheck --all --parallel=2
