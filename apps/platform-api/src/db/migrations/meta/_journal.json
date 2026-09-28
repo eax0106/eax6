@@ -197,6 +197,13 @@
       "when": 1789963200000,
       "tag": "0023_admin_billing_issues",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1790049600000,
+      "tag": "0024_budgets",
+      "breakpoints": true
     }
   ]
 }

@@ -37,7 +37,6 @@ const unfinishedLiveFeatures = new Set<LiveFeature>([
   "benchmarks",
   "discovery",
   "notifications",
-  "budgets",
 ])
 
 export function isLiveFeatureAvailable(feature: LiveFeature, live = isLiveApi) {
