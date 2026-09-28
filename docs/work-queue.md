@@ -43,7 +43,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.6 | tokenized card setup | todo |
 | B2.7 | invoice PDF | todo |
 | B2.8 | new subscription | todo |
-| B2.9 | usage, budgets, cost estimates (moved from B1.10) | todo |
+| B2.9a | usage and cost pages live: month-to-date billable spend and billed operations, by source and by provider/resource, from `/api/v1/costs/summary`. Live mode showed the demo's made-up figures before (e.g. "$284.73", random chart bars). Workflow/project estimates now show "-" in live instead of invented numbers. Budgets hidden in live until B2.9b. | done (this PR) |
+| B2.9b | budgets: platform_db budget configs (architecture C18/F31) with CRUD and current spend from the cost ledger; `block` thresholds enforced with C10's Run Manager gate | todo |
 | B3.1 | notifications | todo |
 | B3.2 | benchmarks | todo |
 | B3.3 | discovery | todo |
@@ -100,6 +101,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B1.8 gap | Assigning a security review to a staff member has no backend (hidden in live). Build or drop? |
 | B1.6/B1.7 gaps | Provider "maintenance" state and editing policies from the list page have no backend (hidden in live). Build or drop? |
 | B1.2 gaps | Admin user screens show MFA and risk state in demo only; user notes (write) have no backend. Build or drop? |
+| Cost visibility | `GET /api/v1/costs/summary` returns the ledger's internal cost and margin to any workspace member with billing:read. The console shows only billable spend, but the API still exposes them. Recommendation: strip internal/retry/recovery cost and margin from the tenant route, and keep them for a staff route. Confirm? |
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |
