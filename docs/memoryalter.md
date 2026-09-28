@@ -704,6 +704,31 @@ proof needs the OAuth app registered.
 
 ---
 
+### 2026-09-28 — Track D: the whole log against the whole system, 38 divergences recorded
+
+**What.** The conformance pass decided on 2026-09-16 ran after Phase 4, Track B and Track C:
+all 33 design-log sections, plus `planes.md`'s binding rules, against `main`, every claim
+checked again today. Result in `docs/conformance/design-log-conformance.md`: 9 sections
+conform, 13 conform with divergences, 10 diverge; **38 divergences recorded before any fix**.
+
+**One fixed now (D-31a).** The auto-creation tier ceiling still defaulted to `ADVANCED`. The
+2026-09-14 entry above says it was changed to `STANDARD`; it never was. Fixed in its own PR
+with a test that fails on the old default. **The lesson:** a decision entry that says "changed"
+is a claim about code, and it went unchecked for two weeks. This pass is what caught it.
+
+**Four log amendments proposed, not made (D3).** §4's buckets to the code's ten classes with
+their mapping; §7 pattern 1 enforced by gate and `RUNTIME_MODE` instead of a marker; §23 Project
+Mode present but not offered; §32 closed by deletion. The log is amended only when Havish accepts
+each one, so the pass cannot be used to quietly bend the standard toward the code.
+
+**Seven new board items** (C40–C46), and six build-or-amend choices for Havish: success criteria
+confirmed by the user (§5.1), per-workflow budgets (§9), workflow folders (§10), custom roles
+(§15), a hosted public form (§25), and the "Session Gateway" rename (§26).
+
+**Decided by.** Havish (to run it); findings await his review.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.

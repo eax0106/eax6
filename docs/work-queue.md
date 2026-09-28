@@ -80,15 +80,23 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |
 | C34 | specs authorize through the enforcing resolver: `enforcing-rbac.routes.spec.ts` mounts the real Project and Workflow controllers behind the production resolution rules and proves the admin of workspace A is refused B's project and workflow (403, only the ownership lookup reaches the engine); removing the workflow binding fails it | done (this PR) |
 | C35 | vitest hang with `.env.local` present: Vite 8's `loadEnv` (bundled dotenv-expand) loops forever on `PLATFORM_DB_PORT=${PLATFORM_DB_PORT:-5432}` once `DATABASE_URL` references it. Every Vitest config, plus a new root one for config-less runs, sets `envDir: false`; CI runs a spec with a generated `.env.local` under a 120 s timeout | done (this PR) |
+| C40 | §4 safety violation halts the whole workflow before Recovery (D-4d; today Recovery routes it to ask_user) | blocked (freeze exemption): Verification & Quality Gate (#17) |
+| C41 | §4 pre-compile live-connection check and batch connector ask after synthesis (D-4g) | todo: Capability Resolver is Category 3 |
+| C42 | §8 pre-flight advisory on manual overrides and goal-change prompt (D-8a) | todo, after Selection & Binding scoring is real |
+| C43 | §9 always-on pre-run cost estimate (D-9b; live shows "-") | todo |
+| C44 | §12 semantic cache to exact-match, C17's implementation (D-12a; live at 0.95 cosine) | blocked (freeze exemption): Model Gateway (#15) |
+| C45 | §18 user-configurable run-history retention, 7 days to 1 year, destructive lowering confirmed (D-18c) | blocked (C3 retention decision) |
+| C46 | §30 explicit refusal and audit for service-asserted tenants (D-30a/b; mismatch answers run-not-found, nothing audited) | blocked (freeze check): run-learning read path, Run Manager (#1) |
+| C47 | §31 tier ceiling default `STANDARD` (D-31a; main had `ADVANCED` though memoryalter recorded the change) | done (PR #46) |
 | C30 | §16 approval modes | blocked (decision) |
 | C32 | image publishing collision | blocked (decision) |
 
 ### Track D — design-log conformance (last)
 | # | Item | Status |
 |---|---|---|
-| D1 | whole log against whole system, incl. rules adopted from alter-x-4- | todo |
-| D2 | record every divergence before fixing | todo |
-| D3 | allow "amend the log" as a conclusion | todo |
+| D1 | whole log against whole system, incl. rules adopted from alter-x-4-: all 33 sections and `planes.md` against main, in `docs/conformance/design-log-conformance.md` -- 9 conform, 13 conform with divergences, 10 diverge | done (this PR) |
+| D2 | record every divergence before fixing: 38 recorded (D-2a to D-32a), each ending in code, amend log, or decision; 7 new board items C40-C46 | done (this PR) |
+| D3 | allow "amend the log" as a conclusion: 4 amendments proposed (§4, §7, §23, §32) and 6 build-or-amend choices, all awaiting Havish; the log itself is not edited until he accepts | done (this PR) |
 
 ## Blocked on a decision or an account — asked at the end
 
@@ -114,3 +122,10 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |
+| Log amendments (D3) | Accept or reject each: §4 buckets become the code's ten failure classes with their mapping to the five, and "retry once, then swap" for a repeated transient failure; §7 pattern 1 is enforced by the mock-reachability gate and `RUNTIME_MODE`, not a marker type; §23 Project Mode code is present but not offered in v1; §32 closed by deleting the columns (2026-09-14). |
+| §5.1 criteria | Success criteria are inferred by the model and never shown to the user. Add a step where the user sees, edits and confirms them, or amend §5.1 to "inferred, shown and editable"? |
+| §9 budget scope | Budgets are per workspace, monthly. §9 says per workflow, daily or monthly. Add per-workflow and daily, or amend §9? |
+| §10 folders | No "Ungrouped" bucket and no folders of workflow sessions. Are engine projects the folders, or build folders? |
+| §15 roles | Fixed roles over 27 route-derived permissions, no custom roles. Build custom roles over a closed toggle set, or amend §15 to fixed roles? |
+| §25 public form | No hosted public form; public inbound is webhooks only. Build the lead-capture form (§1's own example) for v1, or amend §25 to webhooks-only in v1? |
+| §26 rename | "Session Gateway" survives in 61 files including `packages/auth`. One mechanical rename (touches frozen components and contracts), or amend §26 to "renamed when touched"? |
