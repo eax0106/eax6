@@ -68,6 +68,17 @@ if [[ ! -f .db-roles.env ]]; then
 fi
 # shellcheck disable=SC1091
 . ./.db-roles.env
+# Keys and service tokens this host generates for itself, once (kept across
+# re-runs; a key added later is appended): platform-api's session cookie key and
+# the tokens platform-api presents to orchestration's eval facade and
+# deployment admin routes.
+touch .session.env
+for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN; do
+  grep -q "^$key=" .session.env || printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" >>.session.env
+done
+# shellcheck disable=SC1091
+. ./.session.env
+sha256() { printf %s "$1" | openssl dgst -sha256 -r | cut -d' ' -f1; }
 
 # --- 2. environment file ------------------------------------------------------
 log "writing .env for ALTER_ENV=$ALTER_ENV"
@@ -115,8 +126,42 @@ expand() {
     printf 'TEMPORAL_WORKER_DEPLOYMENT_NAME=%s\nTEMPORAL_WORKER_BUILD_ID=%s\n' "$TEMPORAL_WORKER_DEPLOYMENT_NAME" "$ALTER_IMAGE_TAG"
     printf 'TEMPORAL_MINIMUM_RETENTION_DAYS=%s\n' "$TEMPORAL_MINIMUM_RETENTION_DAYS"
     printf 'AUTH0_STAFF_DOMAIN=%s\nAUTH0_STAFF_CLIENT_ID=%s\n' "$AUTH0_STAFF_DOMAIN" "$AUTH0_STAFF_CLIENT_ID"
+    # Production refuses every mock at boot (task 6.1d, check-production-boot.sh):
+    # real identity, email and media providers, and the Session Gateway flag.
+    # platform-api resolves a *_REF as the name of an environment variable
+    # (identity.module.ts resolveRuntimeSecret), so the values are resolved
+    # from Secrets Manager here and the references point at them.
+    printf 'IDENTITY_PROVIDER=auth0\nAUTH0_CLIENT_ID=%s\n' "$AUTH0_CLIENT_ID"
+    printf 'AUTH0_CLIENT_SECRET=%s\nAUTH0_CLIENT_SECRET_REF=env:AUTH0_CLIENT_SECRET\n' "$(secret "$AUTH0_CLIENT_SECRET_REF")"
+    printf 'AUTH0_M2M_CLIENT_SECRET_REF=env:AUTH0_M2M_CLIENT_SECRET\n'
+    printf 'ENGINE_M2M_TOKEN_URL=https://%s/oauth/token\nENGINE_M2M_AUDIENCE=%s\n' "$AUTH0_DOMAIN" "$AUTH0_API_AUDIENCE"
+    printf 'ENGINE_M2M_CLIENT_ID=%s\nENGINE_M2M_CLIENT_SECRET_REF=env:AUTH0_M2M_CLIENT_SECRET\n' "$AUTH0_M2M_CLIENT_ID"
+    printf 'SESSION_COOKIE_SIGNING_KEY=%s\nSESSION_COOKIE_SIGNING_KEY_REF=env:SESSION_COOKIE_SIGNING_KEY\n' "$SESSION_COOKIE_SIGNING_KEY"
+    # tool-gateway resolves SES_CREDENTIALS_SECRET_REF in Secrets Manager;
+    # platform-api reads SES_CREDENTIALS_JSON instead (compose.yml override).
+    printf 'EMAIL_PROVIDER=ses\nSES_FROM_ADDRESS=%s\nSES_CREDENTIALS_SECRET_REF=%s\n' "$SES_FROM_ADDRESS" "$SES_CREDENTIALS_SECRET_REF"
+    printf 'SES_CREDENTIALS_JSON=%s\n' "$(secret "$SES_CREDENTIALS_SECRET_REF")"
+    media_bucket="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/orchestration/artifacts-bucket" --query Parameter.Value --output text)"
+    printf 'MEDIA_OBJECT_STORAGE_PROVIDER=s3\nIMAGE_GEN_PROVIDER=titan\nTEXT_TO_SPEECH_PROVIDER=polly\nSPEECH_TO_TEXT_PROVIDER=transcribe\nMEDIA_BUCKET_NAME=%s\n' "$media_bucket"
+    printf 'INGRESS_SESSION_GATEWAY_CORE_ENABLED=true\n'
+    # Inside the environment's own parameter path, which the host role can read.
+    printf 'SELECTION_BINDING_FAIL_CLOSED_PARAM=/alter/%s/orchestration/selection-binding-fail-closed\n' "$ALTER_ENV"
   fi
   printf 'ALTER_DOMAIN=%s\nALTER_REGISTRY=%s\nALTER_IMAGE_TAG=%s\n' "$ALTER_DOMAIN" "$ALTER_REGISTRY" "$ALTER_IMAGE_TAG"
+  # platform-api's Engine clients (apps/platform-api/src/engine/config.ts) and
+  # the token pairs behind them; each side reads its half.
+  printf 'ENGINE_BASE_URL=http://127.0.0.1:%s\nADS_CORE_BASE_URL=http://127.0.0.1:%s\n' "${seen[ORCHESTRATION_PORT]}" "${seen[ADS_CORE_PORT]}"
+  printf 'COST_LEDGER_BASE_URL=http://127.0.0.1:%s\nAUDIT_SERVICE_BASE_URL=http://127.0.0.1:%s\n' "${seen[COST_PORT]}" "${seen[AUDIT_PORT]}"
+  printf 'EVAL_FACADE_TOKEN=%s\nEVAL_FACADE_TOKEN_REF=env:EVAL_FACADE_TOKEN\nEVAL_FACADE_TOKEN_SHA256=%s\n' "$EVAL_FACADE_TOKEN" "$(sha256 "$EVAL_FACADE_TOKEN")"
+  printf 'DEPLOYMENT_ADMIN_SERVICE_TOKEN=%s\nDEPLOYMENT_ADMIN_SERVICE_TOKEN_REF=env:DEPLOYMENT_ADMIN_SERVICE_TOKEN\n' "$DEPLOYMENT_ADMIN_SERVICE_TOKEN"
+  printf 'DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256=%s\n' "$(sha256 "$DEPLOYMENT_ADMIN_SERVICE_TOKEN")"
+  # audit-service checks its query route against the deletion service token;
+  # platform-api reads that secret through Secrets Manager.
+  deletion_ref="${seen[DELETION_SERVICE_TOKEN_REF]}"
+  [[ "$local_mode" == 1 ]] || deletion_ref="${deletion_ref//alter\/local\//alter\/$ALTER_ENV\/}"
+  printf 'AUDIT_QUERY_SERVICE_TOKEN_REF=%s\n' "$deletion_ref"
+  # The actor-token keys are served by platform-api, on its own port.
+  printf 'ACTOR_TOKEN_JWKS_URL=http://127.0.0.1:%s/.well-known/actor-jwks.json\n' "${seen[PLATFORM_API_PORT]}"
   platform_db="127.0.0.1:${seen[PLATFORM_DB_PORT]:-5432}/platform_db"
   printf 'DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"
   printf 'MARKETPLACE_DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"

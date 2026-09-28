@@ -123,7 +123,17 @@ services:
   provisioning-service: { <<: *node, command: ["provisioning-service"] }
   orchestration-service: { <<: *node, command: ["orchestration-service"] }
   background-workers: { <<: *node, command: ["background-workers"] }
-  platform-api: { <<: *node, command: ["platform-api"] }
+  platform-api:
+    <<: *node
+    command: ["platform-api"]
+    environment:
+      # Plan definitions: the file shipped in the image, overridden per plan
+      # from platform_db by staff (admin policy routes). No AppConfig
+      # application exists for platform-api (task 6.1d).
+      ALTER_CONFIG_SOURCE: local-file
+      # platform-api resolves secret references as environment variable names;
+      # tool-gateway resolves the same variable in Secrets Manager.
+      SES_CREDENTIALS_SECRET_REF: env:SES_CREDENTIALS_JSON
 
   # --- Python services -------------------------------------------------------
   ads-core:

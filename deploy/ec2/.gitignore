@@ -1,0 +1,6 @@
+# Written on the host by bootstrap.sh or the operator; each holds secrets.
+operator.env
+host.env
+.db-roles.env
+.session.env
+web/

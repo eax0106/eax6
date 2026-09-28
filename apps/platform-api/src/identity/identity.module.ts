@@ -64,54 +64,8 @@ const databasePoolToken = Symbol("DatabasePool");
       // downgrade); mock is fatal when NODE_ENV=production (mirrors
       // identity-broker.module.ts's SIGNING_KEY_PROVIDER=mock gate, and
       // sandbox-service's localMock boot check).
-      useFactory: (
-        sessionStore: SessionStore,
-        ssoConfigStore: SsoConfigStore,
-      ): IdentityProvider => {
-        const provider = process.env.IDENTITY_PROVIDER ?? "mock";
-
-        if (provider === "auth0") {
-          if (!process.env.AUTH0_DOMAIN || !process.env.AUTH0_CLIENT_ID) {
-            throw new Error(
-              "AUTH0_DOMAIN and AUTH0_CLIENT_ID are required when IDENTITY_PROVIDER=auth0",
-            );
-          }
-          const options: Auth0IdentityProviderOptions = {
-            domain: process.env.AUTH0_DOMAIN,
-            clientId: process.env.AUTH0_CLIENT_ID,
-            resolveSecret: resolveRuntimeSecret,
-          };
-          if (process.env.AUTH0_CLIENT_SECRET_REF) {
-            options.clientSecretRef = process.env.AUTH0_CLIENT_SECRET_REF;
-          }
-          if (process.env.AUTH0_M2M_CLIENT_ID) {
-            options.m2mClientId = process.env.AUTH0_M2M_CLIENT_ID;
-          }
-          if (process.env.AUTH0_M2M_CLIENT_SECRET_REF) {
-            options.m2mClientSecretRef = process.env.AUTH0_M2M_CLIENT_SECRET_REF;
-          }
-          return new Auth0IdentityProvider(options, sessionStore, ssoConfigStore);
-        }
-
-        if (provider === "google") {
-          if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET_REF) {
-            throw new Error(
-              "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET_REF are required when IDENTITY_PROVIDER=google",
-            );
-          }
-          const options: GoogleIdentityProviderOptions = {
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecretRef: process.env.GOOGLE_CLIENT_SECRET_REF,
-            resolveSecret: resolveRuntimeSecret,
-          };
-          return new GoogleIdentityProvider(options, sessionStore);
-        }
-
-        if (process.env.NODE_ENV === "production") {
-          throw new Error("IDENTITY_PROVIDER=mock is not allowed when NODE_ENV=production");
-        }
-        return new MockIdentityProvider(sessionStore, ssoConfigStore);
-      },
+      useFactory: (sessionStore: SessionStore, ssoConfigStore: SsoConfigStore): IdentityProvider =>
+        createIdentityProvider(sessionStore, ssoConfigStore),
       inject: [sessionStoreToken, ssoConfigStoreToken],
     },
     {
@@ -134,4 +88,58 @@ export async function resolveRuntimeSecret(reference: string): Promise<string> {
     throw new Error(`Secret reference unavailable: ${reference}`);
   }
   return value;
+}
+
+/**
+ * The identity provider IDENTITY_PROVIDER selects. Exported so the EC2
+ * production-config check (deploy/ec2/check-production-config.ts) runs this
+ * exact selection, not a copy of it.
+ */
+export function createIdentityProvider(
+  sessionStore: SessionStore,
+  ssoConfigStore: SsoConfigStore,
+): IdentityProvider {
+  const provider = process.env.IDENTITY_PROVIDER ?? "mock";
+
+  if (provider === "auth0") {
+    if (!process.env.AUTH0_DOMAIN || !process.env.AUTH0_CLIENT_ID) {
+      throw new Error(
+        "AUTH0_DOMAIN and AUTH0_CLIENT_ID are required when IDENTITY_PROVIDER=auth0",
+      );
+    }
+    const options: Auth0IdentityProviderOptions = {
+      domain: process.env.AUTH0_DOMAIN,
+      clientId: process.env.AUTH0_CLIENT_ID,
+      resolveSecret: resolveRuntimeSecret,
+    };
+    if (process.env.AUTH0_CLIENT_SECRET_REF) {
+      options.clientSecretRef = process.env.AUTH0_CLIENT_SECRET_REF;
+    }
+    if (process.env.AUTH0_M2M_CLIENT_ID) {
+      options.m2mClientId = process.env.AUTH0_M2M_CLIENT_ID;
+    }
+    if (process.env.AUTH0_M2M_CLIENT_SECRET_REF) {
+      options.m2mClientSecretRef = process.env.AUTH0_M2M_CLIENT_SECRET_REF;
+    }
+    return new Auth0IdentityProvider(options, sessionStore, ssoConfigStore);
+  }
+
+  if (provider === "google") {
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET_REF) {
+      throw new Error(
+        "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET_REF are required when IDENTITY_PROVIDER=google",
+      );
+    }
+    const options: GoogleIdentityProviderOptions = {
+      clientId: process.env.GOOGLE_CLIENT_ID,
+      clientSecretRef: process.env.GOOGLE_CLIENT_SECRET_REF,
+      resolveSecret: resolveRuntimeSecret,
+    };
+    return new GoogleIdentityProvider(options, sessionStore);
+  }
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("IDENTITY_PROVIDER=mock is not allowed when NODE_ENV=production");
+  }
+  return new MockIdentityProvider(sessionStore, ssoConfigStore);
 }
