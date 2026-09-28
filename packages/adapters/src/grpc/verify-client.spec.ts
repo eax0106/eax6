@@ -11,6 +11,7 @@ const request = {
   node_type: "Merge",
   config_json: "{}",
   output_json: "{}",
+  success_criteria: [],
 };
 
 describe("VerifyServiceClient", () => {

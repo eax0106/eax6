@@ -251,6 +251,7 @@ describe.sequential("node executions durable ledger", () => {
       node_type: "Merge",
       config_json: "{}",
       inputs_json: "{}",
+      success_criteria: [],
     };
     await expect(service.executeNode(request)).rejects.toThrow("provider failure");
     await expect(service.executeNode(request)).rejects.toThrow("provider failure");

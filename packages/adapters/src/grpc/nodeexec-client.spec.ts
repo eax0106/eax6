@@ -36,6 +36,7 @@ const REQUEST: NodeexecExecuteNodeRequest = {
   node_type: "Merge",
   config_json: "{}",
   inputs_json: "{}",
+  success_criteria: [],
 };
 
 describe("NodeExecutionClient", () => {

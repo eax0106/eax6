@@ -50,6 +50,7 @@ describe("NodeexecService.executeNode", () => {
       node_type: "Merge",
       config_json: "{}",
       inputs_json: JSON.stringify({ node_a: { x: 1 } }),
+      success_criteria: [],
     });
 
     expect(JSON.parse(response.output_json)).toEqual({ x: 1 });
@@ -74,6 +75,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_merge", node_type: "Merge", config_json: "{}",
       inputs_json: JSON.stringify({ node_a: { x: 1 } }),
+      success_criteria: [],
     });
 
     expect(verifyGate.scoreNodeInline).toHaveBeenCalledWith({
@@ -139,6 +141,7 @@ describe("NodeexecService.executeNode", () => {
     const response = await nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(ledger.recordSucceeded).toHaveBeenCalledOnce();
@@ -164,6 +167,7 @@ describe("NodeexecService.executeNode", () => {
     await expect(nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      success_criteria: [],
     })).rejects.toThrow(/Verify Gate rejected/);
 
     expect(ledger.recordSucceeded).not.toHaveBeenCalled();
@@ -189,6 +193,7 @@ describe("NodeexecService.executeNode", () => {
     await expect(nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      success_criteria: [],
     })).rejects.toThrow(/Verify Service call failed: unavailable/);
     expect(ledger.recordSucceeded).not.toHaveBeenCalled();
     // The code is what the caller branches on; the detail carries the reason
@@ -221,6 +226,7 @@ describe("NodeexecService.executeNode", () => {
       node_type: "SandboxExec",
       config_json: JSON.stringify({ sandbox_session_id: "e2b_ses_123" }),
       inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(received?.sandbox_session_id).toBe("e2b_ses_123");
@@ -248,6 +254,7 @@ describe("NodeexecService.executeNode", () => {
       node_type: "SandboxExec",
       config_json: JSON.stringify({ sandbox_session_id: "e2b_ses_123" }),
       inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(streamEvents.append).toHaveBeenCalledWith(
@@ -283,6 +290,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_install_dependencies", node_type: "SandboxExec",
       config_json: JSON.stringify({ command: "pnpm install" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(provisioned.getSessionForRun).toHaveBeenCalledWith(TENANT_ID, RUN_ID);
@@ -316,6 +324,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_generate_code", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Build app", model_alias: "ADVANCED" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(provisioned.getSessionForRun).toHaveBeenCalledWith(TENANT_ID, RUN_ID);
@@ -366,6 +375,7 @@ describe("NodeexecService.executeNode", () => {
     await nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask", config_json: configJson, inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(runWorkspaceLookup.getWorkspaceId).toHaveBeenCalledWith(TENANT_ID, RUN_ID);
@@ -412,6 +422,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(received?.agent_id).toBeUndefined();
@@ -441,6 +452,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(response.output_json).toBe("{}");
@@ -472,6 +484,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(response.output_json).toBe("{}");
@@ -504,6 +517,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it" }), inputs_json: "{}",
+      success_criteria: [],
     })).rejects.toThrow(/No eligible agent/);
 
     expect(ledger.recordFailed).toHaveBeenCalledWith(
@@ -538,6 +552,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(response.output_json).toBe("{}");
@@ -565,6 +580,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(response.output_json).toBe("{}");
@@ -584,6 +600,7 @@ describe("NodeexecService.executeNode", () => {
     await nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(runWorkspaceLookup.getWorkspaceId).not.toHaveBeenCalled();
@@ -624,6 +641,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(performanceRecorder.recordObservation).toHaveBeenCalledWith(
@@ -673,6 +691,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     })).rejects.toThrow(ModelGatewayInvalidResponseError);
 
     expect(performanceRecorder.recordObservation).toHaveBeenCalledWith(
@@ -722,6 +741,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     })).rejects.toThrow();
 
     expect(performanceRecorder.recordObservation).not.toHaveBeenCalled();
@@ -761,6 +781,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     })).rejects.toThrow(VerifyGateError);
 
     expect(performanceRecorder.recordObservation).toHaveBeenCalledWith(
@@ -795,6 +816,7 @@ describe("NodeexecService.executeNode", () => {
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_task", node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Do it", model_alias: "STANDARD" }), inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(performanceRecorder.recordObservation).not.toHaveBeenCalled();
@@ -810,6 +832,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "Merge",
         config_json: "{}",
         inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toThrow(NodeHandlerValidationError);
   });
@@ -826,6 +849,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "UnknownNode",
         config_json: "{}",
         inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toThrow(NodeHandlerValidationError);
     expect(ledger.recordStarted).not.toHaveBeenCalled();
@@ -841,6 +865,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "Merge",
         config_json: "{not json",
         inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toThrow(NodeHandlerValidationError);
   });
@@ -859,6 +884,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "Merge",
         config_json: "{not json",
         inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toThrow(persistenceFailure);
   });
@@ -885,6 +911,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "Merge",
         config_json: "{not json",
         inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toThrow(NodeHandlerValidationError);
 
@@ -920,6 +947,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "Merge",
         config_json: "{not json",
         inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toThrow(NodeHandlerValidationError);
   });
@@ -934,6 +962,7 @@ describe("NodeexecService.executeNode", () => {
         node_type: "Merge",
         config_json: "{}",
         inputs_json: "[1,2,3]",
+        success_criteria: [],
       }),
     ).rejects.toThrow(NodeHandlerValidationError);
   });
@@ -948,6 +977,7 @@ describe("NodeexecService.executeNode", () => {
       node_type: "Merge",
       config_json: "{}",
       inputs_json: JSON.stringify({ node_a: { x: 1 }, node_b: { y: 2 } }),
+      success_criteria: [],
     });
 
     expect(ledger.recordStarted).toHaveBeenCalledWith(
@@ -968,6 +998,7 @@ describe("NodeexecService.executeNode", () => {
       node_type: "Merge",
       config_json: "{}",
       inputs_json: "{}",
+      success_criteria: [],
     });
 
     expect(ledger.recordStarted).toHaveBeenCalledWith(
@@ -1149,6 +1180,7 @@ describe("NodeexecService failure cause (#149)", () => {
       nodeexec.executeNode({
         tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
         node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+        success_criteria: [],
       }),
     ).rejects.toBeDefined();
     return vi.mocked(ledger.recordFailed).mock.calls[0]![1] as {
