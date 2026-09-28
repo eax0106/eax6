@@ -16,6 +16,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | 6.1a | Single-EC2 deployment kit: Terraform for the host and every AWS resource LocalStack fakes locally, one compose file, bootstrap, runbook. Proven: terraform validate + real plan (24 resources), compose config, `check-bootstrap-env.sh`. Whole-stack run waits on 6.1b. | done (this PR) |
 | 6.2a | Temporal Cloud wiring in the kit (address, namespace, API key from Secrets Manager, worker deployment name and build id from #222). | done (this PR) |
 | 6.1c | platform_db runtime roles: the kit had platform-api connect as the Postgres superuser, which bypasses row-level security; it now connects as `platform_app` (held to RLS) and the staff plane as `platform_operations` (its `OPERATIONS_*_DATABASE_URL` were configured nowhere, so the security queue and marketplace governance would have answered 503). Proven by `check-platform-db-roles.sh` in CI. | done (this PR) |
+| 6.1d | production boot: with `NODE_ENV=production` platform-api refused to start (mock identity, email and media; AppConfig ids it has no application for; three secret references), tool-gateway too (mock email), and orchestration (Session Gateway flag unset); platform-api's Engine clients had none of their eleven settings, their token pairs had no preimage, and orchestration fetched actor-token keys from port 3000 while platform-api listens on 3020. The kit now selects Auth0, SES, S3/Titan/Polly/Transcribe, resolves platform-api's env-var secret references, reads plan definitions from the bundled file, grants Polly/Transcribe, sets the Engine clients and generates their token pairs, and points the actor-token JWKS at platform-api's port. `check-production-boot.sh` in CI runs each service's own selection code over every container's compose-resolved environment. Generated secret files are now git-ignored | done (this PR) |
 | 6.1b | Launch on EC2 | blocked (accounts + cost, below) |
 | 6.2b | Run against Temporal Cloud | blocked (account) |
 | 6.5 | Load and failure evidence; promotion gate | blocked (needs 6.1b) |
@@ -50,8 +51,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B3.2 | benchmarks | blocked (decision, below): the console is customer-facing, but eval_db holds only Alter's own golden sets and the API only runs them for staff |
 | B3.3 | discovery live: suggestions derived from the workspace's own runs, documents, approvals and connectors, with "Create draft workflow" (opens the new draft) and Dismiss. The use-case catalogue keeps only conversation starters in live; the demo's template ids and invented recommendations are not shown | done (this PR) |
 | B3.4 | server search beyond listing/tool: the engine's workflow and project lists take `q` (case-insensitive name match, `%`/`_`/`\` literal, still paged, 1-200 chars), platform-api forwards it, and the spotlight asks the engine instead of filtering the first page of 50 in the browser. Knowledge sources and connections stay client-side (short per-workspace lists) | done (this PR) |
-| B3.5 | Tool Registry, confirm live | todo |
-| B3.6 | Media Services, confirm live | todo |
+| B3.5 | Tool Registry confirmed live 2026-09-28: a real platform-api process (dev mode, mock sign-in) on real Postgres and LocalStack listed, created a manifest and version, scanned, read the report and revoked (version `revoked`). The scan verdict is honestly `unavailable`: no package scanner is wired (decision below) | done |
+| B3.6 | Media Services: routes confirmed live on the same process with the mock providers (image, speech, transcript). A run against the real Titan/Polly/Transcribe costs cents and waits for your OK; on EC2 the kit selects the real providers (6.1d) | partly done (real-provider run needs your OK) |
 
 Each B item: backend route exists and is wired, `isLiveApi` path added, the live-mode hide
 policy from #212 lifted for it only when its live adapter is verified.
@@ -60,7 +61,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | # | Item | Status |
 |---|---|---|
 | C29 | slice 2b: each compiled node's own success criteria reach the node that produces the output (LLMTask states them) and the Verification & Quality Gate, which judges each one and fails the node on any unmet criterion whatever the rubric score. Live Bedrock proof of an off-contract answer failing still to run | done (this PR) |
-| C1 | 11 AST architecture gates with a baseline | todo |
+| C1 | 11 AST architecture gates imported from alterengine--5 into `scripts/gates/`, run in CI against `baseline.json` (722 findings recorded): a new violation fails and so does a fixed one left in the baseline, so the count only ratchets down. Adapted: Cost Ledger paths, generated code skipped, and the two gates whose subject does not exist yet (deletion registry, capability registry) report that single absence instead of crashing | done (this PR) |
 | C3 | deletion registration in CI | todo |
 | C5 | cost ledger records verification verdicts | todo |
 | C8 | side-effect ledger and idempotency gate before Dispatch | todo |
@@ -92,7 +93,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 
 | Item | What is needed from Havish |
 |---|---|
-| 6.1b | Auth0 tenant (real sign-in), EC2 size and monthly cost approval, domain for HTTPS |
+| 6.1b | Auth0 tenant (API, M2M app, customer regular web app), SES verified domain out of sandbox + sending key, Bedrock Titan image access, EC2 size and monthly cost approval, domain for HTTPS |
 | 6.2b | Temporal Cloud account and API key in Secrets Manager |
 | 5.2 live proof | GitHub OAuth app, client id/secret in Secrets Manager |
 | B1 live proof | A staff Auth0 tenant with a PKCE app (callback `<origin>/staff/callback`), and each staff member added to `staff_users` |
@@ -105,6 +106,8 @@ policy from #212 lifted for it only when its live adapter is verified.
 | Cost visibility | `GET /api/v1/costs/summary` returns the ledger's internal cost and margin to any workspace member with billing:read. The console shows only billable spend, but the API still exposes them. Recommendation: strip internal/retry/recovery cost and margin from the tenant route, and keep them for a staff route. Confirm? |
 | B2.4 upload | Sellers cannot submit identity documents in live mode: there is no document store and no KYC vendor ("manual review until a vendor is selected"). Choose: Razorpay Route linked-account KYC (Razorpay holds the documents), a vendor, or our own encrypted S3 store with retention rules. |
 | B3.2 | Benchmarking console: customers see a benchmarks area, but the engine has no tenant datasets or tenant eval runs (eval_db = Alter's golden sets; `/api/v1/admin/benchmarks` = staff run + release gate). Choose: (a) staff-only eval history in the admin console (needs a list-runs RPC), (b) build tenant datasets and runs in eval-service, (c) drop from v1. Recommendation: (a) now, (b) later. |
+| B3.5 scanner | No package scanner is wired, so every tool version scans `unavailable` and none can be verified clean. Choose a scanner (e.g. OSV/Socket/Snyk) or keep manual review. |
+| B3.6 real run | OK to spend a few cents running image, speech and transcription once against the real AWS providers (Titan, Polly, Transcribe) from this machine? |
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |

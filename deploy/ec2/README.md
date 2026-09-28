@@ -31,8 +31,12 @@ the floor: fourteen services, four Postgres, Redis and Presidio share it.
 1. **Auth0**: a tenant, an API (its identifier is `AUTH0_API_AUDIENCE`), and a
    machine-to-machine application; put the M2M client secret in Secrets Manager.
 2. **Temporal Cloud**: a namespace; put its API key in Secrets Manager.
-3. **A domain** you can point at the host.
-4. **Approve the cost above.**
+3. **Customer sign-in and email**: an Auth0 regular web application for the
+   product (client secret in Secrets Manager), and SES with a verified sending
+   domain, out of the SES sandbox, plus an access key for sending (JSON in
+   Secrets Manager). Enable the Titan image model in Bedrock model access.
+4. **A domain** you can point at the host.
+5. **Approve the cost above.**
 
 ## Launch
 
@@ -72,6 +76,12 @@ Proven without a host:
   endpoint rule is removed.
 - Each gateway service booting from committed configuration against real AWS
   (task 1.6, `scripts/run-service-aws.sh`).
+- `check-production-boot.sh` (CI): every container's environment, as
+  `docker compose config` resolves it from the generated `.env`, passes the
+  checks that only run with `NODE_ENV=production` -- platform-api's schema and
+  its identity, email and media providers, tool-gateway's email provider, and
+  orchestration's Session Gateway -- by running their own code. Before 6.1d
+  six of these refused to start; the check fails when any fix is removed.
 - `check-platform-db-roles.sh` (CI, against the migrated database): the
   services' platform_db roles. The container's superuser bypasses row-level
   security, so it only migrates; platform-api connects as `platform_app`, which

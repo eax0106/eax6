@@ -213,6 +213,12 @@ resource "aws_iam_role_policy" "host" {
         Resource = flatten([for b in [aws_s3_bucket.audit_archive, aws_s3_bucket.artifacts] : [b.arn, "${b.arn}/*"]])
       },
       {
+        Sid      = "MediaSpeech"
+        Effect   = "Allow"
+        Action   = ["polly:SynthesizeSpeech", "transcribe:StartTranscriptionJob", "transcribe:GetTranscriptionJob"]
+        Resource = "*"
+      },
+      {
         Sid      = "Events"
         Effect   = "Allow"
         Action   = ["events:PutEvents"]

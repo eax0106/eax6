@@ -199,6 +199,12 @@ jobs:
       # affected's graph-diff computation can in principle miss a
       # cross-project edge case, so the branch that actually lands on main
       # still gets the exhaustive check.
+
+      - name: architecture gates
+        # Task C1. The eleven AST gates from alterengine--5, each held to
+        # scripts/gates/baseline.json: a new violation fails, and so does a
+        # fixed one left in the baseline, so the count only goes down.
+        run: node scripts/gates/run-all.mjs
       - name: full lint and typecheck sweep
         if: github.event_name != 'pull_request'
         run: pnpm exec nx run-many -t lint,typecheck --all --parallel=2
@@ -236,6 +242,12 @@ jobs:
 
       - name: migrate platform db
         run: pnpm --filter @alterx/platform-api db:migrate
+
+      - name: ec2 production boot config check
+        # Task 6.1d. Every container's environment, as compose resolves it
+        # from bootstrap.sh's .env, gets past the production-only boot checks
+        # (no mock identity, email or media; Session Gateway flag; schema).
+        run: bash deploy/ec2/check-production-boot.sh
 
       - name: ec2 platform db runtime roles check
         # Task 6.1c. The services connect as platform_app (held to RLS) and
