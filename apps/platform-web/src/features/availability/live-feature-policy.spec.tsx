@@ -16,6 +16,7 @@ describe("live feature availability", () => {
     "benchmarks",
     "discovery",
     "notifications",
+    "budgets",
   ]
 
   it.each(unfinishedFeatures)("keeps %s available in demo mode", (feature) => {

@@ -1,4 +1,5 @@
 import { type UsageSummary, type CostRecord, type ModelUsage, type Budget } from "../types"
+import { isLiveApi } from "../http"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -101,7 +102,10 @@ export const budgetsService = {
 }
 
 export const costEstimatesService = {
+  // Live mode (B2.9): no estimate is shown until one can be derived from the
+  // workflow's own plan -- the cost ledger estimates only explicit line items.
   forWorkflow: async (_id: string) => {
+    if (isLiveApi) return null
     await delay(400)
     return {
       currency: "USD",
@@ -117,6 +121,7 @@ export const costEstimatesService = {
     }
   },
   forProject: async (_id: string) => {
+    if (isLiveApi) return null
     await delay(500)
     return {
       currency: "USD",
