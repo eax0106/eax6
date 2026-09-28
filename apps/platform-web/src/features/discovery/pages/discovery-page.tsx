@@ -8,6 +8,8 @@ import type { UseCase } from "@/api/types"
 import { Sparkles, ArrowRight, Zap, Target, BookOpen } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
+import { isLiveApi } from "@/api/http"
+import { WorkspaceSuggestions } from "../components/workspace-suggestions"
 
 export function DiscoveryPage() {
   const navigate = useNavigate()
@@ -99,6 +101,8 @@ export function DiscoveryPage() {
         title="Discover" 
         description="Discover what you can build with AlterX. Explore use-cases and templates to accelerate your workflows."
       />
+
+      {isLiveApi && <WorkspaceSuggestions />}
 
       {recommendations.length > 0 && (
         <section>

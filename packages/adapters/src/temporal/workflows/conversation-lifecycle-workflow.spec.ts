@@ -1,3 +1,4 @@
+import { WorkflowContinuedAsNewError } from "@temporalio/client";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import type { Worker } from "@temporalio/worker";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -143,10 +144,15 @@ describe.sequential("conversationLifecycleWorkflow", () => {
       await handle.signal("message", message("rollover-1"));
       await handle.signal("message", message("rollover-2"));
 
-      await pollUntil(
-        () => handle.describe(),
-        (description) => description.runId !== firstRunId,
-      );
+      // Deterministic, not a wall-clock poll (C33): the first run's own
+      // result, without following the chain, settles exactly when it
+      // continues as new -- however slowly the worker picks up the task.
+      await expect(
+        environment.client.workflow
+          .getHandle(workflowId, firstRunId, { followRuns: false })
+          .result(),
+      ).rejects.toBeInstanceOf(WorkflowContinuedAsNewError);
+      await expect(handle.describe()).resolves.not.toMatchObject({ runId: firstRunId });
       await expect(
         handle.query<readonly IncomingConversationMessage[]>("messages"),
       ).resolves.toMatchObject([

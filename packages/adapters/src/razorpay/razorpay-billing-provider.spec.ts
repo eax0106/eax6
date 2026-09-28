@@ -116,6 +116,7 @@ describe("RazorpayBillingProvider", () => {
           id: "inv_123",
           amount: 50_000,
           currency: "INR",
+          documentUrl: "https://rzp.io/i/inv123",
         }),
       ],
       nextCursor: "1",
@@ -309,6 +310,26 @@ describe("RazorpayBillingProvider", () => {
       }));
       await expect(provider.listInvoices(tenantId)).resolves.toEqual({
         items: [expect.objectContaining({ status: value })],
+        nextCursor: null,
+      });
+    }
+  });
+
+  it("links an invoice's hosted page only when it is an absolute https URL", async () => {
+    references.subscriptionRef = "sub_123";
+    for (const [shortUrl, expected] of [
+      ["https://rzp.io/i/abc", "https://rzp.io/i/abc"],
+      ["http://rzp.io/i/abc", null],
+      ["javascript:alert(1)", null],
+      ["not a url", null],
+      [undefined, null],
+    ] as const) {
+      http.request = vi.fn(async () => ({
+        status: 200,
+        body: { items: [invoiceFixture({ short_url: shortUrl })] },
+      }));
+      await expect(provider.listInvoices(tenantId)).resolves.toEqual({
+        items: [expect.objectContaining({ documentUrl: expected })],
         nextCursor: null,
       });
     }
@@ -584,6 +605,7 @@ function invoiceFixture(
     status: "paid",
     issued_at: 1_785_196_800,
     paid_at: 1_785_196_860,
+    short_url: "https://rzp.io/i/inv123",
     ...overrides,
   };
 }
