@@ -9,14 +9,17 @@
 
 Watching a run happen: live progress, per-node verification results, history.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 52 — Run Monitor** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Runs execute unwatched. |
+| Fail mode | fail-closed on display: show unknown rather than a guessed state. |
+| Driver | user opens a run view; events pushed from real execution. *Driver test:* streamed events match actual run history exactly. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

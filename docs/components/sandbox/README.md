@@ -10,14 +10,17 @@
 
 Executes untrusted code in isolation and returns the result. Holds a deliberately narrow boundary.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 28 — Sandbox** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Only code-execution nodes are affected. |
+| Fail mode | fail-closed. Never report execution success without genuine confirmation of the exit state. |
+| Driver | invoked by Executor for code-execution nodes. *Driver test:* a real code-execution node runs and returns genuine results. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

@@ -8,14 +8,17 @@
 
 Fourteen screens across eight backend modules — tenants, policy, controls, deployments, audit. The largest single block of finished-but-unreachable work in the product.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 54 — Account & Admin** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). |
+| Fail mode | fail-closed on every destructive operation. |
+| Driver | user interaction. *Driver test:* a role change, a connection, and a retention change each take real effect. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

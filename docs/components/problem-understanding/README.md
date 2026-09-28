@@ -10,14 +10,17 @@
 
 Turns a described objective into a structured ProblemSpec the rest of the design path can reason about.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 6 — Problem Understanding** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Design path only; running workflows are unaffected. |
+| Fail mode | fail-closed. An incomplete ProblemSpec — particularly one missing success criteria — must trigger clarification, never proceed to planning. Proceeding silently would leave verification with nothing to judge against, which is precisely the failure Section 5 was written to prevent. |
+| Driver | invoked by Conversation Manager for build and modify intents. *Driver test:* a real build request produces a complete ProblemSpec that reaches the Planner. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

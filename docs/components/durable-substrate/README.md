@@ -10,14 +10,17 @@
 
 Temporal. Provides the durable execution guarantees the whole run path rests on: a workflow survives process death and resumes where it stopped.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 19 — Durable Substrate (Temporal — external managed service)** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | **whole-engine for the run path.** Genuinely: nothing executes, nothing recovers, nothing resumes. One of very few components warranting this rating. |
+| Fail mode | fail-closed. Never fabricate durable state or proceed as though a checkpoint was written. |
+| Driver | external service, driven by its own workers. *Driver test:* a run survives a process kill mid-execution and resumes correctly from durable state. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

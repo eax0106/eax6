@@ -10,14 +10,17 @@
 
 Combines verified upstream outputs into a final result, degrading honestly when there is not enough to work with.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 31 — Synthesis** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Runs execute but cannot deliver a final result. |
+| Fail mode | fail-closed. Never present partial output as complete. |
+| Driver | invoked by Executor when the graph completes or is degraded. *Driver test:* a completed run produces an assembled result; a degraded run produces a labeled partial one. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

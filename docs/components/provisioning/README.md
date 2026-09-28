@@ -10,14 +10,17 @@
 
 Creates and closes the session and project directory a run needs to do work on disk.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 23 — Provisioning** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Only nodes requiring an isolated runtime are affected; the rest of the workflow proceeds. |
+| Fail mode | fail-closed. Never hand back a partially-prepared environment — a sandbox missing a dependency produces failures that look like code errors. |
+| Driver | invoked by Executor for sandbox-requiring nodes. *Driver test:* a real sandbox-requiring node gets a working prepared environment. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

@@ -10,14 +10,17 @@
 
 The front door. Takes what a person says and works out what they actually want, including asking for clarification when the answer is genuinely ambiguous.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 3 — Conversation Manager** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). If this is unavailable, users cannot start or modify workflows — but **in-flight runs continue unaffected**, because the run path never touches it (design log Section 24, two-path model). This is the two-path model paying off concretely: a design-path outage must not stop the run path. |
+| Fail mode | fail-closed on ambiguity. When intent cannot be confidently classified, ask the user (route to **8. Clarification Loop**) rather than guessing. Guessing here silently misroutes the entire downstream pipeline. |
+| Driver | invoked per user message by **48. Platform API/BFF**. *Driver test:* a message sent through the real Platform API arrives here, is classified, and the classification reaches the next component. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

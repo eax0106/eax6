@@ -9,14 +9,17 @@
 
 Creates a brand-new agent when no existing one fits — on the design path when selection finds nothing, and on the run path during self-heal.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 13 — Agent Factory** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Existing workflows run; new agent creation and create-new self-heal are unavailable. |
+| Fail mode | fail-closed. An agent that cannot be authored with confidence must not be created and bound — a bad agent silently inserted mid-run is worse than a failed run, because it produces plausible wrong output that verification may pass. |
+| Driver | invoked by its two callers. *Driver test:* both paths produce a usable agent — a design-time gap fills, and a live self-heal creates and binds one mid-run. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

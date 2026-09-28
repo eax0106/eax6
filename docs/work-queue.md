@@ -76,7 +76,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C4 | safety as a shared in-process library | todo |
 | C7 | Agent Factory extracted | todo |
 | C18 | re-embed backfill | todo |
-| C13 | map 54 contracts onto 61 components | todo |
+| C13 | map 54 contracts onto 61 components: 44 component READMEs now carry their contract's blast radius, fail mode and driver (some map to two contracts, e.g. HumanApproval to Node Type Registry and Approval Store); the 17 no contract covers say so and keep proposed values | done (this PR) |
 | C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |
 | C34 | specs authorize through the enforcing resolver | todo |
 | C35 | vitest hang with `.env.local` present: Vite 8's `loadEnv` (bundled dotenv-expand) loops forever on `PLATFORM_DB_PORT=${PLATFORM_DB_PORT:-5432}` once `DATABASE_URL` references it. Every Vitest config, plus a new root one for config-less runs, sets `envDir: false`; CI runs a spec with a generated `.env.local` under a 120 s timeout | done (this PR) |

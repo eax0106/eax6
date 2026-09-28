@@ -10,14 +10,17 @@
 
 Walks the compiled graph wave by wave during a real run, dispatches each node to the gateways, feeds results into the Blackboard, and hands off to Verification after each node.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 21 — Executor** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, severe. No node execution occurs; durable state is preserved and resumes when Executor returns. |
+| Fail mode | fail-closed. A node whose outcome cannot be determined is never treated as successful, and execution does not advance past an unverified node. |
+| Driver | invoked by Execution Workers when a run is claimed. *Driver test:* a real triggered run executes end-to-end through this component, with each node dispatched, verified, and recorded. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 
