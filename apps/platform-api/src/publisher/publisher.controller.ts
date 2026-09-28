@@ -1,8 +1,7 @@
 import { Body, Controller, Get, Param, Post } from "@nestjs/common";
 import { ActorContext, RequireTenantRole, type ActorContextType } from "../rbac";
-import { PublisherHttpError } from "./publisher.problem";
 import { PublisherService } from "./publisher.service";
-import { parseReview, parseTransition, parseVerification } from "./publisher.validation";
+import { parseTransition, parseVerification } from "./publisher.validation";
 
 @Controller("/api/v1/publisher")
 export class PublisherController {
@@ -19,11 +18,4 @@ export class PublisherController {
   earnings(@ActorContext() actor: ActorContextType) { return this.publisher.earnings(actor.tenant_id); }
   @Get("payouts") @RequireTenantRole("member")
   payouts(@ActorContext() actor: ActorContextType) { return this.publisher.payouts(actor.tenant_id); }
-  @Post("internal/verification/:submissionId/actions/review") @RequireTenantRole("owner")
-  review(@Param("submissionId") submissionId: string, @Body() body: unknown, @ActorContext() actor: ActorContextType) {
-    if (!process.env.INTERNAL_DOGFOOD_TENANT_ID || actor.tenant_id !== process.env.INTERNAL_DOGFOOD_TENANT_ID) {
-      throw new PublisherHttpError(403, "PUBLISHER_INTERIM_REVIEW_DENIED", "KYC review is limited to the configured internal dogfooding tenant until Operations staff RBAC exists.", `/api/v1/publisher/internal/verification/${submissionId}/actions/review`);
-    }
-    return this.publisher.reviewVerification(actor.tenant_id, submissionId, actor.user_id, parseReview(body, `/api/v1/publisher/internal/verification/${submissionId}/actions/review`));
-  }
 }
