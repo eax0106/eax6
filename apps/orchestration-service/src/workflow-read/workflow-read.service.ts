@@ -243,6 +243,7 @@ export class WorkflowReadService {
     workspaceId: string,
     cursor: string | undefined,
     limit: number,
+    query?: string,
   ): Promise<WorkflowPage> {
     requireNonEmpty("tenantId", tenantId);
     requireNonEmpty("workspaceId", workspaceId);
@@ -252,6 +253,10 @@ export class WorkflowReadService {
     if (cursor !== undefined && !WorkflowIdSchema.safeParse(cursor).success) {
       throw new WorkflowValidationError("cursor must be a workflow ID");
     }
+    const nameQuery = query === undefined ? null : query.trim();
+    if (nameQuery !== null && (nameQuery.length === 0 || nameQuery.length > 200)) {
+      throw new WorkflowValidationError("q must be 1 to 200 characters");
+    }
     const bareTenant = bareTenantUuid(tenantId);
     const bareWorkspace = bareWorkspaceUuid(workspaceId);
     return this.store.withTenant(bareTenant, async (tx) => {
@@ -260,9 +265,10 @@ export class WorkflowReadService {
          FROM workflows
          WHERE tenant_id = $1 AND workspace_id = $2
            AND ($3::text IS NULL OR id > $3)
+           AND ($5::text IS NULL OR name ILIKE '%' || $5 || '%' ESCAPE '\\')
          ORDER BY id
          LIMIT $4`,
-        [bareTenant, bareWorkspace, cursor ?? null, limit + 1],
+        [bareTenant, bareWorkspace, cursor ?? null, limit + 1, nameQuery === null ? null : escapeLike(nameQuery)],
       );
       const hasMore = result.rows.length > limit;
       const rows = result.rows.slice(0, limit);
@@ -586,4 +592,9 @@ function fromVersionRow(row: WorkflowVersionRow): WorkflowVersion {
 function newWorkflowVersionId(): `wfv_${string}` {
   const uuid = randomUUID();
   return `wfv_${uuid.slice(0, 14)}7${uuid.slice(15)}`;
+}
+
+/** A name search is literal: %, _ and \ in what the person typed match themselves. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
 }

@@ -36,8 +36,11 @@ function respond(overrides: Record<string, unknown> = {}) {
       return value as never
     }
     if (path.startsWith("/api/v1/search")) return listings as never
-    if (path.startsWith("/api/v1/workflows")) return workflows as never
-    if (path.startsWith("/api/v1/projects")) return projects as never
+    // The engine searches names server-side (task B3.4); the fake does the same.
+    const q = new URL(path, "http://x").searchParams.get("q")?.toLowerCase() ?? ""
+    const byName = <T extends { name: string }>(items: T[]) => items.filter((item) => item.name.toLowerCase().includes(q))
+    if (path.startsWith("/api/v1/workflows")) return { workflows: byName(workflows.workflows) } as never
+    if (path.startsWith("/api/v1/projects")) return { projects: byName(projects.projects) } as never
     if (path.startsWith("/api/v1/ads/sources")) return knowledgeSources as never
     if (path.startsWith("/api/v1/integrations/connections")) return connections as never
     // The connector catalog, which is where a connection's display name comes
@@ -89,6 +92,16 @@ describe("global search against the live API", () => {
     expect(vi.mocked(apiGet).mock.calls.map(([path]) => path)).toContainEqual(
       "/api/v1/search?q=invoice&kind=listing&limit=5",
     )
+  })
+
+  it("asks the engine to search workflow and project names instead of filtering one page here", async () => {
+    respond()
+
+    await globalSearchService("  invoice ")
+
+    const paths = vi.mocked(apiGet).mock.calls.map(([path]) => path)
+    expect(paths).toContainEqual("/api/v1/workflows?q=invoice&limit=5")
+    expect(paths).toContainEqual("/api/v1/projects?q=invoice&limit=5")
   })
 
   it("still shows the other areas when one of them is refused", async () => {

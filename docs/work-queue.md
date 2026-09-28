@@ -48,7 +48,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B3.1 | notifications | todo |
 | B3.2 | benchmarks | todo |
 | B3.3 | discovery | todo |
-| B3.4 | server search beyond listing/tool | todo |
+| B3.4 | server search beyond listing/tool: the engine's workflow and project lists take `q` (case-insensitive name match, `%`/`_`/`\` literal, still paged, 1-200 chars), platform-api forwards it, and the spotlight asks the engine instead of filtering the first page of 50 in the browser. Knowledge sources and connections stay client-side (short per-workspace lists) | done (this PR) |
 | B3.5 | Tool Registry, confirm live | todo |
 | B3.6 | Media Services, confirm live | todo |
 

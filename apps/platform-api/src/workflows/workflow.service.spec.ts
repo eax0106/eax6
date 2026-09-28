@@ -1,3 +1,4 @@
+import { WorkflowHttpError } from "./problem";
 import type { CompiledDag } from "@alterx/contracts";
 import { describe, expect, it, vi } from "vitest";
 import type {
@@ -63,6 +64,16 @@ describe("WorkflowService", () => {
       "/api/v1/workflows?cursor=next+cursor&limit=25",
       expectedContext(),
     );
+  });
+
+  it("adds the name search to the engine list query (task B3.4)", async () => {
+    const engine = engineStub();
+    const service = new WorkflowService(engine.value);
+    await service.list(undefined, "5", actor, traceparent, " a&b ");
+    expect(engine.get).toHaveBeenCalledWith("/api/v1/workflows?limit=5&q=a%26b", expectedContext());
+    expect(() => service.list(undefined, undefined, actor, traceparent, "   ")).toThrow(WorkflowHttpError);
+    expect(() => service.list(undefined, undefined, actor, traceparent, "x".repeat(201))).toThrow(WorkflowHttpError);
+    expect(engine.get).toHaveBeenCalledTimes(1);
   });
 
   it("saves full canvas DAG with concurrency headers", async () => {

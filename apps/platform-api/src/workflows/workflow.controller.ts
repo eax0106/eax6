@@ -78,6 +78,7 @@ export class WorkflowController {
     @ActorContext() actor: ActorContextType | undefined,
     @Headers("traceparent") traceparent: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
+    @Query("q") nameQuery?: string,
   ): Promise<WorkflowList> {
     return project(
       await this.workflows.list(
@@ -85,6 +86,7 @@ export class WorkflowController {
         limit,
         requireActor(actor, "/api/v1/workflows"),
         traceparent,
+        nameQuery,
       ),
       reply,
     );
