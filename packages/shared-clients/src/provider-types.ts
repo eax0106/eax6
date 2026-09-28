@@ -152,6 +152,8 @@ export interface Invoice {
   readonly status: string;
   readonly issuedAt: string;
   readonly paidAt: string | null;
+  /** The provider's hosted invoice page (view and PDF download); null when it has none. */
+  readonly documentUrl: string | null;
 }
 
 export interface PaymentMethodRef {

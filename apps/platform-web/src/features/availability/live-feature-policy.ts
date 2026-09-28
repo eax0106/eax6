@@ -35,8 +35,6 @@ export const liveFeatureNames: Record<LiveFeature, string> = {
 const unfinishedLiveFeatures = new Set<LiveFeature>([
   "admin-deployments",
   "benchmarks",
-  "discovery",
-  "notifications",
 ])
 
 export function isLiveFeatureAvailable(feature: LiveFeature, live = isLiveApi) {

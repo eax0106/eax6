@@ -894,6 +894,8 @@ export interface Invoice {
   currency: string;
   issuedAt: string;
   paidAt: string | null;
+  /** The billing provider's hosted invoice page, where the PDF is downloaded. */
+  documentUrl?: string | null;
 }
 
 export interface CostEstimateItem {
@@ -1019,6 +1021,7 @@ export type NotificationType =
   | 'run'
   | 'workflow'
   | 'project'
+  | 'deployment'
   | 'human_action'
   | 'knowledge'
   | 'connection'

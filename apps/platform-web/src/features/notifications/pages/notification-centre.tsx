@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { PageHeader } from "@/components/common/page-header"
 import { Button } from "@/components/ui/button"
 import { api } from "@/api/client"
+import { isLiveApi } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
 import { formatDistanceToNow } from "date-fns"
 import { Link, useNavigate } from "react-router-dom"
@@ -160,7 +161,7 @@ export function NotificationCentrePage() {
                         <Check className="mr-1.5 h-3 w-3" />
                         Mark read
                       </Button>
-                    ) : (
+                    ) : isLiveApi ? null : (
                       <Button 
                         variant="ghost" 
                         size="sm" 

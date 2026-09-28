@@ -1,4 +1,6 @@
 import type { AppNotification, NotificationPreference } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-notifications"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -72,32 +74,39 @@ const mockPreferences: NotificationPreference[] = [
 
 export const notificationsService = {
   list: async (): Promise<AppNotification[]> => {
+    if (isLiveApi) return live.listNotifications()
     await delay(300)
     return mockNotifications
   },
   getUnreadCount: async (): Promise<number> => {
+    if (isLiveApi) return live.unreadCount()
     await delay(200)
     return mockNotifications.filter(n => n.status === "unread").length
   },
   markRead: async (id: string): Promise<void> => {
+    if (isLiveApi) return live.markRead(id)
     await delay(300)
     const notif = mockNotifications.find(n => n.id === id)
     if (notif) notif.status = "read"
   },
   markUnread: async (id: string): Promise<void> => {
+    if (isLiveApi) throw new Error("Marking a notification unread is not available")
     await delay(300)
     const notif = mockNotifications.find(n => n.id === id)
     if (notif) notif.status = "unread"
   },
   markAllRead: async (): Promise<void> => {
+    if (isLiveApi) return live.markAllRead()
     await delay(500)
     mockNotifications.forEach(n => { n.status = "read" })
   },
   getPreferences: async (): Promise<NotificationPreference[]> => {
+    if (isLiveApi) return live.getPreferences()
     await delay(300)
     return mockPreferences
   },
   updatePreferences: async (_prefs: NotificationPreference[]): Promise<void> => {
+    if (isLiveApi) return live.updatePreferences(_prefs)
     await delay(600)
     // mock update
   }

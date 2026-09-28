@@ -57,6 +57,7 @@ export function NotificationPreferencesPage() {
     "run": { title: "Run Activity", desc: "Started, completed, and failed runs." },
     "workflow": { title: "Workflows", desc: "Workflow health and version changes." },
     "project": { title: "Projects", desc: "Project plan approvals and build events." },
+    "deployment": { title: "Deployments", desc: "Promotions, rollbacks and deployment health." },
     "human_action": { title: "Human Actions", desc: "Tasks requiring your approval, clarification, or review." },
     "knowledge": { title: "Knowledge Base", desc: "Sync status and indexing failures." },
     "connection": { title: "Connections", desc: "Integration status and credential expiration." },

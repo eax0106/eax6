@@ -1,4 +1,6 @@
 import type { UseCase } from "../types"
+import { isLiveApi } from "../http"
+import * as live from "../live-discovery"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -58,13 +60,21 @@ const mockUseCases: UseCase[] = [
 ]
 
 export const discoveryService = {
+  // The use-case catalogue is product copy. In live mode only the entries that
+  // start a conversation are kept: the template ids are demo placeholders.
   listUseCases: async (): Promise<UseCase[]> => {
+    if (isLiveApi) return mockUseCases.filter(uc => uc.starterPrompt && !uc.workflowTemplateId && !uc.projectTemplateId)
     await delay(400)
     return mockUseCases
   },
+  // Live mode: the workspace's own suggestions come from listSuggestions below.
   getRecommendations: async (): Promise<UseCase[]> => {
+    if (isLiveApi) return []
     await delay(300)
     // Mock recommendations, return top 3
     return mockUseCases.slice(0, 3)
-  }
+  },
+  listSuggestions: live.listSuggestions,
+  acceptSuggestion: live.acceptSuggestion,
+  dismissSuggestion: live.dismissSuggestion,
 }
