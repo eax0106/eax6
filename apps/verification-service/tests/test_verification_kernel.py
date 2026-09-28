@@ -16,7 +16,21 @@ from src.verification.kernel import (
     VerificationValidationError,
 )
 from src.verification.llm_client import MODEL_ALIAS_ADVANCED, StubReviewerLlmClient
-from src.verification.models import InjectionClassification, NodeType, ScoreNodeRequest
+from src.verification.models import (
+    CriterionJudgement,
+    InjectionClassification,
+    NodeType,
+    ScoreNodeRequest,
+)
+
+
+class NoCriteriaJudgement:
+    """Base for fakes in tests without success criteria (C29 slice 2b): the
+    reviewer protocol gained judge_criteria, and calling it here is a bug."""
+
+    async def judge_criteria(self, **_: object) -> list[CriterionJudgement]:
+        raise AssertionError("no success criteria here; judge_criteria must not be called")
+
 
 TENANT_ID = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab"
 RUN_ID = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890ab"
@@ -77,7 +91,7 @@ class TestDeterministicNodeTypes:
         assert result.verdict == "fail"
 
     async def test_deterministic_types_never_call_the_reviewer(self) -> None:
-        class ExplodingReviewer:
+        class ExplodingReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 raise AssertionError("deterministic node types must not call the reviewer")
 
@@ -143,7 +157,7 @@ class TestPromptInjection:
     async def test_a_detected_injection_fails_closed_without_calling_the_reviewer(
         self,
     ) -> None:
-        class ExplodingReviewerDetectingClassifier:
+        class ExplodingReviewerDetectingClassifier(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 raise AssertionError(
                     "a detected injection must never reach the reviewer"
@@ -173,7 +187,7 @@ class TestPromptInjection:
     async def test_a_clean_classification_still_proceeds_to_the_reviewer(
         self,
     ) -> None:
-        class PassthroughClassifierReviewer:
+        class PassthroughClassifierReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.9, "clean"
 
@@ -194,7 +208,7 @@ class TestPromptInjection:
     async def test_deterministic_node_types_skip_injection_classification_too(
         self,
     ) -> None:
-        class ExplodingEverything:
+        class ExplodingEverything(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 raise AssertionError("deterministic types must not call the reviewer")
 
@@ -225,7 +239,7 @@ class TestScoreBanding:
     async def test_warn_band_between_threshold_and_margin(
         self, kernel: VerificationKernel
     ) -> None:
-        class FixedScoreReviewer:
+        class FixedScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.6, "borderline"
 
@@ -242,7 +256,7 @@ class TestScoreBanding:
         assert result.verdict == "warn"
 
     async def test_fail_band_below_margin(self, kernel: VerificationKernel) -> None:
-        class FixedScoreReviewer:
+        class FixedScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.4, "poor"
 
@@ -259,7 +273,7 @@ class TestScoreBanding:
         assert result.verdict == "fail"
 
     async def test_out_of_range_score_raises(self, kernel: VerificationKernel) -> None:
-        class BadReviewer:
+        class BadReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 1.5, "broken reviewer"
 
@@ -277,7 +291,7 @@ class TestScoreBanding:
 
 class TestQualityThresholdPolicyClient:
     async def test_uses_the_real_policy_client_threshold_when_present(self) -> None:
-        class FixedScoreReviewer:
+        class FixedScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.5, "mid"
 
@@ -300,7 +314,7 @@ class TestQualityThresholdPolicyClient:
         assert result.verdict == "pass"
 
     async def test_falls_back_to_defaults_when_policy_client_finds_nothing(self) -> None:
-        class FixedScoreReviewer:
+        class FixedScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.5, "mid"
 
@@ -322,7 +336,7 @@ class TestQualityThresholdPolicyClient:
         assert result.verdict == "fail"
 
     async def test_falls_back_to_defaults_when_policy_client_raises(self) -> None:
-        class FixedScoreReviewer:
+        class FixedScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.5, "mid"
 
@@ -346,7 +360,7 @@ class TestQualityThresholdPolicyClient:
     async def test_no_policy_client_configured_uses_defaults(
         self, kernel: VerificationKernel
     ) -> None:
-        class FixedScoreReviewer:
+        class FixedScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.5, "mid"
 
@@ -376,9 +390,9 @@ class ContractReviewer(StubReviewerLlmClient):
     async def review(self, **_: object) -> tuple[float, str]:
         return 0.95, "Fluent and well formed."
 
-    async def judge_criteria(self, *, criteria: tuple[str, ...], output_json: str, **_: object):  # type: ignore[override]
-        from src.verification.models import CriterionJudgement
-
+    async def judge_criteria(
+        self, *, criteria: tuple[str, ...], output_json: str, **_: object
+    ) -> list[CriterionJudgement]:
         self.judged.append(criteria)
         judgements = [
             CriterionJudgement(
