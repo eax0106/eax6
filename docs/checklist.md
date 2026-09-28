@@ -789,7 +789,7 @@ demo.
       "continues as new before history grows" failed once on PR #18 with `pollUntil timed out after
       10000ms`, passed on rerun and 5/5 locally; their CI has passed it every time. Code identical to
       theirs. Make the wait deterministic rather than longer.
-- [ ] **C34 [+] most specs authorize through the non-enforcing `RbacModule`.** Workspace isolation on
+- [x] **C34 [+] most specs authorize through the non-enforcing `RbacModule`. DONE 2026-09-28** (`apps/platform-api/src/rbac/enforcing-rbac.routes.spec.ts`: real controllers, production rules, cross-workspace denial; negative control bites). Workspace isolation on
       project and workflow routes lives in `EnforcingRbacModule`; only the revive-platform integration
       suite binds it (PR #17). A regression in the resolver would pass every other test.
 
