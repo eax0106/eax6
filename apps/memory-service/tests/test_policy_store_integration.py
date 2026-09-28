@@ -1091,3 +1091,7 @@ def test_global_memory_revocation_succeeds_with_privileged_credential(
     # tenant_id must stay NULL: promotion's anonymization already discarded
     # the original tenant-identifying data for good, revert cannot restore it.
     assert row["tenant_id"] is None
+    # C11: the free-text reason is not written onto a row every tenant reads.
+    provenance = row["provenance"]
+    assert isinstance(provenance, dict)
+    assert provenance["revocation"] == {"reverted": True}

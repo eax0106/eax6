@@ -301,9 +301,15 @@ class SqlAlchemyPolicyStoreRepository:
             record.status = "reverted"
             record.reverted_at = reverted_at
             record.destination = None
+            # A global row is readable by every tenant, and a revocation reason
+            # is free text -- often the very tenant detail that made the lesson
+            # unsafe. Only the fact of revocation is kept on it (design log §22,
+            # enforced by memory_records_global_is_content_free).
             record.provenance = {
                 **record.provenance,
-                "revocation": {"reason": reason},
+                "revocation": {"reverted": True}
+                if record.tenant_id is None
+                else {"reason": reason},
             }
             session.flush()
             return StoredMemoryRevocation(

@@ -97,12 +97,29 @@ def test_live_upgrade_creates_tables_indexes_and_forced_rls(pg_url: str) -> None
         assert {row[0] for row in indexes} >= {"idx_policies_scope_kind", "idx_policy_promotions_policy", "idx_drift_scores_subject", "idx_memory_records_tenant_scope"}
 
 
+_ANON_CONTENT = (
+    '{"schema":"global_memory_v1","anonymized":true,"irreversible":true,'
+    '"final_verdict":"rescued","gates":{"passed":3,"failed":1},"recovery_count":1,'
+    '"failure_classes":["timeout"],"strategies":["retry"],"node_type_counts":{"LLMTask":2}}'
+)
+_ANON_PROVENANCE = (
+    '{"promotion":{"evaluation_run_id":"evr_1","anonymized":true,"irreversible":true,'
+    '"source_identifiers_removed":true}}'
+)
+
+
 def test_live_rls_global_and_tenant_guards(pg_url: str) -> None:
     a, b = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa", "bbbbbbbb-0000-4000-8000-bbbbbbbbbbbb"
     engine = sa.create_engine(pg_url)
     with engine.connect() as conn:
         conn.execute(sa.text("INSERT INTO policies(id,scope,scope_id,kind,version,body,status,source) VALUES ('pol_a','tenant',:a,'routing_weights',1,'{}','active','human')"), {"a": a})
-        conn.execute(sa.text("INSERT INTO memory_records(id,scope,content,provenance,status) VALUES ('mem_g','global','{}','{}','verified')"))
+        conn.execute(
+            sa.text(
+                "INSERT INTO memory_records(id,scope,content,provenance,status) "
+                "VALUES ('mem_g','global',CAST(:c AS jsonb),CAST(:p AS jsonb),'verified')"
+            ),
+            {"c": _ANON_CONTENT, "p": _ANON_PROVENANCE},
+        )
         conn.commit(); conn.execute(sa.text("SET ROLE policy_reader")); _tenant(conn, b)
         assert conn.execute(sa.text("SELECT count(*) FROM policies WHERE id='pol_a'")).scalar() == 0
         assert conn.execute(sa.text("SELECT count(*) FROM memory_records WHERE id='mem_g'")).scalar() == 1
@@ -183,3 +200,56 @@ def test_live_agent_drift_cannot_be_written_without_a_tenant(pg_url: str) -> Non
     with engine.connect() as conn:
         with pytest.raises(Exception, match="drift_scores_agent_tenant_check"):
             _insert_agent_drift(conn, "drift_orphan", None)
+
+
+@pytest.mark.parametrize(
+    ("content", "provenance"),
+    [
+        # Raw tenant content, the leak the constraint exists for.
+        ('{"schema":"global_memory_v1","anonymized":true,"irreversible":true,'
+         '"objective":"Refund Acme Corp order 4411"}', _ANON_PROVENANCE),
+        # A known key carrying free text instead of its vocabulary.
+        ('{"schema":"global_memory_v1","anonymized":true,"irreversible":true,'
+         '"final_verdict":"Acme escalated to legal"}', _ANON_PROVENANCE),
+        ('{"schema":"global_memory_v1","anonymized":true,"irreversible":true,'
+         '"strategies":["retry","call Priya at Acme"]}', _ANON_PROVENANCE),
+        ('{"schema":"global_memory_v1","anonymized":true,"irreversible":true,'
+         '"node_type_counts":{"acme-secret-node":1}}', _ANON_PROVENANCE),
+        # Not marked as anonymized at all.
+        ('{"final_verdict":"failed"}', _ANON_PROVENANCE),
+        # A revocation reason is free text, and may be the tenant detail itself.
+        (_ANON_CONTENT, '{"promotion":{"anonymized":true},"revocation":{"reason":"leaked Acme pricing"}}'),
+        # Anonymous content, but provenance still naming its source.
+        (_ANON_CONTENT, '{"promotion":{"anonymized":true},"source_tenant":"ten_acme"}'),
+    ],
+)
+def test_live_a_global_memory_row_cannot_hold_tenant_content(
+    pg_url: str, content: str, provenance: str
+) -> None:
+    """0007, design log §22: the global tier is structurally content-free."""
+    engine = sa.create_engine(pg_url)
+    with engine.connect() as conn:
+        with pytest.raises(Exception, match="memory_records_global_is_content_free"):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO memory_records(id,scope,content,provenance,status) "
+                    "VALUES ('mem_leak','global',CAST(:c AS jsonb),CAST(:p AS jsonb),'promoted')"
+                ),
+                {"c": content, "p": provenance},
+            )
+
+
+def test_live_a_tenant_owned_global_candidate_may_hold_its_own_content(pg_url: str) -> None:
+    """A candidate is still its tenant's own, private row until promotion anonymizes it."""
+    tenant = "eeeeeeee-0000-4000-8000-eeeeeeeeeeee"
+    engine = sa.create_engine(pg_url)
+    with engine.connect() as conn:
+        _tenant(conn, tenant)
+        conn.execute(
+            sa.text(
+                "INSERT INTO memory_records(id,tenant_id,scope,content,provenance,status) "
+                "VALUES ('mem_cand',:t,'global',CAST(:c AS jsonb),'{}','candidate')"
+            ),
+            {"t": tenant, "c": '{"objective":"Refund Acme"}'},
+        )
+        conn.rollback()
