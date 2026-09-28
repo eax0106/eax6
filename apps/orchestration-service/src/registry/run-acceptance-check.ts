@@ -1,0 +1,127 @@
+import { CompiledDagSchema, RunIdSchema, TenantIdSchema } from "@alterx/contracts";
+
+import type { OrchestrationTenantStore } from "../runs/node-execution-ledger.service";
+import { createVerificationResultId } from "./verification-result-id";
+import type { VerifyGateService } from "./verify-gate.service";
+
+/** Why a completed run did, or did not, pass its end-of-run check. */
+export type RunAcceptance =
+  | { readonly checked: false; readonly reason: "no_success_criteria" | "no_compiled_dag" }
+  | { readonly checked: true; readonly passed: boolean; readonly reason: string };
+
+export interface RunAcceptanceCheck {
+  check(tenantId: string, runId: string): Promise<RunAcceptance>;
+}
+
+interface RunAcceptanceLedger {
+  recordRunVerificationResult(request: {
+    readonly id: string;
+    readonly tenantId: string;
+    readonly runId: string;
+    readonly verdict: string;
+    readonly score: number;
+    readonly threshold: number;
+    readonly reviewerModel: string;
+    readonly detailsJson: string;
+  }): Promise<void>;
+}
+
+/**
+ * Design log §5.3: even after every node passes on its own, one final review
+ * compares the combined outcome against the original success criteria the
+ * user gave at intake -- each piece fine alone, the whole not what was
+ * wanted. The criteria are the compiled DAG's own (C29 kept the global list
+ * for exactly this); the combined outcome is every terminal node's output.
+ *
+ * Fail-closed (§5.5): a check that cannot complete is not a pass.
+ */
+export class PostgresRunAcceptanceCheck implements RunAcceptanceCheck {
+  constructor(
+    private readonly store: OrchestrationTenantStore,
+    private readonly verifyGate: VerifyGateService,
+    private readonly ledger: RunAcceptanceLedger,
+  ) {}
+
+  async check(tenantIdInput: string, runId: string): Promise<RunAcceptance> {
+    const tenant = TenantIdSchema.parse(tenantIdInput);
+    RunIdSchema.parse(runId);
+    const tenantId = tenant.slice("ten_".length);
+
+    const loaded = await this.store.withTenant(tenantId, async (tx) => {
+      const version = await tx.query<{ readonly compiled_dag: unknown }>(
+        `SELECT v.compiled_dag FROM runs r
+           JOIN workflow_versions v ON v.tenant_id = r.tenant_id AND v.id = r.workflow_version_id
+         WHERE r.tenant_id = $1 AND r.id = $2`,
+        [tenantId, runId],
+      );
+      const dag = CompiledDagSchema.safeParse(version.rows[0]?.compiled_dag);
+      if (!dag.success) return undefined;
+      const succeeded = await tx.query<{ readonly dag_node_id: string }>(
+        `SELECT DISTINCT dag_node_id FROM node_executions
+         WHERE tenant_id = $1 AND run_id = $2 AND status = 'succeeded'`,
+        [tenantId, runId],
+      );
+      const succeededKeys = new Set(succeeded.rows.map((row) => row.dag_node_id));
+      // Terminal: succeeded, and never the source of an edge whose target
+      // also succeeded -- a skipped branch is not part of the outcome.
+      const feeding = new Set(
+        dag.data.edges
+          .filter((edge) => succeededKeys.has(edge.from) && succeededKeys.has(edge.to))
+          .map((edge) => edge.from),
+      );
+      const terminal = [...succeededKeys].filter((key) => !feeding.has(key)).sort();
+      const outputs: Record<string, unknown> = {};
+      if (terminal.length > 0) {
+        const checkpoints = await tx.query<{ readonly context_key: string; readonly value_json: unknown }>(
+          `SELECT context_key, value_json FROM blackboard_checkpoints
+           WHERE tenant_id = $1 AND run_id = $2 AND context_key = ANY($3::text[])`,
+          [tenantId, runId, terminal],
+        );
+        for (const row of checkpoints.rows) outputs[row.context_key] = row.value_json;
+      }
+      return { criteria: dag.data.success_criteria ?? [], outputs };
+    });
+
+    if (loaded === undefined) return { checked: false, reason: "no_compiled_dag" };
+    if (loaded.criteria.length === 0) return { checked: false, reason: "no_success_criteria" };
+
+    let verdict: { verdict: string; score: number; threshold: number; reviewer_model: string; details_json: string };
+    try {
+      verdict = await this.verifyGate.scoreNodeInline({
+        tenant_id: tenant,
+        run_id: runId,
+        // The reviewer's contract is per node; a run-level review carries a
+        // fresh id that names no stored node execution.
+        node_execution_id: createVerificationResultId().replace(/^ver_/, "node_"),
+        node_key: "__run_outcome__",
+        node_type: "RunOutcome",
+        config_json: "{}",
+        output_json: JSON.stringify(loaded.outputs),
+        success_criteria: [...loaded.criteria],
+      });
+    } catch (error: unknown) {
+      return {
+        checked: true,
+        passed: false,
+        reason: `end-of-run check could not complete: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
+    await this.ledger.recordRunVerificationResult({
+      id: createVerificationResultId(),
+      tenantId: tenant,
+      runId,
+      verdict: verdict.verdict,
+      score: verdict.score,
+      threshold: verdict.threshold,
+      reviewerModel: verdict.reviewer_model,
+      detailsJson: verdict.details_json,
+    });
+    const passed = verdict.verdict !== "fail";
+    return {
+      checked: true,
+      passed,
+      reason: passed ? "combined outcome meets the success criteria" : "combined outcome does not meet every success criterion",
+    };
+  }
+}

@@ -25,6 +25,9 @@ NodeType = Literal[
     "PubSub",
     "GroupChat",
     "YAMLImport",
+    # C29/C37, design log §5.3: not a node -- the run's combined final output,
+    # judged once at the end against the user's original success criteria.
+    "RunOutcome",
 ]
 
 Verdict = Literal["pass", "fail", "warn"]

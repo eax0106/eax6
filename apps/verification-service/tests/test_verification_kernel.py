@@ -474,3 +474,29 @@ class TestSuccessCriteria:
     def test_blank_criteria_are_refused(self) -> None:
         with pytest.raises(ValueError, match="non-empty"):
             criteria_request("{}", ("  ",))
+
+
+class TestRunOutcome:
+    """C37, design log §5.3: the run's combined output against the intake criteria."""
+
+    async def test_combined_output_missing_a_criterion_fails_the_run(self) -> None:
+        reviewer = ContractReviewer()
+        result = await VerificationKernel(llm_client=reviewer).score_node(
+            criteria_request(
+                '{"draft": {"text": "Refund total 40"}, "send": {"sent": true}}',
+                ("Refund total stated", "Currency given"),
+                node_type="RunOutcome",
+            )
+        )
+        assert result.verdict == "fail"
+        assert [c["met"] for c in json.loads(result.details_json)["criteria"]] == [True, False]
+
+    async def test_combined_output_meeting_every_criterion_passes(self) -> None:
+        result = await VerificationKernel(llm_client=ContractReviewer()).score_node(
+            criteria_request(
+                '{"draft": {"text": "Refund total 40, currency INR"}}',
+                ("Refund total stated", "Currency given"),
+                node_type="RunOutcome",
+            )
+        )
+        assert result.verdict == "pass"

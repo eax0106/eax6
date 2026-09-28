@@ -1040,6 +1040,61 @@ describe("NodeexecService.executeNode", () => {
   });
 });
 
+describe("NodeexecService.finalizeRun end-of-run check (design log §5.3, C37)", () => {
+  function nodeexecWith(acceptance: { check: ReturnType<typeof vi.fn> }) {
+    const ledger = fakeLedger();
+    vi.mocked(ledger.finalizeRun).mockImplementation(async (_tenant, _run, status) => ({
+      status,
+      endedAt: "2026-07-28T00:00:01.000Z",
+    }));
+    const streamEvents = { append: vi.fn().mockResolvedValue(undefined) };
+    const args: unknown[] = [
+      new NodeHandlerRegistry([new MergeHandler()]), ledger, streamEvents,
+      undefined, undefined, undefined, undefined, undefined, undefined,
+      undefined, undefined, undefined, undefined, undefined, acceptance,
+    ];
+    const nodeexec = new (NodeexecService as unknown as new (...a: unknown[]) => NodeexecService)(...args);
+    return { nodeexec, ledger, streamEvents };
+  }
+
+  it("finalizes a completed run as failed when its combined outcome misses the criteria", async () => {
+    const check = vi.fn().mockResolvedValue({
+      checked: true, passed: false, reason: "combined outcome does not meet every success criterion",
+    });
+    const { nodeexec, ledger, streamEvents } = nodeexecWith({ check });
+
+    const response = await nodeexec.finalizeRun({
+      tenant_id: TENANT_ID, run_id: RUN_ID, status: "completed", error_json: "",
+    });
+
+    expect(check).toHaveBeenCalledWith(TENANT_ID, RUN_ID);
+    expect(ledger.finalizeRun).toHaveBeenCalledWith(TENANT_ID, RUN_ID, "failed");
+    expect(response.status).toBe("failed");
+    expect(streamEvents.append).toHaveBeenCalledWith(TENANT_ID, RUN_ID, {
+      event: "run.status",
+      data: { status: "failed", reason: "combined outcome does not meet every success criterion" },
+    });
+  });
+
+  it("keeps a completed run completed when the check passes or does not apply", async () => {
+    for (const result of [
+      { checked: true, passed: true, reason: "combined outcome meets the success criteria" },
+      { checked: false, reason: "no_success_criteria" },
+    ]) {
+      const { nodeexec, ledger } = nodeexecWith({ check: vi.fn().mockResolvedValue(result) });
+      await nodeexec.finalizeRun({ tenant_id: TENANT_ID, run_id: RUN_ID, status: "completed", error_json: "" });
+      expect(ledger.finalizeRun).toHaveBeenCalledWith(TENANT_ID, RUN_ID, "completed");
+    }
+  });
+
+  it("does not judge a run that already failed", async () => {
+    const check = vi.fn();
+    const { nodeexec } = nodeexecWith({ check });
+    await nodeexec.finalizeRun({ tenant_id: TENANT_ID, run_id: RUN_ID, status: "failed", error_json: "" });
+    expect(check).not.toHaveBeenCalled();
+  });
+});
+
 describe("NodeexecService.finalizeRun", () => {
   it("finalizes a completed run and emits a run.status SSE event", async () => {
     const ledger = fakeLedger();
