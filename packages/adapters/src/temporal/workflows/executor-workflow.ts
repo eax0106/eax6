@@ -70,6 +70,17 @@ const HUMAN_APPROVAL_REJECTED_ERROR_TYPE = "HumanApprovalRejectedError";
 const HUMAN_APPROVAL_EXPIRED_ERROR_TYPE = "HumanApprovalExpiredError";
 const NODE_RECOVERY_GIVEN_UP_ERROR_TYPE = "NodeRecoveryGivenUpError";
 const NODE_RECOVERY_TIMED_OUT_ERROR_TYPE = "NodeRecoveryTimedOutError";
+const SAFETY_VIOLATION_HALT_ERROR_TYPE = "SafetyViolationHaltError";
+
+/** The activity's own non-retryable type (executor-activities.ts), under its ActivityFailure. */
+function isSafetyViolation(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth += 1) {
+    if (current instanceof ApplicationFailure && current.type === "SafetyViolation") return true;
+    current = (current as { readonly cause?: unknown }).cause;
+  }
+  return false;
+}
 
 /**
  * A plain `throw new Error(...)` inside workflow code is treated by
@@ -228,6 +239,15 @@ async function executeNodeWithRecovery(
     }
     return JSON.parse(result.outputJson) as Record<string, unknown>;
   } catch (error: unknown) {
+    // Design log §4: a safety violation halts the whole workflow at once. It
+    // is not handed to Recovery, and nothing waits for a recovery decision.
+    if (isSafetyViolation(error)) {
+      throw ApplicationFailure.nonRetryable(
+        `Node "${node.key}" tripped a safety violation; the workflow halts`,
+        SAFETY_VIOLATION_HALT_ERROR_TYPE,
+        errorSummaryJson(error),
+      );
+    }
     const decided = await condition(
       () => nodeRetryDecisions.has(nodeExecId),
       input.nodeRecoveryTimeoutMs ?? NODE_RECOVERY_TIMEOUT_MS,

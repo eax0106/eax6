@@ -1,4 +1,4 @@
-import { WorkflowFailedError } from "@temporalio/client";
+import { ApplicationFailure, WorkflowFailedError } from "@temporalio/client";
 import { TestWorkflowEnvironment } from "@temporalio/testing";
 import { NativeConnection, type Worker } from "@temporalio/worker";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -1075,6 +1075,53 @@ describe.sequential("executorWorkflow", () => {
       const error = await handle.result().catch((caught: unknown) => caught);
       expect(error).toBeInstanceOf(WorkflowFailedError);
       expect((error as WorkflowFailedError).cause?.message).toMatch(/recovery gave up/);
+    } finally {
+      await stopWorker(running);
+    }
+  });
+
+  it("halts the whole workflow on a safety violation, once, without waiting for Recovery (design log §4)", async () => {
+    const taskQueue = "executor-safety-halt";
+    const calls: string[] = [];
+    const running = startWorker(
+      await createExecutorWorker(config(taskQueue), environment.nativeConnection, {
+        async executeNode(input) {
+          calls.push(input.nodeKey);
+          throw ApplicationFailure.nonRetryable(
+            "SAFETY_VIOLATION: Verify Gate blocked node output as a safety violation",
+            "SafetyViolation",
+          );
+        },
+        async finalizeRun() {},
+        async recordApprovalDecision() {},
+      }),
+    );
+
+    try {
+      const started = Date.now();
+      const handle = await environment.client.workflow.start(WORKFLOW_TYPE, {
+        taskQueue,
+        workflowId: "executor-safety-halt-workflow",
+        args: [
+          {
+            tenantId: "ten_test",
+            runId: "run_test",
+            compiledDagJson: JSON.stringify(sequentialDag()),
+            // A recovery wait would outlast this test; a halt does not wait.
+            nodeRecoveryTimeoutMs: 600_000,
+          },
+        ],
+      });
+
+      const error = await handle.result().catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(WorkflowFailedError);
+      const cause = (error as WorkflowFailedError).cause as ApplicationFailure;
+      expect(cause.type).toBe("SafetyViolationHaltError");
+      expect(cause.message).toMatch(/node_a.*safety violation; the workflow halts/);
+      // Never retried by the activity policy, and node_b never ran.
+      expect(calls).toEqual(["node_a"]);
+      expect(Date.now() - started).toBeLessThan(60_000);
     } finally {
       await stopWorker(running);
     }
