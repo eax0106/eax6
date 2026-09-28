@@ -52,6 +52,9 @@ roles_file="$work/deploy/ec2/.db-roles.env"
 [[ "$(value MARKETPLACE_DATABASE_URL)" == postgresql://platform_app:* ]] || fail "MARKETPLACE_DATABASE_URL is not the platform_app role"
 [[ "$(value OPERATIONS_PLATFORM_DATABASE_URL)" == postgresql://platform_operations:* ]] || fail "OPERATIONS_PLATFORM_DATABASE_URL is not the platform_operations role"
 [[ "$(value OPERATIONS_MARKETPLACE_DATABASE_URL)" == postgresql://platform_operations:* ]] || fail "OPERATIONS_MARKETPLACE_DATABASE_URL is not the platform_operations role"
+for job in NOTIFICATION_DIGEST_SYSTEM_DATABASE_URL CONNECTOR_HEALTH_SWEEP_SYSTEM_DATABASE_URL; do
+  [[ "$(value "$job")" == postgresql://platform_operations:* ]] || fail "$job is not the platform_operations role"
+done
 grep -q "$(awk -F= '$1=="PLATFORM_APP_DB_PASSWORD"{print $2}' "$roles_file")" <<<"$(value DATABASE_URL)" || fail "DATABASE_URL does not carry the generated role password"
 cmp -s "$roles_file" "$work/deploy/ec2/.db-roles.first" || fail "role passwords changed on a re-run"
 [[ "$(stat -c %a "$roles_file" 2>/dev/null || stat -f %Lp "$roles_file")" == 600 ]] || fail ".db-roles.env is not 0600"

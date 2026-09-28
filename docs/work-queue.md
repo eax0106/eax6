@@ -44,7 +44,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.7 | invoice PDF | todo |
 | B2.8 | new subscription | todo |
 | B2.9 | usage, budgets, cost estimates (moved from B1.10) | todo |
-| B3.1 | notifications | todo |
+| B3.1a | notifications in the console, live: centre, bell and preferences over `/api/v1/notifications` (six event classes mapped to the console's categories, in-app and email per class, links kept only when in-app). "Mark unread" has no API and is hidden. The digest and connector-health jobs' cross-tenant pools (`NOTIFICATION_DIGEST_SYSTEM_DATABASE_URL`, `CONNECTOR_HEALTH_SWEEP_SYSTEM_DATABASE_URL`) were configured nowhere, so both jobs failed closed; the EC2 kit now points them at `platform_operations` | done (this PR) |
+| B3.1b | notification producers: nothing in the system calls `createEvent`, so the centre stays empty. Emit approval-requested (to approvers), budget thresholds (to workspace admins; also B2.9b's alerts), deployment and run-failure events | todo |
 | B3.2 | benchmarks | todo |
 | B3.3 | discovery | todo |
 | B3.4 | server search beyond listing/tool | todo |

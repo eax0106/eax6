@@ -122,6 +122,10 @@ expand() {
   printf 'MARKETPLACE_DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"
   printf 'OPERATIONS_PLATFORM_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
   printf 'OPERATIONS_MARKETPLACE_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
+  # The two cross-tenant platform jobs (notification digests, connector health
+  # sweep) fail closed without their own bypass-RLS pool.
+  printf 'NOTIFICATION_DIGEST_SYSTEM_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
+  printf 'CONNECTOR_HEALTH_SWEEP_SYSTEM_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
 } >.env
 chmod 600 .env
 if [[ "${1:-}" == "--env-only" ]]; then log "wrote .env (--env-only)"; exit 0; fi
