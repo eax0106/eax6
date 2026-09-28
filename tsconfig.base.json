@@ -23,6 +23,9 @@
       "@alterx/auth": [
         "packages/auth/src/index.ts"
       ],
+      "@alterx/deletion-registry": [
+        "packages/deletion-registry/src/index.ts"
+      ],
       "@alterx/tenancy": [
         "packages/tenancy/src/index.ts"
       ],

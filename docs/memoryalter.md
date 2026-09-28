@@ -684,6 +684,24 @@ proof needs the OAuth app registered.
 - **What remains of C29.** A live run against Bedrock showing an off-contract answer now fails,
   and §5.2's mechanical read-back (C36), which is separate.
 
+### 2026-09-28 — C3: every table in eight databases is registered; erasure reaches 38 of 100 tenant tables
+
+- **What.** `packages/deletion-registry` declares each of the 125 live tables once: tenant data with the
+  erasure route that reaches it (the orchestration-service or ads-core provider the audit-service
+  DeletionOrchestrator calls), a declared **gap** when nothing reaches it, or an exemption with a
+  reason. CI builds all eight databases from their own migrations and certifies both directions
+  (no unregistered live table, no stale entry), checks each provider's own table list against its
+  routes, and holds the gap count at `MAX_ERASURE_GAPS` so it can only fall. alterengine--5's
+  single-database deletion-schema gate is replaced by this; the source-level registration gate now
+  reads the real declaration and its 174 findings fall to 0.
+- **What it found.** The DeletionOrchestrator calls two providers. **62 tenant tables are reached by
+  nothing**: all of platform_db (tenants, users, members, billing, marketplace, credentials,
+  notifications…), the cost ledger, intelligence's agents and performance records, policy_db, and
+  audit events. A tenant "erasure" today certifies complete while that data survives -- the same
+  failure the old build died on, now visible and counted instead of silent.
+- **Next.** Providers for those services (C3b), after Havish decides retention: what the law or the
+  audit chain requires kept, and for how long.
+
 ---
 
 ## 3. Checklist context

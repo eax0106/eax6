@@ -1,0 +1,30 @@
+{
+  "name": "deletion-registry",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/deletion-registry/src",
+  "targets": {
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "options": {
+        "eslintConfig": "packages/deletion-registry/eslint.config.mjs",
+        "lintFilePatterns": [
+          "packages/deletion-registry/src/**/*.ts"
+        ]
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc --noEmit -p packages/deletion-registry/tsconfig.json"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "vitest run packages/deletion-registry/src"
+      }
+    }
+  },
+  "tags": []
+}

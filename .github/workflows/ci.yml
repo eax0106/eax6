@@ -13,7 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector: the deletion certification builds ads, intelligence and
+        # policy databases too, whose migrations need the vector extension.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: platform_db
           POSTGRES_USER: platform_api
@@ -242,6 +244,15 @@ jobs:
 
       - name: migrate platform db
         run: pnpm --filter @alterx/platform-api db:migrate
+
+      - name: deletion registry certification
+        # Task C3. Builds every database from its service's real migrations and
+        # checks that each live table is declared (with the erasure route that
+        # reaches it) or exempt, that each provider erases exactly what the
+        # registry says, and that erasure gaps do not grow.
+        run: |
+          databases="$(bash scripts/deletion/materialize-schemas.sh "$DATABASE_URL")"
+          DELETION_DATABASES="$databases" pnpm exec tsx scripts/deletion/certify.ts
 
       - name: ec2 production boot config check
         # Task 6.1d. Every container's environment, as compose resolves it
