@@ -1,9 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { createMockAuditEventHandler } from "@alterx/shared-clients";
+
 import {
   RunOutcomeNotCompletedError,
   RunOutcomeRunNotFoundError,
   RunOutcomeService,
+  RunOutcomeTenantMismatchError,
 } from "./run-outcome.service";
 import { RunLearningController } from "./run-learning.controller";
 
@@ -42,12 +45,12 @@ describe("RunLearningController", () => {
       recovery_actions: [],
     });
 
-    const result = await new RunLearningController(outcomes).summary(
+    const result = await new RunLearningController(outcomes, createMockAuditEventHandler()).summary(
       request() as never,
       RUN,
     );
     expect(result.verdict).toBe("failed");
-    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(TENANT, RUN);
+    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(TENANT, RUN, { assertedByService: false });
   });
 
   it.each([
@@ -57,7 +60,7 @@ describe("RunLearningController", () => {
     const outcomes = service();
     vi.mocked(outcomes.getLearningSummary).mockRejectedValue(error);
     await expect(
-      new RunLearningController(outcomes).summary(request() as never, RUN),
+      new RunLearningController(outcomes, createMockAuditEventHandler()).summary(request() as never, RUN),
     ).rejects.toMatchObject({
       status: expectedStatus,
       response: expect.objectContaining({
@@ -70,7 +73,7 @@ describe("RunLearningController", () => {
 
   it("fails closed when authenticated tenant context is missing", async () => {
     await expect(
-      new RunLearningController(service()).summary(request(null) as never, RUN),
+      new RunLearningController(service(), createMockAuditEventHandler()).summary(request(null) as never, RUN),
     ).rejects.toMatchObject({ status: 500 });
   });
 });
@@ -83,13 +86,13 @@ describe("RunLearningController tenant_id parameter", () => {
     const outcomes = service();
     vi.mocked(outcomes.getLearningSummary).mockResolvedValue({} as never);
 
-    await new RunLearningController(outcomes).summary(
+    await new RunLearningController(outcomes, createMockAuditEventHandler()).summary(
       request(TENANT, "service") as never,
       RUN,
       OTHER_TENANT,
     );
 
-    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(OTHER_TENANT, RUN);
+    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(OTHER_TENANT, RUN, { assertedByService: true });
   });
 
   it("ignores the parameter for a user caller", async () => {
@@ -99,24 +102,99 @@ describe("RunLearningController tenant_id parameter", () => {
     const outcomes = service();
     vi.mocked(outcomes.getLearningSummary).mockResolvedValue({} as never);
 
-    await new RunLearningController(outcomes).summary(
+    await new RunLearningController(outcomes, createMockAuditEventHandler()).summary(
       request(TENANT, "user") as never,
       RUN,
       OTHER_TENANT,
     );
 
-    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(TENANT, RUN);
+    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(TENANT, RUN, { assertedByService: false });
   });
 
   it("falls back to the token tenant when a service caller omits it", async () => {
     const outcomes = service();
     vi.mocked(outcomes.getLearningSummary).mockResolvedValue({} as never);
 
-    await new RunLearningController(outcomes).summary(
+    await new RunLearningController(outcomes, createMockAuditEventHandler()).summary(
       request(TENANT, "service") as never,
       RUN,
     );
 
-    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(TENANT, RUN);
+    expect(outcomes.getLearningSummary).toHaveBeenCalledWith(TENANT, RUN, { assertedByService: false });
+  });
+});
+
+describe("RunLearningController service-asserted tenants (design log §30)", () => {
+  it("refuses a tenant the run does not belong to by name, not as not-found, and audits it", async () => {
+    const outcomes = service();
+    vi.mocked(outcomes.getLearningSummary).mockRejectedValue(new RunOutcomeTenantMismatchError(RUN));
+    const audit = createMockAuditEventHandler();
+    const recordEvent = vi.spyOn(audit, "recordEvent");
+
+    await expect(
+      new RunLearningController(outcomes, audit).summary(
+        request(TENANT, "service") as never,
+        RUN,
+        OTHER_TENANT,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      response: expect.objectContaining({ error_code: "SERVICE_TENANT_MISMATCH" }),
+    });
+    expect(recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tenant_id: OTHER_TENANT,
+        actor_type: "service",
+        actor_ref: `service:${TENANT}`,
+        action: "run.outcome_summary.read",
+        target_type: "run",
+        target_ref: RUN,
+        result: "denied",
+      }),
+    );
+  });
+
+  it("audits every successful service-asserted read", async () => {
+    const outcomes = service();
+    vi.mocked(outcomes.getLearningSummary).mockResolvedValue({} as never);
+    const audit = createMockAuditEventHandler();
+    const recordEvent = vi.spyOn(audit, "recordEvent");
+
+    await new RunLearningController(outcomes, audit).summary(
+      request(TENANT, "service") as never,
+      RUN,
+      OTHER_TENANT,
+    );
+
+    expect(recordEvent).toHaveBeenCalledOnce();
+    expect(recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ tenant_id: OTHER_TENANT, result: "success" }),
+    );
+  });
+
+  it("does not audit a caller reading its own token tenant", async () => {
+    const outcomes = service();
+    vi.mocked(outcomes.getLearningSummary).mockResolvedValue({} as never);
+    const audit = createMockAuditEventHandler();
+    const recordEvent = vi.spyOn(audit, "recordEvent");
+
+    await new RunLearningController(outcomes, audit).summary(request(TENANT, "user") as never, RUN, OTHER_TENANT);
+
+    expect(recordEvent).not.toHaveBeenCalled();
+  });
+
+  it("still answers when the audit write fails", async () => {
+    const outcomes = service();
+    vi.mocked(outcomes.getLearningSummary).mockResolvedValue({ verdict: "passed" } as never);
+    const audit = createMockAuditEventHandler();
+    vi.spyOn(audit, "recordEvent").mockRejectedValue(new Error("audit-service down"));
+
+    const result = await new RunLearningController(outcomes, audit).summary(
+      request(TENANT, "service") as never,
+      RUN,
+      OTHER_TENANT,
+    );
+
+    expect(result).toEqual({ verdict: "passed" });
   });
 });

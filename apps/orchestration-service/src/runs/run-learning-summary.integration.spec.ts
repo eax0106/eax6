@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   RunOutcomeNotCompletedError,
   RunOutcomeRunNotFoundError,
+  RunOutcomeTenantMismatchError,
   RunOutcomeService,
 } from "./run-outcome.service";
 
@@ -117,6 +118,22 @@ describe.sequential("KNOW-13 run learning summary", () => {
     ).rejects.toBeInstanceOf(RunOutcomeNotCompletedError);
     await expect(
       service.getLearningSummary(OTHER_TENANT_REQUEST, RUN),
+    ).rejects.toBeInstanceOf(RunOutcomeRunNotFoundError);
+  });
+
+  it("refuses a service-asserted tenant the run does not belong to by name (design log §30)", async () => {
+    await expect(
+      service.getLearningSummary(OTHER_TENANT_REQUEST, RUN, { assertedByService: true }),
+    ).rejects.toBeInstanceOf(RunOutcomeTenantMismatchError);
+    // The owner asserting itself still reads, and a run that exists nowhere
+    // is still simply not found.
+    await expect(
+      service.getLearningSummary(TENANT_REQUEST, RUN, { assertedByService: true }),
+    ).resolves.toMatchObject({ run_id: RUN });
+    await expect(
+      service.getLearningSummary(OTHER_TENANT_REQUEST, "run_018f4d6e-2b4a-7a3e-8c1a-00000000dead", {
+        assertedByService: true,
+      }),
     ).rejects.toBeInstanceOf(RunOutcomeRunNotFoundError);
   });
 });

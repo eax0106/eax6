@@ -86,8 +86,9 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C43 | §9 always-on pre-run cost estimate (D-9b) | blocked (decision): cost events carry `run_id` but no workflow, and the ledger answers only month summaries and explicit line items. Choose the method: historical average of the workflow's verified runs (needs a per-run ledger query, Cost Ledger is frozen) or a per-node token model (needs assumed token counts, which §5.5 forbids inventing) |
 | C44 | §12 cache answers only an exact repeat (C17 implemented): Model Gateway keys entries by tenant and a hash of the scope plus the caller's own content, through getValue/setValue, with no embedding call on lookup; the eval bootstraps never read the cache. Old code served "Classify the risk of the Apex contract" with Acme's cached answer | done (this PR) |
 | C45 | §18 user-configurable run-history retention, 7 days to 1 year, destructive lowering confirmed (D-18c) | blocked (C3 retention decision) |
-| C46 | §30 explicit refusal and audit for service-asserted tenants (D-30a/b; mismatch answers run-not-found, nothing audited) | blocked (freeze check): run-learning read path, Run Manager (#1) |
+| C46 | §30 service-asserted tenants on the run-learning read: a tenant the run does not belong to is refused as 403 SERVICE_TENANT_MISMATCH (checked against run_owner_tenant, SECURITY DEFINER, migration 0039) instead of an indistinguishable not-found, and every service-asserted read is audited to audit-service (success, denied, error; audit writes fail open with a loud log). Real mode requires AUDIT_SERVICE_GRPC_ADDRESS, checked by the EC2 production-boot check | done (this PR) |
 | C47 | §31 tier ceiling default `STANDARD` (D-31a; main had `ADVANCED` though memoryalter recorded the change) | done (PR #46) |
+| C48 | §30 for intelligence-service: `GET/POST /internal/performance` take the tenant from the caller (query or body) and answer a mismatch as not-found, unaudited. Same fix as C46 (refuse by name, audit). Not frozen | todo |
 | C30 | §16 approval modes | blocked (decision) |
 | C32 | image publishing collision | blocked (decision) |
 

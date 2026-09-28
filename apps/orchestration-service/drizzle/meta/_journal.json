@@ -274,6 +274,13 @@
       "when": 1786904004000,
       "tag": "0038_remove_voice_conversation_channel",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786990404000,
+      "tag": "0039_run_owner_tenant",
+      "breakpoints": true
     }
   ]
 }

@@ -74,6 +74,11 @@ async function main(): Promise<void> {
     resolveSpeechToTextProvider(objects);
   });
   await check("orchestration-service", "Session Gateway", () => sessionGatewayEnvironment(process.env));
+  const { runLearningAuditClient } = await import(
+    "../../apps/orchestration-service/src/runs/run-learning-audit"
+  );
+  // C46: service-asserted tenants are audited; real mode needs audit-service.
+  await check("orchestration-service", "audit client", () => runLearningAuditClient(process.env));
   const { engineConfigFromEnvironment } = await import("../../apps/platform-api/src/engine/config");
   await check("platform-api", "Engine clients", () => engineConfigFromEnvironment(process.env));
 

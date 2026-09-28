@@ -113,6 +113,17 @@ export class RunOutcomeNotCompletedError extends Error {
   }
 }
 
+/**
+ * Design log §30, requirement 2: a service named a tenant that the run does
+ * not belong to. Refused by name -- never absorbed as "not found".
+ */
+export class RunOutcomeTenantMismatchError extends Error {
+  constructor(runId: string) {
+    super(`Run ${runId} does not belong to the asserted tenant`);
+    this.name = "RunOutcomeTenantMismatchError";
+  }
+}
+
 export class RunOutcomeValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -217,12 +228,26 @@ export class RunOutcomeService {
   async getLearningSummary(
     tenantIdInput: string,
     runId: string,
+    options: { readonly assertedByService?: boolean } = {},
   ): Promise<RunLearningSummary> {
     const tenantId = bareTenantUuid(tenantIdInput);
     if (!RunIdSchema.safeParse(runId).success) {
       throw new RunOutcomeValidationError("runId must be a run_ prefixed UUIDv7");
     }
     return this.store.withTenant(tenantId, async (tx) => {
+      if (options.assertedByService === true) {
+        // The tenant came from the caller, not its credential. Check it
+        // against the run's real owner (run_owner_tenant, migration 0039)
+        // before row security turns a wrong tenant into an empty result.
+        const owner = await tx.query<{ readonly tenant_id: string | null }>(
+          "SELECT run_owner_tenant($1)::text AS tenant_id",
+          [runId],
+        );
+        const ownerTenant = owner.rows[0]?.tenant_id ?? null;
+        if (ownerTenant !== null && ownerTenant !== tenantId) {
+          throw new RunOutcomeTenantMismatchError(runId);
+        }
+      }
       const run = await this.#loadRun(tx, tenantId, runId);
       if (!isTerminalRunStatus(run.status)) {
         throw new RunOutcomeNotCompletedError(runId);
