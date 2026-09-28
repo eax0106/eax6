@@ -68,6 +68,12 @@ if [[ ! -f .db-roles.env ]]; then
 fi
 # shellcheck disable=SC1091
 . ./.db-roles.env
+# platform-api's session cookie signing key, generated once like the above.
+if [[ ! -f .session.env ]]; then
+  printf 'SESSION_COOKIE_SIGNING_KEY=%s\n' "$(openssl rand -hex 32)" >.session.env
+fi
+# shellcheck disable=SC1091
+. ./.session.env
 
 # --- 2. environment file ------------------------------------------------------
 log "writing .env for ALTER_ENV=$ALTER_ENV"
@@ -115,6 +121,24 @@ expand() {
     printf 'TEMPORAL_WORKER_DEPLOYMENT_NAME=%s\nTEMPORAL_WORKER_BUILD_ID=%s\n' "$TEMPORAL_WORKER_DEPLOYMENT_NAME" "$ALTER_IMAGE_TAG"
     printf 'TEMPORAL_MINIMUM_RETENTION_DAYS=%s\n' "$TEMPORAL_MINIMUM_RETENTION_DAYS"
     printf 'AUTH0_STAFF_DOMAIN=%s\nAUTH0_STAFF_CLIENT_ID=%s\n' "$AUTH0_STAFF_DOMAIN" "$AUTH0_STAFF_CLIENT_ID"
+    # Production refuses every mock at boot (task 6.1d, check-production-boot.sh):
+    # real identity, email and media providers, and the Session Gateway flag.
+    # platform-api resolves a *_REF as the name of an environment variable
+    # (identity.module.ts resolveRuntimeSecret), so the values are resolved
+    # from Secrets Manager here and the references point at them.
+    printf 'IDENTITY_PROVIDER=auth0\nAUTH0_CLIENT_ID=%s\n' "$AUTH0_CLIENT_ID"
+    printf 'AUTH0_CLIENT_SECRET=%s\nAUTH0_CLIENT_SECRET_REF=env:AUTH0_CLIENT_SECRET\n' "$(secret "$AUTH0_CLIENT_SECRET_REF")"
+    printf 'AUTH0_M2M_CLIENT_SECRET_REF=env:AUTH0_M2M_CLIENT_SECRET\n'
+    printf 'SESSION_COOKIE_SIGNING_KEY=%s\nSESSION_COOKIE_SIGNING_KEY_REF=env:SESSION_COOKIE_SIGNING_KEY\n' "$SESSION_COOKIE_SIGNING_KEY"
+    # tool-gateway resolves SES_CREDENTIALS_SECRET_REF in Secrets Manager;
+    # platform-api reads SES_CREDENTIALS_JSON instead (compose.yml override).
+    printf 'EMAIL_PROVIDER=ses\nSES_FROM_ADDRESS=%s\nSES_CREDENTIALS_SECRET_REF=%s\n' "$SES_FROM_ADDRESS" "$SES_CREDENTIALS_SECRET_REF"
+    printf 'SES_CREDENTIALS_JSON=%s\n' "$(secret "$SES_CREDENTIALS_SECRET_REF")"
+    media_bucket="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/orchestration/artifacts-bucket" --query Parameter.Value --output text)"
+    printf 'MEDIA_OBJECT_STORAGE_PROVIDER=s3\nIMAGE_GEN_PROVIDER=titan\nTEXT_TO_SPEECH_PROVIDER=polly\nSPEECH_TO_TEXT_PROVIDER=transcribe\nMEDIA_BUCKET_NAME=%s\n' "$media_bucket"
+    printf 'INGRESS_SESSION_GATEWAY_CORE_ENABLED=true\n'
+    # Inside the environment's own parameter path, which the host role can read.
+    printf 'SELECTION_BINDING_FAIL_CLOSED_PARAM=/alter/%s/orchestration/selection-binding-fail-closed\n' "$ALTER_ENV"
   fi
   printf 'ALTER_DOMAIN=%s\nALTER_REGISTRY=%s\nALTER_IMAGE_TAG=%s\n' "$ALTER_DOMAIN" "$ALTER_REGISTRY" "$ALTER_IMAGE_TAG"
   platform_db="127.0.0.1:${seen[PLATFORM_DB_PORT]:-5432}/platform_db"

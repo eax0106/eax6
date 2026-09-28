@@ -16,6 +16,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | 6.1a | Single-EC2 deployment kit: Terraform for the host and every AWS resource LocalStack fakes locally, one compose file, bootstrap, runbook. Proven: terraform validate + real plan (24 resources), compose config, `check-bootstrap-env.sh`. Whole-stack run waits on 6.1b. | done (this PR) |
 | 6.2a | Temporal Cloud wiring in the kit (address, namespace, API key from Secrets Manager, worker deployment name and build id from #222). | done (this PR) |
 | 6.1c | platform_db runtime roles: the kit had platform-api connect as the Postgres superuser, which bypasses row-level security; it now connects as `platform_app` (held to RLS) and the staff plane as `platform_operations` (its `OPERATIONS_*_DATABASE_URL` were configured nowhere, so the security queue and marketplace governance would have answered 503). Proven by `check-platform-db-roles.sh` in CI. | done (this PR) |
+| 6.1d | production boot: with `NODE_ENV=production` platform-api refused to start (mock identity, email and media; AppConfig ids it has no application for; three secret references), tool-gateway too (mock email), and orchestration (Session Gateway flag unset). The kit now selects Auth0, SES, S3/Titan/Polly/Transcribe, resolves platform-api's env-var secret references, reads plan definitions from the bundled file, and grants Polly/Transcribe. `check-production-boot.sh` in CI runs each service's own selection code over every container's compose-resolved environment. Generated secret files are now git-ignored | done (this PR) |
 | 6.1b | Launch on EC2 | blocked (accounts + cost, below) |
 | 6.2b | Run against Temporal Cloud | blocked (account) |
 | 6.5 | Load and failure evidence; promotion gate | blocked (needs 6.1b) |
@@ -92,7 +93,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 
 | Item | What is needed from Havish |
 |---|---|
-| 6.1b | Auth0 tenant (real sign-in), EC2 size and monthly cost approval, domain for HTTPS |
+| 6.1b | Auth0 tenant (API, M2M app, customer regular web app), SES verified domain out of sandbox + sending key, Bedrock Titan image access, EC2 size and monthly cost approval, domain for HTTPS |
 | 6.2b | Temporal Cloud account and API key in Secrets Manager |
 | 5.2 live proof | GitHub OAuth app, client id/secret in Secrets Manager |
 | B1 live proof | A staff Auth0 tenant with a PKCE app (callback `<origin>/staff/callback`), and each staff member added to `staff_users` |
