@@ -72,6 +72,13 @@ Proven without a host:
   endpoint rule is removed.
 - Each gateway service booting from committed configuration against real AWS
   (task 1.6, `scripts/run-service-aws.sh`).
+- `check-platform-db-roles.sh` (CI, against the migrated database): the
+  services' platform_db roles. The container's superuser bypasses row-level
+  security, so it only migrates; platform-api connects as `platform_app`, which
+  sees no tenant's rows without that tenant's context, and the staff plane as
+  `platform_operations`, which reads across tenants. Neither can change the
+  schema. It fails when `platform_app` is given BYPASSRLS or a role is given
+  ownership. Role passwords live in `.db-roles.env` (0600, kept across re-runs).
 
 Not proven until the first launch: the whole stack on one host, Caddy's
 certificate, Auth0 and Temporal Cloud. Those need the accounts above.

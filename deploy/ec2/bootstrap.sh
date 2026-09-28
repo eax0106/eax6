@@ -16,9 +16,11 @@
 #                    plus the operator's settings and the secrets they name
 #   3. secrets    -- the environment's generated secrets, created if absent
 #                    (the same set infrastructure/local/localstack-init makes)
-#   4. data       -- Postgres x4, Redis, Presidio; wait until healthy
+#   4. data       -- Postgres x4, Redis, Presidio; wait until healthy; the
+#                    platform_db runtime roles (platform-db-roles.sql)
 #   5. migrate    -- platform, orchestration, and the four alembic services
-#                    (audit and cost-ledger migrate themselves at startup)
+#                    (audit and cost-ledger migrate themselves at startup);
+#                    platform_db as its superuser, then the roles' privileges
 #   6. web        -- build the platform-web bundle for ALTER_DOMAIN
 #   7. services   -- everything, then every /health
 #
@@ -55,6 +57,17 @@ if [[ ! -f .env.base ]]; then
   log "generating .env.base (passwords and tokens, kept across re-runs)"
   (cd "$repo" && bash scripts/bootstrap-env-local.sh --out "$here/.env.base" --from .env.local.example)
 fi
+
+# --- 1b. platform_db runtime role passwords (kept across re-runs) ----------------
+# The platform_db superuser (POSTGRES_USER platform_api) bypasses row-level
+# security, so it only migrates; the services connect as platform_app and, for
+# the staff plane, platform_operations (platform-db-roles.sql, task 6.1c).
+if [[ ! -f .db-roles.env ]]; then
+  printf 'PLATFORM_APP_DB_PASSWORD=%s\nPLATFORM_OPERATIONS_DB_PASSWORD=%s\n' \
+    "$(openssl rand -hex 24)" "$(openssl rand -hex 24)" >.db-roles.env
+fi
+# shellcheck disable=SC1091
+. ./.db-roles.env
 
 # --- 2. environment file ------------------------------------------------------
 log "writing .env for ALTER_ENV=$ALTER_ENV"
@@ -104,6 +117,11 @@ expand() {
     printf 'AUTH0_STAFF_DOMAIN=%s\nAUTH0_STAFF_CLIENT_ID=%s\n' "$AUTH0_STAFF_DOMAIN" "$AUTH0_STAFF_CLIENT_ID"
   fi
   printf 'ALTER_DOMAIN=%s\nALTER_REGISTRY=%s\nALTER_IMAGE_TAG=%s\n' "$ALTER_DOMAIN" "$ALTER_REGISTRY" "$ALTER_IMAGE_TAG"
+  platform_db="127.0.0.1:${seen[PLATFORM_DB_PORT]:-5432}/platform_db"
+  printf 'DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"
+  printf 'MARKETPLACE_DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"
+  printf 'OPERATIONS_PLATFORM_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
+  printf 'OPERATIONS_MARKETPLACE_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
 } >.env
 chmod 600 .env
 if [[ "${1:-}" == "--env-only" ]]; then log "wrote .env (--env-only)"; exit 0; fi
@@ -142,12 +160,27 @@ compose() { docker compose -f compose.yml --env-file .env "$@"; }
 # --- 4. data --------------------------------------------------------------------
 log "starting data services"
 compose up -d --wait platform-db engine-db ads-db cost-db redis presidio-analyzer presidio-anonymizer
+platform_db_roles() {
+  compose exec -T platform-db psql -U platform_api -d platform_db -X -q -v ON_ERROR_STOP=1 \
+    -v app_password="$PLATFORM_APP_DB_PASSWORD" -v operations_password="$PLATFORM_OPERATIONS_DB_PASSWORD" \
+    <platform-db-roles.sql >/dev/null
+}
+log "platform_db runtime roles"
+platform_db_roles
 
 # --- 5. migrations ------------------------------------------------------------
 node_image="$ALTER_REGISTRY/node:$ALTER_IMAGE_TAG"
-run_node() { docker run --rm --network host --env-file .env "$node_image" "$@"; }
+# Options before the image (such as -e overrides) come first: run_node [-e K=V]... cmd...
+run_node() {
+  local options=()
+  while [[ "${1:-}" == -e ]]; do options+=("$1" "$2"); shift 2; done
+  docker run --rm --network host --env-file .env ${options[@]+"${options[@]}"} "$node_image" "$@"
+}
 log "migrating platform_db"
-run_node pnpm --filter @alterx/platform-api db:migrate
+platform_admin_url="postgresql://platform_api:$(env_value PLATFORM_DB_PASSWORD)@127.0.0.1:$(env_value PLATFORM_DB_PORT)/platform_db"
+run_node -e DATABASE_URL="$platform_admin_url" -e MARKETPLACE_DATABASE_URL="$platform_admin_url" \
+  pnpm --filter @alterx/platform-api db:migrate
+platform_db_roles
 log "migrating orchestration_db"
 run_node pnpm --filter @alterx/orchestration-service db:migrate
 for app in ads-core intelligence-service memory-service eval-service; do
