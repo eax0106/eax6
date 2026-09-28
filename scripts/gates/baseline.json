@@ -3,14 +3,9 @@
     "packages/contracts/src/registry.ts :: The capability registry does not exist yet, so no served capability can be checked against it (design log §19).": 1
   },
   "cost-no-float": {
-    "apps/cost-ledger-service/drizzle/0000_create_cost_events.sql :: Floating-point SQL type numeric is forbidden": 1,
-    "apps/cost-ledger-service/drizzle/0003_create_model_pricing.sql :: Floating-point SQL type real is forbidden": 1,
-    "apps/cost-ledger-service/drizzle/0004_create_model_outcomes.sql :: Floating-point SQL type real is forbidden": 1,
-    "apps/cost-ledger-service/drizzle/0004_create_model_outcomes.sql :: Floating-point SQL type Real is forbidden": 1,
-    "apps/cost-ledger-service/drizzle/0005_fx_rate_and_usd_amount.sql :: Floating-point SQL type numeric is forbidden": 2,
-    "apps/cost-ledger-service/drizzle/0005_fx_rate_and_usd_amount.sql :: Floating-point SQL type real is forbidden": 1,
-    "apps/cost-ledger-service/drizzle/0006_price_models_per_token_direction.sql :: Floating-point SQL type numeric is forbidden": 2,
-    "apps/cost-ledger-service/drizzle/0006_price_models_per_token_direction.sql :: Floating-point SQL type real is forbidden": 2,
+    "apps/cost-ledger-service/drizzle/0000_create_cost_events.sql :: Fractional SQL type numeric is forbidden: money is integer minor units": 1,
+    "apps/cost-ledger-service/drizzle/0005_fx_rate_and_usd_amount.sql :: Fractional SQL type numeric is forbidden: money is integer minor units": 2,
+    "apps/cost-ledger-service/drizzle/0006_price_models_per_token_direction.sql :: Fractional SQL type numeric is forbidden: money is integer minor units": 2,
     "apps/cost-ledger-service/src/app.module.ts :: Floating-point number type is forbidden": 2,
     "apps/cost-ledger-service/src/config/environment.ts :: Floating-point literal 0.3 is forbidden": 1,
     "apps/cost-ledger-service/src/config/environment.ts :: Floating-point number type is forbidden": 7,

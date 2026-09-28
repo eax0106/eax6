@@ -54,15 +54,57 @@ function inspectTypeScript(source, file, findings) {
 }
 
 function inspectSql(text, file, findings) {
-  const forbidden = /\b(?:double\s+precision|float(?:\d+)?|real|numeric|decimal)\b/gi;
-  for (const match of text.matchAll(forbidden)) {
-    const before = text.slice(0, match.index);
+  // Only SQL is judged, not prose about it: "the real gate" in a comment, or
+  // a 'real' string value, is not a column type. Both are blanked, keeping
+  // every newline so line numbers still point at the source.
+  const code = withoutSqlComments(text);
+  const floating = /\b(?:double\s+precision|float(?:\d+)?|real)\b/gi;
+  for (const match of code.matchAll(floating)) {
     findings.push({
       file,
-      line: before.split('\n').length,
+      line: code.slice(0, match.index).split('\n').length,
       message: `Floating-point SQL type ${match[0]} is forbidden`,
     });
   }
+  // numeric/decimal are exact, not floating point, but contract 39 stores
+  // money as integer minor units, so a fractional type is still a finding.
+  const fractional = /\b(?:numeric|decimal)\b/gi;
+  for (const match of code.matchAll(fractional)) {
+    findings.push({
+      file,
+      line: code.slice(0, match.index).split('\n').length,
+      message: `Fractional SQL type ${match[0]} is forbidden: money is integer minor units`,
+    });
+  }
+}
+
+/** Blank comments and string literals, preserving newlines; only SQL itself remains. */
+export function withoutSqlComments(text) {
+  let out = '';
+  let index = 0;
+  while (index < text.length) {
+    const rest = text.slice(index);
+    if (rest.startsWith("'")) {
+      const end = text.indexOf("'", index + 1);
+      const stop = end === -1 ? text.length : end + 1;
+      out += text.slice(index, stop).replace(/[^\n]/g, ' ');
+      index = stop;
+    } else if (rest.startsWith('--')) {
+      const end = text.indexOf('\n', index);
+      const stop = end === -1 ? text.length : end;
+      out += ' '.repeat(stop - index);
+      index = stop;
+    } else if (rest.startsWith('/*')) {
+      const end = text.indexOf('*/', index + 2);
+      const stop = end === -1 ? text.length : end + 2;
+      out += text.slice(index, stop).replace(/[^\n]/g, ' ');
+      index = stop;
+    } else {
+      out += text[index];
+      index += 1;
+    }
+  }
+  return out;
 }
 
 function floatFinding(file, source, node, message) {
