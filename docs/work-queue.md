@@ -64,18 +64,18 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C1 | 11 AST architecture gates imported from alterengine--5 into `scripts/gates/`, run in CI against `baseline.json` (722 findings recorded): a new violation fails and so does a fixed one left in the baseline, so the count only ratchets down. Adapted: Cost Ledger paths, generated code skipped, and the two gates whose subject does not exist yet (deletion registry, capability registry) report that single absence instead of crashing | done (this PR) |
 | C3 | deletion registration in CI: `packages/deletion-registry` names all 125 tables in the 8 databases -- 100 tenant tables with the erasure route that reaches them, 25 exemptions with reasons. CI builds every database from its real migrations (`scripts/deletion/materialize-schemas.sh`, pgvector Postgres) and `certify.ts` fails on an unregistered or stale table, on a provider that erases a different set than the registry says, or on more erasure gaps than `MAX_ERASURE_GAPS`. The source gate's 174 findings fall to 0. **Found: erasure reaches 38 tenant tables; 62 are gaps** (platform_db 49, cost 3, intelligence 5, policy 4, audit 1) | done (this PR) |
 | C3b | erasure providers for the gaps: platform-api, cost-ledger-service, intelligence-service and memory-service providers wired into the audit-service DeletionOrchestrator; lower `MAX_ERASURE_GAPS` with each. Retention rules first (decision below) | todo |
-| C5 | cost ledger records verification verdicts | todo |
-| C8 | side-effect ledger and idempotency gate before Dispatch | todo |
-| C10 | Run Manager atomic budget gate | todo |
-| C9 | reviewer isolation against prompt injection | todo |
-| C11 | Policy Store global tier | todo |
-| C36 | §5.2 mechanical read-back (no board item until now) | todo |
-| C37 | §5.3 end-of-run holistic check (no board item until now) | todo |
-| C38 | §19 Capability Registry workflow templates (no board item until now) | todo |
-| C39 | §17 Drift Detector outbound suggestion path (no board item until now) | todo |
-| C4 | safety as a shared in-process library | todo |
+| C5 | cost ledger records verification verdicts | blocked (freeze exemption): changes the Cost Ledger (Category 1 #22) and the run-completion path that would feed it verdicts |
+| C8 | side-effect ledger and idempotency gate before Dispatch | blocked (freeze exemption): a gate in front of Dispatch sits in the Executor (Category 1 #6) |
+| C10 | Run Manager atomic budget gate | blocked (freeze exemption): Run Manager is Category 1 #1 |
+| C9 | reviewer isolation against prompt injection | blocked (freeze exemption): Verification & Quality Gate, Category 1 #17 (the C29 exemption was C29-only) |
+| C11 | Policy Store global tier | blocked (freeze exemption): Policy Store is Category 1 #18 |
+| C36 | §5.2 mechanical read-back | blocked (freeze exemption): Verification & Quality Gate (#17) |
+| C37 | §5.3 end-of-run holistic check | blocked (freeze exemption): Verification & Quality Gate (#17) and Synthesis (#19) |
+| C38 | §19 Capability Registry workflow templates | blocked (freeze exemption): Capability Registry is Category 1 #20 |
+| C39 | §17 Drift Detector outbound suggestion path | todo, after B3.1b: Drift Detector is Category 3 (buildable), but a suggestion needs a delivery path to the user, which is the notification producers |
+| C4 | safety as a shared in-process library | blocked (freeze exemption): moving the screens out of Conversation Manager (#23) and Model Gateway (#15) into one library changes both |
 | C7 | Agent Factory extracted: the Factory no longer imports Selection & Binding. What both need -- the embedding port and vector check, the id types, `NoAgentMatch` -- moved to a neutral `src/agent_contracts` (Selection re-exports, so nothing else changed); a boundary test fails if the Factory imports Selection or Recovery again. Behaviour unchanged: 366 intelligence tests pass | done (this PR) |
-| C18 | re-embed backfill | todo |
+| C18 | re-embed backfill | blocked (freeze exemption): rewrites the Capability Registry's (#20) stored vectors |
 | C13 | map 54 contracts onto 61 components: 44 component READMEs now carry their contract's blast radius, fail mode and driver (some map to two contracts, e.g. HumanApproval to Node Type Registry and Approval Store); the 17 no contract covers say so and keep proposed values | done (this PR) |
 | C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |
 | C34 | specs authorize through the enforcing resolver: `enforcing-rbac.routes.spec.ts` mounts the real Project and Workflow controllers behind the production resolution rules and proves the admin of workspace A is refused B's project and workflow (403, only the ownership lookup reaches the engine); removing the workflow binding fails it | done (this PR) |
@@ -99,6 +99,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | 5.2 live proof | GitHub OAuth app, client id/secret in Secrets Manager |
 | B1 live proof | A staff Auth0 tenant with a PKCE app (callback `<origin>/staff/callback`), and each staff member added to `staff_users` |
 | C30 | Build §16's four approval modes, or amend §16; plus open question 8 (notification channel) |
+| Freeze exemptions (Track C) | The 2026-09-07 freeze ("no code change to the 25 Category 1 components") still stands; the C29 exemption covered C29 only. Ten Track C items change a Category 1 component and wait on an exemption like C29's: C5 Cost Ledger; C8 Executor; C10 Run Manager; C9, C36 Verification & Quality Gate; C37 Gate + Synthesis; C11 Policy Store; C4 Conversation Manager + Model Gateway; C18, C38 Capability Registry. Grant per item (recorded in memoryalter before code), all, or none? |
 | C32 | Grant this repository write on the GHCR packages, rename our images, or turn `images` publishing off here |
 | B1.11 | Admin deployments page: build a platform-release view (over the promotion gate and release evidence), or re-scope the page to tenant deployment actions (rollback/suspend/resume), which need a list route? |
 | B1.8 gap | Assigning a security review to a staff member has no backend (hidden in live). Build or drop? |
@@ -109,7 +110,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B3.2 | Benchmarking console: customers see a benchmarks area, but the engine has no tenant datasets or tenant eval runs (eval_db = Alter's golden sets; `/api/v1/admin/benchmarks` = staff run + release gate). Choose: (a) staff-only eval history in the admin console (needs a list-runs RPC), (b) build tenant datasets and runs in eval-service, (c) drop from v1. Recommendation: (a) now, (b) later. |
 | B3.5 scanner | No package scanner is wired, so every tool version scans `unavailable` and none can be verified clean. Choose a scanner (e.g. OSV/Socket/Snyk) or keep manual review. |
 | B3.6 real run | OK to spend a few cents running image, speech and transcription once against the real AWS providers (Titan, Polly, Transcribe) from this machine? |
-| C3 retention | Erasure currently misses 62 tenant tables. Before providers are built: which data must be **kept** after a tenant deletion request, and for how long -- billing and invoice records (tax law), payouts and KYC (financial regulation), audit events (erase, pseudonymise, or retain for chain integrity), staff access records? The rest is erased. |
+| C3 retention | Erasure currently misses 62 tenant tables. Design log §18 already settles audit events (minimised to an event skeleton, then destroyed after a 30- or 90-day window) and member erasure (pseudonymise). Still open before providers are built: **which window, 30 or 90 days**; and what law requires kept longer after a tenant deletion -- billing and invoice records (tax), payouts and KYC (financial regulation), staff access records. Everything else is destroyed immediately (§18). |
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |
