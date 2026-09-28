@@ -7,6 +7,9 @@ service CostService {
   rpc QueryRollups(QueryRollupsRequest) returns (QueryRollupsResponse);
   rpc ResolveUnitPrice(ResolveUnitPriceRequest) returns (ResolveUnitPriceResponse);
   rpc RecordModelOutcome(RecordModelOutcomeRequest) returns (RecordModelOutcomeResponse);
+  // Design log §21: credits are consumed only by runs that pass verification,
+  // so the ledger records each run's verification verdict beside its cost.
+  rpc RecordRunVerdict(RecordRunVerdictRequest) returns (RecordRunVerdictResponse);
 }
 
 message IngestCostEventRequest {
@@ -84,4 +87,20 @@ message RecordModelOutcomeResponse {
   reserved 100 to 199;
 
   bool accepted = 1;
+}
+
+message RecordRunVerdictRequest {
+  reserved 100 to 199;
+
+  string tenant_id = 1; // ten_ prefixed UUIDv7
+  string run_id = 2; // run_ prefixed UUIDv7
+  // The run's recorded outcome: completed_verified | rescued | escalated |
+  // failed | abandoned | degraded (orchestration run_outcomes.verdict).
+  string verdict = 3;
+  string decided_at = 4; // ISO 8601 timestamp of the run's outcome decision
+}
+
+message RecordRunVerdictResponse {
+  // False when this run's verdict was already recorded (idempotent replay).
+  bool recorded = 1;
 }

@@ -1,11 +1,13 @@
 import { Module } from "@nestjs/common";
 import {
+  CostClient,
   PostgresOrchestrationStoreProvider,
   sharedOrchestrationPoolFactory,
 } from "@alterx/adapters";
 import { lazyAuth0M2mTokenProviderFromEnvironment } from "@alterx/auth";
 import { ORCHESTRATION_MIGRATIONS_PATH } from "./database/migrations-path";
-import { RunOutcomeService } from "./runs/run-outcome.service";
+import { RunOutcomeService, type RunVerdictSink } from "./runs/run-outcome.service";
+import { COST_CLIENT_PROTO_PATH } from "./registry/nodeexec-grpc.constants";
 
 export interface SessionGatewayEnvironment {
   readonly auth0Domain: string;
@@ -135,7 +137,21 @@ export function internalM2mTokenProvider() {
 export function buildRunOutcomeService(): RunOutcomeService {
   const dbConfig = sessionGatewayEnvironment(process.env);
   const store = orchestrationStore(dbConfig);
-  return new RunOutcomeService(store);
+  return new RunOutcomeService(store, runVerdictSink(process.env));
+}
+
+/**
+ * Design log §21: each run's verdict goes to the Cost Ledger. A mock runtime
+ * has no ledger to reach; a real one uses the same address model-gateway's
+ * cost client does.
+ */
+export function runVerdictSink(environment: NodeJS.ProcessEnv): RunVerdictSink | undefined {
+  if ((environment.RUNTIME_MODE?.trim() || "mock") !== "real") return undefined;
+  return new CostClient({
+    address: environment.COST_LEDGER_GRPC_ADDRESS?.trim() || "127.0.0.1:50069",
+    protoPath: COST_CLIENT_PROTO_PATH,
+    accessTokenProvider: internalM2mTokenProvider(),
+  });
 }
 
 function orchestrationStoreConfig(

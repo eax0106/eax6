@@ -50,6 +50,13 @@
       "when": 1785561006000,
       "tag": "0006_price_models_per_token_direction",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786990407000,
+      "tag": "0007_create_run_verdicts",
+      "breakpoints": true
     }
   ]
 }

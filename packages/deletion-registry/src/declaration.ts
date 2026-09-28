@@ -133,6 +133,7 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "cost_db", schema: "public", table: "billing_rollups", owner: "cost-ledger-service", erasure: { kind: "gap", note: "cost-ledger-service has no erasure provider." } },
   { database: "cost_db", schema: "public", table: "cost_events", owner: "cost-ledger-service", erasure: { kind: "gap", note: "cost-ledger-service has no erasure provider." } },
   { database: "cost_db", schema: "public", table: "model_outcomes", owner: "cost-ledger-service", erasure: { kind: "gap", note: "cost-ledger-service has no erasure provider." } },
+  { database: "cost_db", schema: "public", table: "run_verdicts", owner: "cost-ledger-service", erasure: { kind: "gap", note: "cost-ledger-service has no erasure provider; a run's verdict is billing evidence, so whether it is erased or kept waits on the C3 retention decision." } },
   { database: "ads_db", schema: "public", table: "chunks", owner: "ads-core", erasure: { kind: "provider", provider: "ads-core" } },
   { database: "ads_db", schema: "public", table: "document_versions", owner: "ads-core", erasure: { kind: "provider", provider: "ads-core" } },
   { database: "ads_db", schema: "public", table: "documents", owner: "ads-core", erasure: { kind: "provider", provider: "ads-core" } },
@@ -185,4 +186,7 @@ export const tenantDataExemptions: readonly TenantDataExemption[] = [
  * Tenant tables no erasure path reaches, today. certify.ts fails when the
  * count rises above this; lower it in the same change that closes a gap.
  */
-export const MAX_ERASURE_GAPS = 62;
+// 63 since C5 (2026-09-28): run_verdicts is new billing evidence in a
+// service that has no erasure provider yet; it is counted here rather than
+// hidden, and falls with the rest when C3b lands.
+export const MAX_ERASURE_GAPS = 63;

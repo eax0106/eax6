@@ -389,6 +389,8 @@ export type {
   ResolveUnitPriceResponse as CostResolveUnitPriceResponse,
   RecordModelOutcomeRequest as CostRecordModelOutcomeRequest,
   RecordModelOutcomeResponse as CostRecordModelOutcomeResponse,
+  RecordRunVerdictRequest as CostRecordRunVerdictRequest,
+  RecordRunVerdictResponse as CostRecordRunVerdictResponse,
 } from "./generated/alter/cost/v1/cost";
 export type {
   CreateRunRequest as RunsCreateRunRequest,

@@ -309,7 +309,12 @@ export {
   type CostGrpcTransportConfig,
   type CostHandler,
 } from "./grpc/cost-grpc-transport";
-export { CostClient, type CostClientConfig, type CostHandlerClient } from "./grpc/cost-client";
+export {
+  CostClient,
+  type CostClientConfig,
+  type CostHandlerClient,
+  type RunVerdictRecorder,
+} from "./grpc/cost-client";
 export {
   BEDROCK_CAPABILITIES,
   AwsBedrockModelProvider,

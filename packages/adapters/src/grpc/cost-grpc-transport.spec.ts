@@ -52,6 +52,7 @@ function handler(): CostHandler {
     resolveUnitPrice: vi.fn(async () => ({ unit_cost_minor: "0", currency: "INR", confidence: "no_data" })),
     queryRollups: vi.fn(async () => ({ rollups_json: "{}" })),
     recordModelOutcome: vi.fn(async () => ({ accepted: true })),
+    recordRunVerdict: vi.fn(async () => ({ recorded: true })),
   };
 }
 
@@ -134,5 +135,22 @@ describe("CostGrpcController", () => {
     await expect(
       controller.recordModelOutcome(RECORD_MODEL_OUTCOME_REQUEST),
     ).rejects.toMatchObject({ error: { code: 3 } });
+  });
+
+  it("delegates RecordRunVerdict and refuses a rewritten verdict as a failed precondition (C5)", async () => {
+    const costHandler = handler();
+    const controller = new CostGrpcController(costHandler);
+    const request = {
+      tenant_id: "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890b1",
+      run_id: "run_018f4d6e-2b4a-7a3e-8c1a-1234567890b2",
+      verdict: "completed_verified",
+      decided_at: "2026-09-28T10:00:00.000Z",
+    };
+
+    await expect(controller.recordRunVerdict(request)).resolves.toEqual({ recorded: true });
+
+    vi.mocked(costHandler.recordRunVerdict).mockRejectedValueOnce(new NamedCostError("RunVerdictConflictError"));
+    const error = await controller.recordRunVerdict(request).catch((caught: unknown) => caught);
+    expect((error as { getError(): { code: number } }).getError().code).toBe(9);
   });
 });
