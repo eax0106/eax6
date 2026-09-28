@@ -5,7 +5,7 @@ vi.mock("./http", async (importOriginal) => ({
   isLiveApi: true,
 }))
 
-import { listBillingIssues, listMarketplaceReviews, reviewMarketplaceItem } from "./live-admin-commerce"
+import { listBillingIssues, listMarketplaceReviews, listSellerVerifications, reviewMarketplaceItem, reviewSellerVerification } from "./live-admin-commerce"
 import { BillingOpsService } from "./services/billing-ops"
 import { MarketplaceAdminService } from "./services/marketplace-admin"
 
@@ -77,5 +77,19 @@ describe("live admin marketplace and billing (B2.1, B2.2)", () => {
     await expect(service.applyCredit("ten_a", 10, "x")).rejects.toThrow(/no backend/)
     await expect(service.retryBilling("ten_a")).rejects.toThrow(/no backend/)
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it("lists seller verifications and sends a rejection with its reason to the submission's tenant", async () => {
+    fetchMock.mockResolvedValueOnce(
+      Response.json([{ id: "kyc_1", tenant_id: "7f7c7d1e-0000-4000-8000-000000000001", publisher_id: "pub_1", documents: [{ type: "tax_id", objectRef: "s3://x/tax" }], submitted_at: "2026-09-28T00:00:00.000Z" }]),
+    )
+    const [item] = await listSellerVerifications()
+    expect(item).toEqual({ id: "kyc_1", tenantId: "7f7c7d1e-0000-4000-8000-000000000001", documents: [{ type: "tax_id", objectRef: "s3://x/tax" }], submittedAt: "2026-09-28T00:00:00.000Z" })
+
+    fetchMock.mockResolvedValueOnce(Response.json({ id: "kyc_1", status: "rejected" }))
+    await reviewSellerVerification(item!, "rejected", "Tax ID does not match")
+    const [url, init] = fetchMock.mock.calls[1]!
+    expect(String(url)).toContain("/api/v1/admin/publisher/verifications/7f7c7d1e-0000-4000-8000-000000000001/kyc_1/actions/review")
+    expect(JSON.parse(String(init!.body))).toEqual({ decision: "rejected", reason: "Tax ID does not match" })
   })
 })

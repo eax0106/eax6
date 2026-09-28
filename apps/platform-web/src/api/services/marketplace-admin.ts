@@ -18,6 +18,18 @@ export interface MarketplaceReviewItem {
   reviewer?: { id: string; name: string }
 }
 
+/** A seller's identity documents awaiting staff review (task B2.4). */
+export interface SellerVerification {
+  id: string
+  tenantId: string
+  documents: { type: string; objectRef: string }[]
+  submittedAt: string
+}
+
+let mockVerifications: SellerVerification[] = [
+  { id: "kyc_demo_1", tenantId: "ten-2", documents: [{ type: "tax_id", objectRef: "s3://demo/tax-id.pdf" }, { type: "bank_proof", objectRef: "s3://demo/bank.pdf" }], submittedAt: new Date(Date.now() - 3600000).toISOString() },
+]
+
 const MOCK_REVIEWS: MarketplaceReviewItem[] = [
   { id: "mrev-1", listingName: "Advanced Data Scraper", sellerName: "DataCorp", assetType: "workflow", risk: "high", status: "pending_review", submittedAt: new Date(Date.now() - 86400000).toISOString() },
   { id: "mrev-2", listingName: "Salesforce Sync", sellerName: "CRM Tools", assetType: "plugin", risk: "low", status: "changes_requested", submittedAt: new Date(Date.now() - 172800000).toISOString(), reviewer: { id: "u-sys", name: "System Admin" } },
@@ -43,5 +55,17 @@ export class MarketplaceAdminService {
     rev.status = action === "approve" ? "approved" : action === "reject" ? "rejected" : action === "suspend" ? "suspended" : action
     rev.reviewer = { id: "u-sys", name: "Admin (You)" }
     return rev
+  }
+
+  async verificationQueue(): Promise<SellerVerification[]> {
+    if (isLiveApi) return live.listSellerVerifications()
+    await delay(300)
+    return mockVerifications
+  }
+
+  async reviewVerification(item: SellerVerification, decision: "approved" | "rejected", reason?: string): Promise<void> {
+    if (isLiveApi) return live.reviewSellerVerification(item, decision, reason)
+    await delay(400)
+    mockVerifications = mockVerifications.filter(v => v.id !== item.id)
   }
 }

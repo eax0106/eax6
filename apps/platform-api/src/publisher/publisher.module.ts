@@ -1,16 +1,36 @@
-import { Module } from "@nestjs/common";
+import { MiddlewareConsumer, Module, type NestModule } from "@nestjs/common";
+import { AdminAuditModule } from "../admin-audit";
 import { sharedPool } from "../db/shared-pool";
+import { StaffAuthMiddleware, StaffModule } from "../staff";
+import { AdminPublisherController } from "./admin-publisher.controller";
+import { AdminPublisherRepository } from "./admin-publisher.repository";
+import { AdminPublisherService } from "./admin-publisher.service";
 import { ManualReviewKycProvider } from "./manual-review-kyc-provider";
 import { PublisherController } from "./publisher.controller";
 import { PublisherRepository } from "./publisher.repository";
 import { PublisherService } from "./publisher.service";
 
 @Module({
-  controllers: [PublisherController],
+  imports: [AdminAuditModule, StaffModule],
+  controllers: [PublisherController, AdminPublisherController],
   providers: [
+    {
+      provide: AdminPublisherRepository,
+      useFactory: () => new AdminPublisherRepository(
+        process.env.OPERATIONS_MARKETPLACE_DATABASE_URL
+          ? sharedPool(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL)
+          : undefined,
+        false,
+      ),
+    },
+    AdminPublisherService,
     { provide: PublisherRepository, useFactory: () => new PublisherRepository(sharedPool(process.env.MARKETPLACE_DATABASE_URL), false) },
     ManualReviewKycProvider,
     { provide: PublisherService, inject: [PublisherRepository, ManualReviewKycProvider], useFactory: (repository: PublisherRepository, kyc: ManualReviewKycProvider) => new PublisherService(repository, kyc) },
   ],
 })
-export class PublisherModule {}
+export class PublisherModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(StaffAuthMiddleware).forRoutes(AdminPublisherController);
+  }
+}

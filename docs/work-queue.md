@@ -38,7 +38,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.1 | marketplace-admin: the governance queue (listings in review, draft/blocked tools) with approve, reject (send back) and take down, each with a recorded reason; "needs changes" has no API action and is hidden in live | done (this PR) |
 | B2.2 | billing-ops: cross-tenant list of tenants out of good standing (dunning grace/limited/suspended) via a SECURITY DEFINER function; resolve, credit and retry have no backend and are hidden in live | done (this PR) |
 | B2.3 | checkout | todo |
-| B2.4 | KYC / document review | todo |
+| B2.4 | KYC review, staff side: queue of pending seller verifications across tenants (Operations pool) and approve/reject (reason required) as the staff member, audited, in the admin Marketplace page. Removed the interim route, which only a dogfood tenant owner could call and which could only review that tenant's own submission. Seller-side document upload is blocked (below). | done (this PR) |
 | B2.5 | tax / fee settlement | todo |
 | B2.6 | tokenized card setup | todo |
 | B2.7 | invoice PDF: Razorpay renders the invoice; its hosted page (`short_url`, view and PDF download) is carried through as `documentUrl` (https only) and linked from the invoices page | done (this PR) |
@@ -100,6 +100,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B1.8 gap | Assigning a security review to a staff member has no backend (hidden in live). Build or drop? |
 | B1.6/B1.7 gaps | Provider "maintenance" state and editing policies from the list page have no backend (hidden in live). Build or drop? |
 | B1.2 gaps | Admin user screens show MFA and risk state in demo only; user notes (write) have no backend. Build or drop? |
+| B2.4 upload | Sellers cannot submit identity documents in live mode: there is no document store and no KYC vendor ("manual review until a vendor is selected"). Choose: Razorpay Route linked-account KYC (Razorpay holds the documents), a vendor, or our own encrypted S3 store with retention rules. |
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |
