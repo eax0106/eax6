@@ -79,6 +79,7 @@ describe("NodeexecService.executeNode", () => {
     expect(verifyGate.scoreNodeInline).toHaveBeenCalledWith({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "node_merge", node_type: "Merge", config_json: "{}", output_json: "{\"x\":1}",
+      success_criteria: [],
     });
     expect(ledger.recordSucceeded).toHaveBeenCalledOnce();
     expect(JSON.parse(response.metadata_json)).toMatchObject({ verification: { verdict: "pass" } });
@@ -89,6 +90,38 @@ describe("NodeexecService.executeNode", () => {
         reviewerModel: "deterministic", detailsJson: "{}",
       }),
     );
+  });
+
+  it("gives the node and the gate the node's own success criteria, and fails on an unmet one (C29)", async () => {
+    const ledger = fakeLedger();
+    const seen: NodeExecutionContext[] = [];
+    const handler: NodeHandler = {
+      nodeType: "LLMTask",
+      execute: async (context) => {
+        seen.push(context);
+        return { output: { text: "a poem" } };
+      },
+    };
+    const verifyGate = {
+      scoreNodeInline: vi.fn().mockResolvedValue({
+        verdict: "fail", score: 0.95, threshold: 0.7, reviewer_model: "ADVANCED",
+        details_json: JSON.stringify({ reason: "output does not meet every success criterion" }),
+      }),
+    } as unknown as VerifyGateService;
+    const nodeexec = new NodeexecService(
+      new NodeHandlerRegistry([handler]), ledger, undefined, undefined, undefined,
+      undefined, undefined, verifyGate,
+    );
+    await expect(nodeexec.executeNode({
+      tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
+      node_key: "summarise", node_type: "LLMTask", config_json: JSON.stringify({ prompt: "x", model_alias: "FAST" }),
+      inputs_json: "{}", success_criteria: ["Refund total stated"],
+    })).rejects.toBeInstanceOf(VerifyGateError);
+    expect(seen[0]!.success_criteria).toEqual(["Refund total stated"]);
+    expect(verifyGate.scoreNodeInline).toHaveBeenCalledWith(
+      expect.objectContaining({ node_key: "summarise", success_criteria: ["Refund total stated"] }),
+    );
+    expect(ledger.recordSucceeded).not.toHaveBeenCalled();
   });
 
   it("records a warning verdict distinctly while preserving success", async () => {

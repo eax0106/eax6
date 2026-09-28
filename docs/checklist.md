@@ -634,7 +634,7 @@ demo.
       minutes, so this is invisible from outside. **It blocks every task whose artefact is a
       test, and it blocked 2.4a.** Pairs naturally with C25 — both are "the tooling config
       nobody looked at".
-- [ ] **C29 [+] nothing validates model output against the task's contract. SCOPED 2026-09-16,
+- [ ] **C29 [+] nothing validates model output against the task's contract. Slice 2b BUILT 2026-09-28: criteria reach the producing node and the gate, which fails any unmet criterion (see memoryalter); live Bedrock proof outstanding. SCOPED 2026-09-16,
       and it is the same work as C12.** The contract is not missing from the system, it is
       missing from the *path*: `success_criteria` is decided at the top of the design path and
       never reaches the node that produces output or the gate that judges it. **Fix is to carry

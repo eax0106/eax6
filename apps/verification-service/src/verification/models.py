@@ -50,6 +50,19 @@ class ScoreNodeRequest(BaseModel):
     node_type: NodeType
     config_json: str
     output_json: str
+    # C29: the producing node's own success criteria (design log §5.1). When
+    # present the reviewer judges the output against each one.
+    success_criteria: tuple[str, ...] = ()
+
+    @field_validator("success_criteria")
+    @classmethod
+    def _validate_success_criteria(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        cleaned = tuple(criterion.strip() for criterion in value)
+        if any(not criterion for criterion in cleaned):
+            raise ValueError("success_criteria entries must be non-empty")
+        if len(cleaned) > 50:
+            raise ValueError("success_criteria has at most 50 entries")
+        return cleaned
 
     @field_validator("tenant_id")
     @classmethod
@@ -144,3 +157,11 @@ class VerificationContext(_StrictModel):
     task_context: dict[str, object]
     response: object
     evidence: dict[str, object]
+
+
+class CriterionJudgement(_StrictModel):
+    """C29: the reviewer's verdict on one success criterion."""
+
+    criterion: str
+    met: bool
+    reason: str

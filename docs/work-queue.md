@@ -59,7 +59,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 ### Track C — design-log compatibility
 | # | Item | Status |
 |---|---|---|
-| C29 | slice 2b: criteria to the producing node and the gate | todo |
+| C29 | slice 2b: each compiled node's own success criteria reach the node that produces the output (LLMTask states them) and the Verification & Quality Gate, which judges each one and fails the node on any unmet criterion whatever the rubric score. Live Bedrock proof of an off-contract answer failing still to run | done (this PR) |
 | C1 | 11 AST architecture gates with a baseline | todo |
 | C3 | deletion registration in CI | todo |
 | C5 | cost ledger records verification verdicts | todo |

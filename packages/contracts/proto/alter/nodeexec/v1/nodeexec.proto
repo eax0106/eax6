@@ -30,6 +30,9 @@ message ExecuteNodeRequest {
   string node_type = 5; // one of the 11 alter.registry.v1 node types
   string config_json = 6;
   string inputs_json = 7; // upstream outputs, keyed by producing node key
+  // C29: the node's own success criteria from the compiled DAG (design log
+  // §5.1). Empty for legacy workflows compiled before criteria existed.
+  repeated string success_criteria = 8;
 }
 
 message ExecuteNodeResponse {

@@ -149,3 +149,31 @@ async def test_malformed_prefixed_id_is_rejected(
             )
         )
     assert caught.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+async def test_success_criteria_travel_over_grpc_to_the_judgement(
+    stub: verify_pb2_grpc.VerifyServiceStub,
+) -> None:
+    """C29 slice 2b: the criteria field reaches the kernel; the stub reviewer
+    meets nothing on an empty output, so the node fails on its contract."""
+    response = await stub.ScoreNodeInline(
+        verify_pb2.ScoreNodeInlineRequest(
+            tenant_id=TENANT,
+            run_id=RUN,
+            node_execution_id=NODE_EXECUTION,
+            node_key="summarise",
+            node_type="LLMTask",
+            config_json="{}",
+            output_json=json.dumps({"text": "a summary"}),
+            success_criteria=["Summary under 100 words"],
+        )
+    )
+    details = json.loads(response.details_json)
+    assert details["criteria"] == [
+        {
+            "criterion": "Summary under 100 words",
+            "met": True,
+            "reason": "Stub reviewer: output is present.",
+        }
+    ]
+    assert response.verdict == "pass"

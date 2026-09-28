@@ -13,7 +13,7 @@ time without touching kernel.py.
 
 from typing import Protocol, runtime_checkable
 
-from .models import InjectionClassification
+from .models import CriterionJudgement, InjectionClassification
 
 # Alter LLM alias vocabulary (doc 13 sec 2) -- components never name a
 # model, only an alias; Model Gateway resolves the actual provider/model
@@ -41,6 +41,21 @@ class ReviewerLlmClient(Protocol):
 
         Returns (score in [0.0, 1.0], rationale).
         """
+        ...
+
+    async def judge_criteria(
+        self,
+        *,
+        tenant_id: str,
+        run_id: str,
+        node_execution_id: str,
+        node_type: str,
+        criteria: tuple[str, ...],
+        config_json: str,
+        output_json: str,
+    ) -> list[CriterionJudgement]:
+        """C29. Judge the output against each of the producing node's success
+        criteria. Returns exactly one judgement per criterion, in order."""
         ...
 
     async def classify_prompt_injection(
@@ -88,6 +103,28 @@ class StubReviewerLlmClient:
         if stripped in ("", "{}", "null"):
             return 0.1, "Stub reviewer: output is empty or contains no content."
         return 0.9, "Stub reviewer: output is present and non-empty."
+
+    async def judge_criteria(
+        self,
+        *,
+        tenant_id: str,
+        run_id: str,
+        node_execution_id: str,
+        node_type: str,
+        criteria: tuple[str, ...],
+        config_json: str,
+        output_json: str,
+    ) -> list[CriterionJudgement]:
+        # Same shape heuristic as review(): an empty output meets nothing.
+        met = output_json.strip() not in ("", "{}", "null")
+        return [
+            CriterionJudgement(
+                criterion=criterion,
+                met=met,
+                reason="Stub reviewer: " + ("output is present." if met else "output is empty."),
+            )
+            for criterion in criteria
+        ]
 
     async def classify_prompt_injection(
         self,

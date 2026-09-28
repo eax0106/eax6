@@ -76,6 +76,19 @@ describe("createExecutorActivities.executeNode", () => {
     );
   });
 
+  it("carries the compiled node's success criteria to Nodeexec, and none on older workflows (C29)", async () => {
+    const nodeExecutionClient = fakeNodeExecutionClient(JSON.stringify({ ok: true }));
+    const activities = createExecutorActivities(nodeExecutionClient, fakeBlackboardClient({}));
+
+    await activities.executeNode({ ...BASE_INPUT, predecessorKeys: [], successCriteria: ["Currency given"] });
+    await activities.executeNode({ ...BASE_INPUT, predecessorKeys: [] });
+
+    expect(vi.mocked(nodeExecutionClient.executeNode).mock.calls.map(([request]) => request.success_criteria)).toEqual([
+      ["Currency given"],
+      [],
+    ]);
+  });
+
   it("omits a predecessor from inputs when its Blackboard value is not found", async () => {
     const nodeExecutionClient = fakeNodeExecutionClient(JSON.stringify({ ok: true }));
     const blackboardClient = fakeBlackboardClient({});

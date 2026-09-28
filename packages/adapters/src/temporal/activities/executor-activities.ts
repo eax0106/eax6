@@ -10,6 +10,8 @@ export interface ExecuteNodeActivityInput {
   readonly configJson: string;
   /** Direct upstream node keys -- their outputs are read from the Blackboard, not passed inline. */
   readonly predecessorKeys: readonly string[];
+  /** C29: the compiled node's own success criteria; absent on older workflows. */
+  readonly successCriteria?: readonly string[];
 }
 
 export interface ExecuteNodeActivityResult {
@@ -98,6 +100,7 @@ export function createExecutorActivities(
         node_type: input.nodeType,
         config_json: input.configJson,
         inputs_json: JSON.stringify(inputs),
+        success_criteria: [...(input.successCriteria ?? [])],
       });
 
       await blackboardClient.writeValue({

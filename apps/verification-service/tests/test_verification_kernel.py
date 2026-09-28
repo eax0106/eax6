@@ -362,3 +362,101 @@ class TestQualityThresholdPolicyClient:
 
         assert result.threshold == 0.7
         assert result.verdict == "fail"
+
+
+class ContractReviewer(StubReviewerLlmClient):
+    """C29: scores every output well on the rubric, and meets a criterion only
+    when the output mentions the criterion's first word -- so a fluent,
+    off-contract answer scores high and still misses the contract."""
+
+    def __init__(self, drop_one: bool = False) -> None:
+        self.judged: list[tuple[str, ...]] = []
+        self.drop_one = drop_one
+
+    async def review(self, **_: object) -> tuple[float, str]:
+        return 0.95, "Fluent and well formed."
+
+    async def judge_criteria(self, *, criteria: tuple[str, ...], output_json: str, **_: object):  # type: ignore[override]
+        from src.verification.models import CriterionJudgement
+
+        self.judged.append(criteria)
+        judgements = [
+            CriterionJudgement(
+                criterion=criterion,
+                met=criterion.split()[0].lower() in output_json.lower(),
+                reason="checked",
+            )
+            for criterion in criteria
+        ]
+        return judgements[:-1] if self.drop_one else judgements
+
+
+def criteria_request(
+    output_json: str, criteria: tuple[str, ...], node_type: NodeType = "LLMTask"
+) -> ScoreNodeRequest:
+    return ScoreNodeRequest(
+        tenant_id=TENANT_ID,
+        run_id=RUN_ID,
+        node_execution_id=NODE_EXECUTION_ID,
+        node_key="node_a",
+        node_type=node_type,
+        config_json="{}",
+        output_json=output_json,
+        success_criteria=criteria,
+    )
+
+
+class TestSuccessCriteria:
+    """C29 slice 2b: the gate judges output against the node's own criteria."""
+
+    async def test_output_meeting_every_criterion_passes_with_a_per_criterion_record(self) -> None:
+        reviewer = ContractReviewer()
+        result = await VerificationKernel(llm_client=reviewer).score_node(
+            criteria_request(
+                '{"text": "Refund total 40 and currency INR"}',
+                ("Refund total stated", "Currency given"),
+            )
+        )
+        assert result.verdict == "pass"
+        details = json.loads(result.details_json)
+        assert [c["met"] for c in details["criteria"]] == [True, True]
+        assert reviewer.judged == [("Refund total stated", "Currency given")]
+
+    async def test_fluent_off_contract_output_fails_despite_a_high_rubric_score(self) -> None:
+        result = await VerificationKernel(llm_client=ContractReviewer()).score_node(
+            criteria_request('{"text": "Here is a lovely poem about refunds"}', ("Currency given",))
+        )
+        assert result.score == 0.95
+        assert result.verdict == "fail"
+        details = json.loads(result.details_json)
+        assert details["reason"] == "output does not meet every success criterion"
+        assert details["criteria"] == [
+            {"criterion": "Currency given", "met": False, "reason": "checked"}
+        ]
+
+    async def test_a_reviewer_that_skips_a_criterion_is_an_error_never_a_pass(self) -> None:
+        with pytest.raises(
+            VerificationValidationError, match="exactly one judgement per success criterion"
+        ):
+            await VerificationKernel(llm_client=ContractReviewer(drop_one=True)).score_node(
+                criteria_request('{"text": "Currency INR"}', ("Currency given", "Total given"))
+            )
+
+    async def test_no_criteria_means_no_criteria_judgement(self) -> None:
+        reviewer = ContractReviewer()
+        result = await VerificationKernel(llm_client=reviewer).score_node(request("LLMTask"))
+        assert reviewer.judged == []
+        assert "criteria" not in json.loads(result.details_json)
+
+    async def test_deterministic_nodes_record_their_criteria_unjudged(self) -> None:
+        reviewer = ContractReviewer()
+        result = await VerificationKernel(llm_client=reviewer).score_node(
+            criteria_request('{"routed": true}', ("Routes refunds",), node_type="Gate")
+        )
+        assert result.verdict == "pass"
+        assert json.loads(result.details_json)["criteria_not_judged"] == ["Routes refunds"]
+        assert reviewer.judged == []
+
+    def test_blank_criteria_are_refused(self) -> None:
+        with pytest.raises(ValueError, match="non-empty"):
+            criteria_request("{}", ("  ",))
