@@ -21,6 +21,7 @@ describe("cost_db migration files", () => {
       "0004_create_model_outcomes.sql",
       "0005_fx_rate_and_usd_amount.sql",
       "0006_price_models_per_token_direction.sql",
+      "0007_create_run_verdicts.sql",
     ]);
     expect(
       readdirSync(resolve(COST_MIGRATIONS_PATH, "rollback"))
@@ -34,6 +35,7 @@ describe("cost_db migration files", () => {
       "0004_drop_model_outcomes.sql",
       "0005_drop_fx_rate_and_usd_amount.sql",
       "0006_drop_model_price_dimension.sql",
+      "0007_drop_run_verdicts.sql",
     ]);
   });
 

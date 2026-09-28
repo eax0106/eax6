@@ -87,3 +87,22 @@ export interface RecordModelOutcomeRequest {
 export interface RecordModelOutcomeResponse {
   accepted: boolean;
 }
+
+export interface RecordRunVerdictRequest {
+  /** ten_ prefixed UUIDv7 */
+  tenant_id: string;
+  /** run_ prefixed UUIDv7 */
+  run_id: string;
+  /**
+   * The run's recorded outcome: completed_verified | rescued | escalated |
+   * failed | abandoned | degraded (orchestration run_outcomes.verdict).
+   */
+  verdict: string;
+  /** ISO 8601 timestamp of the run's outcome decision */
+  decided_at: string;
+}
+
+export interface RecordRunVerdictResponse {
+  /** False when this run's verdict was already recorded (idempotent replay). */
+  recorded: boolean;
+}

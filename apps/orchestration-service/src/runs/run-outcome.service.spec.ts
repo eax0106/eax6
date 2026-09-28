@@ -85,6 +85,14 @@ function fakeStore(db: FakeDb): RunOutcomeTenantStore {
             };
             return { rowCount: 1, rows: [] };
           }
+          if (sql.includes("FROM run_outcomes WHERE")) {
+            return db.inserted === undefined
+              ? { rowCount: 0, rows: [] }
+              : {
+                  rowCount: 1,
+                  rows: [{ verdict: db.inserted["verdict"], decided_at: "2026-09-28T10:00:00.000Z" }],
+                };
+          }
           throw new Error(`Unexpected SQL: ${sql}`);
         }) as unknown as RunOutcomeTransaction["query"],
       });
@@ -379,4 +387,31 @@ describe("RunOutcomeService.getLearningSummary", () => {
       ).rejects.toBeInstanceOf(RunOutcomeNotCompletedError);
     },
   );
+});
+
+// C5, design log §21 / §22 item 10: each recorded outcome's verdict goes to
+// the Cost Ledger, and a ledger outage never fails the run's finalization.
+describe("RunOutcomeService.recordOutcome sends the verdict to the Cost Ledger", () => {
+  it("sends the stored verdict with its decision time", async () => {
+    const recordRunVerdict = vi.fn().mockResolvedValue({ recorded: true });
+    const service = new RunOutcomeService(fakeStore(baseDb()), { recordRunVerdict });
+
+    await service.recordOutcome(TENANT_ID, RUN_ID, "completed");
+
+    expect(recordRunVerdict).toHaveBeenCalledWith({
+      tenant_id: TENANT_ID,
+      run_id: RUN_ID,
+      verdict: "completed_verified",
+      decided_at: "2026-09-28T10:00:00.000Z",
+    });
+  });
+
+  it("still records the outcome when the ledger is unreachable", async () => {
+    const db = baseDb();
+    const recordRunVerdict = vi.fn().mockRejectedValue(new Error("cost ledger unavailable"));
+    const service = new RunOutcomeService(fakeStore(db), { recordRunVerdict });
+
+    await expect(service.recordOutcome(TENANT_ID, RUN_ID, "failed")).resolves.toBeUndefined();
+    expect(db.inserted).toMatchObject({ verdict: "failed" });
+  });
 });

@@ -8,6 +8,8 @@ import type {
   CostResolveUnitPriceResponse,
   CostRecordModelOutcomeRequest,
   CostRecordModelOutcomeResponse,
+  CostRecordRunVerdictRequest,
+  CostRecordRunVerdictResponse,
 } from "@alterx/contracts";
 import { serviceAuthorizationMetadata, type ServiceAccessTokenProvider } from "./service-auth";
 
@@ -28,6 +30,11 @@ export interface CostHandlerClient {
   recordModelOutcome(
     request: CostRecordModelOutcomeRequest,
   ): Promise<CostRecordModelOutcomeResponse>;
+}
+
+/** Design log §21: the run's verification verdict, recorded beside its cost. */
+export interface RunVerdictRecorder {
+  recordRunVerdict(request: CostRecordRunVerdictRequest): Promise<CostRecordRunVerdictResponse>;
 }
 
 interface CostGrpcClient extends Client {
@@ -52,11 +59,18 @@ interface CostGrpcClient extends Client {
     options: { readonly deadline: Date },
     callback: (error: Error | null, response?: CostRecordModelOutcomeResponse) => void,
   ): void;
+  recordRunVerdict(request: CostRecordRunVerdictRequest, options: { readonly deadline: Date }, callback: (error: Error | null, response?: CostRecordRunVerdictResponse) => void): void;
+  recordRunVerdict(
+    request: CostRecordRunVerdictRequest,
+    metadata: Metadata,
+    options: { readonly deadline: Date },
+    callback: (error: Error | null, response?: CostRecordRunVerdictResponse) => void,
+  ): void;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-export class CostClient implements CostHandlerClient {
+export class CostClient implements CostHandlerClient, RunVerdictRecorder {
   readonly #client: CostGrpcClient;
   readonly #timeoutMs: number;
   readonly #accessTokenProvider: ServiceAccessTokenProvider | undefined;
@@ -151,6 +165,26 @@ export class CostClient implements CostHandlerClient {
       };
       if (this.#accessTokenProvider === undefined) this.#client.recordModelOutcome(request, { deadline }, callback);
       else void serviceAuthorizationMetadata(this.#accessTokenProvider).then((metadata) => this.#client.recordModelOutcome(request, metadata, { deadline }, callback), reject);
+    });
+  }
+  async recordRunVerdict(
+    request: CostRecordRunVerdictRequest,
+  ): Promise<CostRecordRunVerdictResponse> {
+    return new Promise<CostRecordRunVerdictResponse>((resolve, reject) => {
+      const deadline = new Date(Date.now() + this.#timeoutMs);
+      const callback = (error: Error | null, response?: CostRecordRunVerdictResponse) => {
+        if (error !== null) {
+          reject(error);
+          return;
+        }
+        if (response === undefined) {
+          reject(new Error("Cost Service returned an empty response"));
+          return;
+        }
+        resolve(response);
+      };
+      if (this.#accessTokenProvider === undefined) this.#client.recordRunVerdict(request, { deadline }, callback);
+      else void serviceAuthorizationMetadata(this.#accessTokenProvider).then((metadata) => this.#client.recordRunVerdict(request, metadata, { deadline }, callback), reject);
     });
   }
 }

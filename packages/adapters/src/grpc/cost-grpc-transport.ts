@@ -16,6 +16,8 @@ import type {
   CostResolveUnitPriceResponse,
   CostRecordModelOutcomeRequest,
   CostRecordModelOutcomeResponse,
+  CostRecordRunVerdictRequest,
+  CostRecordRunVerdictResponse,
 } from "@alterx/contracts";
 import { internalError } from "./internal-error";
 
@@ -30,6 +32,9 @@ export interface CostHandler {
   recordModelOutcome(
     request: CostRecordModelOutcomeRequest,
   ): Promise<CostRecordModelOutcomeResponse>;
+  recordRunVerdict(
+    request: CostRecordRunVerdictRequest,
+  ): Promise<CostRecordRunVerdictResponse>;
 }
 
 export interface CostGrpcTransportConfig {
@@ -84,6 +89,17 @@ export class CostGrpcController {
       throw mapCostError(error);
     }
   }
+
+  @GrpcMethod("CostService", "RecordRunVerdict")
+  async recordRunVerdict(
+    request: CostRecordRunVerdictRequest,
+  ): Promise<CostRecordRunVerdictResponse> {
+    try {
+      return await this.handler.recordRunVerdict(request);
+    } catch (error: unknown) {
+      throw mapCostError(error);
+    }
+  }
 }
 
 /** Cost Ledger is single-transport, so this starts the microservice itself
@@ -109,10 +125,17 @@ function mapCostError(error: unknown): RpcException {
   if (
     isNamedError(error, "CostValidationError") ||
     isNamedError(error, "RollupValidationError") ||
-    isNamedError(error, "ModelOutcomesValidationError")
+    isNamedError(error, "ModelOutcomesValidationError") ||
+    isNamedError(error, "RunVerdictValidationError")
   ) {
     return new RpcException({
       code: status.INVALID_ARGUMENT,
+      message: error.message,
+    });
+  }
+  if (isNamedError(error, "RunVerdictConflictError")) {
+    return new RpcException({
+      code: status.FAILED_PRECONDITION,
       message: error.message,
     });
   }
