@@ -41,7 +41,8 @@ import { RunOutcomeService } from "./runs/run-outcome.service";
 import { ProjectRunProvisioningService } from "./runs/project-run-provisioning.service";
 import { RunWorkspaceLookupService } from "./runs/run-workspace-lookup.service";
 import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.constants";
-import { RunLearningController } from "./runs/run-learning.controller";
+import { RUN_LEARNING_AUDIT, RunLearningController } from "./runs/run-learning.controller";
+import { runLearningAuditClient } from "./runs/run-learning-audit";
 import { RunObservabilityController } from "./runs/run-observability.controller";
 import { RunObservabilityService } from "./runs/run-observability.service";
 import { loadRunLauncherEnvironment } from "./config/run-launcher-environment";
@@ -391,6 +392,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: RunOutcomeService,
       useFactory: () => buildRunOutcomeService(),
+    },
+    {
+      provide: RUN_LEARNING_AUDIT,
+      useFactory: () => runLearningAuditClient(process.env),
     },
     {
       provide: ApprovalsService,

@@ -56,6 +56,7 @@ describe("orchestration migration files", () => {
       "0036_add_workflow_version_task_skeleton.sql",
       "0037_drop_workflow_version_requirements_columns.sql",
       "0038_remove_voice_conversation_channel.sql",
+      "0039_run_owner_tenant.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -101,6 +102,7 @@ describe("orchestration migration files", () => {
       "0036_remove_workflow_version_task_skeleton.sql",
       "0037_restore_workflow_version_requirements_columns.sql",
       "0038_restore_voice_conversation_channel.sql",
+      "0039_drop_run_owner_tenant.sql",
     ]);
   });
 

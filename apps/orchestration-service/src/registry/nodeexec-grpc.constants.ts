@@ -37,6 +37,15 @@ export const MEMORY_CLIENT_PROTO_PATH = existsSync(workspaceMemoryProtoPath)
   ? workspaceMemoryProtoPath
   : resolve(__dirname, "../../proto/memory.proto");
 
+const workspaceAuditEventsProtoPath = resolve(
+  process.cwd(),
+  "packages/contracts/proto/alter/audit/v1/audit.proto",
+);
+
+export const AUDIT_EVENTS_CLIENT_PROTO_PATH = existsSync(workspaceAuditEventsProtoPath)
+  ? workspaceAuditEventsProtoPath
+  : resolve(__dirname, "../../proto/audit.proto");
+
 const workspaceCostProtoPath = resolve(
   process.cwd(),
   "packages/contracts/proto/alter/cost/v1/cost.proto",
