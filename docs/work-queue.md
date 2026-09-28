@@ -46,8 +46,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.9a | usage and cost pages live: month-to-date billable spend and billed operations, by source and by provider/resource, from `/api/v1/costs/summary`. Live mode showed the demo's made-up figures before (e.g. "$284.73", random chart bars). Workflow/project estimates now show "-" in live instead of invented numbers. Budgets hidden in live until B2.9b. | done (this PR) |
 | B2.9b | budgets: platform_db `budgets` (migration 0024, tenant RLS, per workspace, monthly, INR/USD, notify/warn/block thresholds) with list (any member; this month's billable spend from the cost ledger, unknown if the ledger is down or counts another currency), create/update/delete (workspace admin, new `budgets:write`). Page creates, pauses, deletes. Thresholds are stored, not yet acted on: alerts wait on B3.1, blocking on C10 | done (this PR) |
 | B3.1 | notifications | todo |
-| B3.2 | benchmarks | todo |
-| B3.3 | discovery | todo |
+| B3.2 | benchmarks | blocked (decision, below): the console is customer-facing, but eval_db holds only Alter's own golden sets and the API only runs them for staff |
+| B3.3 | discovery live: suggestions derived from the workspace's own runs, documents, approvals and connectors, with "Create draft workflow" (opens the new draft) and Dismiss. The use-case catalogue keeps only conversation starters in live; the demo's template ids and invented recommendations are not shown | done (this PR) |
 | B3.4 | server search beyond listing/tool | todo |
 | B3.5 | Tool Registry, confirm live | todo |
 | B3.6 | Media Services, confirm live | todo |
@@ -103,6 +103,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B1.2 gaps | Admin user screens show MFA and risk state in demo only; user notes (write) have no backend. Build or drop? |
 | Cost visibility | `GET /api/v1/costs/summary` returns the ledger's internal cost and margin to any workspace member with billing:read. The console shows only billable spend, but the API still exposes them. Recommendation: strip internal/retry/recovery cost and margin from the tenant route, and keep them for a staff route. Confirm? |
 | B2.4 upload | Sellers cannot submit identity documents in live mode: there is no document store and no KYC vendor ("manual review until a vendor is selected"). Choose: Razorpay Route linked-account KYC (Razorpay holds the documents), a vendor, or our own encrypted S3 store with retention rules. |
+| B3.2 | Benchmarking console: customers see a benchmarks area, but the engine has no tenant datasets or tenant eval runs (eval_db = Alter's golden sets; `/api/v1/admin/benchmarks` = staff run + release gate). Choose: (a) staff-only eval history in the admin console (needs a list-runs RPC), (b) build tenant datasets and runs in eval-service, (c) drop from v1. Recommendation: (a) now, (b) later. |
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |
 | B1.1 gaps | Admin tenant screens show members, workflows, 30-day runs and spend in demo only; tenant notes (write) and a "restricted" tenant state have no backend. Build them, or drop them from the UI? |
