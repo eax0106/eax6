@@ -91,6 +91,23 @@ export class I18nService {
     return workspace[0]?.language ?? "en";
   }
 
+  /** The signed-in user's saved language, so a new device starts in it. */
+  async getUserLanguage(actor: ActorContext): Promise<LanguagePreference> {
+    const rows = await this.db.queryTenant<LanguagePreference>(
+      actor.tenant_id,
+      `SELECT u.preferred_language AS language
+         FROM users u
+        WHERE u.id = $1
+          AND EXISTS (
+            SELECT 1
+              FROM tenant_members
+             WHERE tenant_id = $2 AND user_id = $1
+          )`,
+      [actor.user_id, actor.tenant_id],
+    );
+    return required(rows[0], "I18N_USER_NOT_FOUND", "/api/v1/i18n/users/me/language");
+  }
+
   async updateUserLanguage(
     actor: ActorContext,
     language: SupportedLocale,
