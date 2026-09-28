@@ -8,14 +8,17 @@
 
 Chooses the execution strategy for a problem — single agent, manager-worker, and so on.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 7 — Planner** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Design work stops; **and the `replan` recovery strategy becomes unavailable**, degrading self-heal without stopping runs that do not need it. |
+| Fail mode | fail-closed. A partial or low-confidence decomposition must route to **8. Clarification Loop**, not proceed. |
+| Driver | invoked by Problem Understanding for build/modify intents; invoked by Recovery Policy Engine when Classify selects `replan`. *Driver test:* both callers reach it — a fresh build produces a task skeleton, and a real failing run triggering `replan` also produces one. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

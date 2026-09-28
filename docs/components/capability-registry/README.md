@@ -10,14 +10,17 @@
 
 The catalogue of what agents can do, versioned and tenant-scoped.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 11 — Capability Registry** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Compiled workflows keep running (bindings are already baked into the DAG), but new design work stops **and** the swap-agent / rebind recovery strategies become unavailable. |
+| Fail mode | fail-closed. An incomplete candidate set must be reported as incomplete, never returned as if it were the full set — otherwise Selection & Binding silently picks from a truncated field. |
+| Driver | lookups driven by Selection & Binding and by Recovery. **Availability and health metadata need their own driver** — a real scheduled refresh, not a manual switch. *Driver test:* a provider going unhealthy is reflected in registry availability without human intervention. *(The old build had a correct, properly-authorized provider-health failover switch that no automated signal ever fed — Pattern 3 exactly.)* |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

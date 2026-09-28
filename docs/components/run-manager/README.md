@@ -10,14 +10,17 @@
 
 Decides whether a run starts, queues it, and dispatches it to the durable substrate. It does not walk the graph node by node — that is the Executor's job. Run Manager owns the moment a run comes into existence and the decision of whether it is allowed to.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 16 — Run Manager** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, but severe: no new runs start. Runs already executing on the Durable Substrate continue; the design path is unaffected. |
+| Fail mode | fail-closed. A run that cannot be safely started is not started, and is recorded as failed rather than left silently pending. |
+| Driver | event pickup and manual requests drive enqueue. **Dispatch requires its own real scheduler** — a background sweeper draining per active tenant on an interval, with a tenant-fairness policy above it. *Driver test:* **a queued run is dispatched with no further launches happening anywhere in the system.** This single test would have caught the largest finding in the old build's audit. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

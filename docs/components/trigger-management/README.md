@@ -9,14 +9,17 @@
 
 Creating, testing and removing the triggers that start workflows.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 2 — Event & Trigger Gateway** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. If it is down, new external work cannot enter the engine, but in-flight runs continue unaffected. |
+| Fail mode | fail-closed. Reject signals that fail validation, signature verification, or durable write. Never accept-and-hope. |
+| Driver | external callers drive the webhook and form paths. **Scheduled triggers need their own driver** — a real scheduler, not an incidental one. *Driver test:* a scheduled trigger fires on time with no other activity in the system. This is precisely the old build's Pattern 3 failure (a dispatch queue whose only driver was the next unrelated launch); the test must prove the scheduler exists and runs unprompted. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

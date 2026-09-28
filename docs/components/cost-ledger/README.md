@@ -10,14 +10,17 @@
 
 Answers "what did this cost us" — internal, per-run, per-node engineering data. Distinct from Billing, which answers what the customer owes.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 39 — Cost Ledger** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-open-and-logged` |
+| Blast radius | this-layer-only. The budget gate fails closed without it (contract 16), so runs will not start rather than running unmetered. |
+| Fail mode | fail-closed for the budget gate. An unknown spend position must block, not permit. |
+| Driver | writes driven by the gateways; estimates read by Run Manager. *Driver test:* a real run produces complete cost attribution across every node, with its verification verdict recorded alongside. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

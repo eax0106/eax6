@@ -8,14 +8,17 @@
 
 What the customer sees about spend, credits and invoices.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 43 — Billing & Subscription — **BUILD DEFERRED**** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | *Not stated in the contract.* |
+| Fail mode | *Not stated in the contract.* |
+| Driver | *Not stated in the contract.* |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

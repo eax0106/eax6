@@ -10,14 +10,17 @@
 
 The single swappable route to every frontier model. Every reasoning component in the engine reaches the outside world through here, and none of them is married to a provider.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 26 — Model Gateway** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, severe and unusually broad: it affects **both paths**. Reasoning components on the design path and AI nodes on the run path all stop; purely deterministic nodes continue. |
+| Fail mode | fail-closed. Never fabricate a response, never silently downgrade to a weaker model without that being a recorded routing decision (design log Section 12: cost never silently degrades quality). |
+| Driver | invoked by its many callers. *Driver test:* a real model call succeeds through the gateway, with cost recorded and outcome reported to Drift Detector. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

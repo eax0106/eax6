@@ -9,14 +9,25 @@
 
 "What is waiting on me" across every workflow — the approval inbox.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 53 — Approval Inbox** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only), but approvals block their runs while unseen. |
+| Fail mode | fail-closed. Never display an approval as decided that was not, and never lose a submitted decision. |
+| Driver | user interaction; **arrival driven by 45. Notification**. *Driver test:* an approval raised during an unattended run appears here and is actionable. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+**Contract 25 — Approval Store** ([`component-contracts.md`](../../architecture/component-contracts.md))
+
+| | |
+|---|---|
+| Blast radius | this-layer-only. Workflows containing approval nodes block at those nodes; others are unaffected. |
+| Fail mode | fail-closed. Never auto-approve because state could not be read. Never lose a decision that a human actually made. |
+| Driver | raised by Executor; decided by humans via Platform API; **timeout mode needs its own driver** — a real scheduler for auto-reject-on-timeout. *Driver test:* a timeout-mode approval actually times out and resolves without anyone touching the system. |
+
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

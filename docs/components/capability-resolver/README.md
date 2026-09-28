@@ -9,14 +9,17 @@
 
 Works out what capability and model tier a described task actually needs.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 9 — Capability Resolver** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Design path only. |
+| Fail mode | fail-closed. An unresolvable requirement must surface, not default to a guessed tier. |
+| Driver | invoked by Planner after decomposition. *Driver test:* a real task skeleton produces per-node requirements that reach the Synthesizer. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

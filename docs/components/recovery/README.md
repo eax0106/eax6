@@ -9,14 +9,17 @@
 
 The self-heal engine. Classifies why a node failed, selects a strategy, and dispatches it — keeping the workflow alive without a blocking human gate.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 30 — Recovery Policy Engine** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Failures cannot be repaired; runs fail rather than self-healing. |
+| Fail mode | fail-closed. An unclassifiable failure escalates to the user rather than defaulting to a guessed strategy. |
+| Driver | invoked by Verification and Executor on failure. *Driver test:* a real failure of each classified type produces the correct strategy and a real repair. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

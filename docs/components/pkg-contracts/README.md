@@ -9,14 +9,17 @@
 
 Shared protobuf and type definitions every service compiles against.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 35 — Type/Schema Contracts** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | whole-engine, at build time. A contract error breaks compilation everywhere, which is the correct place for it to break. |
+| Fail mode | fail-closed at build. A malformed or breaking contract change fails CI rather than reaching runtime. |
+| Driver | *Not stated in the contract.* |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

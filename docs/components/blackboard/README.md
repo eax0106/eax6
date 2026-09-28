@@ -10,14 +10,17 @@
 
 Carries one node's output to the next during a run. Redis accelerates; Postgres decides.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 22 — Blackboard** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Runs cannot share context between nodes. |
+| Fail mode | fail-closed. Never return partial or stale context as though complete — a node reasoning on incomplete inherited context produces confidently wrong output. |
+| Driver | written and read by Executor during execution. *Driver test:* a downstream node genuinely receives an upstream node's output through this component, with no re-prompting. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

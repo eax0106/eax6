@@ -564,7 +564,7 @@ demo.
 - [ ] **C10 Run Manager atomic budget gate** (§22) — must be atomic, not read-then-decide.
 - [ ] **C11 Policy Store global tier**, structurally incapable of holding tenant content
       (§22).
-- [ ] **C13 map the 54 contracts onto the 61 components** — from decision 0.7. Replace the
+- [x] **C13 map the 54 contracts onto the 61 components. DONE 2026-09-28** (44 mapped, 17 marked uncovered with the reason) — from decision 0.7. Replace the
       proposed blast radius / fail mode / driver values in `components/` with
       `architecture/component-contracts.md`'s. Its done gates are targets, not gates that
       fail today. Roughly a day; closes design log §29's open item.
@@ -793,7 +793,7 @@ demo.
       project and workflow routes lives in `EnforcingRbacModule`; only the revive-platform integration
       suite binds it (PR #17). A regression in the resolver would pass every other test.
 
-- [ ] **C35 [+] vitest hangs whenever the repository-root `.env.local` exists.** Found 2026-09-28:
+- [x] **C35 [+] vitest hangs whenever the repository-root `.env.local` exists. FIXED 2026-09-28:** root cause is Vite 8's `loadEnv` looping on a self-referencing default (`PLATFORM_DB_PORT=${PLATFORM_DB_PORT:-5432}`) referenced by `DATABASE_URL`; Vitest configs set `envDir: false` and CI proves it with a generated `.env.local`. Found 2026-09-28:
       any vitest run (platform-api, model-gateway) sits at 100% CPU with no output after Vite loads
       env files; moving `.env.local` aside makes the same spec pass in seconds. Every developer who
       follows AGENTS.md has that file. Likely Vite's env expansion on the file's many

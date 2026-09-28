@@ -10,14 +10,17 @@
 
 Judges whether a node's output actually did what it was supposed to. The component the entire verified-run billing claim rests on.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 29 — Verification & Quality Gate** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, severe. Under fail-closed rules nothing can be marked successful, so runs stall or fail rather than completing unverified. |
+| Fail mode | **fail-closed, absolutely.** If verification errors, times out, or cannot get a clean signal, the result is unverified — routed to review, never silently counted as success. Section 5's honest framing: not "100% certain," but "never wrongly claims success it did not check." |
+| Driver | invoked by Executor per node and at completion. *Driver test:* every node in a real run is verified; none is skipped. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

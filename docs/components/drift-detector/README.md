@@ -9,14 +9,17 @@
 
 Watches live performance and decays stale policy scores, so the engine's judgment tracks reality rather than a snapshot.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 34 — Drift Detector** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-open-and-logged` |
+| Blast radius | degraded (self only). Policy quality slowly decays and suggestions stop; nothing immediate breaks. |
+| Fail mode | fail-open with loud logging. It must never block runs — but silent failure means learning quietly rots, which is exactly how the old build's drift detector ran under-scoped unnoticed. |
+| Driver | **a real scheduler, mandatory.** *Driver test:* drift evaluation runs on schedule with no human involvement, and a genuine regression produces both a policy decay and a user-visible suggestion. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

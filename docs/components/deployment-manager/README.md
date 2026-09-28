@@ -9,14 +9,17 @@
 
 Deploying and managing what the engine produces.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 15 — Workflow Lifecycle** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Runs continue on their current production versions; publishing, canary, and — importantly — **rollback** become unavailable, which is the genuinely uncomfortable part of this outage. |
+| Fail mode | fail-closed. A promotion that cannot be verified as passing does not promote. A rollback that cannot be confirmed reports failure loudly rather than silently leaving a bad version live. |
+| Driver | invoked by Platform API for user-initiated transitions; **automatic rollback needs its own driver** — a real monitor watching canary health, not a human noticing. *Driver test:* a canary version showing regression is rolled back automatically, with no human intervention. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

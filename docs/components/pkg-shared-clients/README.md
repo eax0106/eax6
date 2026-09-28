@@ -16,7 +16,7 @@ Generated and hand-written clients services use to reach one another.
 | Blast radius | `this-layer-only` |
 | Fail mode | `fail-closed` |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*No contract covers this component: a library of provider ports and mocks, not a component with a contract. These values stay proposed (task C13).*
 
 ## Where the code lives
 

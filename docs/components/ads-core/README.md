@@ -9,14 +9,25 @@
 
 The store behind cross-workflow context — where a user's accumulated material physically lives, and what retrieval reads.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 5 — ADS Store** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, same reasoning as ADS Client. |
+| Fail mode | fail-closed. Never return partial results silently as if complete. |
+| Driver | queries driven by ADS Client. **Ingestion needs its own driver** — a real indexing worker, not an incidental one. *Driver test:* content becomes retrievable after ingestion with nothing else prompting the system. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+**Contract 4 — ADS Client** ([`component-contracts.md`](../../architecture/component-contracts.md))
+
+| | |
+|---|---|
+| Blast radius | this-layer-only. Design work degrades (no prior context); runs containing RAG or memory nodes fail at those nodes; runs without them are unaffected. |
+| Fail mode | fail-closed, on both axes. If scope cannot be established, refuse the query — never return unscoped data. If context cannot be retrieved during design, say so rather than silently designing against missing context. |
+| Driver | called by Problem Understanding and Planner on the design path; called by RAG-type nodes through Executor on the run path. *Driver test:* a real design-path request and a real run-path RAG node each retrieve through this component, with scope enforced in both. |
+
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

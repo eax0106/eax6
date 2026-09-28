@@ -15,7 +15,7 @@ A declared voice surface: number binding, call handling, outbound calls, account
 | Blast radius | `nothing` |
 | Fail mode | `fail-closed` |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*No contract covers this component: scope undecided (open question 2). These values stay proposed (task C13).*
 
 ## Where the code lives
 

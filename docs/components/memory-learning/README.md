@@ -9,14 +9,17 @@
 
 Summarises what happened in a run into something the engine can learn from, and feeds the Policy Store.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 32 — Memory & Learning** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Learning stops; runs are entirely unaffected. |
+| Fail mode | fail-closed on writes. Never record learning whose provenance cannot be confirmed. |
+| Driver | invoked on verified run completion. *Driver test:* a verified run produces a learning candidate; **a failed run produces none.** |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

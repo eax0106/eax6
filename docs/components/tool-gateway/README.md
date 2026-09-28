@@ -9,14 +9,17 @@
 
 The single route from a node to the outside world: HTTP, browser, connector and internal tool families, with credential resolution and token minting behind it.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 27 — Tool Gateway** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, severe: tool-performing nodes fail **and** mechanical verification cannot run. |
+| Fail mode | fail-closed. No action without a recorded effect (contract 24). No action without resolved permission. No unbounded response reads. |
+| Driver | invoked by Executor and by Verification. *Driver test:* both callers work — a node performs a real external action, and verification reads that same action back independently. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

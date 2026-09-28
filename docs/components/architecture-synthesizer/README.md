@@ -8,14 +8,17 @@
 
 Decides what system should exist for a described problem — the topology, the waves, the roles. This is the product.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 10 — Architecture Synthesizer** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only). Design path only; existing workflows are unaffected. |
+| Fail mode | fail-closed. A low-confidence architecture must ask rather than ship a guessed topology — a wrong topology produces a workflow that runs successfully while doing the wrong thing, which verification may not catch. |
+| Driver | invoked by Capability Resolver in the design chain. *Driver test:* a real ProblemSpec traverses Planner → Resolver → Synthesizer and produces a complete ArchitectureSpec. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

@@ -202,6 +202,16 @@ jobs:
       # cross-project edge case, so the branch that actually lands on main
       # still gets the exhaustive check.
 
+      - name: vitest with the repository .env.local present
+        # Task C35. Vite 8's env-file loader loops forever on the example's
+        # self-referencing defaults, so every vitest run hung on a developer
+        # machine. The configs no longer read env files; this proves it with a
+        # generated .env.local, and a hang fails at the timeout.
+        run: |
+          scripts/bootstrap-env-local.sh --out .env.local --from .env.local.example >/dev/null
+          timeout 120 pnpm exec vitest run packages/tenancy/src/index.spec.ts
+          rm .env.local
+
       - name: architecture gates
         # Task C1. The eleven AST gates from alterengine--5, each held to
         # scripts/gates/baseline.json: a new violation fails, and so does a

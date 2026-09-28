@@ -10,14 +10,17 @@
 
 Converges parallel branches back into one path after a fan-out.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 20 — Node Type Registry** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `degraded` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Executor cannot dispatch without it. |
+| Fail mode | fail-closed. An unrecognized node kind must refuse to execute, never fall through to a default behavior. |
+| Driver | invoked by Executor per node dispatch. *Driver test:* every registered node kind is reachable and correctly dispatched by a real workflow execution. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 
