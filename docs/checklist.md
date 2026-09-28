@@ -517,7 +517,11 @@ call behind it.
 to the design log's standards. Priced individually, never batched. Nothing here blocks the
 demo.
 
-- [ ] **C1 architecture gates.** Export the 11 AST gates from `alterengine--5`, each with a
+- [x] **C1 architecture gates. DONE 2026-09-28** — `scripts/gates/`, CI step "architecture gates",
+      baseline of 722 findings (mock-reachability 25, unsafe-default 219, driver-existence 59,
+      duplicate-primitive 146, safety-duplicate 34, cost-no-float 61, deletion-registration 174,
+      capability-coverage 1, verifier-driver 2, deletion-schema 1, test-env-file 0). Fails on a new
+      finding and on a stale baseline entry. Original: Export the 11 AST gates from `alterengine--5`, each with a
       baseline allowlist of every current violation, so they fail only on **new** ones.
       Nobody stops for a cleanup sprint; every later fix lands governed.
 - [x] **C2 `RUNTIME_MODE` switch — CLOSED 2026-09-16, PR #13 (`3c03199`).** Carries C15.
