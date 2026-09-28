@@ -214,6 +214,7 @@ async function executeNodeWithRecovery(
       nodeType: node.type,
       configJson: JSON.stringify(node.config),
       predecessorKeys: [...predecessorKeys],
+      ...(node.success_criteria === undefined ? {} : { successCriteria: [...node.success_criteria] }),
     });
 
     if (result.pending === true) {

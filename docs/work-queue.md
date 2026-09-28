@@ -60,7 +60,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 ### Track C — design-log compatibility
 | # | Item | Status |
 |---|---|---|
-| C29 | slice 2b: criteria to the producing node and the gate | todo |
+| C29 | slice 2b: each compiled node's own success criteria reach the node that produces the output (LLMTask states them) and the Verification & Quality Gate, which judges each one and fails the node on any unmet criterion whatever the rubric score. Live Bedrock proof of an off-contract answer failing still to run | done (this PR) |
 | C1 | 11 AST architecture gates imported from alterengine--5 into `scripts/gates/`, run in CI against `baseline.json` (722 findings recorded): a new violation fails and so does a fixed one left in the baseline, so the count only ratchets down. Adapted: Cost Ledger paths, generated code skipped, and the two gates whose subject does not exist yet (deletion registry, capability registry) report that single absence instead of crashing | done (this PR) |
 | C3 | deletion registration in CI: `packages/deletion-registry` names all 125 tables in the 8 databases -- 100 tenant tables with the erasure route that reaches them, 25 exemptions with reasons. CI builds every database from its real migrations (`scripts/deletion/materialize-schemas.sh`, pgvector Postgres) and `certify.ts` fails on an unregistered or stale table, on a provider that erases a different set than the registry says, or on more erasure gaps than `MAX_ERASURE_GAPS`. The source gate's 174 findings fall to 0. **Found: erasure reaches 38 tenant tables; 62 are gaps** (platform_db 49, cost 3, intelligence 5, policy 4, audit 1) | done (this PR) |
 | C3b | erasure providers for the gaps: platform-api, cost-ledger-service, intelligence-service and memory-service providers wired into the audit-service DeletionOrchestrator; lower `MAX_ERASURE_GAPS` with each. Retention rules first (decision below) | todo |
@@ -74,11 +74,11 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C38 | §19 Capability Registry workflow templates | blocked (freeze exemption): Capability Registry is Category 1 #20 |
 | C39 | §17 Drift Detector outbound suggestion path | todo, after B3.1b: Drift Detector is Category 3 (buildable), but a suggestion needs a delivery path to the user, which is the notification producers |
 | C4 | safety as a shared in-process library | blocked (freeze exemption): moving the screens out of Conversation Manager (#23) and Model Gateway (#15) into one library changes both |
-| C7 | Agent Factory extracted | todo |
+| C7 | Agent Factory extracted: the Factory no longer imports Selection & Binding. What both need -- the embedding port and vector check, the id types, `NoAgentMatch` -- moved to a neutral `src/agent_contracts` (Selection re-exports, so nothing else changed); a boundary test fails if the Factory imports Selection or Recovery again. Behaviour unchanged: 366 intelligence tests pass | done (this PR) |
 | C18 | re-embed backfill | blocked (freeze exemption): rewrites the Capability Registry's (#20) stored vectors |
 | C13 | map 54 contracts onto 61 components: 44 component READMEs now carry their contract's blast radius, fail mode and driver (some map to two contracts, e.g. HumanApproval to Node Type Registry and Approval Store); the 17 no contract covers say so and keep proposed values | done (this PR) |
 | C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |
-| C34 | specs authorize through the enforcing resolver | todo |
+| C34 | specs authorize through the enforcing resolver: `enforcing-rbac.routes.spec.ts` mounts the real Project and Workflow controllers behind the production resolution rules and proves the admin of workspace A is refused B's project and workflow (403, only the ownership lookup reaches the engine); removing the workflow binding fails it | done (this PR) |
 | C35 | vitest hang with `.env.local` present: Vite 8's `loadEnv` (bundled dotenv-expand) loops forever on `PLATFORM_DB_PORT=${PLATFORM_DB_PORT:-5432}` once `DATABASE_URL` references it. Every Vitest config, plus a new root one for config-less runs, sets `envDir: false`; CI runs a spec with a generated `.env.local` under a 120 s timeout | done (this PR) |
 | C30 | §16 approval modes | blocked (decision) |
 | C32 | image publishing collision | blocked (decision) |

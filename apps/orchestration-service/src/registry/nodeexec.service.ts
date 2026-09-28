@@ -179,9 +179,11 @@ export class NodeexecService {
       );
       const agentBinding = await this.#resolveAgentBindingBestEffort(request, executionConfig);
       boundAgentId = agentBinding.agent_id;
+      const successCriteria = request.success_criteria ?? [];
       const result = await this.registry.execute(request.node_type, {
         config: executionConfig,
         inputs,
+        ...(successCriteria.length === 0 ? {} : { success_criteria: successCriteria }),
         tenant_id: request.tenant_id,
         run_id: request.run_id,
         node_execution_id: request.node_execution_id,
@@ -264,6 +266,7 @@ export class NodeexecService {
           node_type: request.node_type,
           config_json: JSON.stringify(executionConfig),
           output_json: outputJson,
+          success_criteria: successCriteria,
         });
         if (verification !== undefined) {
           await this.ledger.recordVerificationResult({

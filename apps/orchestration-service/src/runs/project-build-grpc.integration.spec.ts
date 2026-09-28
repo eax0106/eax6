@@ -279,6 +279,7 @@ describe("project build gRPC boundary", () => {
       node_type: "LLMTask",
       config_json: JSON.stringify({ prompt: "Build project", model_alias: "ADVANCED" }),
       inputs_json: "{}",
+      success_criteria: [],
     });
     expect(JSON.parse(response.output_json)).toEqual({
       files: [{ path: "src/index.ts", content: "export const built = true;\n" }],

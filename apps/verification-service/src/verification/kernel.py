@@ -24,7 +24,7 @@ into that table, the same way NodeexecService owns node_executions writes.
 import json
 
 from .llm_client import MODEL_ALIAS_ADVANCED, ReviewerLlmClient
-from .models import NodeType, ScoreNodeRequest, ScoreNodeResponse, Verdict
+from .models import CriterionJudgement, NodeType, ScoreNodeRequest, ScoreNodeResponse, Verdict
 from .policy_client import QualityThresholdPolicyClient
 
 DEFAULT_THRESHOLD = 0.7
@@ -133,13 +133,17 @@ class VerificationKernel:
     def _score_deterministic(self, request: ScoreNodeRequest) -> ScoreNodeResponse:
         complete = _is_structurally_complete(request.output_json)
         score = 1.0 if complete else 0.0
-        details = {
+        details: dict[str, object] = {
             "reason": (
                 "output is a non-empty structured value"
                 if complete
                 else "output is empty, null, or not valid JSON"
             ),
         }
+        if request.success_criteria:
+            # A routing or control-flow node's output is a decision, not
+            # content; its criteria are recorded, not judged by a reviewer.
+            details["criteria_not_judged"] = list(request.success_criteria)
         return ScoreNodeResponse(
             verdict="pass" if complete else "fail",
             score=score,
@@ -170,7 +174,7 @@ class VerificationKernel:
         )
         if classification.injection_detected:
             threshold, _warn_margin = await self._resolve_threshold(request.tenant_id)
-            details = {
+            blocked = {
                 "reason": classification.reason
                 or "output classified as a prompt injection attempt",
                 "confidence": classification.confidence,
@@ -180,7 +184,7 @@ class VerificationKernel:
                 score=0.0,
                 threshold=threshold,
                 reviewer_model=REVIEWER_MODEL_INJECTION_BLOCKED,
-                details_json=json.dumps(details),
+                details_json=json.dumps(blocked),
             )
 
         score, rationale = await self._llm.review(
@@ -198,9 +202,30 @@ class VerificationKernel:
             )
 
         threshold, warn_margin = await self._resolve_threshold(request.tenant_id)
-        details = {"rationale": rationale, "rubric": rubric}
+        details: dict[str, object] = {"rationale": rationale, "rubric": rubric}
+        verdict = _verdict_for(score, threshold, warn_margin)
+        if request.success_criteria:
+            # C29: the task's own contract. The rubric says what good output of
+            # this node type looks like; the criteria say what this node was
+            # asked to achieve. Any unmet criterion fails the node, whatever
+            # the rubric score -- fluent, off-contract output is the failure
+            # this exists to catch.
+            judgements = await self._llm.judge_criteria(
+                tenant_id=request.tenant_id,
+                run_id=request.run_id,
+                node_execution_id=request.node_execution_id,
+                node_type=request.node_type,
+                criteria=request.success_criteria,
+                config_json=request.config_json,
+                output_json=request.output_json,
+            )
+            _require_one_judgement_each(request.success_criteria, judgements)
+            details["criteria"] = [judgement.model_dump() for judgement in judgements]
+            if any(not judgement.met for judgement in judgements):
+                verdict = "fail"
+                details["reason"] = "output does not meet every success criterion"
         return ScoreNodeResponse(
-            verdict=_verdict_for(score, threshold, warn_margin),
+            verdict=verdict,
             score=score,
             threshold=threshold,
             reviewer_model=MODEL_ALIAS_ADVANCED,
@@ -215,3 +240,14 @@ class VerificationKernel:
         except Exception:
             return DEFAULT_THRESHOLD, WARN_MARGIN
         return resolved if resolved is not None else (DEFAULT_THRESHOLD, WARN_MARGIN)
+
+
+def _require_one_judgement_each(
+    criteria: tuple[str, ...], judgements: list[CriterionJudgement]
+) -> None:
+    """A reviewer that skips, reorders or invents a criterion has not judged
+    the contract; that is an error, never a pass."""
+    if [judgement.criterion for judgement in judgements] != list(criteria):
+        raise VerificationValidationError(
+            "reviewer did not return exactly one judgement per success criterion, in order"
+        )

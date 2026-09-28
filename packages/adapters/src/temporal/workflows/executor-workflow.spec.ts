@@ -414,6 +414,38 @@ describe.sequential("executorWorkflow", () => {
     };
   }
 
+  it("hands each node its own compiled success criteria, and none to a node without any (C29)", async () => {
+    const taskQueue = "executor-success-criteria";
+    const seen: Record<string, readonly string[] | undefined> = {};
+    const activities: ExecutorActivities = {
+      async executeNode(input) {
+        seen[input.nodeKey] = input.successCriteria;
+        return { outputJson: JSON.stringify({ from: input.nodeKey }), metadataJson: "{}" };
+      },
+      async finalizeRun() {},
+      async recordApprovalDecision() {},
+    };
+    const running = startWorker(
+      await createExecutorWorker(config(taskQueue), environment.nativeConnection, activities),
+    );
+    try {
+      const dag = sequentialDag();
+      const withCriteria: CompiledDag = {
+        ...dag,
+        nodes: [{ ...dag.nodes[0]!, success_criteria: ["Refund total stated"] }, dag.nodes[1]!],
+      };
+      const handle = await environment.client.workflow.start(WORKFLOW_TYPE, {
+        taskQueue,
+        workflowId: "executor-success-criteria-workflow",
+        args: [{ tenantId: "ten_test", runId: "run_test", compiledDagJson: JSON.stringify(withCriteria) }],
+      });
+      await handle.result();
+      expect(seen).toEqual({ node_a: ["Refund total stated"], node_b: undefined });
+    } finally {
+      await stopWorker(running);
+    }
+  });
+
   it("walks a sequential chain in order, passing only direct predecessors, and finalizes the run as completed", async () => {
     const taskQueue = "executor-sequential";
     const callOrder: string[] = [];

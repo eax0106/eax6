@@ -119,6 +119,7 @@ class VerifyGrpcService:
                 node_type=cast(NodeType, request.node_type),
                 config_json=request.config_json,
                 output_json=request.output_json,
+                success_criteria=tuple(request.success_criteria),
             )
         except ValidationError as error:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(error))

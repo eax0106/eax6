@@ -557,7 +557,7 @@ demo.
       `lineItems[].source` not in the `COST_SOURCES` union before estimating anything —
       `source: "telepathy"` now throws `EstimationValidationError`, verified by
       `estimation.service.spec.ts` and `estimation.controller.spec.ts`.
-- [ ] **C7 Agent Factory extracted** as its own L4 component (§22 item 9) — two callers in
+- [x] **C7 Agent Factory extracted** (DONE 2026-09-28: no import of Selection & Binding; shared contract module; boundary test) as its own L4 component (§22 item 9) — two callers in
       different layers.
 - [ ] **C8 Side-Effect Ledger + idempotency gate** in front of Dispatch (§4, §22 item 7).
 - [ ] **C9 reviewer isolation** against prompt injection (§5.4).
@@ -640,7 +640,7 @@ demo.
       minutes, so this is invisible from outside. **It blocks every task whose artefact is a
       test, and it blocked 2.4a.** Pairs naturally with C25 — both are "the tooling config
       nobody looked at".
-- [ ] **C29 [+] nothing validates model output against the task's contract. SCOPED 2026-09-16,
+- [ ] **C29 [+] nothing validates model output against the task's contract. Slice 2b BUILT 2026-09-28: criteria reach the producing node and the gate, which fails any unmet criterion (see memoryalter); live Bedrock proof outstanding. SCOPED 2026-09-16,
       and it is the same work as C12.** The contract is not missing from the system, it is
       missing from the *path*: `success_criteria` is decided at the top of the design path and
       never reaches the node that produces output or the gate that judges it. **Fix is to carry
@@ -789,7 +789,7 @@ demo.
       "continues as new before history grows" failed once on PR #18 with `pollUntil timed out after
       10000ms`, passed on rerun and 5/5 locally; their CI has passed it every time. Code identical to
       theirs. Make the wait deterministic rather than longer.
-- [ ] **C34 [+] most specs authorize through the non-enforcing `RbacModule`.** Workspace isolation on
+- [x] **C34 [+] most specs authorize through the non-enforcing `RbacModule`. DONE 2026-09-28** (`apps/platform-api/src/rbac/enforcing-rbac.routes.spec.ts`: real controllers, production rules, cross-workspace denial; negative control bites). Workspace isolation on
       project and workflow routes lives in `EnforcingRbacModule`; only the revive-platform integration
       suite binds it (PR #17). A regression in the resolver would pass every other test.
 

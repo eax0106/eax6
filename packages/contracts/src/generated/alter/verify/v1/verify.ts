@@ -101,6 +101,11 @@ export interface ScoreNodeInlineRequest {
   node_type: string;
   config_json: string;
   output_json: string;
+  /**
+   * C29: the producing node's success criteria. When present the reviewer
+   * judges the output against each one and any unmet criterion fails.
+   */
+  success_criteria: string[];
 }
 
 export interface ScoreNodeInlineResponse {

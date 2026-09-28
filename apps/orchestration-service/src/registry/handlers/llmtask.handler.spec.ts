@@ -4,7 +4,7 @@ import { ModelGatewayInvalidResponseError } from "@alterx/shared-clients";
 import { describe, expect, it, vi } from "vitest";
 
 import { NodeHandlerValidationError } from "../handler";
-import { LlmTaskHandler, llmTaskSystemMessage, unwrapFencedJson } from "./llmtask.handler";
+import { withSuccessCriteria, LlmTaskHandler, llmTaskSystemMessage, unwrapFencedJson } from "./llmtask.handler";
 
 const TENANT_ID = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
 const RUN_ID = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
@@ -69,6 +69,14 @@ describe("LlmTaskHandler agent instructions and output contract", () => {
       expect(messages[0]!.content).toMatch(/single JSON object only/);
     },
   );
+
+  it("states the node's success criteria to the model, numbered, and nothing when there are none (C29)", () => {
+    expect(withSuccessCriteria("Summarise.", ["Under 100 words", "Names the customer"])).toBe(
+      "Summarise.\n\nYour output must meet every one of these success criteria:\n1. Under 100 words\n2. Names the customer",
+    );
+    expect(withSuccessCriteria("Summarise.", undefined)).toBe("Summarise.");
+    expect(withSuccessCriteria("Summarise.", [])).toBe("Summarise.");
+  });
 
   it("accepts a JSON answer wrapped in one markdown fence", async () => {
     const { result } = await run({}, "```json\n{\"name\": \"LOANDESK\"}\n```");

@@ -22,7 +22,21 @@ from src.verification.kernel import (
     VerificationKernel,
 )
 from src.verification.llm_client import StubReviewerLlmClient
-from src.verification.models import InjectionClassification, NodeType, ScoreNodeRequest
+from src.verification.models import (
+    CriterionJudgement,
+    InjectionClassification,
+    NodeType,
+    ScoreNodeRequest,
+)
+
+
+class NoCriteriaJudgement:
+    """Base for fakes in tests without success criteria (C29 slice 2b): the
+    reviewer protocol gained judge_criteria, and calling it here is a bug."""
+
+    async def judge_criteria(self, **_: object) -> list[CriterionJudgement]:
+        raise AssertionError("no success criteria here; judge_criteria must not be called")
+
 
 TENANT_ID = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab"
 RUN_ID = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890ab"
@@ -86,7 +100,7 @@ class TestFalsePassRate:
         # Exercises the banding path directly (not the stub's emptiness
         # signal) -- a fixed 0.4 score is real fail-band per
         # test_verification_kernel.py's TestScoreBanding.test_fail_band_below_margin.
-        class FixedLowScoreReviewer:
+        class FixedLowScoreReviewer(NoCriteriaJudgement):
             async def review(self, **kwargs: object) -> tuple[float, str]:
                 return 0.4, "genuinely poor output"
 

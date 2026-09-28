@@ -95,7 +95,7 @@ class AssessSeverityResponse(_message.Message):
     def __init__(self, severity: _Optional[str] = ..., rationale: _Optional[str] = ..., severity_tier: _Optional[_Union[SafetySeverity, str]] = ...) -> None: ...
 
 class ScoreNodeInlineRequest(_message.Message):
-    __slots__ = ("tenant_id", "run_id", "node_execution_id", "node_key", "node_type", "config_json", "output_json")
+    __slots__ = ("tenant_id", "run_id", "node_execution_id", "node_key", "node_type", "config_json", "output_json", "success_criteria")
     TENANT_ID_FIELD_NUMBER: _ClassVar[int]
     RUN_ID_FIELD_NUMBER: _ClassVar[int]
     NODE_EXECUTION_ID_FIELD_NUMBER: _ClassVar[int]
@@ -103,6 +103,7 @@ class ScoreNodeInlineRequest(_message.Message):
     NODE_TYPE_FIELD_NUMBER: _ClassVar[int]
     CONFIG_JSON_FIELD_NUMBER: _ClassVar[int]
     OUTPUT_JSON_FIELD_NUMBER: _ClassVar[int]
+    SUCCESS_CRITERIA_FIELD_NUMBER: _ClassVar[int]
     tenant_id: str
     run_id: str
     node_execution_id: str
@@ -110,7 +111,8 @@ class ScoreNodeInlineRequest(_message.Message):
     node_type: str
     config_json: str
     output_json: str
-    def __init__(self, tenant_id: _Optional[str] = ..., run_id: _Optional[str] = ..., node_execution_id: _Optional[str] = ..., node_key: _Optional[str] = ..., node_type: _Optional[str] = ..., config_json: _Optional[str] = ..., output_json: _Optional[str] = ...) -> None: ...
+    success_criteria: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, tenant_id: _Optional[str] = ..., run_id: _Optional[str] = ..., node_execution_id: _Optional[str] = ..., node_key: _Optional[str] = ..., node_type: _Optional[str] = ..., config_json: _Optional[str] = ..., output_json: _Optional[str] = ..., success_criteria: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class ScoreNodeInlineResponse(_message.Message):
     __slots__ = ("verdict", "score", "threshold", "reviewer_model", "details_json")
