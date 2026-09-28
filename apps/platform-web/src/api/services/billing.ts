@@ -1,4 +1,4 @@
-import { apiGet, apiGetWithEtag, apiPatch, isLiveApi, mutationKey } from "../http"
+import { apiGet, apiGetWithEtag, apiPatch, apiPost, isLiveApi, mutationKey } from "../http"
 import type { BillingPaymentMethod, BillingPlan, BillingSubscription, Invoice } from "../types"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
@@ -37,6 +37,17 @@ export const billingService = {
       return apiPatch<BillingSubscription>("/api/v1/billing/subscription", { plan_id: planId }, {
         ifMatch: current.etag,
         idempotencyKey: mutationKey("billing-plan-change"),
+      })
+    }
+    await delay(600)
+    mockPlanId = planId
+    return (await billingService.getSubscription())!
+  },
+  /** Starts a subscription (task B2.8): the tenant has none yet and pays with a registered method. */
+  subscribe: async (planId: string, paymentMethodRef: string): Promise<BillingSubscription> => {
+    if (isLiveApi) {
+      return apiPost<BillingSubscription>("/api/v1/billing/subscription", { plan_id: planId, payment_method_ref: paymentMethodRef }, {
+        idempotencyKey: mutationKey("billing-subscribe"),
       })
     }
     await delay(600)

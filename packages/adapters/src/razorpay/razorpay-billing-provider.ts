@@ -400,6 +400,7 @@ function mapInvoice(value: unknown): Invoice {
     status: invoiceStatus(invoice.status),
     issuedAt: epoch(invoice.issued_at ?? invoice.created_at),
     paidAt: nullableEpoch(invoice.paid_at),
+    documentUrl: httpsUrl(invoice.short_url),
   };
 }
 
@@ -454,6 +455,16 @@ function string(value: unknown, fallback?: string): string {
   if (typeof value === "string" && value.length > 0) return value;
   if (fallback !== undefined) return fallback;
   throw new RazorpayBillingError(502, "Razorpay returned an invalid string");
+}
+
+// Rendered as a link for the customer, so only an absolute https URL passes.
+function httpsUrl(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  try {
+    return new URL(value).protocol === "https:" ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function nullableString(value: unknown): string | null {

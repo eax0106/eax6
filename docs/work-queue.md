@@ -41,8 +41,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.4 | KYC / document review | todo |
 | B2.5 | tax / fee settlement | todo |
 | B2.6 | tokenized card setup | todo |
-| B2.7 | invoice PDF | todo |
-| B2.8 | new subscription | todo |
+| B2.7 | invoice PDF: Razorpay renders the invoice; its hosted page (`short_url`, view and PDF download) is carried through as `documentUrl` (https only) and linked from the invoices page | done (this PR) |
+| B2.8 | new subscription: with no subscription and a registered payment method, the plans page subscribes through `POST /api/v1/billing/subscription` (idempotent). In live mode a tenant has no payment method until B2.6 is decided, so this path is wired but not reachable there yet | done (this PR) |
 | B2.9 | usage, budgets, cost estimates (moved from B1.10) | todo |
 | B3.1 | notifications | todo |
 | B3.2 | benchmarks | todo |
