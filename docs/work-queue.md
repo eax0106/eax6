@@ -74,7 +74,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C38 | §19 Capability Registry workflow templates (no board item until now) | todo |
 | C39 | §17 Drift Detector outbound suggestion path (no board item until now) | todo |
 | C4 | safety as a shared in-process library | todo |
-| C7 | Agent Factory extracted | todo |
+| C7 | Agent Factory extracted: the Factory no longer imports Selection & Binding. What both need -- the embedding port and vector check, the id types, `NoAgentMatch` -- moved to a neutral `src/agent_contracts` (Selection re-exports, so nothing else changed); a boundary test fails if the Factory imports Selection or Recovery again. Behaviour unchanged: 366 intelligence tests pass | done (this PR) |
 | C18 | re-embed backfill | todo |
 | C13 | map 54 contracts onto 61 components | todo |
 | C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |

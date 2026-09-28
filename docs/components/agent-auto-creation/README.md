@@ -54,7 +54,7 @@ Rationale and rejected alternatives: [`phase-0-decisions.md` §0.3](../../phase-
 
 - [ ] Idempotent per tenant, workspace and capability set — a retrying caller stops writing a row per attempt.
 - [ ] Tier behaviour per decision 0.3.
-- [ ] Extracted as its own component with its own contract (task C7).
+- [x] Extracted as its own component with its own contract (task C7): imports nothing from Selection & Binding; shared types live in `src/agent_contracts`; `tests/test_agent_factory_boundary.py` keeps it so.
 
 ## Open issues
 

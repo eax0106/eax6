@@ -13,13 +13,13 @@ from src.agent_auto_creation.models import (
     CreatePersonaResponse,
     PersonaCreationOutcome,
 )
-from src.capability_resolver import NodeRequirement
-from src.db.ids import new_prefixed_id
-from src.selection_binding import (
+from src.agent_contracts import (
     EmbeddingClient,
     NoAgentMatch,
     embedding_vector_literal,
 )
+from src.capability_resolver import NodeRequirement
+from src.db.ids import new_prefixed_id
 
 _SET_TENANT_CONTEXT = text("SELECT set_config('app.current_tenant_id', :tenant_id, true)")
 

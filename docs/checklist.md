@@ -557,7 +557,7 @@ demo.
       `lineItems[].source` not in the `COST_SOURCES` union before estimating anything —
       `source: "telepathy"` now throws `EstimationValidationError`, verified by
       `estimation.service.spec.ts` and `estimation.controller.spec.ts`.
-- [ ] **C7 Agent Factory extracted** as its own L4 component (§22 item 9) — two callers in
+- [x] **C7 Agent Factory extracted** (DONE 2026-09-28: no import of Selection & Binding; shared contract module; boundary test) as its own L4 component (§22 item 9) — two callers in
       different layers.
 - [ ] **C8 Side-Effect Ledger + idempotency gate** in front of Dispatch (§4, §22 item 7).
 - [ ] **C9 reviewer isolation** against prompt injection (§5.4).

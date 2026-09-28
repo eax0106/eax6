@@ -2,9 +2,7 @@
 
 import json
 import logging
-import math
 import uuid
-from collections.abc import Sequence
 from typing import TYPE_CHECKING, Protocol
 
 from pydantic import ValidationError
@@ -12,9 +10,13 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.agent_contracts.embedding_client import EmbeddingClient as EmbeddingClient
+from src.agent_contracts.embedding_client import EmbeddingResultError as EmbeddingResultError
+from src.agent_contracts.embedding_client import (
+    embedding_vector_literal as embedding_vector_literal,
+)
 from src.capability_resolver import NodeRequirement, NodeRequirements
 from src.db.ids import PLATFORM_TENANT_ID
-from src.selection_binding.embedding_client import EmbeddingClient
 from src.selection_binding.models import (
     BindAgentModelToolRequest,
     BindAgentModelToolResponse,
@@ -43,7 +45,6 @@ class PersonaCreationEngine(Protocol):
     ) -> "CreatePersonaResponse | NoAgentMatch": ...
 
 
-_EMBEDDING_DIMENSIONS = 512
 
 _SET_TENANT_CONTEXT = text("SELECT set_config('app.current_tenant_id', :tenant_id, true)")
 
@@ -314,8 +315,6 @@ class BindingValidationError(ValueError):
     pass
 
 
-class EmbeddingResultError(ValueError):
-    pass
 
 
 class SelectionBindingEngine:
@@ -612,19 +611,6 @@ def _database_uuid(prefixed_id: str, expected_prefix: str) -> str:
     except ValueError as error:
         raise BindingValidationError("identifier does not contain a valid UUID") from error
 
-
-def embedding_vector_literal(values: Sequence[float]) -> str:
-    vector = list(values)
-    if len(vector) != _EMBEDDING_DIMENSIONS:
-        raise EmbeddingResultError(f"embedding must contain exactly {_EMBEDDING_DIMENSIONS} values")
-    if any(
-        isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value)
-        for value in vector
-    ):
-        raise EmbeddingResultError("embedding values must be finite numbers")
-    if not any(value != 0 for value in vector):
-        raise EmbeddingResultError("embedding must not be the zero vector")
-    return "[" + ",".join(str(float(value)) for value in vector) + "]"
 
 
 def _response(
