@@ -41,6 +41,21 @@ export class NotificationService {
     return event;
   }
 
+  /**
+   * One event per member holding any of `roles` in the workspace, each
+   * delivered by that member's own preferences. Returns how many were created.
+   */
+  async notifyWorkspaceRoles(
+    roles: readonly string[],
+    input: Omit<CreateNotificationEventInput, "userId">,
+  ): Promise<number> {
+    const recipients = await this.repository.workspaceMemberIds(input.tenantId, input.workspaceId, roles);
+    for (const userId of recipients) {
+      await this.createEvent({ ...input, userId });
+    }
+    return recipients.length;
+  }
+
   list(input: NotificationListInput): Promise<NotificationPage> {
     return this.repository.list(input);
   }

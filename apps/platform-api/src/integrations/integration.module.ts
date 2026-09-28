@@ -15,6 +15,8 @@ import {
 } from "./connector-health-sweep.controller";
 import { IntegrationController } from "./integration.controller";
 import { IntegrationExceptionFilter } from "./integration-exception.filter";
+import { NotificationModule } from "../notifications/notification.module";
+import { NotificationService } from "../notifications/notification.service";
 import { IntegrationRepository } from "./integration.repository";
 import {
   IntegrationService,
@@ -71,7 +73,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
 }
 
 @Module({
-  imports: [IdempotencyModule],
+  imports: [IdempotencyModule, NotificationModule],
   controllers: [IntegrationController, ConnectorHealthSweepController],
   providers: [
     {
@@ -131,6 +133,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
         INTEGRATION_OAUTH_HTTP_CLIENT,
         INTEGRATION_CONNECTOR_RUNTIME_CONFIG,
         SystemIntegrationStore,
+        NotificationService,
       ],
       useFactory: (
         repository: IntegrationRepository,
@@ -138,6 +141,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
         http: OAuthHttpClient,
         connectorConfig: ConnectorRuntimeConfigMap,
         systemStore: SystemIntegrationStore,
+        notifications: NotificationService,
       ) =>
         new IntegrationService(
           repository,
@@ -146,6 +150,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
           connectorConfig,
           Number(process.env.OAUTH_STATE_TTL_SECONDS ?? 300),
           systemStore,
+          notifications,
         ),
     },
     IntegrationExceptionFilter,

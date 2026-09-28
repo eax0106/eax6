@@ -14,6 +14,7 @@ import {
   ActivityCursorNotFoundError,
   IntegrationRepository,
 } from "./integration.repository";
+import type { NotificationService } from "../notifications/notification.service";
 import { IntegrationHttpError } from "./problem";
 import { SystemIntegrationStore } from "./system-integration-store";
 import {
@@ -61,6 +62,7 @@ export class IntegrationService {
     private readonly connectorConfig: ConnectorRuntimeConfigMap,
     private readonly stateTtlSeconds: number = DEFAULT_STATE_TTL_SECONDS,
     private readonly systemStore?: SystemIntegrationStore,
+    private readonly notifications?: NotificationService,
   ) {}
 
   catalog(): ConnectorCatalogEntry[] {
@@ -323,7 +325,42 @@ export class IntegrationService {
       new Date(),
     );
     if (!updated) throw notFound(instance);
+    if (status === "unhealthy" && record.lastHealthStatus !== "unhealthy") {
+      await this.notifyConnectionUnhealthy(updated, definition);
+    }
     return project(updated);
+  }
+
+  /**
+   * Design log §4 bucket 3: a broken credential is a hard stop that only a
+   * human can fix, so the people who can reconnect it are told once, when the
+   * connection turns unhealthy -- not on every sweep while it stays broken.
+   * A failed notification never fails the health check itself.
+   */
+  private async notifyConnectionUnhealthy(
+    record: OAuthConnectionRecord,
+    definition: ConnectorDefinition,
+  ): Promise<void> {
+    if (!this.notifications) return;
+    try {
+      await this.notifications.notifyWorkspaceRoles(["admin"], {
+        tenantId: record.tenantId,
+        workspaceId: record.workspaceId,
+        eventClass: "system",
+        severity: "warning",
+        title: `${definition.displayName} connection needs reconnecting`,
+        body: `Alter could not use the ${definition.displayName} connection. Workflows that depend on it will stop at that step until someone reconnects it.`,
+        deepLink: `/connections/${encodeURIComponent(record.id)}`,
+        sourceService: "platform-api.integrations",
+      });
+    } catch (error) {
+      this.logger.error({
+        tenantId: record.tenantId,
+        connectionId: record.id,
+        message: "connection-unhealthy notification failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /**

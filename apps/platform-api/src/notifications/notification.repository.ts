@@ -142,6 +142,23 @@ export class NotificationRepository implements OnModuleDestroy {
     );
   }
 
+  /** The users holding any of `roles` in one workspace: a producer's recipients. */
+  workspaceMemberIds(
+    tenantId: string,
+    workspaceId: string,
+    roles: readonly string[],
+  ): Promise<string[]> {
+    return this.withTenant(tenantId, async (client) => {
+      const result = await client.query<{ user_id: string }>(
+        `SELECT user_id FROM workspace_members
+          WHERE tenant_id = $1 AND workspace_id = $2 AND role = ANY($3::text[])
+          ORDER BY user_id`,
+        [tenantId, workspaceId, [...roles]],
+      );
+      return result.rows.map((row) => row.user_id);
+    });
+  }
+
   listPreferences(tenantId: string, userId: string): Promise<NotificationPreference[]> {
     return this.withTenant(tenantId, async (client) => {
       const result = await client.query<PreferenceRow>(
