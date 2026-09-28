@@ -4,6 +4,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PgSessionStore } from "./session-store";
 import { PgSsoConfigStore } from "./sso-config-store";
 
+// Parallel spec files all grant on the one `public` schema row; concurrent
+// ACL updates fail with "tuple concurrently updated", so they take turns.
+const PUBLIC_SCHEMA_ACL_LOCK = 7_210_031;
+
 const databaseUrl = (() => {
   const value = process.env.DATABASE_URL;
   if (!value) {
@@ -37,7 +41,7 @@ describe("PostgreSQL identity tenant isolation", () => {
     adminClient = new pg.Client({ connectionString: databaseUrl });
     await adminClient.connect();
     await adminClient.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${rolePassword}'`);
-    await adminClient.query(`GRANT USAGE ON SCHEMA public TO "${roleName}"`);
+    await adminClient.query(`DO $$ BEGIN PERFORM pg_advisory_xact_lock(${PUBLIC_SCHEMA_ACL_LOCK}); GRANT USAGE ON SCHEMA public TO "${roleName}"; END $$`);
     await adminClient.query(
       // users: session lookups only accept active users (task B1.2).
       `GRANT SELECT, UPDATE ON tenants, user_sessions TO "${roleName}"; GRANT SELECT ON users TO "${roleName}"`,

@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MarketplaceRepository } from "./marketplace.repository";
 import type { ListingCompatibility } from "./types";
 
+// Parallel spec files all grant on the one `public` schema row; concurrent
+// ACL updates fail with "tuple concurrently updated", so they take turns.
+const PUBLIC_SCHEMA_ACL_LOCK = 7_210_031;
+
 const databaseUrl = process.env.MARKETPLACE_DATABASE_URL ?? "";
 const tenantA = "ten_00000000-0000-7000-8000-000000000001";
 const tenantB = "ten_00000000-0000-7000-8000-000000000002";
@@ -45,7 +49,7 @@ describe.skipIf(!databaseUrl)("MarketplaceRepository PostgreSQL RLS", () => {
     const password = randomUUID();
     await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`);
     await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
-    await admin.query(`GRANT USAGE ON SCHEMA public TO "${roleName}"`);
+    await admin.query(`DO $$ BEGIN PERFORM pg_advisory_xact_lock(${PUBLIC_SCHEMA_ACL_LOCK}); GRANT USAGE ON SCHEMA public TO "${roleName}"; END $$`);
     await admin.query(
       `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES
        IN SCHEMA "${schemaName}" TO "${roleName}"`,
@@ -68,7 +72,7 @@ describe.skipIf(!databaseUrl)("MarketplaceRepository PostgreSQL RLS", () => {
       // itself is never dropped -- revoke it explicitly or DROP ROLE
       // fails with "role ... cannot be dropped because some objects
       // depend on it".
-      await admin.query(`REVOKE USAGE ON SCHEMA public FROM "${roleName}"`);
+      await admin.query(`DO $$ BEGIN PERFORM pg_advisory_xact_lock(${PUBLIC_SCHEMA_ACL_LOCK}); REVOKE USAGE ON SCHEMA public FROM "${roleName}"; END $$`);
       await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
       await admin.end();
     }

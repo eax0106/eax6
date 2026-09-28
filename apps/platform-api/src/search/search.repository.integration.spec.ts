@@ -5,6 +5,10 @@ import { applyMarketplaceMigrations } from "../db/marketplace-migrator";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { MarketplaceSearchRepository } from "./search.repository";
 
+// Parallel spec files all grant on the one `public` schema row; concurrent
+// ACL updates fail with "tuple concurrently updated", so they take turns.
+const PUBLIC_SCHEMA_ACL_LOCK = 7_210_031;
+
 const tenantA = "ten_search_a";
 const tenantB = "ten_search_b";
 
@@ -35,7 +39,7 @@ describe("MarketplaceSearchRepository PostgreSQL integration", () => {
     // and keeping public on every test's search_path here makes that
     // deterministic instead of only ever working for the first test.
     await admin.query(`SET search_path TO "${schemaName}", public`); await applyMarketplaceMigrations(admin);
-    const password = randomUUID(); await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`); await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`); await admin.query(`GRANT USAGE ON SCHEMA public TO "${roleName}"`); await admin.query(`GRANT SELECT ON ALL TABLES IN SCHEMA "${schemaName}" TO "${roleName}"`);
+    const password = randomUUID(); await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`); await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`); await admin.query(`DO $$ BEGIN PERFORM pg_advisory_xact_lock(${PUBLIC_SCHEMA_ACL_LOCK}); GRANT USAGE ON SCHEMA public TO "${roleName}"; END $$`); await admin.query(`GRANT SELECT ON ALL TABLES IN SCHEMA "${schemaName}" TO "${roleName}"`);
     const url = new URL(container.getConnectionUri()); url.username = roleName; url.password = password; url.searchParams.set("options", `-c search_path=${schemaName},public`);
     pool = new pg.Pool({ connectionString: url.toString() }); repository = new MarketplaceSearchRepository(pool);
   });
@@ -43,7 +47,7 @@ describe("MarketplaceSearchRepository PostgreSQL integration", () => {
   // never dropped, so that grant outlives the private schema's own DROP ...
   // CASCADE and otherwise blocks the role drop ("role ... cannot be dropped
   // because some objects depend on it").
-  afterEach(async () => { await pool?.end(); if (admin) { await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`); await admin.query(`REVOKE USAGE ON SCHEMA public FROM "${roleName}"`); await admin.query(`DROP ROLE IF EXISTS "${roleName}"`); await admin.end(); } });
+  afterEach(async () => { await pool?.end(); if (admin) { await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`); await admin.query(`DO $$ BEGIN PERFORM pg_advisory_xact_lock(${PUBLIC_SCHEMA_ACL_LOCK}); REVOKE USAGE ON SCHEMA public FROM "${roleName}"; END $$`); await admin.query(`DROP ROLE IF EXISTS "${roleName}"`); await admin.end(); } });
   afterAll(async () => { await container?.stop(); });
 
   it("ranks FTS exact matches above partial matches and returns a one-character trigram typo", async () => {
