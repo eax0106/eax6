@@ -74,6 +74,30 @@ async function main(): Promise<void> {
     resolveSpeechToTextProvider(objects);
   });
   await check("orchestration-service", "Session Gateway", () => sessionGatewayEnvironment(process.env));
+  const { engineConfigFromEnvironment } = await import("../../apps/platform-api/src/engine/config");
+  await check("platform-api", "Engine clients", () => engineConfigFromEnvironment(process.env));
+
+  // Pairs whose halves live in different containers: each must agree.
+  const env = (service: string, key: string) => services[service]?.environment?.[key] ?? undefined;
+  const sha256 = async (value: string) => (await import("node:crypto")).createHash("sha256").update(value).digest("hex");
+  const pairs: [string, string, string, string][] = [
+    ["platform-api", "EVAL_FACADE_TOKEN", "orchestration-service", "EVAL_FACADE_TOKEN_SHA256"],
+    ["platform-api", "DEPLOYMENT_ADMIN_SERVICE_TOKEN", "orchestration-service", "DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256"],
+  ];
+  for (const [caller, tokenKey, receiver, hashKey] of pairs) {
+    const token = env(caller, tokenKey);
+    const hash = env(receiver, hashKey);
+    if (!token || !hash || (await sha256(token)) !== hash) {
+      failures.push(`${caller} ${tokenKey} does not match ${receiver} ${hashKey}`);
+    }
+  }
+  if (env("platform-api", "AUDIT_QUERY_SERVICE_TOKEN_REF") !== env("audit-service", "DELETION_SERVICE_TOKEN_REF")) {
+    failures.push("platform-api AUDIT_QUERY_SERVICE_TOKEN_REF is not audit-service's DELETION_SERVICE_TOKEN_REF");
+  }
+  const jwks = env("orchestration-service", "ACTOR_TOKEN_JWKS_URL") ?? "";
+  if (!jwks.startsWith(`http://127.0.0.1:${env("platform-api", "PLATFORM_API_PORT")}/`)) {
+    failures.push(`orchestration-service ACTOR_TOKEN_JWKS_URL ${jwks} is not platform-api's port ${env("platform-api", "PLATFORM_API_PORT")}`);
+  }
 
   if (failures.length > 0) {
     for (const failure of failures) console.log(`FAIL ${failure}`);
