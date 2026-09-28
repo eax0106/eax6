@@ -207,6 +207,7 @@ export const queryKeys = {
     },
     marketplace: {
       reviewQueue: ["admin", "marketplace", "reviewQueue"] as const,
+      verifications: ["admin", "marketplace", "verifications"] as const,
     },
     featureFlags: {
       list: ["admin", "featureFlags", "list"] as const,

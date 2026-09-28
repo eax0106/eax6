@@ -3,7 +3,7 @@ import { HttpException } from "@nestjs/common";
 import type { ProblemDetails } from "@alterx/contracts";
 
 export class PublisherHttpError extends HttpException {
-  constructor(status: 400 | 403 | 404 | 409 | 502, errorCode: string, detail: string, instance: string) {
+  constructor(status: 400 | 403 | 404 | 409 | 502 | 503, errorCode: string, detail: string, instance: string) {
     super({
       type: `https://errors.alter.ai/${errorCode.toLowerCase().replaceAll("_", "-")}`,
       title: errorCode,
