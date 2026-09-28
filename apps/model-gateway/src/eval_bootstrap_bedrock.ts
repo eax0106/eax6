@@ -25,6 +25,7 @@ import { AppModule } from "./app.module";
 import { loadModelGatewayEnvironment } from "./config/environment";
 import { MODELGW_PROTO_PATH } from "./gateway/grpc.constants";
 import { OperationalConfigProvider } from "./operations/operational-config-provider";
+import { evalCacheProvider } from "./gateway/eval-cache";
 
 /**
  * Real, disclosed eval-only entrypoint for Phase 1 (task 1.5) -- NOT
@@ -120,7 +121,7 @@ async function bootstrap(): Promise<void> {
   const modelProvider = new FailoverModelProvider(createEvalModelProvider(), {});
   const piiRedactionProvider = createMockPIIRedactionProvider();
   const embeddingProvider = createMockEmbeddingProvider();
-  const cacheProvider = createMockCacheProvider();
+  const cacheProvider = evalCacheProvider(createMockCacheProvider());
   const queueProvider = createMockQueueProvider();
   const costEventsQueueName = "alter-eval-cost-events";
   const costClient: CostHandlerClient = {

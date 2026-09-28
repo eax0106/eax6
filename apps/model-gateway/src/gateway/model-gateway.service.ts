@@ -35,7 +35,7 @@ const ESTIMATED_USD_PER_TOKEN = 0.00001;
 const FALLBACK_USD_TO_INR_RATE = 83;
 const COST_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-const CACHE_EMBEDDING_DIMENSIONS = 512;
+const CACHE_TTL_SECONDS = 24 * 60 * 60;
 
 export class InvalidEmbeddingDimensionsError extends Error {
   constructor(dimensions: number) {
@@ -203,10 +203,8 @@ export class ModelGatewayService implements ModelgwHandler {
       request.input_json,
     );
 
-    // Embedded once and reused for both the lookup and (on a miss) the
-    // store below -- computing it twice would double the embedding
-    // provider's cost on every cache miss for no benefit, since the text
-    // being embedded is identical both times.
+    // Keyed once and reused for both the lookup and (on a miss) the store
+    // below.
     const key = cacheKey(
       binding.model_id,
       alias,
@@ -214,14 +212,9 @@ export class ModelGatewayService implements ModelgwHandler {
       alterAuthoredIndexes(request.input_json),
     );
     // Nothing the caller varied means nothing to compare: not cached.
-    const embedding =
-      key.text === "" ? undefined : await this.#embedBestEffort(request.tenant_id, key.text);
+    const entryKey = exactCacheEntryKey(request.tenant_id, key);
 
-    const cacheHit = await this.#lookupCacheBestEffort(
-      request.tenant_id,
-      embedding,
-      key.scope,
-    );
+    const cacheHit = await this.#lookupCacheBestEffort(entryKey);
     if (cacheHit !== undefined) {
       return cacheHit;
     }
@@ -300,7 +293,7 @@ export class ModelGatewayService implements ModelgwHandler {
       ),
     };
 
-    await this.#storeCacheBestEffort(request.tenant_id, embedding, response, key.scope);
+    await this.#storeCacheBestEffort(entryKey, response);
 
     return response;
   }
@@ -319,9 +312,9 @@ export class ModelGatewayService implements ModelgwHandler {
       request.input_json,
     );
 
-    // ENGINE-FIX-B5-19: mirrors invoke()'s own embed-once-then-check-cache
-    // sequence above -- same reasons apply here (one embedding call, cache
-    // check before any cost-limit resolution or real upstream call). On a
+    // ENGINE-FIX-B5-19: mirrors invoke()'s own key-once-then-check-cache
+    // sequence above -- same reasons apply here (cache check before any
+    // cost-limit resolution or real upstream call). On a
     // hit, invoke() never resolves a cost limit or touches the real model
     // provider at all; stream() does the same below, returning before
     // `resolveCostLimit` is even called.
@@ -332,13 +325,8 @@ export class ModelGatewayService implements ModelgwHandler {
       alterAuthoredIndexes(request.input_json),
     );
     // Nothing the caller varied means nothing to compare: not cached.
-    const embedding =
-      key.text === "" ? undefined : await this.#embedBestEffort(request.tenant_id, key.text);
-    const cacheHit = await this.#lookupCacheBestEffort(
-      request.tenant_id,
-      embedding,
-      key.scope,
-    );
+    const entryKey = exactCacheEntryKey(request.tenant_id, key);
+    const cacheHit = await this.#lookupCacheBestEffort(entryKey);
     if (cacheHit !== undefined) {
       const cachedText = extractCachedStreamText(cacheHit.output_json);
       if (cachedText !== undefined) {
@@ -454,7 +442,7 @@ export class ModelGatewayService implements ModelgwHandler {
       // truncated response into the cache. Mirrors invoke()'s own
       // response-shape and #storeCacheBestEffort call at the end of its
       // cache-miss path.
-      await this.#storeCacheBestEffort(request.tenant_id, embedding, {
+      await this.#storeCacheBestEffort(entryKey, {
         output_json: JSON.stringify({
           message: { role: "assistant", content: accumulatedContent },
           stop_reason: "end_turn",
@@ -465,7 +453,7 @@ export class ModelGatewayService implements ModelgwHandler {
         resolved_capability: `${alias}:${servedBy ?? binding.model_id}`,
         cache_hit: false,
         estimated_cost_usd: finalCostUsd,
-      }, key.scope);
+      });
     } catch (error) {
       // A success outcome was already recorded above the moment the final
       // chunk arrived -- a later throw (e.g. a cost-limit rejection, or a
@@ -493,12 +481,10 @@ export class ModelGatewayService implements ModelgwHandler {
     };
   }
 
-  // Real transport for the embeddingProvider that already exists internally
-  // (used until now only for this service's own semantic-cache writes,
-  // #embedBestEffort below) -- callers outside model-gateway (e.g. ads-core's
-  // real chunk embedding, KNOW-5) previously had no way to reach it at all.
-  // Unlike #embedBestEffort, this never swallows a failure: a caller asking
-  // for an embedding needs to know if it didn't get one.
+  // Real transport for the embeddingProvider -- callers outside
+  // model-gateway (e.g. ads-core's real chunk embedding, KNOW-5) reach it
+  // here. This never swallows a failure: a caller asking for an embedding
+  // needs to know if it didn't get one.
   async embed(request: ModelgwEmbedRequest): Promise<ModelgwEmbedResponse> {
     if (request.dimensions !== 512 && request.dimensions !== 1024) {
       throw new InvalidEmbeddingDimensionsError(request.dimensions);
@@ -726,25 +712,19 @@ export class ModelGatewayService implements ModelgwHandler {
   }
 
   async #lookupCacheBestEffort(
-    tenantId: string,
-    embedding: readonly number[] | undefined,
-    scope: string,
+    entryKey: string | undefined,
   ): Promise<ModelgwInvokeResponse | undefined> {
-    if (embedding === undefined) {
+    if (entryKey === undefined) {
       return undefined;
     }
     try {
-      const lookup = await this.cacheProvider.lookupSemantic({
-        tenantId,
-        embedding,
-        scope,
-      });
-      if (!lookup.hit || lookup.valueJson === undefined) {
+      const valueJson = await this.cacheProvider.getValue(entryKey);
+      if (valueJson === undefined) {
         return undefined;
       }
-      return parseCachedInvokeValue(lookup.valueJson);
+      return parseCachedInvokeValue(valueJson);
     } catch {
-      // The semantic cache is a pre-spend optimization, not a correctness
+      // The cache is a pre-spend optimization, not a correctness
       // requirement -- any failure here (cache provider down, corrupt
       // cached value) must fall through to a real model invocation, never
       // fail the request.
@@ -753,48 +733,43 @@ export class ModelGatewayService implements ModelgwHandler {
   }
 
   async #storeCacheBestEffort(
-    tenantId: string,
-    embedding: readonly number[] | undefined,
+    entryKey: string | undefined,
     response: ModelgwInvokeResponse,
-    scope: string,
   ): Promise<void> {
-    if (embedding === undefined) {
+    if (entryKey === undefined) {
       return;
     }
     try {
-      await this.cacheProvider.storeSemantic({
-        tenantId,
-        embedding,
-        valueJson: JSON.stringify(response),
-        scope,
-      });
+      await this.cacheProvider.setValue(entryKey, JSON.stringify(response), CACHE_TTL_SECONDS);
     } catch {
       // Never fail an otherwise-successful model invocation because the
       // cache write failed.
     }
   }
-
-  async #embedBestEffort(
-    tenantId: string,
-    text: string,
-  ): Promise<readonly number[] | undefined> {
-    try {
-      const result = await this.embeddingProvider.embed({
-        tenantId,
-        text,
-        dimensions: CACHE_EMBEDDING_DIMENSIONS,
-      });
-      return result.vector;
-    } catch {
-      // Embedding failure disables the cache for this call only -- never
-      // fail the request over a pre-spend optimization.
-      return undefined;
-    }
-  }
 }
 
 /**
- * What the semantic cache compares, and what it must never compare across.
+ * The cache answers only an exact repeat (task C17, design log §12).
+ *
+ * It used to compare embeddings and serve anything above 0.95 cosine
+ * similarity. Two classification prompts differing by one entity name can
+ * sit above that, so a near-identical call was answered with another call's
+ * result -- the wrong answer, delivered quickly, and nobody had decided to
+ * turn that on. The entry is now keyed by the tenant and a hash of the scope
+ * and the caller's varying content together, so only byte-identical input
+ * (after redaction) can hit, and no embedding call is spent on the lookup.
+ */
+export function exactCacheEntryKey(
+  tenantId: string,
+  key: { readonly scope: string; readonly text: string },
+): string | undefined {
+  if (key.text === "") return undefined;
+  const digest = createHash("sha256").update(key.scope).update("\n").update(key.text).digest("hex");
+  return `modelgw:exact:${tenantId}:${digest}`;
+}
+
+/**
+ * What the cache compares, and what it must never compare across.
  *
  * The cache used to embed the whole payload and compare every candidate a
  * tenant had. Two different objectives sent with the same fixed prompt are
@@ -806,11 +781,12 @@ export class ModelGatewayService implements ModelgwHandler {
  * So the scope pins the model (a cheap model's answer must not serve a call
  * that asked for a better one), the alias, and everything in the payload the
  * caller did not vary -- the messages marked `alter_authored`, which are
- * constant prompts Alter wrote, and the inference settings. What is embedded
- * is only the rest: the caller's own content, in order and with its roles.
+ * constant prompts Alter wrote, and the inference settings. `text` is only
+ * the rest: the caller's own content, in order and with its roles. Since
+ * C17 both must match exactly (`exactCacheEntryKey`).
  *
  * A payload with no varying content at all has nothing to compare, so it is
- * not cached: `text` is empty and embedding is skipped.
+ * not cached: `text` is empty.
  */
 export function cacheKey(
   modelId: string,
@@ -852,7 +828,7 @@ export function cacheKey(
  *
  * Redaction strips the marker before a payload leaves the gateway (providers
  * never see it), and the cache key is built from the redacted payload so no
- * unredacted text is sent to the embedding provider either. Redaction keeps
+ * unredacted text reaches the cache either. Redaction keeps
  * the messages in place, so the positions still line up.
  */
 export function alterAuthoredIndexes(inputJson: string): ReadonlySet<number> {
