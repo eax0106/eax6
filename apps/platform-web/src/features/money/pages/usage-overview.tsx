@@ -7,8 +7,14 @@ import { formatCurrency, formatCompactNumber, formatBytes } from "@/lib/formatte
 import { Activity, HardDrive, Cpu, Coins } from "lucide-react"
 import { usePreferencesStore } from "@/features/settings/stores/usePreferencesStore"
 import { type DisplayCurrency } from "@/api/types"
+import { isLiveApi } from "@/api/http"
+import { LiveUsageOverview } from "../components/live-usage"
 
 export function UsageOverviewPage() {
+  return isLiveApi ? <LiveUsageOverview /> : <DemoUsageOverview />
+}
+
+function DemoUsageOverview() {
   const { data: usage, isLoading } = useQuery({
     queryKey: queryKeys.usage.overview,
     queryFn: () => api.usage.getOverview()
