@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { NotificationService } from "../notifications/notification.service";
 import type { MutableSecretsProvider } from "@alterx/shared-clients";
 import type { OAuthHttpClient } from "./adapters/oauth/oauth-http-client";
 import { IntegrationService, type ConnectorRuntimeConfigMap } from "./integration.service";
@@ -99,6 +100,71 @@ describe("IntegrationService.runHealthSweep", () => {
     expect(connections.get(`${tenantId}:${workspaceId}:conn-healthy`)?.lastHealthStatus).toBe(
       "healthy",
     );
+  });
+});
+
+describe("IntegrationService.health notifies when a connection turns unhealthy (B3.1b)", () => {
+  function setup(lastHealthStatus: string | null, notify: (roles: readonly string[], input: unknown) => Promise<number>) {
+    const connections = new Map<string, OAuthConnectionRecord>([
+      [`${tenantId}:${workspaceId}:conn-1`, { ...connectionRecord("conn-1"), lastHealthStatus }],
+    ]);
+    const calls: { roles: readonly string[]; input: Record<string, unknown> }[] = [];
+    const notifications = {
+      notifyWorkspaceRoles: async (roles: readonly string[], input: Record<string, unknown>) => {
+        calls.push({ roles, input });
+        return notify(roles, input);
+      },
+    } as unknown as NotificationService;
+    const service = new IntegrationService(
+      fakeRepository(connections),
+      fakeSecrets,
+      {
+        fetchAccountId: async () => {
+          throw new Error("401 from provider");
+        },
+      } as unknown as OAuthHttpClient,
+      connectorConfig,
+      300,
+      undefined,
+      notifications,
+    );
+    return { service, calls };
+  }
+
+  it("tells the workspace admins once, on the transition, with a link to the connection", async () => {
+    const { service, calls } = setup("healthy", async () => 1);
+
+    const view = await service.health(tenantId, workspaceId, "conn-1", "usr_1");
+
+    expect(view.last_health_status).toBe("unhealthy");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.roles).toEqual(["admin"]);
+    expect(calls[0]!.input).toMatchObject({
+      tenantId,
+      workspaceId,
+      eventClass: "system",
+      severity: "warning",
+      title: "GitHub connection needs reconnecting",
+      deepLink: "/connections/conn-1",
+    });
+  });
+
+  it("stays quiet while a connection stays unhealthy", async () => {
+    const { service, calls } = setup("unhealthy", async () => 1);
+
+    await service.health(tenantId, workspaceId, "conn-1", "usr_1");
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it("still records the health result when the notification fails", async () => {
+    const { service } = setup(null, async () => {
+      throw new Error("notification store down");
+    });
+
+    const view = await service.health(tenantId, workspaceId, "conn-1", "usr_1");
+
+    expect(view.last_health_status).toBe("unhealthy");
   });
 });
 

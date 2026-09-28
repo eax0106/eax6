@@ -22,6 +22,8 @@ describe("IntegrationModule", () => {
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF =
       "env:CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN";
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN = "test-connector-health-sweep-token";
+    process.env.NOTIFICATION_DIGEST_SERVICE_TOKEN_REF = "env:NOTIFICATION_DIGEST_SERVICE_TOKEN";
+    process.env.NOTIFICATION_DIGEST_SERVICE_TOKEN = "test-notification-digest-token";
     delete process.env.GITHUB_OAUTH_CLIENT_ID_SECRET_REF;
     delete process.env.GITHUB_OAUTH_CLIENT_SECRET_REF;
     delete process.env.GOOGLE_OAUTH_CLIENT_ID_SECRET_REF;
@@ -58,6 +60,8 @@ describe("IntegrationModule", () => {
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF =
       "env:CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN";
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN = "test-connector-health-sweep-token";
+    process.env.NOTIFICATION_DIGEST_SERVICE_TOKEN_REF = "env:NOTIFICATION_DIGEST_SERVICE_TOKEN";
+    process.env.NOTIFICATION_DIGEST_SERVICE_TOKEN = "test-notification-digest-token";
     process.env.GITHUB_OAUTH_CLIENT_ID_SECRET_REF =
       "/alter/prod/integrations/github/client-id";
     process.env.GITHUB_OAUTH_CLIENT_SECRET_REF =
