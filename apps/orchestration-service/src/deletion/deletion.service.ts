@@ -36,7 +36,7 @@ export const TABLES = [
   "run_stream_events", "verification_results", "recovery_actions", "run_outcomes", "approvals",
   "projects", "deployments", "project_plans", "artifacts", "whatsapp_accounts",
   "webhook_endpoints", "webhook_endpoint_secrets", "trigger_integration_bindings",
-  "escalations", "run_dispatch_queue",
+  "escalations", "run_dispatch_queue", "side_effects",
 ] as const;
 // Children before parents. A child ordered after a table it has a plain FK
 // to makes the DELETE fail outright; a child ordered after a table it has
@@ -52,13 +52,13 @@ export const TABLES = [
 // hand-derived guess. If a new migration adds a table or a FK, regenerate
 // rather than hand-editing: extract every {child, parent} pair from
 // CREATE TABLE / ALTER TABLE ... REFERENCES statements in that folder and
-// run Kahn's algorithm over the 29 TABLES nodes; child must precede parent
+// run Kahn's algorithm over the 30 TABLES nodes; child must precede parent
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
   "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
   "deployments", "artifacts", "escalations", "project_plans", "recovery_actions",
-  "run_dispatch_queue", "run_outcomes", "run_stream_events", "trigger_integration_bindings",
+  "run_dispatch_queue", "run_outcomes", "run_stream_events", "side_effects", "trigger_integration_bindings",
   "trigger_webhook_secrets", "verification_results", "node_executions", "runs", "events",
   "conversations", "projects", "trigger_versions", "triggers", "webhook_endpoint_secrets",
   "webhook_endpoints", "whatsapp_accounts", "workflow_template_variable_definitions",

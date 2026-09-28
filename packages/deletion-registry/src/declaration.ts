@@ -122,6 +122,7 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "orchestration_db", schema: "public", table: "trigger_webhook_secrets", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "triggers", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "verification_results", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
+  { database: "orchestration_db", schema: "public", table: "side_effects", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "webhook_endpoint_secrets", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "webhook_endpoints", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "whatsapp_accounts", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },

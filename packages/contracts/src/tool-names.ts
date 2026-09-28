@@ -41,3 +41,26 @@ export const ToolNameSchema = z.enum([
 export const TOOL_NAMES = ToolNameSchema.options;
 
 export type ToolName = z.infer<typeof ToolNameSchema>;
+
+/**
+ * Tools whose call changes something outside Alter that repeating would
+ * change again: a second row, a second deletion, a second email, a second
+ * click on a submit button. Design log §4's idempotency gate refuses to
+ * re-run a node that called one of these once it may already have acted.
+ *
+ * Reads (search, select, extract, navigate) and the browser session's own
+ * lifecycle are not here: repeating them repeats a read or opens another
+ * disposable session, not an irreversible external action.
+ */
+export const SIDE_EFFECT_TOOL_NAMES: readonly ToolName[] = [
+  "database.insert",
+  "database.update",
+  "database.delete",
+  "browser.click",
+  "email.send",
+];
+
+export function hasExternalSideEffect(toolName: string): boolean {
+  return (SIDE_EFFECT_TOOL_NAMES as readonly string[]).includes(toolName);
+}
+
