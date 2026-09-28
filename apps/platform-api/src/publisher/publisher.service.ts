@@ -27,7 +27,7 @@ export class PublisherService {
 
   async reviewVerification(tenantId: string, submissionId: string, reviewerId: string, input: ReviewKycInput) {
     const reviewed = await this.repository.reviewSubmission(tenantId, submissionId, reviewerId, input.decision, input.reason ?? null);
-    if (!reviewed) throw new PublisherHttpError(404, "PUBLISHER_KYC_SUBMISSION_NOT_FOUND", "Pending KYC submission was not found.", `/api/v1/publisher/internal/verification/${submissionId}`);
+    if (!reviewed) throw new PublisherHttpError(404, "PUBLISHER_KYC_SUBMISSION_NOT_FOUND", "Pending KYC submission was not found.", `/api/v1/admin/publisher/verifications/${tenantId}/${submissionId}/actions/review`);
     return reviewed;
   }
 

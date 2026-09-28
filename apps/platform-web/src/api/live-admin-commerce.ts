@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./http"
-import type { MarketplaceReviewItem } from "./services/marketplace-admin"
+import type { MarketplaceReviewItem, SellerVerification } from "./services/marketplace-admin"
 import type { BillingIssue } from "./services/billing-ops"
 
 // Admin console, marketplace moderation and billing operations (tasks B2.1,
@@ -54,6 +54,35 @@ export async function reviewMarketplaceItem(
       `/api/v1/admin/marketplace/governance/${resourceType}/${encodeURIComponent(item.id)}/actions/apply`,
       { action: governanceAction[action], reason: CONSOLE_REASON },
     ),
+  )
+}
+
+// --- Seller verification (B2.4) ----------------------------------------------
+
+function mapVerification(value: unknown): SellerVerification {
+  const item = value as AnyRecord
+  const documents = Array.isArray(item.documents) ? (item.documents as AnyRecord[]) : []
+  return {
+    id: String(item.id),
+    tenantId: String(item.tenant_id),
+    documents: documents.map((document) => ({ type: String(document.type), objectRef: String(document.objectRef) })),
+    submittedAt: String(item.submitted_at),
+  }
+}
+
+export async function listSellerVerifications(): Promise<SellerVerification[]> {
+  const body = await apiGet<unknown>("/api/v1/admin/publisher/verifications")
+  return (Array.isArray(body) ? body : []).map(mapVerification)
+}
+
+export async function reviewSellerVerification(
+  item: Pick<SellerVerification, "id" | "tenantId">,
+  decision: "approved" | "rejected",
+  reason?: string,
+): Promise<void> {
+  await apiPost<unknown>(
+    `/api/v1/admin/publisher/verifications/${encodeURIComponent(item.tenantId)}/${encodeURIComponent(item.id)}/actions/review`,
+    reason ? { decision, reason } : { decision },
   )
 }
 
