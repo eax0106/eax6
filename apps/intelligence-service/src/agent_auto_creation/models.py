@@ -2,14 +2,14 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from src.capability_resolver.models import AgentId
-from src.selection_binding.models import (
+from src.agent_contracts.types import (
     NoAgentMatch,
     NonEmptyString,
     TenantId,
     Uint32,
     WorkspaceId,
 )
+from src.capability_resolver.models import AgentId
 
 
 class _StrictFrozenModel(BaseModel):
