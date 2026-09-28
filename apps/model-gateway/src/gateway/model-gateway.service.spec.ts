@@ -1040,7 +1040,9 @@ describe("ModelGatewayService", () => {
   });
 
   it("does not cache a payload whose content is all Alter's own fixed prompt", async () => {
-    const cacheProvider = createMockCacheProvider();
+    const mockCache = createMockCacheProvider();
+    const setValue = vi.fn(mockCache.setValue);
+    const cacheProvider = { ...mockCache, setValue };
     const service = buildService({
       embeddingProvider: createMockEmbeddingProvider(),
       cacheProvider,
@@ -1054,16 +1056,16 @@ describe("ModelGatewayService", () => {
       }),
     );
 
-    expect(cacheProvider.getStoredEntries()).toHaveLength(0);
+    expect(setValue).not.toHaveBeenCalled();
   });
 
   it("compares only what the caller varied, so one objective cannot answer another", async () => {
-    // The fixed prompt is most of a planning payload. Embedding the whole
+    // The fixed prompt is most of a planning payload. Comparing the whole
     // payload made two objectives near-identical text, and one was answered
     // with the other's cached response.
-    const embed = vi.fn(createMockEmbeddingProvider().embed);
+    const invoke = vi.fn(createMockModelProvider().invoke);
     const service = buildService({
-      embeddingProvider: createMockEmbeddingProvider({ embed }),
+      modelProvider: createMockModelProvider({ invoke }),
       cacheProvider: createMockCacheProvider(),
     });
     const fixed = "You are a task planner. " + "x".repeat(400);
@@ -1077,15 +1079,40 @@ describe("ModelGatewayService", () => {
         }),
       });
 
-    await service.invoke(plan("count the pending orders"));
-    await service.invoke(plan("email the weekly status"));
+    const first = await service.invoke(plan("count the pending orders"));
+    const second = await service.invoke(plan("email the weekly status"));
 
-    const embedded = embed.mock.calls.map(([call]) => call.text);
-    expect(embedded).toEqual([
-      JSON.stringify([{ role: "user", content: "count the pending orders" }]),
-      JSON.stringify([{ role: "user", content: "email the weekly status" }]),
-    ]);
-    expect(embedded.every((text) => !text.includes(fixed))).toBe(true);
+    expect([first.cache_hit, second.cache_hit]).toEqual([false, false]);
+    expect(invoke).toHaveBeenCalledTimes(2);
+  });
+
+  // C17 / design log §12: only an exact repeat is answered from the cache.
+  // An embedding provider that scores every text as identical is the worst
+  // case a similarity cache could meet -- under the 0.95 threshold it served
+  // a one-word-different request with the first request's answer.
+  it("never answers a near-identical request from the cache, however similar its embedding", async () => {
+    const invoke = vi.fn(createMockModelProvider().invoke);
+    const embed = vi.fn(async () => ({ vector: new Array(512).fill(0.1), modelId: "constant" }));
+    const service = buildService({
+      modelProvider: createMockModelProvider({ invoke }),
+      embeddingProvider: { ...createMockEmbeddingProvider(), embed } as unknown as EmbeddingProvider,
+      cacheProvider: createMockCacheProvider(),
+    });
+    const classify = (entity: string) =>
+      request({
+        input_json: JSON.stringify({
+          messages: [{ role: "user", content: `Classify the risk of the ${entity} contract.` }],
+        }),
+      });
+
+    const first = await service.invoke(classify("Acme"));
+    const second = await service.invoke(classify("Apex"));
+    const repeat = await service.invoke(classify("Acme"));
+
+    expect([first.cache_hit, second.cache_hit, repeat.cache_hit]).toEqual([false, false, true]);
+    expect(invoke).toHaveBeenCalledTimes(2);
+    // The lookup is by key, so no embedding is spent on it.
+    expect(embed).not.toHaveBeenCalled();
   });
 
   it("puts the model, the alias and the fixed prompt in the scope, not in the comparison", () => {
@@ -1127,35 +1154,23 @@ describe("ModelGatewayService", () => {
   it("misses the cache on the first call, invokes the real model, then stores the result", async () => {
     const invoke = vi.fn(createMockModelProvider().invoke);
     const modelProvider = createMockModelProvider({ invoke });
-    const embed = vi.fn(createMockEmbeddingProvider().embed);
-    const embeddingProvider = createMockEmbeddingProvider({ embed });
-    const cacheProvider = createMockCacheProvider();
-    const service = buildService({
-      modelProvider,
-      embeddingProvider,
-      cacheProvider,
-    });
+    const mockCache = createMockCacheProvider();
+    const setValue = vi.fn(mockCache.setValue);
+    const service = buildService({ modelProvider, cacheProvider: { ...mockCache, setValue } });
 
     await service.invoke(request());
 
     expect(invoke).toHaveBeenCalledTimes(1);
-    // Embedding is computed once and reused for both the lookup and the
-    // store -- calling the real embedding provider twice per cache miss
-    // would double its cost for no benefit.
-    expect(embed).toHaveBeenCalledTimes(1);
-    const stored = (
-      cacheProvider as ReturnType<typeof createMockCacheProvider>
-    ).getStoredEntries();
-    expect(stored).toHaveLength(1);
-    expect(stored[0]?.tenantId).toBe(
-      "ten_018f47a2-7b11-7b11-8a11-1234567890ab",
-    );
-    const cachedValue = JSON.parse(stored[0]?.valueJson ?? "{}");
+    expect(setValue).toHaveBeenCalledTimes(1);
+    const [key, valueJson, ttlSeconds] = setValue.mock.calls[0]!;
+    expect(key).toMatch(/^modelgw:exact:ten_018f47a2-7b11-7b11-8a11-1234567890ab:[0-9a-f]{64}$/);
+    expect(ttlSeconds).toBe(24 * 60 * 60);
+    const cachedValue = JSON.parse(valueJson);
     expect(cachedValue).toHaveProperty("output_json");
     expect(cachedValue).toHaveProperty("resolved_capability");
   });
 
-  it("hits the cache on a semantically identical second call and never invokes the real model again", async () => {
+  it("hits the cache on an identical second call and never invokes the real model again", async () => {
     const invoke = vi.fn(createMockModelProvider().invoke);
     const modelProvider = createMockModelProvider({ invoke });
     // Deterministic embedding: identical redacted text -> identical vector,
@@ -1211,7 +1226,7 @@ describe("ModelGatewayService", () => {
     const modelProvider = createMockModelProvider({ invoke });
     const cacheProvider: CacheProvider = {
       ...createMockCacheProvider(),
-      storeSemantic: async () => {
+      setValue: async () => {
         throw new Error("cache unavailable");
       },
     };
@@ -1228,7 +1243,7 @@ describe("ModelGatewayService", () => {
     const modelProvider = createMockModelProvider({ invoke });
     const cacheProvider: CacheProvider = {
       ...createMockCacheProvider(),
-      lookupSemantic: async () => ({ hit: true, valueJson: "not-json{{{" }),
+      getValue: async () => "not-json{{{",
     };
     const service = buildService({ modelProvider, cacheProvider });
 
@@ -1240,7 +1255,7 @@ describe("ModelGatewayService", () => {
 
   // ENGINE-FIX-B5-19: stream() previously never checked or populated the
   // semantic cache at all -- every streaming call was a guaranteed miss.
-  it("misses the semantic cache on the first streaming call, then hits it on an identical second call without calling the model again", async () => {
+  it("misses the cache on the first streaming call, then hits it on an identical second call without calling the model again", async () => {
     const stream = vi.fn(async function* () {
       yield { sequence: 1, delta: "hello ", final: false as const, servedBy: "mock.model" };
       yield { sequence: 2, delta: "world", final: false as const, servedBy: "mock.model" };
@@ -1322,15 +1337,15 @@ describe("ModelGatewayService", () => {
     ]);
   });
 
-  it("does not populate the semantic cache when the stream errors partway through", async () => {
+  it("does not populate the cache when the stream errors partway through", async () => {
     const stream = vi.fn(async function* () {
       yield { sequence: 1, delta: "partial", final: false as const, servedBy: "mock.model" };
       throw new Error("upstream connection dropped");
     });
     const modelProvider = createMockModelProvider({ stream });
-    const embeddingProvider = createMockEmbeddingProvider();
-    const cacheProvider = createMockCacheProvider();
-    const service = buildService({ modelProvider, embeddingProvider, cacheProvider });
+    const mockCache = createMockCacheProvider();
+    const setValue = vi.fn(mockCache.setValue);
+    const service = buildService({ modelProvider, cacheProvider: { ...mockCache, setValue } });
 
     const drain = async () => {
       const iterator = service.stream(request())[Symbol.asyncIterator]();
@@ -1340,9 +1355,7 @@ describe("ModelGatewayService", () => {
     };
     await expect(drain()).rejects.toThrow(/upstream connection dropped/);
 
-    expect(
-      (cacheProvider as ReturnType<typeof createMockCacheProvider>).getStoredEntries(),
-    ).toHaveLength(0);
+    expect(setValue).not.toHaveBeenCalled();
 
     // Behavioral confirmation, not just an empty store list: an identical
     // follow-up request must still miss and go upstream again -- if the

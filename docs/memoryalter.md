@@ -729,6 +729,25 @@ confirmed by the user (§5.1), per-workflow budgets (§9), workflow folders (§1
 
 ---
 
+### 2026-09-28 — the freeze is lifted for the design-log items in the 25 components
+
+**Decision (Havish, in session).** "Finish all those 25 up, make it up to date to the new design
+log." This is the recorded exemption the 2026-09-07 freeze requires, and it covers exactly the
+design-log conformance items that sit inside Category 1 components: C4 (safety library), C5
+(Cost Ledger verdicts), C8 (side-effect ledger and idempotency gate), C9 (reviewer isolation),
+C10 (Run Manager budget gate), C11 (Policy Store global tier), C18 (re-embed backfill), C36
+(mechanical read-back), C37 (end-of-run holistic check), C38 (Capability Registry templates),
+C40 (safety halts the workflow), C44 (exact-match cache) and C46 (service-asserted tenants).
+
+**What it does not cover.** Anything else in those components, and any product choice hidden
+inside one of these items: where a choice is Havish's (budget scope, template content, spend on
+a live re-embed) the item is built up to that choice and the choice is asked, not guessed.
+
+**How each is held.** Same bar as C29: a test that fails on the old code, a live check where one
+is possible, its own PR, CI green on the exact head before merging.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.
