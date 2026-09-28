@@ -11,6 +11,10 @@
  *     ratchets down and the file stays a true list of what is left.
  * Nobody stops for a cleanup sprint; every later fix lands governed.
  *
+ * alterengine--5's deletion-schema gate is not here: it read one database,
+ * and this system has eight. scripts/deletion/certify.ts (task C3) does that
+ * job against every database, built from real migrations, in its own CI step.
+ *
  *   node scripts/gates/run-all.mjs            check against the baseline
  *   node scripts/gates/run-all.mjs --update   rewrite the baseline to now
  *
@@ -24,7 +28,6 @@ import { REPO_ROOT } from './lib.mjs';
 
 import * as capabilityCoverage from './capability-coverage.mjs';
 import * as deletionRegistration from './deletion-registration.mjs';
-import * as deletionSchema from './deletion-schema.mjs';
 import * as costNoFloat from './cost-no-float.mjs';
 import * as driverExistence from './driver-existence.mjs';
 import * as duplicatePrimitive from './duplicate-primitive.mjs';
@@ -44,7 +47,6 @@ export const GATES = [
   deletionRegistration,
   capabilityCoverage,
   verifierDriver,
-  deletionSchema,
   testEnvFile,
 ];
 
