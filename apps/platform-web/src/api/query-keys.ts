@@ -160,6 +160,7 @@ export const queryKeys = {
   discovery: {
     useCases: ["discovery", "useCases"] as const,
     recommendations: ["discovery", "recommendations"] as const,
+    suggestions: ["discovery", "suggestions"] as const,
   },
   benchmarks: {
     list: ["benchmarks", "list"] as const,
