@@ -7,6 +7,7 @@ import type {
   NodeexecFinalizeRunResponse,
 } from "@alterx/contracts";
 import {
+  hasExternalSideEffect,
   GENERATED_FILES_OUTPUT_INSTRUCTION,
   ModelAliasSchema,
   NodeTypeSchema,
@@ -53,6 +54,22 @@ export class AgentCreationFailedError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "AgentCreationFailedError";
+  }
+}
+
+/**
+ * The node already reached the outside world in this run (design log §4).
+ * Carries its own code so Recovery sees why, not a generic failure.
+ */
+export class SideEffectAlreadyAppliedError extends Error {
+  readonly code = "SIDE_EFFECT_ALREADY_APPLIED";
+
+  constructor(nodeKey: string, toolName: string, priorStatus: string) {
+    super(
+      `Node "${nodeKey}" already called ${toolName} in this run (${priorStatus}); ` +
+        "re-running it could repeat an external action, so it needs a person's decision",
+    );
+    this.name = "SideEffectAlreadyAppliedError";
   }
 }
 
@@ -187,6 +204,7 @@ export class NodeexecService {
       const agentBinding = await this.#resolveAgentBindingBestEffort(request, executionConfig);
       boundAgentId = agentBinding.agent_id;
       const successCriteria = request.success_criteria ?? [];
+      const sideEffectId = await this.#passIdempotencyGate(request, executionConfig);
       const result = await this.registry.execute(request.node_type, {
         config: executionConfig,
         inputs,
@@ -206,6 +224,9 @@ export class NodeexecService {
       });
 
       executedMetadata = result.metadata;
+      if (sideEffectId !== undefined) {
+        await this.#settleSideEffect(request.tenant_id, sideEffectId, result);
+      }
       if (request.node_type === "SandboxExec") {
         await this.#appendTerminalFramesBestEffort(request, result.output);
       }
@@ -356,6 +377,67 @@ export class NodeexecService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Design log §4: the idempotency gate in front of every re-execution. A
+   * ToolCall whose tool acts on the outside world is recorded in the
+   * Side-Effect Ledger before it is called; if this run's node already has
+   * such a record, the earlier attempt may have sent the message or written
+   * the row, and running it again would do it twice. The node is refused
+   * instead, and Recovery hands the decision to a person. Covers every
+   * retry path at once: the activity's own retries, Recovery's retry and
+   * backoff, and swap_agent.
+   */
+  async #passIdempotencyGate(
+    request: NodeexecExecuteNodeRequest,
+    config: Record<string, unknown>,
+  ): Promise<string | undefined> {
+    const toolName = config["tool_name"];
+    if (
+      request.node_type !== "ToolCall" ||
+      typeof toolName !== "string" ||
+      !hasExternalSideEffect(toolName)
+    ) {
+      return undefined;
+    }
+    const prior = await this.ledger.priorSideEffects(request.tenant_id, request.run_id, request.node_key);
+    if (prior.length > 0) {
+      throw new SideEffectAlreadyAppliedError(request.node_key, toolName, prior[prior.length - 1]!.status);
+    }
+    const id = createVerificationResultId().replace(/^ver_/, "sfx_");
+    await this.ledger.recordSideEffectAttempt({
+      id,
+      tenantId: request.tenant_id,
+      runId: request.run_id,
+      dagNodeId: request.node_key,
+      nodeExecutionId: request.node_execution_id,
+      toolName,
+    });
+    return id;
+  }
+
+  /**
+   * A returned result settles the attempt: success marks it completed with
+   * the gateway's audit id; a call refused before dispatch (validation) is
+   * withdrawn, since nothing left Alter; any other failure stays 'attempted'
+   * -- a timeout or a gateway error may have acted, and must still block a
+   * retry.
+   */
+  async #settleSideEffect(
+    tenantId: string,
+    id: string,
+    result: { readonly output: Record<string, unknown>; readonly metadata?: Record<string, unknown> },
+  ): Promise<void> {
+    const problem = ProblemDetailsSchema.safeParse(result.output);
+    if (problem.success && problem.data.status >= 400) {
+      if (problem.data.error_code === "TOOL_CALL_VALIDATION_FAILED") {
+        await this.ledger.withdrawSideEffectAttempt(tenantId, id);
+      }
+      return;
+    }
+    const auditId = result.metadata?.["audit_id"];
+    await this.ledger.completeSideEffect(tenantId, id, typeof auditId === "string" ? auditId : undefined);
   }
 
   /**

@@ -264,6 +264,82 @@ export class NodeExecutionLedgerService {
     });
   }
 
+  /**
+   * Design log §4 / §22 item 7: whether this run's node has already reached
+   * the outside world. Any recorded attempt counts -- one that never
+   * reported back may still have acted, and cannot be told apart from one
+   * that did.
+   */
+  async priorSideEffects(
+    tenantIdInput: string,
+    runId: string,
+    dagNodeId: string,
+  ): Promise<readonly { readonly toolName: string; readonly status: string }[]> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    requireRunId(runId);
+    return this.store.withTenant(tenantId, async (tx) => {
+      const result = await tx.query<{ readonly tool_name: string; readonly status: string }>(
+        `SELECT tool_name, status FROM side_effects
+         WHERE tenant_id = $1 AND run_id = $2 AND dag_node_id = $3
+         ORDER BY recorded_at`,
+        [tenantId, runId, dagNodeId],
+      );
+      return result.rows.map((row) => ({ toolName: row.tool_name, status: row.status }));
+    });
+  }
+
+  /** Recorded before the tool is called, so a crash mid-call still counts. */
+  async recordSideEffectAttempt(request: {
+    readonly id: string;
+    readonly tenantId: string;
+    readonly runId: string;
+    readonly dagNodeId: string;
+    readonly nodeExecutionId: string;
+    readonly toolName: string;
+  }): Promise<void> {
+    const tenantId = bareTenantUuid(request.tenantId);
+    requireRunId(request.runId);
+    requireNodeExecutionId(request.nodeExecutionId);
+    await this.store.withTenant(tenantId, async (tx) => {
+      await tx.query(
+        `INSERT INTO side_effects
+           (id, tenant_id, run_id, dag_node_id, node_execution_id, tool_name, status)
+         VALUES ($1, $2, $3, $4, $5, $6, 'attempted')`,
+        [request.id, tenantId, request.runId, request.dagNodeId, request.nodeExecutionId, request.toolName],
+      );
+    });
+  }
+
+  async completeSideEffect(
+    tenantIdInput: string,
+    id: string,
+    toolAuditId: string | undefined,
+  ): Promise<void> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    await this.store.withTenant(tenantId, async (tx) => {
+      await tx.query(
+        `UPDATE side_effects
+            SET status = 'completed', tool_audit_id = $3, completed_at = clock_timestamp()
+          WHERE tenant_id = $1 AND id = $2`,
+        [tenantId, id, toolAuditId ?? null],
+      );
+    });
+  }
+
+  /**
+   * The attempt provably never reached the tool (the call was refused before
+   * dispatch), so it is not evidence of an external action.
+   */
+  async withdrawSideEffectAttempt(tenantIdInput: string, id: string): Promise<void> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    await this.store.withTenant(tenantId, async (tx) => {
+      await tx.query(
+        "DELETE FROM side_effects WHERE tenant_id = $1 AND id = $2 AND status = 'attempted'",
+        [tenantId, id],
+      );
+    });
+  }
+
   async recordVerificationResult(request: {
     readonly id: string;
     readonly tenantId: string;

@@ -1331,3 +1331,109 @@ describe("NodeexecService failure cause (#149)", () => {
     });
   });
 });
+
+// C8, design log §4 / §22 item 7: the Side-Effect Ledger and the idempotency
+// gate in front of every re-execution.
+describe("NodeexecService idempotency gate", () => {
+  function sideEffectLedger(prior: readonly { toolName: string; status: string }[] = []) {
+    const ledger = fakeLedger() as unknown as Record<string, ReturnType<typeof vi.fn>>;
+    ledger["priorSideEffects"] = vi.fn().mockResolvedValue(prior);
+    ledger["recordSideEffectAttempt"] = vi.fn().mockResolvedValue(undefined);
+    ledger["completeSideEffect"] = vi.fn().mockResolvedValue(undefined);
+    ledger["withdrawSideEffectAttempt"] = vi.fn().mockResolvedValue(undefined);
+    return ledger;
+  }
+
+  function toolCall(ledger: Record<string, ReturnType<typeof vi.fn>>, result: { output: Record<string, unknown>; metadata?: Record<string, unknown> }) {
+    const execute = vi.fn().mockResolvedValue(result);
+    const recovery = {
+      triggerForBlockedNode: vi.fn().mockResolvedValue(undefined),
+      triggerForFailedNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as RecoveryTriggerService;
+    const nodeexec = new NodeexecService(
+      new NodeHandlerRegistry([{ nodeType: "ToolCall", execute }]),
+      ledger as unknown as NodeExecutionLedgerService,
+      undefined,
+      recovery,
+    );
+    const run = (toolName: string) =>
+      nodeexec.executeNode({
+        tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
+        node_key: "notify", node_type: "ToolCall",
+        config_json: JSON.stringify({ tool_name: toolName, input: {} }),
+        inputs_json: "{}", success_criteria: [],
+      });
+    return { run, execute, recovery };
+  }
+
+  const AUDIT_ID = "aud_018f4d6e-2b4a-7a3e-8c1a-1234567890ff";
+
+  it("records the attempt before calling a side-effecting tool, and completes it with the audit id", async () => {
+    const ledger = sideEffectLedger();
+    const { run, execute } = toolCall(ledger, { output: { message_id: "m-1" }, metadata: { audit_id: AUDIT_ID } });
+
+    await run("email.send");
+
+    expect(ledger["recordSideEffectAttempt"]).toHaveBeenCalledWith(expect.objectContaining({
+      tenantId: TENANT_ID, runId: RUN_ID, dagNodeId: "notify", nodeExecutionId: NODE_EXECUTION_ID, toolName: "email.send",
+      id: expect.stringMatching(/^sfx_/),
+    }));
+    expect(ledger["recordSideEffectAttempt"]!.mock.invocationCallOrder[0]!).toBeLessThan(execute.mock.invocationCallOrder[0]!);
+    const id = ledger["recordSideEffectAttempt"]!.mock.calls[0]![0].id;
+    expect(ledger["completeSideEffect"]).toHaveBeenCalledWith(TENANT_ID, id, AUDIT_ID);
+  });
+
+  it("refuses to run the node again once it may already have acted, and never calls the tool", async () => {
+    const ledger = sideEffectLedger([{ toolName: "email.send", status: "attempted" }]);
+    const { run, execute, recovery } = toolCall(ledger, { output: {} });
+
+    await expect(run("email.send")).rejects.toThrow(/already called email.send in this run/);
+
+    expect(execute).not.toHaveBeenCalled();
+    expect(ledger["recordSideEffectAttempt"]).not.toHaveBeenCalled();
+    expect(ledger["recordFailed"]).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ code: "SIDE_EFFECT_ALREADY_APPLIED" }));
+    expect(recovery.triggerForFailedNode).toHaveBeenCalledWith(expect.objectContaining({ errorCode: "SIDE_EFFECT_ALREADY_APPLIED" }));
+  });
+
+  it("withdraws the attempt when the call was refused before dispatch", async () => {
+    const ledger = sideEffectLedger();
+    const { run } = toolCall(ledger, {
+      output: {
+        type: "https://alter.dev/problems/tool-call-validation", title: "Bad Request", status: 400,
+        detail: "bad input", instance: "/", error_code: "TOOL_CALL_VALIDATION_FAILED",
+        trace_id: "trc_018f4d6e-2b4a-7a3e-8c1a-1234567890aa", request_id: "req_018f4d6e-2b4a-7a3e-8c1a-1234567890ab", retryable: false, field_errors: [], documentation_key: "execution.tool-call.validation-failed",
+      },
+    });
+
+    await run("database.insert").catch(() => undefined);
+
+    expect(ledger["withdrawSideEffectAttempt"]).toHaveBeenCalledOnce();
+    expect(ledger["completeSideEffect"]).not.toHaveBeenCalled();
+  });
+
+  it("keeps the attempt when the gateway failed in a way that may have acted", async () => {
+    const ledger = sideEffectLedger();
+    const { run } = toolCall(ledger, {
+      output: {
+        type: "https://alter.dev/problems/tool-gateway", title: "Bad Gateway", status: 502,
+        detail: "deadline exceeded", instance: "/", error_code: "TOOL_GATEWAY_UNAVAILABLE",
+        trace_id: "trc_018f4d6e-2b4a-7a3e-8c1a-1234567890aa", request_id: "req_018f4d6e-2b4a-7a3e-8c1a-1234567890ab", retryable: true, field_errors: [], documentation_key: "execution.tool-call.gateway-failed",
+      },
+    });
+
+    await run("database.insert").catch(() => undefined);
+
+    expect(ledger["withdrawSideEffectAttempt"]).not.toHaveBeenCalled();
+    expect(ledger["completeSideEffect"]).not.toHaveBeenCalled();
+  });
+
+  it("leaves reads alone", async () => {
+    const ledger = sideEffectLedger();
+    const { run } = toolCall(ledger, { output: { results: [] }, metadata: { audit_id: AUDIT_ID } });
+
+    await run("search.web");
+
+    expect(ledger["priorSideEffects"]).not.toHaveBeenCalled();
+    expect(ledger["recordSideEffectAttempt"]).not.toHaveBeenCalled();
+  });
+});
