@@ -43,7 +43,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.6 | tokenized card setup | todo |
 | B2.7 | invoice PDF: Razorpay renders the invoice; its hosted page (`short_url`, view and PDF download) is carried through as `documentUrl` (https only) and linked from the invoices page | done (this PR) |
 | B2.8 | new subscription: with no subscription and a registered payment method, the plans page subscribes through `POST /api/v1/billing/subscription` (idempotent). In live mode a tenant has no payment method until B2.6 is decided, so this path is wired but not reachable there yet | done (this PR) |
-| B2.9 | usage, budgets, cost estimates (moved from B1.10) | todo |
+| B2.9a | usage and cost pages live: month-to-date billable spend and billed operations, by source and by provider/resource, from `/api/v1/costs/summary`. Live mode showed the demo's made-up figures before (e.g. "$284.73", random chart bars). Workflow/project estimates now show "-" in live instead of invented numbers. Budgets hidden in live until B2.9b. | done (this PR) |
+| B2.9b | budgets: platform_db `budgets` (migration 0024, tenant RLS, per workspace, monthly, INR/USD, notify/warn/block thresholds) with list (any member; this month's billable spend from the cost ledger, unknown if the ledger is down or counts another currency), create/update/delete (workspace admin, new `budgets:write`). Page creates, pauses, deletes. Thresholds are stored, not yet acted on: alerts wait on B3.1, blocking on C10 | done (this PR) |
 | B3.1 | notifications | todo |
 | B3.2 | benchmarks | todo |
 | B3.3 | discovery | todo |
@@ -100,6 +101,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | B1.8 gap | Assigning a security review to a staff member has no backend (hidden in live). Build or drop? |
 | B1.6/B1.7 gaps | Provider "maintenance" state and editing policies from the list page have no backend (hidden in live). Build or drop? |
 | B1.2 gaps | Admin user screens show MFA and risk state in demo only; user notes (write) have no backend. Build or drop? |
+| Cost visibility | `GET /api/v1/costs/summary` returns the ledger's internal cost and margin to any workspace member with billing:read. The console shows only billable spend, but the API still exposes them. Recommendation: strip internal/retry/recovery cost and margin from the tenant route, and keep them for a staff route. Confirm? |
 | B2.4 upload | Sellers cannot submit identity documents in live mode: there is no document store and no KYC vendor ("manual review until a vendor is selected"). Choose: Razorpay Route linked-account KYC (Razorpay holds the documents), a vendor, or our own encrypted S3 store with retention rules. |
 | B2.1 gap | Marketplace "needs changes" and a risk score have no backend (hidden in live). Build or drop? |
 | B2.2 gaps | Billing ops resolve/dismiss, apply credit and retry charge have no backend (hidden in live), and the dunning state records no amount. Build (needs Razorpay retry/credit calls) or drop? |

@@ -6,8 +6,14 @@ import { queryKeys } from "@/api/query-keys"
 import { formatCurrency, formatCompactNumber } from "@/lib/formatters"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { isLiveApi } from "@/api/http"
+import { LiveCostBreakdown } from "../components/live-usage"
 
 export function UsageCostsPage() {
+  return isLiveApi ? <LiveCostBreakdown /> : <DemoCostBreakdown />
+}
+
+function DemoCostBreakdown() {
   const { data: models } = useQuery({ queryKey: queryKeys.usage.models, queryFn: () => api.usage.getModelUsage() })
   const { data: workflows } = useQuery({ queryKey: ["usage", "workflows"], queryFn: () => api.usage.getWorkflowUsage() })
   const { data: projects } = useQuery({ queryKey: ["usage", "projects"], queryFn: () => api.usage.getProjectUsage() })

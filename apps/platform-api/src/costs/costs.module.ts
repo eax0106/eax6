@@ -8,5 +8,6 @@ import { CostsService } from "./costs.service";
   imports: [EngineModule],
   controllers: [CostsController],
   providers: [CostsService, CostsExceptionFilter],
+  exports: [CostsService],
 })
 export class CostsModule {}

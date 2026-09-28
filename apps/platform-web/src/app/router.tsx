@@ -336,7 +336,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "", element: <UsageOverviewPage /> },
           { path: "costs", element: <UsageCostsPage /> },
-          { path: "budgets", element: <BudgetsPage /> },
+          { path: "budgets", element: <LiveFeatureGate feature="budgets"><BudgetsPage /></LiveFeatureGate> },
         ]
       },
       { 

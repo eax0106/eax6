@@ -851,7 +851,8 @@ export interface Budget {
   amount: number;
   currency: string;
   period: "monthly" | "weekly";
-  currentSpend: number;
+  /** Null when the cost ledger could not be read or counts another currency. */
+  currentSpend: number | null;
   enabled: boolean;
   thresholds: BudgetThreshold[];
 }

@@ -10,6 +10,7 @@ export type LiveFeature =
   | "benchmarks"
   | "discovery"
   | "notifications"
+  | "budgets"
 
 export const liveFeatureNames: Record<LiveFeature, string> = {
   "admin-tenants": "Admin: Tenants",
@@ -28,6 +29,7 @@ export const liveFeatureNames: Record<LiveFeature, string> = {
   benchmarks: "Benchmarks",
   discovery: "Discovery",
   notifications: "Notifications",
+  budgets: "Budgets",
 }
 
 const unfinishedLiveFeatures = new Set<LiveFeature>([

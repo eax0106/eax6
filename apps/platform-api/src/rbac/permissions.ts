@@ -38,6 +38,7 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
   admin: [
     "approvals:decide",
     "billing:read",
+    "budgets:write",
     "credential:delete",
     "credential:read",
     "credential:write",
