@@ -73,7 +73,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C7 | Agent Factory extracted | todo |
 | C18 | re-embed backfill | todo |
 | C13 | map 54 contracts onto 61 components | todo |
-| C33 | deterministic wait in the flaky Temporal test | todo |
+| C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |
 | C34 | specs authorize through the enforcing resolver | todo |
 | C35 | vitest hang with `.env.local` present | todo |
 | C30 | §16 approval modes | blocked (decision) |
