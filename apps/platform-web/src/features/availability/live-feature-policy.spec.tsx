@@ -25,7 +25,7 @@ describe("live feature availability", () => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(false)
   })
 
-  it.each(["admin-tenants", "admin-users", "admin-audit", "admin-feature-flags", "admin-providers", "admin-policies", "admin-system-status", "admin-incidents", "admin-security", "admin-support", "admin-marketplace", "admin-billing", "discovery"] as const)("shows %s in live mode once its adapter is wired (Track B)", (feature) => {
+  it.each(["admin-tenants", "admin-users", "admin-audit", "admin-feature-flags", "admin-providers", "admin-policies", "admin-system-status", "admin-incidents", "admin-security", "admin-support", "admin-marketplace", "admin-billing", "budgets", "discovery"] as const)("shows %s in live mode once its adapter is wired (Track B)", (feature) => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(true)
   })
 

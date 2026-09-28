@@ -1,12 +1,13 @@
 import { NavLink, Outlet } from "react-router-dom"
 import { BarChart3, Receipt, Wallet, CreditCard, Activity, Box } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { isLiveFeatureAvailable } from "@/features/availability/live-feature-policy"
 
 const usageNavItems = [
   { name: "Overview", href: "/app/usage", icon: Activity },
   { name: "Cost Breakdown", href: "/app/usage/costs", icon: BarChart3 },
   { name: "Budgets", href: "/app/usage/budgets", icon: Wallet },
-]
+].filter((item) => item.href !== "/app/usage/budgets" || isLiveFeatureAvailable("budgets"))
 
 const billingNavItems = [
   { name: "Billing Overview", href: "/app/billing", icon: Box },
