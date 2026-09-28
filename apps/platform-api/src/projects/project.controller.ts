@@ -85,6 +85,7 @@ export class ProjectController {
     @ActorContext() actor: ActorContextType | undefined,
     @Headers("traceparent") traceparent: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
+    @Query("q") nameQuery?: string,
   ): Promise<ProjectList> {
     const instance = "/api/v1/projects";
     return project(
@@ -93,6 +94,7 @@ export class ProjectController {
         limit,
         requireActor(actor, instance),
         traceparent,
+        nameQuery,
       ),
       reply,
     );

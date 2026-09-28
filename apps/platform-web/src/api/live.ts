@@ -220,6 +220,12 @@ export async function getWorkflows(): Promise<Workflow[]> {
   return asArray(body, "workflows").map(mapWorkflow)
 }
 
+/** The engine's name search over every workflow in the workspace (task B3.4). */
+export async function searchWorkflows(query: string, limit: number): Promise<Workflow[]> {
+  const body = await apiGet<unknown>(`/api/v1/workflows?q=${encodeURIComponent(query)}&limit=${limit}`)
+  return asArray(body, "workflows").map(mapWorkflow)
+}
+
 export async function getWorkflow(id: string): Promise<Workflow> {
   return mapWorkflow(await apiGet<unknown>(`/api/v1/workflows/${encodeURIComponent(id)}`))
 }
@@ -609,6 +615,12 @@ export async function getArtifactsByRun(runId: string): Promise<Artifact[]> {
 
 export async function getProjects(): Promise<Project[]> {
   const body = await apiGet<unknown>("/api/v1/projects")
+  return asArray(body, "projects").map(mapProject)
+}
+
+/** The engine's name search over every project in the workspace (task B3.4). */
+export async function searchProjects(query: string, limit: number): Promise<Project[]> {
+  const body = await apiGet<unknown>(`/api/v1/projects?q=${encodeURIComponent(query)}&limit=${limit}`)
   return asArray(body, "projects").map(mapProject)
 }
 

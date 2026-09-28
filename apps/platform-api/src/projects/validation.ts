@@ -81,6 +81,7 @@ export function parseProjectListQuery(
   cursor: string | undefined,
   limit: string | undefined,
   instance: string,
+  nameQuery?: string,
 ): string {
   if (
     cursor !== undefined &&
@@ -95,9 +96,14 @@ export function parseProjectListQuery(
   ) {
     throw invalidListQuery(instance, "limit", "Expected integer from 1 to 200");
   }
+  const q = nameQuery?.trim();
+  if (nameQuery !== undefined && (!q || q.length > 200)) {
+    throw invalidListQuery(instance, "q", "Expected 1-200 characters");
+  }
   const query = new URLSearchParams();
   if (cursor !== undefined) query.set("cursor", cursor);
   if (parsedLimit !== undefined) query.set("limit", String(parsedLimit));
+  if (q) query.set("q", q);
   const serialized = query.toString();
   return serialized ? `?${serialized}` : "";
 }

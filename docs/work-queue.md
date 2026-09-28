@@ -49,7 +49,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B3.1b | notification producers: nothing in the system calls `createEvent`, so the centre stays empty. Emit approval-requested (to approvers), budget thresholds (to workspace admins; also B2.9b's alerts), deployment and run-failure events | todo |
 | B3.2 | benchmarks | blocked (decision, below): the console is customer-facing, but eval_db holds only Alter's own golden sets and the API only runs them for staff |
 | B3.3 | discovery live: suggestions derived from the workspace's own runs, documents, approvals and connectors, with "Create draft workflow" (opens the new draft) and Dismiss. The use-case catalogue keeps only conversation starters in live; the demo's template ids and invented recommendations are not shown | done (this PR) |
-| B3.4 | server search beyond listing/tool | todo |
+| B3.4 | server search beyond listing/tool: the engine's workflow and project lists take `q` (case-insensitive name match, `%`/`_`/`\` literal, still paged, 1-200 chars), platform-api forwards it, and the spotlight asks the engine instead of filtering the first page of 50 in the browser. Knowledge sources and connections stay client-side (short per-workspace lists) | done (this PR) |
 | B3.5 | Tool Registry, confirm live | todo |
 | B3.6 | Media Services, confirm live | todo |
 

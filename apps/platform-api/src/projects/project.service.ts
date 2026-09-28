@@ -56,9 +56,10 @@ export class ProjectService {
     limit: string | undefined,
     actor: ActorContext,
     traceparent: string | undefined,
+    nameQuery?: string,
   ): Promise<EngineResponse<ProjectList>> {
     const instance = "/api/v1/projects";
-    const query = parseProjectListQuery(cursor, limit, instance);
+    const query = parseProjectListQuery(cursor, limit, instance, nameQuery);
     return this.engine.get(
       `/api/v1/projects${query}`,
       callerContext(actor, traceparent, instance),

@@ -164,10 +164,18 @@ describe("ProjectController routes", () => {
     );
   });
 
+  it("forwards a trimmed name search to the engine (task B3.4)", async () => {
+    const response = await request("GET", "/api/v1/projects?q=%20invoice%20&limit=5", { actor: viewer });
+    expect(response.statusCode).toBe(200);
+    expect(engine.get).toHaveBeenCalledWith("/api/v1/projects?limit=5&q=invoice", expect.anything());
+  });
+
   it.each([
     ["cursor=not-a-project-id", "cursor"],
     ["limit=0", "limit"],
     ["limit=201", "limit"],
+    ["q=%20%20", "q"],
+    [`q=${"x".repeat(201)}`, "q"],
   ])("rejects ?%s before calling the engine", async (query, field) => {
     const response = await request("GET", `/api/v1/projects?${query}`, {
       actor: viewer,

@@ -69,6 +69,7 @@ export class ProjectReadController {
     @Req() request: SessionGatewayRequest,
     @Query("cursor") cursor?: string,
     @Query("limit") rawLimit?: string,
+    @Query("q") query?: string,
   ) {
     try {
       return await this.service.listProjects(
@@ -76,6 +77,7 @@ export class ProjectReadController {
         requiredWorkspaceId(request),
         cursor,
         rawLimit === undefined ? 50 : Number(rawLimit),
+        query,
       );
     } catch (error: unknown) {
       throw mapProjectError(error, request.url);
