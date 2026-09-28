@@ -323,7 +323,13 @@ export {
   type FailureObservation,
   type RootCauseEstimate,
 } from "./recovery-classification";
-export { ToolNameSchema, TOOL_NAMES, type ToolName } from "./tool-names";
+export {
+  ToolNameSchema,
+  TOOL_NAMES,
+  SIDE_EFFECT_TOOL_NAMES,
+  hasExternalSideEffect,
+  type ToolName,
+} from "./tool-names";
 export {
   AbuseSignalSchema,
   AdminIncidentSchema,
