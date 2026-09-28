@@ -1021,6 +1021,7 @@ export type NotificationType =
   | 'run'
   | 'workflow'
   | 'project'
+  | 'deployment'
   | 'human_action'
   | 'knowledge'
   | 'connection'
