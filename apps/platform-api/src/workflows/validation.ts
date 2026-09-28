@@ -121,6 +121,14 @@ export function parseVersionQuery(
   return serialized ? `?${serialized}` : "";
 }
 
+/** Adds the engine's name search (task B3.4) to a list query string. */
+export function withNameQuery(query: string, nameQuery: string | undefined, instance: string): string {
+  if (nameQuery === undefined) return query;
+  const q = nameQuery.trim();
+  if (!q || q.length > 200) throw invalidVersionQuery(instance, "q", "Expected 1-200 characters");
+  return `${query}${query ? "&" : "?"}q=${encodeURIComponent(q)}`;
+}
+
 function invalidVersionQuery(
   instance: string,
   field: string,

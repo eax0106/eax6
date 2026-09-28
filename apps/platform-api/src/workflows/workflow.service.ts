@@ -27,6 +27,7 @@ import type {
 import {
   parseTraceparent,
   parseVersionQuery,
+  withNameQuery,
   parseWorkflowId,
 } from "./validation";
 
@@ -61,9 +62,10 @@ export class WorkflowService {
     limit: string | undefined,
     actor: ActorContext,
     traceparent: string | undefined,
+    nameQuery?: string,
   ): Promise<EngineResponse<WorkflowList>> {
     const instance = "/api/v1/workflows";
-    const query = parseVersionQuery(cursor, limit, instance);
+    const query = withNameQuery(parseVersionQuery(cursor, limit, instance), nameQuery, instance);
     return this.engine.get(
       `/api/v1/workflows${query}`,
       callerContext(actor, traceparent, instance),

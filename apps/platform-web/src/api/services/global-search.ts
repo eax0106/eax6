@@ -1,12 +1,11 @@
 import { type GlobalSearchResult } from "../types"
 import { apiGet, isLiveApi } from "../http"
-import { getConnections, getKnowledgeSources, getProjects, getWorkflows } from "../live"
+import { getConnections, getKnowledgeSources, searchProjects, searchWorkflows } from "../live"
 
-// The Marketplace is the only part of the product with a search endpoint, so
-// listings are ranked server-side. Everything else is filtered here over the
-// lists the spotlight can already read, which holds while a workspace's lists
-// fit in the single page those functions ask for. A server-side global search
-// would replace this function; the modal renders whatever it returns.
+// Listings, workflows and projects are searched server-side (the engine
+// searches workflow and project names across the whole workspace, task B3.4).
+// Knowledge sources and connections are filtered here over the lists the
+// spotlight can already read: both are short, per-workspace lists.
 const GROUP_LIMIT = 5
 
 // Typing re-runs this on every debounce tick, and the lists it reads change far
@@ -50,10 +49,8 @@ async function liveResults(query: string): Promise<GlobalSearchResult[]> {
   const q = query.toLowerCase()
   const sources: Promise<GlobalSearchResult[]>[] = [
     listingResults(query),
-    cachedList("workflows", getWorkflows).then((items) =>
+    searchWorkflows(query.trim(), GROUP_LIMIT).then((items) =>
       items
-        .filter((workflow) => matches(q, workflow.name, workflow.description))
-        .slice(0, GROUP_LIMIT)
         .map((workflow) => ({
           id: workflow.id,
           type: "workflow" as const,
@@ -62,10 +59,8 @@ async function liveResults(query: string): Promise<GlobalSearchResult[]> {
           url: `/app/workflows/${encodeURIComponent(workflow.id)}`,
         })),
     ),
-    cachedList("projects", getProjects).then((items) =>
+    searchProjects(query.trim(), GROUP_LIMIT).then((items) =>
       items
-        .filter((project) => matches(q, project.name, project.brief?.goal))
-        .slice(0, GROUP_LIMIT)
         .map((project) => ({
           id: project.id,
           type: "project" as const,

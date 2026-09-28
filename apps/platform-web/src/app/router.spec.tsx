@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 describe("admin subtree lazy-loading", () => {
-  it("renders the lazily-loaded AdminLayout shell past the Suspense boundary", async () => {
+  it("renders the lazily-loaded AdminLayout shell past the Suspense boundary", { timeout: 20_000 }, async () => {
     localStorage.setItem("alterx_auth", "true")
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
@@ -35,6 +35,10 @@ describe("admin subtree lazy-loading", () => {
     // is loaded -- proves AdminLayout itself (also lazy) resolved and
     // mounted. getByText throws (and waitFor retries) until it's found, so
     // no extra assertion is needed on the result.
-    await waitFor(() => screen.getByText("AlterX Admin"))
+    // The first lazy import transforms the whole admin subtree; under a full
+    // parallel suite that takes longer than waitFor's 1 s default, so the
+    // wait is bounded by the test timeout instead (it still ends the moment
+    // the shell mounts).
+    await waitFor(() => screen.getByText("AlterX Admin"), { timeout: 15_000 })
   })
 })
