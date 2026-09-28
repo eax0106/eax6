@@ -659,6 +659,31 @@ proof needs the OAuth app registered.
 
 **C35 found on the way:** vitest hangs whenever the root `.env.local` exists.
 
+### 2026-09-28 — C29 slice 2b: the producing node and the gate read one contract
+
+- **What.** A compiled node's own success criteria now reach the node that produces the output
+  and the gate that judges it. The Executor carries them from the compiled DAG
+  (`executor-workflow.ts`, `executor-activities.ts`, `nodeexec.proto` field 8) into the handler
+  context (`handler.ts`); LLMTask states them to the model, numbered, after the prompt
+  (`llmtask.handler.ts`); Nodeexec sends them with the output to the Verification & Quality Gate
+  (`nodeexec.service.ts`, `verify.proto` field 8). The gate (`verification-service` kernel, models,
+  gRPC mapping, reviewer client) asks the ADVANCED reviewer for one boolean judgement per
+  criterion, requires exactly one per criterion in order, and **fails the node when any criterion
+  is unmet, whatever the rubric score** — the fluent, off-contract answer C29 was found for.
+- **Within the exemption.** Only the Executor and the Verification & Quality Gate changed; the
+  Graph Compiler already carried per-node criteria since slices 1 and 2a. No fourth Category 1
+  component was needed.
+- **Deliberately not done.** Routing and control-flow nodes (Gate, Merge, …) record their
+  criteria in the verdict details as not judged: their output is a decision, and an LLM judging a
+  boolean route was already rejected for the rubric. A reviewer that skips, reorders or invents a
+  criterion is an error, never a pass.
+- **Evidence.** Kernel, reviewer-parsing and gRPC specs in verification-service (a high rubric
+  score with an unmet criterion fails; removing the fail line fails the test); Nodeexec, activity,
+  LLMTask and a real Temporal workflow spec on the executor side (removing the criteria from the
+  gate request fails 2 tests).
+- **What remains of C29.** A live run against Bedrock showing an off-contract answer now fails,
+  and §5.2's mechanical read-back (C36), which is separate.
+
 ### 2026-09-28 — C3: every table in eight databases is registered; erasure reaches 38 of 100 tenant tables
 
 - **What.** `packages/deletion-registry` declares each of the 125 live tables once: tenant data with the

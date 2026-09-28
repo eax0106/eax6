@@ -47,6 +47,13 @@ export interface NodeExecutionContext {
   readonly bound_tool_names?: readonly string[];
   /** The bound agent version's instructions (agent_versions.persona_description). */
   readonly bound_agent_instructions?: string;
+  /**
+   * C29: this node's own success criteria from the compiled DAG (design log
+   * §5.1) -- what the task asked this node to achieve. Absent for workflows
+   * compiled before criteria existed. The Verification & Quality Gate judges
+   * the output against the same list.
+   */
+  readonly success_criteria?: readonly string[];
   /** Durable SSE publisher injected by Nodeexec; never exposed to workflow code. */
   readonly on_model_delta?: (delta: string, index: number, final: boolean) => Promise<void>;
 }

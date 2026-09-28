@@ -88,6 +88,9 @@ message ScoreNodeInlineRequest {
   string node_type = 5; // one of the 11 real NodeType values
   string config_json = 6;
   string output_json = 7;
+  // C29: the producing node's success criteria. When present the reviewer
+  // judges the output against each one and any unmet criterion fails.
+  repeated string success_criteria = 8;
 }
 
 message ScoreNodeInlineResponse {

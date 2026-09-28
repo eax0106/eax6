@@ -27,6 +27,17 @@ export function llmTaskSystemMessage(agentInstructions: string | undefined): str
 }
 
 /**
+ * C29: the node's own success criteria, stated to the model it asks. The
+ * Verification & Quality Gate judges the output against the same list, so the
+ * producer and the judge read one contract.
+ */
+export function withSuccessCriteria(content: string, criteria: readonly string[] | undefined): string {
+  if (criteria === undefined || criteria.length === 0) return content;
+  const numbered = criteria.map((criterion, index) => `${index + 1}. ${criterion}`).join("\n");
+  return `${content}\n\nYour output must meet every one of these success criteria:\n${numbered}`;
+}
+
+/**
  * The text inside one markdown code fence, when that fence is the entire
  * answer. Models still wrap JSON in ```json fences despite the output contract
  * (seen live on Bedrock); anything else passes through untouched and is parsed,
@@ -92,10 +103,12 @@ export class LlmTaskHandler implements NodeHandler {
     // {{placeholder}} interpolation in config.prompt, so this stays a
     // fixed, always-present block instead of a partially-supported syntax.
     const upstreamEntries = Object.entries(context.inputs);
-    const content =
+    const content = withSuccessCriteria(
       upstreamEntries.length === 0
         ? prompt
-        : `${prompt}\n\nUpstream node output:\n${JSON.stringify(context.inputs, null, 2)}`;
+        : `${prompt}\n\nUpstream node output:\n${JSON.stringify(context.inputs, null, 2)}`,
+      context.success_criteria,
+    );
 
     const modelRequest = {
       tenant_id: context.tenant_id,

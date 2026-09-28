@@ -54,6 +54,7 @@ describe.sequential("verification Gate real Postgres path", () => {
     await scoredNodeexec.executeNode({
       tenant_id: TENANT_REQUEST, run_id: RUN, node_execution_id: nodeExecutionId,
       node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      success_criteria: [],
     });
 
     const row = await store.withTenant(TENANT, async (tx) => {
@@ -127,5 +128,6 @@ function gateRequest() {
     tenant_id: TENANT_REQUEST, run_id: RUN, node_execution_id: GATE, node_key: "verification_gate", node_type: "Gate",
     config_json: JSON.stringify({ verification: { source_node_key: "reviewed", protected_node_key: "external" } }),
     inputs_json: "{}",
+    success_criteria: [],
   };
 }

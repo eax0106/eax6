@@ -21,6 +21,11 @@ export interface ExecuteNodeRequest {
   config_json: string;
   /** upstream outputs, keyed by producing node key */
   inputs_json: string;
+  /**
+   * C29: the node's own success criteria from the compiled DAG (design log
+   * §5.1). Empty for legacy workflows compiled before criteria existed.
+   */
+  success_criteria: string[];
 }
 
 export interface ExecuteNodeResponse {
