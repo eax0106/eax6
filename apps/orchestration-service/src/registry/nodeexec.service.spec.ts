@@ -1332,6 +1332,55 @@ describe("NodeexecService failure cause (#149)", () => {
   });
 });
 
+// C36, design log §5.2: the mechanical check before the semantic gate.
+describe("NodeexecService mechanical check", () => {
+  function run(output: Record<string, unknown>) {
+    const ledger = fakeLedger();
+    Object.assign(ledger, {
+      priorSideEffects: vi.fn().mockResolvedValue([]),
+      recordSideEffectAttempt: vi.fn().mockResolvedValue(undefined),
+      completeSideEffect: vi.fn().mockResolvedValue(undefined),
+      withdrawSideEffectAttempt: vi.fn().mockResolvedValue(undefined),
+    });
+    const scoreNodeInline = vi.fn().mockResolvedValue({
+      verdict: "pass", score: 1, threshold: 0.8, reviewer_model: "ADVANCED", details_json: "{}",
+    });
+    const nodeexec = new NodeexecService(
+      new NodeHandlerRegistry([{ nodeType: "ToolCall", execute: vi.fn().mockResolvedValue({ output }) }]),
+      ledger, undefined, undefined, undefined, undefined, undefined,
+      { scoreNodeInline } as unknown as VerifyGateService,
+    );
+    const call = nodeexec.executeNode({
+      tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
+      node_key: "update_order", node_type: "ToolCall",
+      config_json: JSON.stringify({ tool_name: "database.update", input: {} }),
+      inputs_json: "{}", success_criteria: [],
+    });
+    return { call, ledger, scoreNodeInline };
+  }
+
+  it("fails a write that changed nothing, before any semantic review", async () => {
+    const { call, ledger, scoreNodeInline } = run({ rowCount: 0, rows: [] });
+
+    await expect(call).rejects.toThrow(/affected no rows/);
+
+    expect(scoreNodeInline).not.toHaveBeenCalled();
+    expect(ledger.recordSucceeded).not.toHaveBeenCalled();
+    expect(ledger.recordFailed).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ code: "MECHANICAL_CHECK_FAILED" }));
+  });
+
+  it("passes a confirmed write on to the semantic gate and records the basis", async () => {
+    const { call, scoreNodeInline } = run({ rowCount: 1, rows: [] });
+
+    const response = await call;
+
+    expect(scoreNodeInline).toHaveBeenCalledOnce();
+    expect(JSON.parse(response.metadata_json)).toMatchObject({
+      mechanical_check: { confirmed: true, basis: "database reported 1 affected row(s)" },
+    });
+  });
+});
+
 // C8, design log §4 / §22 item 7: the Side-Effect Ledger and the idempotency
 // gate in front of every re-execution.
 describe("NodeexecService idempotency gate", () => {
@@ -1370,7 +1419,7 @@ describe("NodeexecService idempotency gate", () => {
 
   it("records the attempt before calling a side-effecting tool, and completes it with the audit id", async () => {
     const ledger = sideEffectLedger();
-    const { run, execute } = toolCall(ledger, { output: { message_id: "m-1" }, metadata: { audit_id: AUDIT_ID } });
+    const { run, execute } = toolCall(ledger, { output: { messageId: "m-1" }, metadata: { audit_id: AUDIT_ID } });
 
     await run("email.send");
 
