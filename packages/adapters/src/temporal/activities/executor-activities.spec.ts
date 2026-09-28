@@ -1,3 +1,4 @@
+import { ApplicationFailure } from "@temporalio/client";
 import { describe, expect, it, vi } from "vitest";
 
 import type { BlackboardHandlerClient } from "../../grpc/blackboard-client";
@@ -168,5 +169,31 @@ describe("createExecutorActivities.executeNode", () => {
     await expect(
       activities.executeNode({ ...BASE_INPUT, predecessorKeys: [] }),
     ).rejects.toThrow("boom");
+  });
+
+  it("turns a safety halt from Nodeexec into a non-retryable SafetyViolation failure (design log §4)", async () => {
+    // What a gRPC error from the Nodeexec transport looks like: numeric code,
+    // the server's message in details.
+    const grpcError = Object.assign(
+      new Error("9 FAILED_PRECONDITION: SAFETY_VIOLATION: Verify Gate blocked node output"),
+      { code: 9, details: "SAFETY_VIOLATION: Verify Gate blocked node output" },
+    );
+    const nodeExecutionClient: NodeExecutionHandler = {
+      executeNode: vi.fn().mockRejectedValue(grpcError),
+      finalizeRun: vi.fn(async () => ({ status: "completed", ended_at: "" })),
+      finalizeApprovalNode: vi.fn(async () => ({ status: "succeeded" })),
+    };
+    const activities = createExecutorActivities(nodeExecutionClient, fakeBlackboardClient());
+
+    const error = await activities
+      .executeNode({ ...BASE_INPUT, predecessorKeys: [] })
+      .catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(ApplicationFailure);
+    expect((error as ApplicationFailure).type).toBe("SafetyViolation");
+    expect((error as ApplicationFailure).nonRetryable).toBe(true);
+    expect((error as ApplicationFailure).message).toBe(
+      "SAFETY_VIOLATION: Verify Gate blocked node output",
+    );
   });
 });

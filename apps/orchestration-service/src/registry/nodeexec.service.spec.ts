@@ -13,7 +13,7 @@ import type { GeneratedFileMaterializer } from "./generated-file-materializer";
 import { NodeExecutionLedgerService } from "../runs/node-execution-ledger.service";
 import { RunStreamEventService } from "../runs/run-stream-event.service";
 import type { RecoveryTriggerService } from "../recovery/recovery-trigger.service";
-import { VerifyGateError, VerifyGateService } from "./verify-gate.service";
+import { SafetyViolationError, VerifyGateError, VerifyGateService } from "./verify-gate.service";
 
 const TENANT_ID = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
 const RUN_ID = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
@@ -178,6 +178,39 @@ describe("NodeexecService.executeNode", () => {
     expect(recovery.triggerForFailedNode).toHaveBeenCalledWith(expect.objectContaining({
       errorCode: "VERIFICATION_GATE_FAILED",
     }));
+  });
+
+  it("halts on a safety violation without asking Recovery to keep going (design log §4, C40)", async () => {
+    const ledger = fakeLedger();
+    const recovery = {
+      triggerForBlockedNode: vi.fn().mockResolvedValue(undefined),
+      triggerForFailedNode: vi.fn().mockResolvedValue(undefined),
+    } as unknown as RecoveryTriggerService;
+    const verifyGate = {
+      scoreNodeInline: vi.fn().mockResolvedValue({
+        verdict: "fail", score: 0, threshold: 0.8, reviewer_model: "injection-blocked",
+        details_json: JSON.stringify({ reason: "rubric override attempt" }),
+      }),
+    } as unknown as VerifyGateService;
+    const nodeexec = new NodeexecService(
+      new NodeHandlerRegistry([new MergeHandler()]), ledger, undefined, recovery, undefined,
+      undefined, undefined, verifyGate,
+    );
+
+    const error = await nodeexec.executeNode({
+      tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
+      node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      success_criteria: [],
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(SafetyViolationError);
+    expect((error as Error).name).toBe("SafetyViolationError");
+    expect(ledger.recordFailed).toHaveBeenCalledWith(expect.anything(), {
+      code: "SAFETY_VIOLATION",
+      detail: "Verify Gate blocked node output as a safety violation; the workflow halts",
+    });
+    expect(recovery.triggerForFailedNode).not.toHaveBeenCalled();
+    expect(recovery.triggerForBlockedNode).not.toHaveBeenCalled();
   });
 
   it("fails closed when Verify Service is unavailable", async () => {

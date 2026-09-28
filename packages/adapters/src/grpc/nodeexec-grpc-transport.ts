@@ -98,7 +98,16 @@ export function connectNodeexecGrpcTransport(
   });
 }
 
+/** Prefix a safety halt carries across the wire; the Executor reads it. */
+export const SAFETY_VIOLATION_PREFIX = "SAFETY_VIOLATION: ";
+
 function mapNodeexecError(error: unknown, fallbackMessage: string): RpcException {
+  if (isNamedError(error, "SafetyViolationError")) {
+    return new RpcException({
+      code: status.FAILED_PRECONDITION,
+      message: `${SAFETY_VIOLATION_PREFIX}${error.message}`,
+    });
+  }
   if (isNamedError(error, "NodeHandlerValidationError")) {
     return new RpcException({
       code: status.INVALID_ARGUMENT,

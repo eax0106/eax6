@@ -1,4 +1,6 @@
+import { ApplicationFailure } from "@temporalio/client";
 import type { BlackboardHandlerClient } from "../../grpc/blackboard-client";
+import { SAFETY_VIOLATION_PREFIX } from "../../grpc/nodeexec-grpc-transport";
 import type { NodeExecutionHandler } from "../../grpc/nodeexec-client";
 
 export interface ExecuteNodeActivityInput {
@@ -69,6 +71,20 @@ export interface ExecutorActivities {
  * matches NodeexecService's existing inputs_json contract, where an
  * unlisted upstream key simply means "no data from that node".
  */
+/** The failure type a safety halt carries from the activity to the workflow. */
+export const SAFETY_VIOLATION_FAILURE_TYPE = "SafetyViolation";
+
+function safetyViolationDetail(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const record = error as { readonly details?: unknown; readonly message?: unknown };
+  for (const text of [record.details, record.message]) {
+    if (typeof text !== "string") continue;
+    const at = text.indexOf(SAFETY_VIOLATION_PREFIX);
+    if (at !== -1) return text.slice(at);
+  }
+  return undefined;
+}
+
 export function createExecutorActivities(
   nodeExecutionClient: NodeExecutionHandler,
   blackboardClient: BlackboardHandlerClient,
@@ -92,16 +108,28 @@ export function createExecutorActivities(
         }),
       );
 
-      const response = await nodeExecutionClient.executeNode({
-        tenant_id: input.tenantId,
-        run_id: input.runId,
-        node_execution_id: input.nodeExecutionId,
-        node_key: input.nodeKey,
-        node_type: input.nodeType,
-        config_json: input.configJson,
-        inputs_json: JSON.stringify(inputs),
-        success_criteria: [...(input.successCriteria ?? [])],
-      });
+      let response: Awaited<ReturnType<NodeExecutionHandler["executeNode"]>>;
+      try {
+        response = await nodeExecutionClient.executeNode({
+          tenant_id: input.tenantId,
+          run_id: input.runId,
+          node_execution_id: input.nodeExecutionId,
+          node_key: input.nodeKey,
+          node_type: input.nodeType,
+          config_json: input.configJson,
+          inputs_json: JSON.stringify(inputs),
+          success_criteria: [...(input.successCriteria ?? [])],
+        });
+      } catch (error: unknown) {
+        // Design log §4: a safety violation is never retried -- not by this
+        // activity's retry policy, not by Recovery. It reaches the workflow
+        // as its own non-retryable type, and the workflow halts.
+        const detail = safetyViolationDetail(error);
+        if (detail !== undefined) {
+          throw ApplicationFailure.nonRetryable(detail, SAFETY_VIOLATION_FAILURE_TYPE);
+        }
+        throw error;
+      }
 
       await blackboardClient.writeValue({
         tenant_id: input.tenantId,
