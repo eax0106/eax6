@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     # CEILING agent to exist just by asking for one. Above this, the no-match
     # is returned instead, which is a real answer rather than a failure to
     # route around.
-    agent_auto_creation_max_tier: str = "ADVANCED"
+    agent_auto_creation_max_tier: str = "STANDARD"
 
     @model_validator(mode="after")
     def reject_mock_runtime_in_production(self) -> "Settings":
