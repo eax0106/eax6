@@ -39,6 +39,7 @@ import {
   type VerifyGateService,
 } from "./verify-gate.service";
 import { createVerificationResultId } from "./verification-result-id";
+import { MechanicalCheckFailedError, mechanicalCheck } from "./mechanical-check";
 import type { RunAcceptanceCheck } from "./run-acceptance-check";
 
 /**
@@ -286,6 +287,16 @@ export class NodeexecService {
           problem.data.error_code,
         );
       } else {
+        const mechanical =
+          request.node_type === "ToolCall" && typeof executionConfig["tool_name"] === "string"
+            ? mechanicalCheck(executionConfig["tool_name"], result.output)
+            : undefined;
+        if (mechanical !== undefined) {
+          metadata = { ...metadata, mechanical_check: mechanical };
+          if ("confirmed" in mechanical && !mechanical.confirmed) {
+            throw new MechanicalCheckFailedError(mechanical.reason);
+          }
+        }
         const verification = await this.verifyGate?.scoreNodeInline({
           tenant_id: request.tenant_id,
           run_id: request.run_id,
