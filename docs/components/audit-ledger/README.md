@@ -10,14 +10,17 @@
 
 The tamper-evident record of what happened, hash-chained so a forgery is detectable.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 38 — Audit** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | degraded (self only) for writes. **But an audit gap is a compliance gap**, so write failures must be loud. |
+| Fail mode | fail-open for writes with loud alerting (never block a run), fail-closed for verification (never report a chain valid that was not checked). |
+| Driver | writes driven by every component. **Chain verification requires a scheduler**, with alerting on any non-valid result. The read path must be incremental before it can run on a schedule. *Driver test:* chain verification runs on schedule, unprompted, and a deliberately tampered entry raises an alert. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

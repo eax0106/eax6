@@ -9,14 +9,17 @@
 
 Chooses which agent runs a node and binds it. The component that decides quality and cost on the design path.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 12 — Selection & Binding** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Same reasoning as Registry: running workflows continue on existing bindings; new design and rebind-class recovery stop. |
+| Fail mode | fail-closed and loud. On policy unavailability, refuse or flag degraded — never silently substitute defaults. |
+| Driver | invoked by Architecture Synthesizer on the design path; by Recovery on the run path; by **51. Canvas** (through Platform API) for critique-mode comparisons on manual override. *Driver test:* all three callers work — a fresh design binds, a recovery swap rebinds, and a manual override produces a real comparison. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

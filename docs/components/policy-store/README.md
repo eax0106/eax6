@@ -10,14 +10,17 @@
 
 The engine's learning, stored as versioned symbolic policy rather than a neural net: routing weights, quality thresholds, recovery preferences, pattern scores — explainable, inspectable, reversible.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 33 — Policy Store** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Consumers must degrade visibly rather than silently reverting to defaults. |
+| Fail mode | fail-closed. Optimistic-concurrency conflicts must be surfaced, never silently overwritten. |
+| Driver | read by its consumers; written by Memory & Learning and Drift Detector. *Driver test:* a policy change measurably alters a real routing decision, and rolling it back restores the prior behavior. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

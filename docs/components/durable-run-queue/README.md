@@ -10,14 +10,17 @@
 
 Holds queued runs durably between dispatch and pickup, with leases so a worker crash does not strand work, and a dead-letter path for runs that fail repeatedly.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 17 — Durable Run Queue** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, severe. No runs can be queued or dispatched. |
+| Fail mode | fail-closed. Never acknowledge an entry whose work was not confirmed complete or terminally failed. |
+| Driver | driven by Run Manager's sweeper (see contract 16). This component deliberately has no internal timer; that design is correct **provided a real caller drives it**, which is precisely what the old build lacked. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

@@ -10,14 +10,17 @@
 
 Produces the versioned WorkflowDAG from a task skeleton or an architecture. This is the last stop on the design path — everything downstream executes what it emits.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 14 — Graph Compiler** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Already-compiled workflows keep running; new compilation and recompile-class recovery stop. |
+| Fail mode | fail-closed. An invalid DAG must never compile — a graph that fails validation cannot be stored or executed under any circumstance. |
+| Driver | invoked by Selection & Binding on the design path; by Recovery for recompile/replan; by Canvas for manual-edit validation (design log Section 8's impact analysis reuses this validator rather than duplicating it). *Driver test:* all three callers compile or validate through this one component, and no fourth path exists. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

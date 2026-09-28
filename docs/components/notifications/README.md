@@ -8,14 +8,17 @@
 
 Delivery of everything the engine needs a human to see: self-heal notify-after, pending approvals, proactive suggestions.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 45 — Notification** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Runs continue, but **humans stop learning that they are needed** — pending approvals go unseen, self-heals unreviewed, suggestions unnoticed. |
+| Fail mode | fail-closed on delivery confirmation. An undelivered notification must be retried and surfaced, never silently dropped — the failure mode that makes an approval gate meaningless. |
+| Driver | invoked by its five senders. **Retry of undelivered notifications needs its own driver.** *Driver test:* an approval raised during an unattended run genuinely reaches a person. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

@@ -10,14 +10,17 @@
 
 Measures whether the engine is actually any good: golden sets, release gates, chaos scenarios, load suites. The instrument every quality claim depends on.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 40 — Eval & Red-team** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only. Promotion halts (correctly) rather than proceeding unevaluated. |
+| Fail mode | fail-closed, absolutely. Unevaluable means fail, never pass. |
+| Driver | promotion gating driven by Workflow Lifecycle; **scheduled regression evaluation needs its own scheduler.** *Driver test:* the promotion gate blocks a real promotion that should fail, and scheduled evaluation runs unprompted. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

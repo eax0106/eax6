@@ -9,14 +9,17 @@
 
 Shared authentication primitives — token validation, scheme handling.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 1 — Identity & Tenant Gateway** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `whole-engine` |
-| Fail mode | `fail-closed` |
+| Blast radius | whole-engine. Legitimately so: if this is unavailable, nothing works. One of very few components permitted this rating. |
+| Fail mode | fail-closed, absolutely. Deny whenever identity or permissions cannot be established. |
+| Driver | invoked per-request by Platform API/BFF; invoked per-trigger-fire by Event & Trigger Gateway. *Driver test:* a real request travels end-to-end through both guards and arrives downstream with a non-empty permission set. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

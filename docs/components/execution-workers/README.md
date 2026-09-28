@@ -10,14 +10,17 @@
 
 The worker processes that claim queued runs and execute them. Separate from the Executor's logic: these are the processes, that is the algorithm.
 
-## Blast radius and fail mode
+## Blast radius, fail mode and driver
+
+**Contract 18 — Execution Workers** ([`component-contracts.md`](../../architecture/component-contracts.md))
 
 | | |
 |---|---|
-| Blast radius | `this-layer-only` |
-| Fail mode | `fail-closed` |
+| Blast radius | this-layer-only, severe. In-flight work stops progressing, though durable state is preserved and resumes when workers return. |
+| Fail mode | fail-closed. Never delete a message before its work is terminal. |
+| Driver | worker processes poll their task queues. *Driver test:* workers are running and claiming; a queue with pending work and no active worker is a detectable, alerting condition rather than a silent stall. |
 
-*Proposed, not ratified.* Design log §29 lists per-component blast radius and fail mode as an open item — *"not yet applied to any specific component list."* These are a first pass, to be confirmed when the component's contract is written.
+*From the contract (task C13, decision 0.7). The contract's done gates are targets, not gates that fail today.*
 
 ## Where the code lives
 

@@ -564,7 +564,7 @@ demo.
 - [ ] **C10 Run Manager atomic budget gate** (§22) — must be atomic, not read-then-decide.
 - [ ] **C11 Policy Store global tier**, structurally incapable of holding tenant content
       (§22).
-- [ ] **C13 map the 54 contracts onto the 61 components** — from decision 0.7. Replace the
+- [x] **C13 map the 54 contracts onto the 61 components. DONE 2026-09-28** (44 mapped, 17 marked uncovered with the reason) — from decision 0.7. Replace the
       proposed blast radius / fail mode / driver values in `components/` with
       `architecture/component-contracts.md`'s. Its done gates are targets, not gates that
       fail today. Roughly a day; closes design log §29's open item.
