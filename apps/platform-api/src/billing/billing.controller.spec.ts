@@ -612,6 +612,7 @@ class MemoryBillingProvider implements BillingProvider {
           status: "paid",
           issuedAt: "2026-07-28T00:00:00.000Z",
           paidAt: "2026-07-28T00:01:00.000Z",
+          documentUrl: null,
         },
       ],
       nextCursor: null,

@@ -779,7 +779,7 @@ demo.
       repositories now publish the same image names. **Havish's decision:** grant this repository write
       access to each package, rename ours, or disable the workflow here until building consolidates.
       Until then `images` is red on every push to `main`; `ci` is unaffected.
-- [ ] **C33 [+] a timing-sensitive Temporal test flakes on CI.** `conversation-lifecycle-workflow.spec.ts`
+- [x] **C33 [+] a timing-sensitive Temporal test flakes on CI.** Fixed 2026-09-28 (#31): waits on the first run's result with `followRuns: false`, which settles exactly at continue-as-new; with no rollover the test now fails instead of passing late. `conversation-lifecycle-workflow.spec.ts`
       "continues as new before history grows" failed once on PR #18 with `pollUntil timed out after
       10000ms`, passed on rerun and 5/5 locally; their CI has passed it every time. Code identical to
       theirs. Make the wait deterministic rather than longer.

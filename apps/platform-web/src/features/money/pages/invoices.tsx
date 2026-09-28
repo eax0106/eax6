@@ -30,18 +30,19 @@ export function InvoicesPage() {
                 <TableHead>Issue Date</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Invoice</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">Loading invoices...</TableCell>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading invoices...</TableCell>
                 </TableRow>
               ) : isError ? (
-                <TableRow><TableCell colSpan={4} role="alert" className="text-center py-8 text-destructive">Could not load invoices.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={5} role="alert" className="text-center py-8 text-destructive">Could not load invoices.</TableCell></TableRow>
               ) : invoices?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No invoices found.</TableCell>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No invoices found.</TableCell>
                 </TableRow>
               ) : (
                 invoices?.map((invoice) => (
@@ -57,6 +58,15 @@ export function InvoicesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-medium">{formatProviderMoney(invoice.amount, invoice.currency)}</TableCell>
+                    <TableCell className="text-right">
+                      {invoice.documentUrl ? (
+                        <a href={invoice.documentUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          View / download
+                        </a>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}

@@ -11,6 +11,13 @@ export function BillingPlansPage() {
   const queryClient = useQueryClient()
   const plans = useQuery({ queryKey: queryKeys.billing.plans, queryFn: () => api.billing.getPlans() })
   const subscription = useQuery({ queryKey: queryKeys.billing.subscription, queryFn: () => api.billing.getSubscription() })
+  const paymentMethod = useQuery({ queryKey: queryKeys.billing.paymentMethod, queryFn: () => api.billing.getPaymentMethod() })
+  const subscribe = useMutation({
+    mutationFn: ({ planId, paymentMethodRef }: { planId: string; paymentMethodRef: string }) => api.billing.subscribe(planId, paymentMethodRef),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.billing.subscription })
+    },
+  })
   const change = useMutation({
     mutationFn: (planId: string) => api.billing.changePlan(planId),
     onSuccess: () => {
@@ -24,8 +31,10 @@ export function BillingPlansPage() {
     <div className="space-y-8">
       <PageHeader title="Subscription Plans" description={isLiveApi ? "Plans and prices from the billing provider." : "Demo plan catalog."} />
       {(plans.isError || subscription.isError) && <p role="alert" className="text-destructive">Could not load billing plans.</p>}
-      {!subscription.data && !subscription.isError && <p className="text-sm text-muted-foreground">A payment method and subscription setup are required before changing plans.</p>}
+      {!subscription.data && !subscription.isError && !paymentMethod.data && !paymentMethod.isLoading && <p className="text-sm text-muted-foreground">Add a payment method before subscribing to a plan.</p>}
+      {!subscription.data && !subscription.isError && paymentMethod.data && <p className="text-sm text-muted-foreground">Choose a plan to subscribe with the card ending {paymentMethod.data.last4 ?? "on file"}.</p>}
       {change.isError && <p role="alert" className="text-destructive">{change.error.message}</p>}
+      {subscribe.isError && <p role="alert" className="text-destructive">{subscribe.error.message}</p>}
       {plans.data?.filter(plan => plan.active).length === 0 && <p className="text-muted-foreground">No plans are available.</p>}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {plans.data?.filter(plan => plan.active).map(plan => {
@@ -42,16 +51,32 @@ export function BillingPlansPage() {
                 <span className="text-muted-foreground text-sm"> {formatPlanPeriod(plan)}</span>
               </CardContent>
               <CardFooter>
-                <Button
-                  variant={current ? "outline" : "primary"}
-                  className="w-full"
-                  disabled={current || !subscription.data || change.isPending}
-                  onClick={() => {
-                    if (window.confirm(`Change to ${plan.name} for ${formatProviderMoney(plan.amount, plan.currency)} ${formatPlanPeriod(plan)}?`)) change.mutate(plan.id)
-                  }}
-                >
-                  {current ? "Current" : "Change Plan"}
-                </Button>
+                {subscription.data ? (
+                  <Button
+                    variant={current ? "outline" : "primary"}
+                    className="w-full"
+                    disabled={current || change.isPending}
+                    onClick={() => {
+                      if (window.confirm(`Change to ${plan.name} for ${formatProviderMoney(plan.amount, plan.currency)} ${formatPlanPeriod(plan)}?`)) change.mutate(plan.id)
+                    }}
+                  >
+                    {current ? "Current" : "Change Plan"}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    className="w-full"
+                    disabled={!paymentMethod.data || subscription.isError || subscribe.isPending}
+                    onClick={() => {
+                      const method = paymentMethod.data
+                      if (method && window.confirm(`Subscribe to ${plan.name} for ${formatProviderMoney(plan.amount, plan.currency)} ${formatPlanPeriod(plan)}?`)) {
+                        subscribe.mutate({ planId: plan.id, paymentMethodRef: method.ref })
+                      }
+                    }}
+                  >
+                    Subscribe
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           )

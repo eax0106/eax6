@@ -41,8 +41,8 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.4 | KYC review, staff side: queue of pending seller verifications across tenants (Operations pool) and approve/reject (reason required) as the staff member, audited, in the admin Marketplace page. Removed the interim route, which only a dogfood tenant owner could call and which could only review that tenant's own submission. Seller-side document upload is blocked (below). | done (this PR) |
 | B2.5 | tax / fee settlement | todo |
 | B2.6 | tokenized card setup | todo |
-| B2.7 | invoice PDF | todo |
-| B2.8 | new subscription | todo |
+| B2.7 | invoice PDF: Razorpay renders the invoice; its hosted page (`short_url`, view and PDF download) is carried through as `documentUrl` (https only) and linked from the invoices page | done (this PR) |
+| B2.8 | new subscription: with no subscription and a registered payment method, the plans page subscribes through `POST /api/v1/billing/subscription` (idempotent). In live mode a tenant has no payment method until B2.6 is decided, so this path is wired but not reachable there yet | done (this PR) |
 | B2.9a | usage and cost pages live: month-to-date billable spend and billed operations, by source and by provider/resource, from `/api/v1/costs/summary`. Live mode showed the demo's made-up figures before (e.g. "$284.73", random chart bars). Workflow/project estimates now show "-" in live instead of invented numbers. Budgets hidden in live until B2.9b. | done (this PR) |
 | B2.9b | budgets: platform_db `budgets` (migration 0024, tenant RLS, per workspace, monthly, INR/USD, notify/warn/block thresholds) with list (any member; this month's billable spend from the cost ledger, unknown if the ledger is down or counts another currency), create/update/delete (workspace admin, new `budgets:write`). Page creates, pauses, deletes. Thresholds are stored, not yet acted on: alerts wait on B3.1, blocking on C10 | done (this PR) |
 | B3.1 | notifications | todo |
@@ -74,7 +74,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C7 | Agent Factory extracted | todo |
 | C18 | re-embed backfill | todo |
 | C13 | map 54 contracts onto 61 components | todo |
-| C33 | deterministic wait in the flaky Temporal test | todo |
+| C33 | deterministic wait in the flaky Temporal test: the rollover test waits on the first run's own result without following the chain (settles exactly at continue-as-new) instead of a 10 s wall-clock poll | done (#31, which it blocked) |
 | C34 | specs authorize through the enforcing resolver | todo |
 | C35 | vitest hang with `.env.local` present | todo |
 | C30 | §16 approval modes | blocked (decision) |
