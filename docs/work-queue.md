@@ -67,7 +67,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 | C5 | cost ledger records verification verdicts | blocked (freeze exemption): changes the Cost Ledger (Category 1 #22) and the run-completion path that would feed it verdicts |
 | C8 | side-effect ledger and idempotency gate before Dispatch | blocked (freeze exemption): a gate in front of Dispatch sits in the Executor (Category 1 #6) |
 | C10 | Run Manager atomic budget gate | blocked (freeze exemption): Run Manager is Category 1 #1 |
-| C9 | reviewer isolation against prompt injection | blocked (freeze exemption): Verification & Quality Gate, Category 1 #17 (the C29 exemption was C29-only) |
+| C9 | reviewer isolation: already in place (ENGINE-FIX-P3-15: output classified for injection before review, passed as labelled untrusted data, a detected attempt fails without review). The divergence was fail-open: a failed or unreadable classifier answered "not detected", so an outage let unscreened output reach the reviewer. It now raises like a failed review, leaving the node unverified (§5.5, planes 37) | done (this PR) |
 | C11 | Policy Store global tier | blocked (freeze exemption): Policy Store is Category 1 #18 |
 | C36 | §5.2 mechanical read-back | blocked (freeze exemption): Verification & Quality Gate (#17) |
 | C37 | §5.3 end-of-run holistic check | blocked (freeze exemption): Verification & Quality Gate (#17) and Synthesis (#19) |
