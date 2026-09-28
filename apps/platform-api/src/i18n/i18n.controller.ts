@@ -26,6 +26,12 @@ export class I18nController {
     );
   }
 
+  @Get("users/me/language")
+  @RequireTenantRole("member")
+  getUserLanguage(@ActorContext() actor: ActorContextType | undefined): Promise<LanguagePreference> {
+    return this.i18n.getUserLanguage(requireActor(actor, "/api/v1/i18n/users/me/language"));
+  }
+
   @Patch("users/me/language")
   @RequireTenantRole("member")
   updateUserLanguage(
