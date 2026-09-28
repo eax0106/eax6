@@ -1,5 +1,6 @@
 import { type UsageSummary, type CostRecord, type ModelUsage, type Budget } from "../types"
 import { isLiveApi } from "../http"
+import * as liveBudgets from "../live-budgets"
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -22,7 +23,7 @@ const mockModelUsage: ModelUsage[] = [
   { provider: "Google", model: "gemini-1.5-pro", inputTokens: 2100000, outputTokens: 380000, cost: 31.90, runCount: 150 },
 ]
 
-const mockBudgets: Budget[] = [
+let mockBudgets: Budget[] = [
   {
     id: "budg_1",
     name: "Workspace Monthly",
@@ -85,19 +86,27 @@ export const usageService = {
 
 export const budgetsService = {
   list: async (): Promise<Budget[]> => {
+    if (isLiveApi) return liveBudgets.listBudgets()
     await delay(300)
     return mockBudgets
   },
   create: async (data: Partial<Budget>): Promise<Budget> => {
+    if (isLiveApi) return liveBudgets.createBudget(data)
     await delay(400)
-    return { ...mockBudgets[0], ...data, id: "budg_" + Date.now(), currentSpend: 0 } as Budget
+    const budget = { ...mockBudgets[0], ...data, id: "budg_" + Date.now(), scope: "workspace", period: "monthly", currentSpend: 0 } as Budget
+    mockBudgets = [...mockBudgets, budget]
+    return budget
   },
   update: async (_id: string, data: Partial<Budget>): Promise<Budget> => {
+    if (isLiveApi) return liveBudgets.updateBudget(_id, data)
     await delay(400)
-    return { ...mockBudgets.find(b => b.id === _id)!, ...data }
+    mockBudgets = mockBudgets.map(b => (b.id === _id ? { ...b, ...data } : b))
+    return mockBudgets.find(b => b.id === _id)!
   },
   remove: async (_id: string): Promise<void> => {
+    if (isLiveApi) return liveBudgets.deleteBudget(_id)
     await delay(300)
+    mockBudgets = mockBudgets.filter(b => b.id !== _id)
   }
 }
 

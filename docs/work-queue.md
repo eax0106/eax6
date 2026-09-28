@@ -44,7 +44,7 @@ item there. Status: `todo` · `doing` · `done (PR #n)` · `blocked (reason)`.
 | B2.7 | invoice PDF | todo |
 | B2.8 | new subscription | todo |
 | B2.9a | usage and cost pages live: month-to-date billable spend and billed operations, by source and by provider/resource, from `/api/v1/costs/summary`. Live mode showed the demo's made-up figures before (e.g. "$284.73", random chart bars). Workflow/project estimates now show "-" in live instead of invented numbers. Budgets hidden in live until B2.9b. | done (this PR) |
-| B2.9b | budgets: platform_db budget configs (architecture C18/F31) with CRUD and current spend from the cost ledger; `block` thresholds enforced with C10's Run Manager gate | todo |
+| B2.9b | budgets: platform_db `budgets` (migration 0024, tenant RLS, per workspace, monthly, INR/USD, notify/warn/block thresholds) with list (any member; this month's billable spend from the cost ledger, unknown if the ledger is down or counts another currency), create/update/delete (workspace admin, new `budgets:write`). Page creates, pauses, deletes. Thresholds are stored, not yet acted on: alerts wait on B3.1, blocking on C10 | done (this PR) |
 | B3.1 | notifications | todo |
 | B3.2 | benchmarks | todo |
 | B3.3 | discovery | todo |
