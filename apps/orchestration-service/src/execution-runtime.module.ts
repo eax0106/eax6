@@ -31,6 +31,7 @@ import { GraphCompilerService } from "./compiler/graph-compiler.service";
 import { CAPABILITY_CLIENT_PROTO_PATH } from "./compiler/capability-client.constants";
 import { RegistryService } from "./registry/registry.service";
 import { NodeexecService } from "./registry/nodeexec.service";
+import { PostgresRunAcceptanceCheck } from "./registry/run-acceptance-check";
 import { SsmSelectionBindingFailClosedConfig } from "./registry/selection-binding-fail-closed-config";
 import { NodeExecutionsController } from "./runs/node-executions.controller";
 import { NodeExecutionLedgerService } from "./runs/node-execution-ledger.service";
@@ -330,6 +331,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
           performanceRecorder,
           selectionBindingFailClosed,
           runFinalizationMemoryWriter,
+          new PostgresRunAcceptanceCheck(store, verifyGate, ledger),
         );
       },
       inject: [ArtifactsService],

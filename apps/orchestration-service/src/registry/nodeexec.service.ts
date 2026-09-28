@@ -38,6 +38,7 @@ import {
   type VerifyGateService,
 } from "./verify-gate.service";
 import { createVerificationResultId } from "./verification-result-id";
+import type { RunAcceptanceCheck } from "./run-acceptance-check";
 
 /**
  * Real producer of FailureClass "agent_creation_failure" (recovery-
@@ -120,6 +121,7 @@ export class NodeexecService {
     private readonly performanceRecorder?: PerformanceRecorderHandler,
     private readonly selectionBindingFailClosed?: SelectionBindingFailClosedConfig,
     private readonly runFinalizationMemoryWriter?: RunFinalizationMemoryWriter,
+    private readonly runAcceptance?: RunAcceptanceCheck,
   ) {}
 
   async executeNode(
@@ -707,10 +709,23 @@ export class NodeexecService {
         `finalizeRun status must be "completed" or "failed", got "${request.status}"`,
       );
     }
+    // Design log §5.3: a run whose every node passed still has to deliver
+    // what the user asked for as a whole. A completed run that fails its
+    // end-of-run check -- or whose check cannot complete (§5.5) -- is
+    // finalized as failed, never counted as a success.
+    let status: "completed" | "failed" = request.status;
+    let acceptanceFailure: string | undefined;
+    if (status === "completed" && this.runAcceptance !== undefined) {
+      const acceptance = await this.runAcceptance.check(request.tenant_id, request.run_id);
+      if (acceptance.checked && !acceptance.passed) {
+        status = "failed";
+        acceptanceFailure = acceptance.reason;
+      }
+    }
     const result = await this.ledger.finalizeRun(
       request.tenant_id,
       request.run_id,
-      request.status,
+      status,
     );
     // Project sessions outlive individual node calls, but not the run. This
     // call deliberately remains on the real terminal activity path so an
@@ -732,7 +747,10 @@ export class NodeexecService {
       try {
         await this.streamEvents?.append(request.tenant_id, request.run_id, {
           event: "run.status",
-          data: { status: result.status },
+          data: {
+            status: result.status,
+            ...(acceptanceFailure === undefined ? {} : { reason: acceptanceFailure }),
+          },
         });
       } catch {
         // SSE journal is convenience transport. Durable runs.status remains source of truth.

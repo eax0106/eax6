@@ -84,6 +84,14 @@ NODE_TYPE_RUBRICS: dict[NodeType, str] = {
         "upstream result it claims to synthesize, with no unaddressed gaps "
         "or contradictions between the sources."
     ),
+    # Design log §5.3: every node can pass on its own while the whole run
+    # still misses what was asked. This judges the run's final outputs
+    # together against the original intake criteria.
+    "RunOutcome": (
+        "Judge whether the run's final outputs, taken together, deliver what "
+        "the user asked for: every stated success criterion is achieved by "
+        "the combined result, not merely attempted by some step of it."
+    ),
 }
 
 
