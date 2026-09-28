@@ -6,11 +6,27 @@ import type { VerifyServiceHandlerClient } from "@alterx/adapters";
 
 export class VerifyGateError extends Error {
   constructor(
-    readonly code: "VERIFICATION_GATE_FAILED" | "VERIFY_SERVICE_UNAVAILABLE",
+    readonly code: "VERIFICATION_GATE_FAILED" | "VERIFY_SERVICE_UNAVAILABLE" | "SAFETY_VIOLATION",
     message: string,
     options?: ErrorOptions,
   ) {
     super(message, options);
+  }
+}
+
+/**
+ * Design log §4: a safety violation is not a failure Recovery handles. Its
+ * instinct is to keep going, which re-exposes the same attack path, so the
+ * whole workflow halts before Recovery is ever invoked. The gate reports one
+ * by its reviewer model: output classified as a prompt injection is never
+ * reviewed, only blocked.
+ */
+export const SAFETY_BLOCKED_REVIEWER_MODEL = "injection-blocked";
+
+export class SafetyViolationError extends VerifyGateError {
+  constructor(message: string) {
+    super("SAFETY_VIOLATION", message);
+    this.name = "SafetyViolationError";
   }
 }
 

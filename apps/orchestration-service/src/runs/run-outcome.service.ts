@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 
+import { Logger } from "@nestjs/common";
+
 import { RunIdSchema, TenantIdSchema } from "@alterx/contracts";
 
 /**
@@ -143,8 +145,23 @@ function isTerminalRunStatus(status: string): boolean {
   return status === "completed" || status === "failed" || status === "cancelled";
 }
 
+/** The Cost Ledger's run-verdict intake (design log §21), narrowed to what this needs. */
+export interface RunVerdictSink {
+  recordRunVerdict(request: {
+    readonly tenant_id: string;
+    readonly run_id: string;
+    readonly verdict: string;
+    readonly decided_at: string;
+  }): Promise<unknown>;
+}
+
 export class RunOutcomeService {
-  constructor(private readonly store: RunOutcomeTenantStore) {}
+  readonly #logger = new Logger(RunOutcomeService.name);
+
+  constructor(
+    private readonly store: RunOutcomeTenantStore,
+    private readonly verdictSink?: RunVerdictSink,
+  ) {}
 
   /**
    * `terminalRunStatus` is the real, already-resolved `runs.status` at the
@@ -161,7 +178,7 @@ export class RunOutcomeService {
     if (!RunIdSchema.safeParse(runId).success) {
       throw new RunOutcomeValidationError("runId must be a run_ prefixed UUIDv7");
     }
-    await this.store.withTenant(tenantId, async (tx) => {
+    const recorded = await this.store.withTenant(tenantId, async (tx) => {
       const run = await this.#loadRun(tx, tenantId, runId);
       const eligible = await this.#isEligible(tx, tenantId, run.workflow_version_id);
       const gates = await this.#countGates(tx, tenantId, runId);
@@ -195,7 +212,46 @@ export class RunOutcomeService {
           recovery.count,
         ],
       );
+      // The outcome as stored -- a replayed finalize keeps the first one.
+      const stored = await tx.query<{ readonly verdict: string; readonly decided_at: string }>(
+        `SELECT verdict, to_char(decided_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS decided_at
+         FROM run_outcomes WHERE tenant_id = $1 AND run_id = $2`,
+        [tenantId, runId],
+      );
+      return stored.rows[0];
     });
+    if (recorded !== undefined) {
+      await this.#sendVerdictBestEffort(tenantIdInput, runId, recorded);
+    }
+  }
+
+  /**
+   * Design log §21 / §22 item 10: the Cost Ledger records each run's verdict
+   * beside its cost, because verified-run billing charges only runs that
+   * pass. Sent after the outcome commits and never allowed to fail the run's
+   * finalization; the ledger's intake is idempotent, so a resend is safe.
+   */
+  async #sendVerdictBestEffort(
+    tenantId: string,
+    runId: string,
+    outcome: { readonly verdict: string; readonly decided_at: string },
+  ): Promise<void> {
+    if (this.verdictSink === undefined) return;
+    try {
+      await this.verdictSink.recordRunVerdict({
+        tenant_id: tenantId,
+        run_id: runId,
+        verdict: outcome.verdict,
+        decided_at: outcome.decided_at,
+      });
+    } catch (error: unknown) {
+      this.#logger.error({
+        message: "run verdict could not be recorded in the Cost Ledger",
+        runId,
+        verdict: outcome.verdict,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /** Real backing for `GET /runs/{id}/outcome` (doc 05). */

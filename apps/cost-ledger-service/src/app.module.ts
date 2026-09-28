@@ -19,6 +19,7 @@ import { EstimationService } from "./estimation/estimation.service";
 import { HealthController } from "./health/health.controller";
 import { ModelOutcomesController } from "./model-outcomes/model-outcomes.controller";
 import { ModelOutcomesService } from "./model-outcomes/model-outcomes.service";
+import { RunVerdictsService } from "./run-verdicts/run-verdicts.service";
 import { NodeCostsController } from "./node-costs/node-costs.controller";
 import { NodeCostsService } from "./node-costs/node-costs.service";
 
@@ -47,6 +48,7 @@ export class AppModule {
         EstimationService,
         NodeCostsService,
         ModelOutcomesService,
+        RunVerdictsService,
         {
           provide: CostRollupService,
           useFactory: () =>
@@ -59,11 +61,12 @@ export class AppModule {
         CostStoreLifecycle,
         {
           provide: COST_HANDLER,
-          inject: [CostRollupService, EstimationService, ModelOutcomesService],
+          inject: [CostRollupService, EstimationService, ModelOutcomesService, RunVerdictsService],
           useFactory: (
             rollup: CostRollupService,
             estimation: EstimationService,
             modelOutcomes: ModelOutcomesService,
+            runVerdicts: RunVerdictsService,
           ): CostHandler => {
             const ingest = new CostIngestService(
               store as unknown as CostEventStore,
@@ -75,6 +78,7 @@ export class AppModule {
               queryRollups: (request) => rollup.queryRollups(request),
               resolveUnitPrice: (request) => estimation.resolveUnitPrice(request),
               recordModelOutcome: (request) => modelOutcomes.recordOutcome(request),
+              recordRunVerdict: (request) => runVerdicts.recordRunVerdict(request),
             };
           },
         },

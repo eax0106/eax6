@@ -45,3 +45,12 @@ const workspaceAuditEventsProtoPath = resolve(
 export const AUDIT_EVENTS_CLIENT_PROTO_PATH = existsSync(workspaceAuditEventsProtoPath)
   ? workspaceAuditEventsProtoPath
   : resolve(__dirname, "../../proto/audit.proto");
+
+const workspaceCostProtoPath = resolve(
+  process.cwd(),
+  "packages/contracts/proto/alter/cost/v1/cost.proto",
+);
+
+export const COST_CLIENT_PROTO_PATH = existsSync(workspaceCostProtoPath)
+  ? workspaceCostProtoPath
+  : resolve(__dirname, "../../proto/cost.proto");

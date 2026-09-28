@@ -31,7 +31,12 @@ import type { RunWorkspaceLookupService } from "../runs/run-workspace-lookup.ser
 import type { GeneratedFileMaterializer } from "./generated-file-materializer";
 import type { SelectionBindingFailClosedConfig } from "./selection-binding-fail-closed-config";
 import type { RunFinalizationMemoryWriter } from "./run-finalization-memory-writer";
-import { VerifyGateError, type VerifyGateService } from "./verify-gate.service";
+import {
+  SAFETY_BLOCKED_REVIEWER_MODEL,
+  SafetyViolationError,
+  VerifyGateError,
+  type VerifyGateService,
+} from "./verify-gate.service";
 import { createVerificationResultId } from "./verification-result-id";
 
 /**
@@ -290,6 +295,11 @@ export class NodeexecService {
               reviewer_model: verification.reviewer_model,
             },
           };
+          if (verification.verdict === "fail" && verification.reviewer_model === SAFETY_BLOCKED_REVIEWER_MODEL) {
+            throw new SafetyViolationError(
+              "Verify Gate blocked node output as a safety violation; the workflow halts",
+            );
+          }
           if (verification.verdict === "fail") {
             throw new VerifyGateError(
               "VERIFICATION_GATE_FAILED",
@@ -337,7 +347,11 @@ export class NodeexecService {
         request, boundAgentId, "failure", executionStartedAtMs, executedMetadata,
         failure.code,
       );
-      await this.#triggerRecoveryForFailureBestEffort(request, failure);
+      // A safety violation halts the whole workflow (design log §4); Recovery
+      // is never asked to find a way to keep going.
+      if (!(error instanceof SafetyViolationError)) {
+        await this.#triggerRecoveryForFailureBestEffort(request, failure);
+      }
       throw error;
     }
   }
