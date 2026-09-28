@@ -541,7 +541,9 @@ demo.
       pattern, verified against each fix individually rather than by inference. Original
       scope: (§7 pattern 2). In production, any mock selection is a
       fatal boot error, never a silent fallback. Do alongside Phase 1.
-- [ ] **C3 deletion registration in CI** (§18, §28). Do before more components store tenant
+- [x] **C3 deletion registration in CI** (§18, §28). **DONE 2026-09-28**: registry of all 125 tables in 8
+      databases, certified in CI against schemas built from real migrations; 62 erasure gaps made visible
+      and held by `MAX_ERASURE_GAPS` (closing them is C3b). Original: Do before more components store tenant
       data. The old build's erasure certified complete while data survived in ten tables it
       never touched.
 - [ ] **C4 safety as a shared in-process library** (§11). Largest item. Unblocks the eval
