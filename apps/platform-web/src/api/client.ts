@@ -245,13 +245,15 @@ class ApiClient {
     await delay(MOCK_DELAY)
   }
 
-  // Settings: Language
-  // getLanguage has no live branch on purpose -- the backend only exposes
-  // two PATCH endpoints (i18n/users/me/language, i18n/workspaces/:id/language)
-  // that return the language they just set, there is no GET to read the
-  // current preference back. localStorage is the only source of truth for
-  // "what language is currently selected" in both mock and live mode.
+  // Settings: Language. Live mode reads the saved preference from the
+  // backend (GET /api/v1/i18n/users/me/language) and keeps localStorage as a
+  // cache, so a second device starts in the language the user chose.
   async getLanguage(): Promise<string> {
+    if (isLiveApi) {
+      const lang = await live.getLanguage()
+      localStorage.setItem("alterx_lang", lang)
+      return lang
+    }
     await delay(MOCK_DELAY)
     return localStorage.getItem("alterx_lang") || "en-US"
   }

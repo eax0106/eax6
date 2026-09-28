@@ -210,6 +210,12 @@ export async function revokeSession(sessionId: string): Promise<void> {
 // updateUserLanguage), not i18n/workspaces/:id/language. The UI passes
 // BCP-47-ish codes ("en-US"/"hi-IN"); the backend only accepts the bare
 // subtag ("en"/"hi" -- i18n/types.ts's supportedLocales), hence the split.
+/** The user's saved language, in the settings page's codes (en-US, hi-IN). */
+export async function getLanguage(): Promise<string> {
+  const body = await apiGet<{ language?: unknown }>("/api/v1/i18n/users/me/language")
+  return body.language === "hi" ? "hi-IN" : "en-US"
+}
+
 export async function updateLanguage(lang: string): Promise<void> {
   const language = lang.split("-")[0]
   await apiPatch("/api/v1/i18n/users/me/language", { language })

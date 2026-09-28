@@ -73,6 +73,14 @@ describe.skipIf(!databaseUrl)("i18n PostgreSQL integration", () => {
     await admin.query("UPDATE workspaces SET default_language = 'hi' WHERE id = $1", [workspaceId]);
     await expect(service.resolveLocale(userId, workspaceId, tenantId)).resolves.toBe("hi");
   });
+
+  it("reads back the language a user saved, so another device starts in it", async () => {
+    const actor = { tenant_id: tenantId, user_id: userId } as Parameters<I18nService["getUserLanguage"]>[0];
+
+    await expect(service.getUserLanguage(actor)).resolves.toEqual({ language: "en" });
+    await service.updateUserLanguage(actor, "hi");
+    await expect(service.getUserLanguage(actor)).resolves.toEqual({ language: "hi" });
+  });
 });
 
 function migrationStatements(): string[] {
