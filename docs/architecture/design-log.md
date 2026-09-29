@@ -59,6 +59,8 @@ Honest build-feasibility read: every individual capability (durable multi-agent 
 
 **Tool/credential connection timing (resolved, was open):** Alter asks for all needed connectors as a **batch, after Architecture Synthesizer finishes understanding the full workflow** — not one-by-one interruptions mid-conversation, and not a mandatory pre-connect-everything step before describing any workflow. Reason: the full tool list isn't actually known until the design is complete, so asking earlier risks asking for something that turns out unnecessary. Mechanism lives inside Tool Gateway (already has real credential resolution/token minting in the old build) plus a pre-compile check: Capability Resolver confirms a live connection exists for each required capability before the graph is built.
 
+**Amended 2026-09-29 (Havish, decision D13, from D-4a/D-4c).** Classify uses ten failure classes that map onto the five buckets: transient = timeout, infrastructure_failure, rate_limit, sandbox_crash; node's own fault = logic_output_failure, agent_creation_failure; credential gap = credential_missing, tool_permission_denial; safety_violation is outside Recovery (halts the workflow); unknown goes to a person. Buckets 4 (target missing) and 5 (ambiguous outcome) get classes of their own. A transient failure that repeats is retried once, then swapped. See §34 D13.
+
 ## 5. Verification mechanism (locked)
 
 Two-layer, per-node, plus one holistic pass — not a single end-of-run check.
@@ -87,6 +89,8 @@ Reuse alter-x-4-'s final 8-layer + cross-cutting-plane target (L1 Front Door →
 2. Missing config silently selecting a mock → single `RUNTIME_MODE` switch; in production mode, any mock selection is a fatal boot error, never a silent fallback.
 3. Real machinery with nothing driving it (schedulers, verifiers with zero callers) → mandatory "driver exists" test for every scheduled/background component, not just "the mechanism works when called."
 4. Duplicated primitives drifting apart (two ID validators, empty stub packages) → single source of truth per shared primitive, enforced.
+
+**Amended 2026-09-29 (D13, from D-7a).** Pattern 1 is enforced by the mock-reachability gate plus the `RUNTIME_MODE` boot check (a mock selected in production refuses to boot), not by a marker type.
 
 ## 8. Workflow editing & override model (locked)
 
@@ -312,6 +316,8 @@ The old PRD had two modes on one engine: Workflow Mode (business automation, com
 
 **Architectural requirement so this stays addable:** keep Sandbox and Provisioning in the component list, scoped small. Project Mode must remain a later addition, never a rearchitecture. Do not design it out.
 
+**Amended 2026-09-29 (D13, from D-23a).** Project Mode code is present (plan-then-execute project skeleton, project run provisioning, Project Studio) but not offered in the v1 interface. It stays in the code; it is not designed out.
+
 ## 24. Two-path engine model (locked): design path and run path
 
 The engine is **not** one linear L1→L8 pipeline. It has two distinct paths through the same components, connected at exactly one point.
@@ -408,6 +414,8 @@ Concretely, the architecture compile path writes an empty node-requirements map 
 
 **The residual problem, recorded rather than hidden.** Filling that column correctly still leaves the system with two sources for one fact: the stored map, and the fresh resolution the Executor and Recovery each perform at run time. That *is* pattern 4, arrived at from the other direction. The clean resolution is for run-time consumers to read the stored value rather than re-resolve, making it the single source of truth — or for the column to be deleted as redundant. **That decision is deferred, not answered**, because it touches components that are deliberately frozen during revival. It must not be forgotten: a correct value in a column nothing reads is still two answers waiting to disagree.
 
+**Amended 2026-09-29 (D13, from D-32a): closed.** The residual was answered on 2026-09-14 by deleting the write-only `node_requirements` and `policy_bindings` columns.
+
 ## 33. Voice and Repository Manager: cut from v1 (locked 2026-09-08)
 
 Both were declared as contracts with nothing behind them. Both are cut from the first release, deliberately and in writing, following the same reasoning Section 23 applied to Project Mode: an explicit cut is reversible, an ambiguous one compounds.
@@ -436,6 +444,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D10. Workflow health.** Validation, availability, correctness, reliability over the last 20 runs or 7 days; overall = average; status set by the worst dimension (critical <50, warning <80); "not enough data" with no runs.
 - **D11. Event replay.** Replay is a dry run (Simulate on the stored event) by default; "Replay for real" is separate, confirms the outside actions it will repeat, and records who confirmed.
 - **D12. Memory settings.** Chat, workflow and workspace memory switches (on by default) enforced by memory-service; retention 7-365 days, default 90; no "allow sensitive data" in v1, memories always PII-redacted.
+- **D13. Track D amendments accepted.** §4 ten classes mapped to the five buckets, retry once then swap, classes added for target-missing and ambiguous; §7 pattern 1 by gate and RUNTIME_MODE; §23 Project Mode present, not offered; §32 closed by deletion.
 
 ---
 

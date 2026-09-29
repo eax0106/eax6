@@ -134,3 +134,15 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (b).** Chat memory (the workflow's chat recalls earlier messages when building), workflow memory (lessons from a workflow's past runs reused in it) and workspace memory (lessons shared across the workspace through the ADS memory store) are real switches, all on by default, each checked by memory-service before it writes or reads that kind of memory. Retention: 7 to 365 days, default 90; older memories are deleted by the retention sweep. "Allow sensitive data" is removed for v1 (memories are always stored with PII redacted). The anonymised cross-tenant policy learning of §2 is unaffected.
 
 **What it means.** A per-workspace memory settings record (engine or memory-service, tenant RLS) with a read and an If-Match write route; memory-service enforces the switches and the retention window; platform-api routes; web page wired without the sensitive-data switch.
+
+## D13. Four design-log amendments from Track D (D-4a with D-4c, D-7a, D-23a, D-32a)
+
+**Question.** Four places where the conformance pass found the code right and the log out of date: accept each amendment (the log changes) or reject it (the code changes).
+
+**Answer: accept all four.**
+1. **§4 (D-4a, D-4c).** The classify stage uses the code's ten failure classes (`packages/contracts/src/recovery-classification.ts`), mapped onto the log's five buckets: transient = timeout, infrastructure_failure, rate_limit, sandbox_crash; node's own fault = logic_output_failure, agent_creation_failure; credential gap = credential_missing, tool_permission_denial; safety_violation is handled outside Recovery (C40); unknown goes to a person. A transient failure that repeats is retried once, then the node is swapped. The two buckets with no class yet (target resource missing, genuinely ambiguous outcome) get classes of their own (D-4b), now buildable.
+2. **§7 pattern 1 (D-7a).** Enforced by the mock-reachability gate and the `RUNTIME_MODE` boot check (a mock in production is a boot error), not by a marker type.
+3. **§23 (D-23a).** Project Mode code is present but not offered in the v1 interface; it is not removed.
+4. **§32 (D-32a).** Closed on 2026-09-14 by deleting the write-only columns.
+
+**What it means.** The log sections are amended; Recovery gains the two missing failure classes and their routes (target missing: ask the user to redirect or recreate; ambiguous: clarification only, never retry or swap), and self-heal notices reach the user through the D1 system caller.
