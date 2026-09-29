@@ -468,6 +468,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D24. Cost visibility.** Tenants see the full price they pay per workflow and per run (Alter's cut included), never Alter's internal cost or margin; the full breakdown is staff-only.
 - **D25. Benchmarks.** Staff golden-set history in the admin console, and tenant benchmark datasets and runs (executed through Simulate, judged by the Verification & Quality Gate), both in v1.
 - **D26. Admin console.** Build tenant detail, notes, review assignment, billing retry/credit/resolve, tenant deployments page; drop the restricted state, MFA/risk display, provider maintenance state and list-page policy editing.
+- **D27. Marketplace review.** "Needs changes" with notes and resubmit; a risk score from real signals only (scan verdict, first listing, outside-action reach, past reports), reasons shown, orders the queue, never decides.
 
 ---
 

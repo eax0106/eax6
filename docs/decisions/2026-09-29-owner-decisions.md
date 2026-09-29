@@ -275,3 +275,11 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **Drop (removed from the admin UI):** a "restricted" tenant state (suspend covers it); MFA and risk display (Auth0 shows it; the user screen links there instead); provider "maintenance" state (enable/disable covers it); editing policies from the list page (policy changes go through reviewed configuration).
 
 **What it means.** The build items get platform-api staff routes (staff roles, audited, reason where the action changes state) and web wiring; the drop items are removed from the web, not hidden.
+
+## D27. Marketplace "needs changes" and risk score (B2.1)
+
+**Answer: build both.**
+- **Needs changes:** a governance status with reviewer notes; the seller edits and resubmits, which returns the listing to the review queue; every transition audited with a reason.
+- **Risk score:** computed only from real signals: the latest scanner verdict (D21), whether it is the seller's first listing, the outside actions the tool can perform (side-effect tools, account scopes), and prior reports or takedowns. The score shows its reasons beside it, orders the review queue, and never approves or rejects anything by itself.
+
+**What it means.** Governance status and notes, resubmit route, a risk computation over existing data, review queue sorted by risk with reasons shown; the web's hidden controls wired.
