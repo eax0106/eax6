@@ -37,6 +37,7 @@ export const TABLES = [
   "projects", "deployments", "project_plans", "artifacts", "whatsapp_accounts",
   "webhook_endpoints", "webhook_endpoint_secrets", "trigger_integration_bindings",
   "escalations", "run_dispatch_queue", "side_effects",
+  "budgets", "budget_usage", "budget_reservations",
 ] as const;
 // Children before parents. A child ordered after a table it has a plain FK
 // to makes the DELETE fail outright; a child ordered after a table it has
@@ -56,7 +57,7 @@ export const TABLES = [
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
-  "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
+  "budget_reservations", "budget_usage", "budgets", "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
   "deployments", "artifacts", "escalations", "project_plans", "recovery_actions",
   "run_dispatch_queue", "run_outcomes", "run_stream_events", "side_effects", "trigger_integration_bindings",
   "trigger_webhook_secrets", "verification_results", "node_executions", "runs", "events",

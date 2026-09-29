@@ -58,6 +58,7 @@ describe("orchestration migration files", () => {
       "0038_remove_voice_conversation_channel.sql",
       "0039_run_owner_tenant.sql",
       "0040_create_side_effects.sql",
+      "0041_create_budgets.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -105,6 +106,7 @@ describe("orchestration migration files", () => {
       "0038_restore_voice_conversation_channel.sql",
       "0039_drop_run_owner_tenant.sql",
       "0040_drop_side_effects.sql",
+      "0041_drop_budgets.sql",
     ]);
   });
 

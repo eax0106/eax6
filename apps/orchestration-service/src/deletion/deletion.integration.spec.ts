@@ -89,7 +89,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     expect(DELETE_ORDER).toHaveLength(new Set(DELETE_ORDER).size);
   });
 
-  it("deletes all 30 tenant tables while preserving a second tenant", async () => {
+  it("deletes all 33 tenant tables while preserving a second tenant", async () => {
     await seedAll(adminStore, TENANT_A, "a");
     await seedAll(adminStore, TENANT_B, "b");
 
@@ -97,12 +97,12 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     // 30: ENGINE-FIX-P0-2 added the ten tables (migrations 0019+) that were
     // previously missing from both TABLES and DELETE_ORDER, which let
     // verifyDeletion certify erasure complete while their rows survived;
-    // C8 added side_effects.
-    expect(before).toHaveLength(30);
+    // C8 added side_effects; D3 added budgets, budget_usage and budget_reservations.
+    expect(before).toHaveLength(33);
     expect(before.every((location) => location.rowCount === 1)).toBe(true);
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
-      deletedRows: 30,
+      deletedRows: 33,
       deletedObjects: 0,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
@@ -183,6 +183,11 @@ async function seedAll(
     await tx.query("INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES ($1,$2,'fixture','{}')", [tenant, run]);
     await tx.query("INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,'fixture','Merge','succeeded')", [node, tenant, run]);
     await tx.query("INSERT INTO side_effects(id,tenant_id,run_id,dag_node_id,node_execution_id,tool_name,status) VALUES ($1,$2,$3,'fixture',$4,'email.send','completed')", [`sfx_${suffix}`, tenant, run, node]);
+    // D3: a budget, what it has spent, and the run's reservation against it.
+    const budget = `bud_018f4d6e-2b4a-7a3e-8c1a-1234567890${suffix === "a" ? "a9" : "b9"}`;
+    await tx.query("INSERT INTO budgets(id,tenant_id,workspace_id,workflow_id,kind,period,amount_minor,created_by) VALUES ($1,$2,$2,$3,'workflow','daily',100,'usr_fixture')", [budget, tenant, workflow]);
+    await tx.query("INSERT INTO budget_usage(tenant_id,budget_id,period_key,reserved_minor) VALUES ($1,$2,'2026-09-30',10)", [tenant, budget]);
+    await tx.query("INSERT INTO budget_reservations(tenant_id,run_id,budget_id,period_key,reserved_minor) VALUES ($1,$2,$3,'2026-09-30',10)", [tenant, run, budget]);
     await tx.query("INSERT INTO run_stream_events(id,tenant_id,run_id,seq,event,payload) VALUES ($1,$2,$3,1,'node.completed','{}')", [`sse_${suffix}`, tenant, run]);
     await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,node_execution_id,gate_type,verdict) VALUES ($1,$2,$3,$4,'quality','pass')", [`vrf_${suffix}`, tenant, run, node]);
     await tx.query("INSERT INTO recovery_actions(id,tenant_id,run_id,node_execution_id,failure_class) VALUES ($1,$2,$3,$4,'fixture')", [`rcv_${suffix}`, tenant, run, node]);
@@ -190,7 +195,7 @@ async function seedAll(
     await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$2,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations
-    // 0019+). Seeded here so "deletes all 30 tenant tables" actually proves
+    // 0019+). Seeded here so "deletes all 33 tenant tables" actually proves
     // coverage instead of just proving the original 19 still work.
     const project = `prj_${suffix}`;
     const webhookEndpoint = `whe_${suffix}`;

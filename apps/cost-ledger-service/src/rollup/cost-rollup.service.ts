@@ -242,7 +242,7 @@ export class CostRollupService {
   }
 }
 
-function applyMargin(internalCostMinor: string, marginRate: number): string {
+export function applyMargin(internalCostMinor: string, marginRate: number): string {
   const internal = BigInt(internalCostMinor);
   if (internal === 0n) return "0";
   // billable = ceil(internal / (1 - marginRate)) -- integer-safe: scale by

@@ -22,6 +22,7 @@ import { ModelOutcomesService } from "./model-outcomes/model-outcomes.service";
 import { RunVerdictsService } from "./run-verdicts/run-verdicts.service";
 import { NodeCostsController } from "./node-costs/node-costs.controller";
 import { NodeCostsService } from "./node-costs/node-costs.service";
+import { RUN_TOTAL_MARGIN_RATE, RunTotalService } from "./node-costs/run-total.service";
 
 @Module({})
 export class AppModule {
@@ -47,6 +48,8 @@ export class AppModule {
         { provide: COST_STORE_PROVIDER, useValue: store },
         EstimationService,
         NodeCostsService,
+        { provide: RUN_TOTAL_MARGIN_RATE, useValue: marginRate },
+        RunTotalService,
         ModelOutcomesService,
         RunVerdictsService,
         {
