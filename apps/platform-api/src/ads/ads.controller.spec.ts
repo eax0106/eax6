@@ -261,6 +261,32 @@ describe("ADS administration routes", () => {
       expect.any(Object),
     );
 
+    const bySource = await request({
+      method: "GET",
+      url: `/api/v1/ads/documents?limit=25&sourceId=${sourceId}`,
+      actor,
+    });
+    expect(bySource.statusCode).toBe(200);
+    expect(engine.get).toHaveBeenLastCalledWith(
+      `/api/v1/ads/documents?limit=25&source_id=${sourceId}`,
+      expect.any(Object),
+    );
+    const onlySource = await request({
+      method: "GET",
+      url: `/api/v1/ads/documents?sourceId=${sourceId}`,
+      actor,
+    });
+    expect(onlySource.statusCode).toBe(200);
+    expect(engine.get).toHaveBeenLastCalledWith(
+      expect.stringMatching(new RegExp(`^/api/v1/ads/documents[?&].*source_id=${sourceId}$`)),
+      expect.any(Object),
+    );
+    expectProblem(
+      await request({ method: "GET", url: "/api/v1/ads/documents?sourceId=not-a-source", actor }),
+      400,
+      "ADS_VALIDATION_FAILED",
+    );
+
     const detail = await request({
       method: "GET",
       url: `/api/v1/ads/documents/${documentId}`,
