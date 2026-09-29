@@ -1762,6 +1762,44 @@ against the API on the third run before merge.
 - **Where.** `havishalterx-eng/alterengine-6#13`; fixes at `0c9d593`, `4dd53ac` on
   `codex/revive-c-protective`.
 
+### 2026-09-29 — everything buildable without Havish, built: #66–#72 (C50, C52–C57)
+
+- **What.** Seven pull requests, each merged with a merge commit after CI was green on the exact head:
+  - #66 C50 knowledge delete: document and source, objects deleted before rows in one transaction.
+  - #67 C52 workspace artifacts list.
+  - #68 C53 WhatsApp account delete, scoped to the workspace.
+  - #69 C54 a stored event that breaks the event contract no longer ends the run stream.
+  - #70 C55 `ws_` workspace ids, workspace rename and onboarding save.
+  - #71 C56 the end-of-run check runs once per run.
+  - #72 C57 member names, sign out other sessions, profile name.
+
+  Every item except #71 was also proven live on the local stack. Web methods still on mock data in live mode fell from 25 to 20 of 124, and every one of the 20 now waits on a decision, an account, or is by design.
+- **Why the list shrank before it was built.** The readiness map listed chat, memory settings, workflow health, workspace delete and event replay as buildable. Reading the code first showed each one hides a product choice:
+  - the engine's conversations table has no messages, title or workflow link, and nothing decides what the assistant replies;
+  - the memory switches would govern nothing that exists;
+  - there is no health formula;
+  - deleting a workspace erases engine data, which is the retention question;
+  - replay repeats outside actions.
+
+  They were moved to Havish's decisions instead of being built on a guess. The same happened to member invites and role change once they were checked (below).
+- **Two defects found only by calling the routes live.**
+  1. **Workspace rename and onboarding save always failed.** The ETag is a JS `Date` (milliseconds) and `updated_at` holds microseconds, so the `updated_at = $n` concurrency check never matched. Service-level unit tests with mocked rows could not see this; a real Postgres row did. Fixed with `date_trunc('milliseconds', ...)`.
+  2. **`ws_` workspace ids returned 500 in the RBAC guard's lookup, before any handler ran.** The first fix covered only the services and passed its tests. The live call still returned 500, which is what located the guard.
+
+  **The reusable lesson:** a test at the service layer does not prove a route. The request passes the guard first.
+- **Members is further from done than the map said.** Live invite is broken: the web sends an email, but the API wants an existing user id, and design log §20's invite flow does not exist. The screen's roles (owner/admin/member/viewer) do not match the enforced workspace roles (admin/editor/operator/approver/viewer). Both went to Havish.
+- **How.** Each change followed the same steps:
+  - its own worktree from `origin/main`
+  - a test that fails on the old code, shown failing
+  - full suites of every touched app, gates and coverage
+  - a live run on the local stack (platform-api :3020, orchestration :3010, ads-core on :8011 because :8010 was taken by another app)
+  - a work-queue row
+  - merge on green through `merge_when_green.sh`, which refuses if the head moved
+
+  CI caught one thing local checks missed: identity branch coverage fell to 89.45% against a 90% threshold, fixed with a repository unit test.
+- **When.** 2026-09-29.
+- **Where.** `apps/ads-core/src/ingestion`, `apps/orchestration-service/src/{artifacts,webhooks,runs,registry}`, `apps/platform-api/src/{ads,runs,channels,streaming,workspaces,rbac,onboarding,identity,members}`, `apps/platform-web/src/api`. Readiness map republished at 75% with no block left that does not wait on Havish.
+
 ---
 
 ## 6. Component ledger
