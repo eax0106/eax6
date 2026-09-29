@@ -120,6 +120,7 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Sessions group into named project folders**, plus an "Ungrouped" catch-all for anything not assigned to a group — sidebar pattern confirmed by the user against a real reference screenshot: group header, sessions nested under it, search + filter controls at the top.
 - **Cross-workflow context, within one user, is expected and required** — Alter should already have context on a user's other workflows when building a new related one, no need to re-explain from scratch. Concrete requirement this creates: ADS Client's retrieval scope must span *all* of that user's workflows/sessions, not just the current one.
 - **This does not weaken tenant isolation (Section 2)** — the isolation boundary is the tenant, not the individual workflow. Cross-workflow sharing happens freely inside one user's own space; the wall between different users' data stays exactly as strict as already locked.
+- **Amended 2026-09-29 (Havish, decision D9).** Folders are simple engine-owned named records; a workflow's folder is optional and "Ungrouped" means none; deleting a folder never deletes its workflows. Cross-workflow context spans the **workspace's** workflows (the workspace is a permission boundary), not every workspace a user belongs to. See §34 D9.
 - **Amended 2026-09-29 (Havish, decision D6).** One workflow = one chat, confirmed: the chat is where that workflow is built and changed, through the builder pipeline. Added: one read-only assistant per user ("Ask Alter") that answers questions and gives updates across the user's workflows from data the user can already read, and whose only action is to start a new workflow and send the user to its chat. It cannot change any existing workflow. See §34 D6.
 
 ## 11. Safety & Policy plane (locked): shared library, not a standalone service
@@ -431,6 +432,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D6. Chat.** One workflow = one chat (builder pipeline). Plus a read-only "Ask Alter" assistant per user: updates and answers across workflows from what the user can read; its only action is starting a new workflow and handing off to that workflow's chat. Amends §10.
 - **D7. Members.** Hybrid invites (our record, Auth0 delivers, matched on first sign-in, 7-day expiry, resend/revoke); members screen shows the five enforced roles; fixed roles for v1, custom roles deferred. Amends §15 and §20.
 - **D8. Success criteria.** Shown and editable on the plan step; Build confirms them; an uncovered criterion fails loudly. Amends §5.1.
+- **D9. Folders and context.** Engine-owned simple folders with an Ungrouped bucket; cross-workflow context stays inside the workspace. Amends §10.
 
 ---
 

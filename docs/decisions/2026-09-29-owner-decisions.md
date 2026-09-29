@@ -93,3 +93,11 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (a).** The plan screen lists the success criteria beside the steps; the user can edit, add or remove them; pressing Build confirms them. A user-added criterion that no step covers makes the planner fail loudly and ask (C29 rule), never silently dropped. An edit to a live workflow that touches what the criteria depend on asks whether the goal changed (§8).
 
 **What it means.** Criteria returned with the plan and accepted back on build (editable list); planner re-assigns edited criteria to nodes; web plan step shows and edits them.
+
+## D9. Folders and cross-workflow context (design log §10)
+
+**Answers (Havish took each recommendation).**
+- **9a: simple folders, engine-owned.** A folder is a named record in the engine (tenant RLS, workspace-scoped, erasure-registered). A workflow has an optional folder; none means "Ungrouped". Create, rename, delete (its workflows return to Ungrouped, never deleted), move a workflow. Engine projects keep their Project Studio meaning and are not reused as folders.
+- **9b: cross-workflow context stays within the workspace.** Retrieval spans every workflow in the workspace, never across workspaces, because workspaces are permission boundaries.
+
+**What it means.** Engine folders table and routes; `folder_id` on workflows; platform-api proxies; web sidebar groups by folder with an Ungrouped bucket. ADS retrieval unchanged (already workspace-scoped); §10's wording amended.
