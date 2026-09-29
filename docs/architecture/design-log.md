@@ -380,6 +380,8 @@ Sections 15 and 20 settled how a *person* is authenticated. Nothing settled how 
 
 **The limitation, stated rather than hidden.** Every service currently presents the *same* shared token, so this authenticates *that the caller is an Alter service*, not *which one*. Section 2's tenant isolation therefore rests on that shared secret plus requirement 2's data-level check. That is acceptable now and it is not the end state: when per-service M2M applications exist, the asserter check tightens to RS256 verification and every call site stays unchanged.
 
+**Amended 2026-09-29 (Havish, decision D1): background jobs use a system caller, not the shared token.** Platform work that runs with no user signed in reaches the engine on the existing two-token path: the identity broker mints the short-lived, single-use actor token for a named system principal (`system:platform-jobs`) instead of a user, bound to one tenant, carrying a fixed read-only permission set, and the engine validates and audits it like any call (recording the principal type). The shared-token internal-endpoint pattern above stays for service-to-service calls that already use it; it is not extended to platform jobs. See §34 D1.
+
 ## 31. Agent creation must not manufacture a doomed agent (locked 2026-09-08)
 
 Section 22 item 9 gave Agent Factory its own component. This section settles what it does when the requirement it is asked to satisfy is one policy will not allow.
@@ -407,6 +409,14 @@ Both were declared as contracts with nothing behind them. Both are cut from the 
 **Cutting means removing or deprecating the declaration, not writing a note.** A contract that remains generates clients, appears in counts, and sits inside every estimate of remaining work — which is the cost that made this worth deciding at all. If either returns later it returns as a scoped addition with a named vendor or a written purpose, never as a rediscovered obligation.
 
 **Amended 2026-09-28 (Havish): the Repository Manager returns to v1, standalone.** It returns exactly as this section required — with a written purpose and a named vendor. **Purpose:** a workspace links GitHub repositories reachable through its own GitHub OAuth connection and reads their branches and open pull requests. **Vendor:** GitHub, through the existing OAuth Hub connector (scopes `read:user repo`), so no GitHub App is introduced. **Scope boundary:** read-only against GitHub; bindings store identifiers, never tokens; no repository creation, transfer or write — those belong to Project Mode, which stays out of v1 (§23). Voice stays cut.
+---
+
+## 34. Owner decisions of 2026-09-29
+
+Havish answered every open product question in one sitting, one question at a time, each put with options and an attacked recommendation. The full record (question, options, answer, consequence) is `../decisions/2026-09-29-owner-decisions.md`; this section is the binding summary, and sections a decision changes carry an "Amended 2026-09-29" note pointing here.
+
+- **D1. System identity for background jobs: system caller on the two-token path.** A named principal `system:platform-jobs`, one tenant per token, fixed read-only permissions, short-lived and single-use, audited as a system principal. Unblocks engine-originated notifications, budget alerts, drift suggestions and self-heal notices. Amends §30.
+
 ---
 
 ## Status as of 2026-09-01
