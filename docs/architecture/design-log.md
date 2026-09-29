@@ -158,6 +158,7 @@ Closes gap #1 from the pre-microarchitecture review (Section 16 below lists all 
 - **Predefined roles (Admin, Editor, Viewer, Approver, etc.) plus custom roles, same data model underneath both.** A role is just `{name, set of the 9 permissions}` — predefined roles are shipped presets of that shape, a custom role is the owner naming their own combination. One simple model, not two systems.
 - **Custom roles are private per tenant**, following directly from the tenant-isolation wall already locked (Section 2) — never visible or shared across different companies' accounts.
 - **Single-person accounts are unaffected by any of this** — the owner has full power from day one, role system only becomes relevant the moment a second member is invited.
+- **Amended 2026-09-29 (Havish, decision D7).** v1 ships the fixed roles only (tenant owner; workspace admin, editor, operator, approver, viewer); custom roles are deferred, and the name-plus-permission-set model keeps them addable. See §34 D7.
 
 ## 16. HumanApproval node mechanics (locked)
 
@@ -236,7 +237,7 @@ Closes gap #6 from the pre-microarchitecture review.
 
 - **Managed identity provider (Auth0 / Cognito / Clerk class), never hand-rolled auth.** Grounded in precedent: the old build used a managed provider plus careful token validation, and its JWT validator was one of the few components its hardening audit called textbook-correct — algorithm pinned to RS256 at both the header check and the key-import filter (closing `alg:none` and HS256-confusion), issuer matched exactly, audience validated, expiry/issued-at/not-before all checked with bounded clock skew. That correctness came from using a real provider and validating properly, not from inventing anything. Same approach here.
 - **Sign-in methods at launch:** social login (Google/GitHub class) plus email/password. Social is lowest-friction for a self-serve product; email/password is expected.
-- **Member invite flow (follows from Section 15):** owner invites by email, invitee follows the link, creates their own credentials, lands in the tenant with the role the owner assigned. Each member's login is their own — never a shared credential.
+- **Member invite flow (follows from Section 15):** owner invites by email, invitee follows the link, creates their own credentials, lands in the tenant with the role the owner assigned. Each member's login is their own — never a shared credential. **Amended 2026-09-29 (D7):** the invitation record (role, workspace, status, 7-day expiry, inviter) is ours; Auth0 Organization invitations deliver the email and hosted sign-up; the first sign-in matches the invitation and creates the membership. Resend and revoke act on our record.
 - **Enterprise SSO deferred** — a real later-stage need for larger organizations, not v1.
 
 ## 21. Monetization — how Alter charges the customer (locked in shape, pricing deferred)
@@ -428,6 +429,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D4. Pre-run estimate.** Usual cost from the last 5 verified runs plus a worst-case bound from the compiled DAG; reserve the worst case at run start, true up at the end. Cost Ledger freeze exemption granted for the per-workflow cost read. Amends §9.
 - **D5. Approvals.** All four §16 modes; main control "Ask me first" / "Always go ahead", set by a person; "Always go ahead" on external-action steps only with an explicit, recorded confirmation; promotion suggested after 10 consecutive approvals; delivery in-app plus email. Amends §16 and the add-never-remove safeguard rule for this one case.
 - **D6. Chat.** One workflow = one chat (builder pipeline). Plus a read-only "Ask Alter" assistant per user: updates and answers across workflows from what the user can read; its only action is starting a new workflow and handing off to that workflow's chat. Amends §10.
+- **D7. Members.** Hybrid invites (our record, Auth0 delivers, matched on first sign-in, 7-day expiry, resend/revoke); members screen shows the five enforced roles; fixed roles for v1, custom roles deferred. Amends §15 and §20.
 
 ---
 

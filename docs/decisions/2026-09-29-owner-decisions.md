@@ -72,3 +72,14 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **Assistant ("Ask Alter").** One assistant per user, across the workspace's workflows. It **has no power to change anything**: it answers questions and gives updates on the user's other workflows (status, recent runs, failures, verification results, spend), grounded only in data the user can already read. Its one action is to **start a new workflow**: it creates the new, empty workflow and its chat and sends the user there, where the workflow's own chat does the building.
 
 **What it means.** Engine stores chat messages (tenant RLS, erasure-registered), each workflow chat linked to its workflow; chat title is the workflow name; archiving a chat archives nothing else. The assistant is a separate conversation per user, read-only over the engine's run, verification and cost reads through the caller's own identity (it can see only what the user can see), with a single write: create a draft workflow and return its chat. Its answers are model calls and are costed like any other.
+
+## D7. Members: invites, roles, custom roles (design log §15, §20)
+
+**Question.** Live invites are broken (the web sends an email; the API wants an existing user id); the members screen's roles do not match the enforced workspace roles; §15 wanted custom roles.
+
+**Answers (Havish took each recommendation).**
+- **7a: hybrid invites.** Our own invitation record is the source of truth (tenant RLS: email, role, workspace, status, expiry 7 days, invited by). Auth0 Organization invitations deliver the email and the hosted sign-up link. On the invitee's first sign-in the callback matches the invitation and creates the membership with the chosen role. Resend issues a fresh invitation; revoke cancels one. Pending invitations appear in the members list as "invited". The mock identity provider mirrors this locally.
+- **7b: the members screen shows the five enforced workspace roles** (admin, editor, operator, approver, viewer) plus the tenant owner badge. Role change is wired to a new members route (workspace admin, audited, cannot demote the last admin, owner not changeable through it).
+- **7c: fixed roles for v1; custom roles later.** §15's custom roles are deferred. The role model already stores a role as name plus permission set, so custom roles remain an addition, not a redesign.
+
+**What it means.** Invitation table and routes (create, list, resend, revoke), Auth0 invitation adapter and mock mirror, acceptance on callback; web invite dialog and member menu use the real roles; `PATCH` member role route with safeguards and audit. Password change stays with the identity provider (Auth0's change-password email), wired from the security page.
