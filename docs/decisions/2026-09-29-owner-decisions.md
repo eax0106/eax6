@@ -114,3 +114,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **Window:** last 20 runs or last 7 days, whichever is smaller. **Overall:** average of the four. **Status from the worst dimension:** critical if any below 50, warning if any below 80, else healthy. **No runs yet:** "not enough data", never a default 100. Also shown: recent failures and degraded runs (finished but needed recovery).
 
 **What it means.** An engine read computing these from runs, verification_results, recovery actions and connection health; platform-api route; web health views wired.
+
+## D11. Event replay
+
+**Question.** The events page's Replay does nothing; a real re-run repeats the workflow's outside actions, and the side-effect ledger (C8) guards retries within one run, not a new run.
+
+**Options put.** (a) replay for real; (b) dry run only, through the existing Simulate action; (c) both: Replay is a dry run by default, and "Replay for real" is a separate action with a confirmation naming the outside actions that will repeat.
+
+**Answer: (c).** Replay runs the workflow's Simulate action on the stored event and shows what each step would do, touching nothing outside. "Replay for real" starts a new run from the stored event after a confirmation that lists the outside actions it will repeat (counted from the workflow's side-effect tools), and records who confirmed it.
+
+**What it means.** Engine replay route (dry run via simulate; real via a new run with the stored payload and a `replayed_from` link); platform-api routes (real replay needs the workflow run permission and the confirmation token); web Replay and "Replay for real" with the confirmation.

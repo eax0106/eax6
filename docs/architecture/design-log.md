@@ -434,6 +434,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D8. Success criteria.** Shown and editable on the plan step; Build confirms them; an uncovered criterion fails loudly. Amends §5.1.
 - **D9. Folders and context.** Engine-owned simple folders with an Ungrouped bucket; cross-workflow context stays inside the workspace. Amends §10.
 - **D10. Workflow health.** Validation, availability, correctness, reliability over the last 20 runs or 7 days; overall = average; status set by the worst dimension (critical <50, warning <80); "not enough data" with no runs.
+- **D11. Event replay.** Replay is a dry run (Simulate on the stored event) by default; "Replay for real" is separate, confirms the outside actions it will repeat, and records who confirmed.
 
 ---
 
