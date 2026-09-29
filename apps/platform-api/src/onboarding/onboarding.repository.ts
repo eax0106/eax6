@@ -64,7 +64,10 @@ export class OnboardingRepository implements OnboardingInitializer {
       const result = await client.query<OnboardingRow>(
         `UPDATE onboarding_states
             SET steps = $1::jsonb, current_step = $2, status = $3
-          WHERE tenant_id = $4 AND workspace_id = $5 AND updated_at = $6
+          WHERE tenant_id = $4 AND workspace_id = $5
+            -- expectedUpdatedAt is a JS Date (milliseconds); updated_at holds
+            -- microseconds, so compare at the precision the caller has.
+            AND date_trunc('milliseconds', updated_at) = $6
           RETURNING *`,
         [
           JSON.stringify(state.steps),

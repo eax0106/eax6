@@ -15,18 +15,27 @@ describe("PlatformDbWorkspaceTenantLookup", () => {
     const queryTenant = vi.fn(async () => [{ tenant_id: "ten_a" }]);
     const lookup = new PlatformDbWorkspaceTenantLookup(db(queryTenant));
 
-    await expect(lookup.queryWorkspaceTenant("ten_a", "ws_1")).resolves.toBe("ten_a");
+    const workspace = "018f47a5-7b2c-7d10-8f11-123456789abc";
+    await expect(lookup.queryWorkspaceTenant("ten_a", `ws_${workspace}`)).resolves.toBe("ten_a");
     expect(queryTenant).toHaveBeenCalledWith(
       "ten_a",
       "SELECT tenant_id FROM workspaces WHERE id = $1",
-      ["ws_1"],
+      [workspace],
     );
+  });
+
+  it("resolves nothing for an id that is not a workspace id, without querying", async () => {
+    const queryTenant = vi.fn(async () => [{ tenant_id: "ten_a" }]);
+    const lookup = new PlatformDbWorkspaceTenantLookup(db(queryTenant));
+
+    await expect(lookup.queryWorkspaceTenant("ten_a", "ws_1")).resolves.toBeUndefined();
+    expect(queryTenant).not.toHaveBeenCalled();
   });
 
   it("returns undefined when the RLS-scoped query finds no matching row", async () => {
     const queryTenant = vi.fn(async () => []);
     const lookup = new PlatformDbWorkspaceTenantLookup(db(queryTenant));
 
-    await expect(lookup.queryWorkspaceTenant("ten_a", "ws_missing")).resolves.toBeUndefined();
+    await expect(lookup.queryWorkspaceTenant("ten_a", "ws_018f47a5-7b2c-7d10-8f11-000000000000")).resolves.toBeUndefined();
   });
 });

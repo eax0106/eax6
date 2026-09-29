@@ -4,6 +4,7 @@ import { computeEtag, ConcurrencyHttpError, ifMatchIncludes } from "../concurren
 import type { ActorContext } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
 import { PlatformHttpError } from "../signup/problem";
+import { bareWorkspaceId } from "./workspace-id";
 
 /**
  * The safeguards a workspace requires on every run, set by a tenant owner.
@@ -121,11 +122,9 @@ function safeguardsInstance(workspaceId: string): string {
   return `/api/v1/workspaces/${workspaceId}/safeguards`;
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** A malformed id is a workspace that does not exist, not a database error. */
 function uuidOrNotFound(workspaceId: string, instance: string): string {
-  return UUID.test(workspaceId) ? workspaceId : workspaceNotFound(instance);
+  return bareWorkspaceId(workspaceId) ?? workspaceNotFound(instance);
 }
 
 function workspaceNotFound(instance: string): never {

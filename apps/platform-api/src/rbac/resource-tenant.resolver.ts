@@ -1,4 +1,5 @@
 import type { PlatformDb } from "../signup/platform-db";
+import { bareWorkspaceId } from "../workspaces/workspace-id";
 import type { RbacRequest } from "./types";
 
 export interface ResourceTenantResolver {
@@ -84,10 +85,17 @@ export class PlatformDbWorkspaceTenantLookup implements WorkspaceTenantLookup {
     actorTenantId: string,
     workspaceId: string,
   ): Promise<string | undefined> {
+    // A route may name the workspace by its bare UUID or its ws_ form; any
+    // other string names no workspace (and would make Postgres fail the
+    // uuid cast, answering 500 instead of a denial).
+    const id = bareWorkspaceId(workspaceId);
+    if (id === undefined) {
+      return undefined;
+    }
     const rows = await this.db.queryTenant<{ readonly tenant_id: string }>(
       actorTenantId,
       "SELECT tenant_id FROM workspaces WHERE id = $1",
-      [workspaceId],
+      [id],
     );
     return rows[0]?.tenant_id;
   }
