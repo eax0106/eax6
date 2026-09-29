@@ -2,6 +2,7 @@ import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2, Upload } from "lucide-react"
 import { api } from "@/api/client"
+import { isLiveApi } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,14 +104,17 @@ export function ProfileSettings() {
               />
               <p className="text-xs text-text-muted mt-1">Email cannot be changed.</p>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-text-primary">Job title</label>
-              <Input 
-                value={jobTitle} 
-                onChange={(e) => setJobTitle(e.target.value)} 
-                placeholder="e.g. Product Manager"
-              />
-            </div>
+            {/* No job title is stored in live mode; it is not offered there. */}
+            {!isLiveApi && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-text-primary">Job title</label>
+                <Input 
+                  value={jobTitle} 
+                  onChange={(e) => setJobTitle(e.target.value)} 
+                  placeholder="e.g. Product Manager"
+                />
+              </div>
+            )}
           </div>
           <div className="flex justify-end pt-4">
             <Button type="submit" disabled={!isDirty || isPending}>

@@ -21,4 +21,15 @@ export class UserProfileRepository {
     );
     return result.rows[0] ?? null;
   }
+
+  async updateDisplayName(userId: string, displayName: string): Promise<UserProfileRow | null> {
+    if (!this.pool) {
+      return null;
+    }
+    const result = await this.pool.query<UserProfileRow>(
+      "UPDATE users SET display_name = $2 WHERE id = $1 RETURNING id, email, display_name",
+      [userId, displayName],
+    );
+    return result.rows[0] ?? null;
+  }
 }

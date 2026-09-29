@@ -221,6 +221,7 @@ class ApiClient {
   }
 
   async updateProfile(data: Partial<Profile>): Promise<Profile> {
+    if (isLiveApi) return live.updateProfile(data, mockProfile)
     await delay(MOCK_DELAY)
     return { ...mockProfile, ...data }
   }
@@ -243,6 +244,7 @@ class ApiClient {
   }
 
   async revokeOtherSessions(): Promise<void> {
+    if (isLiveApi) return live.revokeOtherSessions()
     await delay(MOCK_DELAY)
   }
 

@@ -7,6 +7,7 @@ import {
   Headers,
   Logger,
   Param,
+  Patch,
   Post,
   Query,
   Req,
@@ -130,6 +131,46 @@ export class IdentityController {
     await this.safe(reply, "/api/v1/auth/me", async () => {
       const session = await this.requireSession(request);
       const profile = await this.userProfileRepository.findById(session.userId);
+      if (!profile) {
+        throw new IdentityHttpError(404, "USER_NOT_FOUND", "User profile not found");
+      }
+      reply.send({
+        userId: session.userId,
+        tenantId: session.tenantId,
+        email: profile.email,
+        name: profile.display_name,
+      });
+    });
+  }
+
+  @Delete("sessions")
+  @RequireTenantRole("member")
+  async revokeOtherSessions(@Req() request: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    await this.safe(reply, "/api/v1/auth/sessions", async () => {
+      const session = await this.requireSession(request);
+      const revoked = await this.identityService.revokeOtherSessions(
+        session.tenantId,
+        session.userId,
+        session.id,
+      );
+      reply.send({ revoked });
+    });
+  }
+
+  @Patch("me")
+  @RequireTenantRole("member")
+  async updateMe(
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ): Promise<void> {
+    await this.safe(reply, "/api/v1/auth/me", async () => {
+      const session = await this.requireSession(request);
+      const name = (body as { name?: unknown } | null)?.name;
+      if (typeof name !== "string" || name.trim().length === 0 || name.trim().length > 120) {
+        throw new IdentityHttpError(400, "INVALID_PROFILE", "name must be 1 to 120 characters");
+      }
+      const profile = await this.userProfileRepository.updateDisplayName(session.userId, name.trim());
       if (!profile) {
         throw new IdentityHttpError(404, "USER_NOT_FOUND", "User profile not found");
       }
