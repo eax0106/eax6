@@ -26,6 +26,7 @@ interface CostLedgerEnvironmentBase {
   // already establishes (doc 04 SS1: "pseudonymized survivors only in
   // cost_db and audit_db").
   readonly pseudonymKeyReference: string;
+  readonly deletionServiceTokenReference: string;
 }
 
 export interface CostLedgerIamEnvironment extends CostLedgerEnvironmentBase {
@@ -132,6 +133,7 @@ export function loadCostLedgerEnvironment(
     costMarginRate: parseMarginRate(environment.COST_MARGIN_RATE),
     costUsdToInrRate: parseUsdToInrRate(environment.COST_USD_TO_INR_RATE),
     pseudonymKeyReference: requireValue(environment, "COST_PSEUDONYM_KEY_REF"),
+    deletionServiceTokenReference: requireValue(environment, "DELETION_SERVICE_TOKEN_REF"),
   };
 
   if (resolveDatabaseAuthentication(environment, alterEnvironment) === "static") {

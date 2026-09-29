@@ -64,6 +64,15 @@ async function main(): Promise<void> {
       /export const TABLES = \[([\s\S]*?)\] as const/,
     ),
     "ads-core": providerTables("apps/ads-core/src/deletion/provider.py", /^TABLES = \(([\s\S]*?)\)/m),
+    "cost-ledger-service": providerTables(
+      "apps/cost-ledger-service/src/deletion/cost-deletion.service.ts",
+      /export const COST_TABLES = \[([\s\S]*?)\] as const/,
+    ),
+    "intelligence-service": providerTables(
+      "apps/intelligence-service/src/deletion/provider.py",
+      /^TABLES = \(([\s\S]*?)\)/m,
+    ),
+    "memory-service": providerTables("apps/memory-service/src/deletion/provider.py", /^TABLES = \(([\s\S]*?)\)/m),
     "platform-api": providerTables(
       "apps/platform-api/src/deletion/platform-deletion.service.ts",
       /export const PLATFORM_TABLES = \[([\s\S]*?)\] as const/,

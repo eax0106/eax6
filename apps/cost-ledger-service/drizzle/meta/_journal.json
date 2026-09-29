@@ -57,6 +57,13 @@
       "when": 1786990407000,
       "tag": "0007_create_run_verdicts",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786994007000,
+      "tag": "0008_erasure_grants",
+      "breakpoints": true
     }
   ]
 }

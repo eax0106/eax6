@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     auth0_m2m_client_secret: str = ""
     memory_service_base_url: str = "http://localhost:8002"
     internal_service_token: str = ""
+    # SHA-256 of the shared deletion service token audit-service presents to erasure providers.
+    deletion_service_token_sha256: str = ""
+    # A role that may list every tenant (deletion-ledger replay); empty disables that route.
+    intelligence_deletion_db_url_sync: str = ""
     capability_grpc_bind_address: str = "0.0.0.0:50061"
     draft_agent_promotion_threshold: int = 3
     # Highest tier agent auto-creation may mint. A genuine capability gap is

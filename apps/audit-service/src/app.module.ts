@@ -22,6 +22,9 @@ export interface AuditDeletionWiring {
   readonly adsBaseUrl: string;
   readonly orchestrationBaseUrl: string;
   readonly platformApiBaseUrl: string;
+  readonly costBaseUrl: string;
+  readonly intelligenceBaseUrl: string;
+  readonly memoryBaseUrl: string;
   readonly serviceToken: string;
   readonly serviceTokenHash: string;
   readonly pseudonymKey: string;
@@ -35,7 +38,10 @@ export class AppModule {
       store,
       [new HttpDeletionProvider(deletion.adsBaseUrl, deletion.serviceToken, "ads-core"),
        new HttpDeletionProvider(deletion.orchestrationBaseUrl, deletion.serviceToken, "orchestration-service"),
-       new HttpDeletionProvider(deletion.platformApiBaseUrl, deletion.serviceToken, "platform-api")],
+       new HttpDeletionProvider(deletion.platformApiBaseUrl, deletion.serviceToken, "platform-api"),
+       new HttpDeletionProvider(deletion.costBaseUrl, deletion.serviceToken, "cost-ledger-service"),
+       new HttpDeletionProvider(deletion.intelligenceBaseUrl, deletion.serviceToken, "intelligence-service"),
+       new HttpDeletionProvider(deletion.memoryBaseUrl, deletion.serviceToken, "memory-service")],
       deletion.objectStorage,
       deletion.pseudonymKey,
     );
