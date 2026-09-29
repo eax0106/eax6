@@ -183,16 +183,35 @@ export async function removeMember(memberId: string): Promise<void> {
 
 export async function getProfile(fallback: Profile): Promise<Profile> {
   // GET /api/v1/auth/me is the real profile read (identity.controller.ts's
-  // `me` handler); it returns {userId, tenantId, email, name} -- no
-  // jobTitle/avatarUrl on the backend, so those keep coming from fallback,
-  // same as this function already did for fields it can't fill in.
+  // `me` handler); it returns {userId, tenantId, email, name}. The backend
+  // stores no job title or photo, so none is shown rather than the demo's.
   const body = await apiGet<{ userId?: string; email?: string; name?: string }>("/api/v1/auth/me")
   return {
     ...fallback,
     id: body.userId ?? fallback.id,
     email: body.email ?? fallback.email,
     name: body.name ?? fallback.name,
+    jobTitle: undefined,
+    avatarUrl: undefined,
   }
+}
+
+/** Saves the display name, the one profile field the backend stores. */
+export async function updateProfile(data: Partial<Profile>, fallback: Profile): Promise<Profile> {
+  const body = await apiPatch<{ userId?: string; email?: string; name?: string }>("/api/v1/auth/me", { name: data.name })
+  return {
+    ...fallback,
+    id: body.userId ?? fallback.id,
+    email: body.email ?? fallback.email,
+    name: body.name ?? fallback.name,
+    jobTitle: undefined,
+    avatarUrl: undefined,
+  }
+}
+
+/** Signs the user out on every other device; the current session stays. */
+export async function revokeOtherSessions(): Promise<void> {
+  await apiDelete("/api/v1/auth/sessions")
 }
 
 export async function getSessions(): Promise<Session[]> {

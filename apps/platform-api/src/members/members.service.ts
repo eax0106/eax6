@@ -15,6 +15,9 @@ export interface MemberView {
   userId: string;
   role: string;
   scope: "tenant" | "workspace";
+  /** From the member's user record, so the list names people rather than ids. */
+  email?: string | null;
+  name?: string | null;
 }
 
 export interface InviteMemberInput {
@@ -32,16 +35,20 @@ export class MembersService {
   async list(actor: ActorContext): Promise<MemberView[]> {
     const tenant = await this.db.queryTenant<MemberView>(
       actor.tenant_id,
-      `SELECT id, tenant_id AS "tenantId", NULL::uuid AS "workspaceId",
-              user_id AS "userId", role, 'tenant' AS scope
-         FROM tenant_members WHERE tenant_id = $1`,
+      `SELECT m.id, m.tenant_id AS "tenantId", NULL::uuid AS "workspaceId",
+              m.user_id AS "userId", m.role, 'tenant' AS scope,
+              u.email, u.display_name AS name
+         FROM tenant_members m LEFT JOIN users u ON u.id = m.user_id
+        WHERE m.tenant_id = $1`,
       [actor.tenant_id],
     );
     const workspace = await this.db.queryTenant<MemberView>(
       actor.tenant_id,
-      `SELECT id, tenant_id AS "tenantId", workspace_id AS "workspaceId",
-              user_id AS "userId", role, 'workspace' AS scope
-         FROM workspace_members WHERE tenant_id = $1`,
+      `SELECT m.id, m.tenant_id AS "tenantId", m.workspace_id AS "workspaceId",
+              m.user_id AS "userId", m.role, 'workspace' AS scope,
+              u.email, u.display_name AS name
+         FROM workspace_members m LEFT JOIN users u ON u.id = m.user_id
+        WHERE m.tenant_id = $1`,
       [actor.tenant_id],
     );
     return [...tenant, ...workspace];

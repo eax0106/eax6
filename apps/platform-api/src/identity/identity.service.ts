@@ -120,6 +120,18 @@ export class IdentityService {
     this.revocations.publish({ tenantId, userId, sessionId });
   }
 
+  /** Signs the user out everywhere except the session making the request. */
+  async revokeOtherSessions(tenantId: string, userId: string, keepSessionId: string): Promise<number> {
+    const sessions = await this.identityProvider.listActiveSessions(tenantId, userId);
+    let revoked = 0;
+    for (const session of sessions) {
+      if (session.id === keepSessionId) continue;
+      await this.revokeSession(tenantId, userId, session.id);
+      revoked += 1;
+    }
+    return revoked;
+  }
+
   enrollMfa(userId: string): Promise<MfaEnrollment> {
     return this.identityProvider.enrollMfa(userId);
   }
