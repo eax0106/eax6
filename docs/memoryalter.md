@@ -746,6 +746,19 @@ a live re-embed) the item is built up to that choice and the choice is asked, no
 **How each is held.** Same bar as C29: a test that fails on the old code, a live check where one
 is possible, its own PR, CI green on the exact head before merging.
 
+### 2026-09-29 — Havish answered every open decision (D1-D32); two more freeze exemptions
+
+**Decision.** In one sitting Havish answered all 32 open questions covering every readiness-map block that waited on him (46 blocks). The full record is `decisions/2026-09-29-owner-decisions.md`; the binding summary is design log §34, and each section a decision changes carries an "Amended 2026-09-29" note.
+
+**Freeze exemptions granted in that sitting, recorded here before any code as rule 1 requires:**
+- **Cost Ledger (D4):** a per-workflow cost read for the pre-run estimate (C43). The 2026-09-28 exemption covered C5 only.
+- **Compile path (D19):** the pre-compile live-connection check and batch "connect these" ask (C41), in Graph Compiler / Capability Resolver.
+- Run Manager's budget gate (D3, C10), the Capability Registry templates (D18, C38) and the safety library change (D15, C4) were already covered by the 2026-09-28 exemption.
+
+**Process decision (D32).** Squash-merge every PR, as AGENTS.md says; merge commits are no longer used (the imports that needed them are finished). Branches are still never deleted.
+
+**Decided by.** Havish.
+
 ---
 
 ## 3. Checklist context

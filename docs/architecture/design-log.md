@@ -59,13 +59,17 @@ Honest build-feasibility read: every individual capability (durable multi-agent 
 
 **Tool/credential connection timing (resolved, was open):** Alter asks for all needed connectors as a **batch, after Architecture Synthesizer finishes understanding the full workflow** — not one-by-one interruptions mid-conversation, and not a mandatory pre-connect-everything step before describing any workflow. Reason: the full tool list isn't actually known until the design is complete, so asking earlier risks asking for something that turns out unnecessary. Mechanism lives inside Tool Gateway (already has real credential resolution/token minting in the old build) plus a pre-compile check: Capability Resolver confirms a live connection exists for each required capability before the graph is built.
 
+**Amended 2026-09-29 (Havish, decision D19): who holds the connection record.** Users connect accounts in the platform; the platform pushes each connection's type, status and secret reference (never the token) to an engine connection registry on every change and on its health sweep. The engine is authoritative at compile and run time: the pre-compile check reads that registry and returns one batch "connect these" list, and Tool Gateway resolves credentials through it. See §34 D19.
+
+**Amended 2026-09-29 (Havish, decision D13, from D-4a/D-4c).** Classify uses ten failure classes that map onto the five buckets: transient = timeout, infrastructure_failure, rate_limit, sandbox_crash; node's own fault = logic_output_failure, agent_creation_failure; credential gap = credential_missing, tool_permission_denial; safety_violation is outside Recovery (halts the workflow); unknown goes to a person. Buckets 4 (target missing) and 5 (ambiguous outcome) get classes of their own. A transient failure that repeats is retried once, then swapped. See §34 D13.
+
 ## 5. Verification mechanism (locked)
 
 Two-layer, per-node, plus one holistic pass — not a single end-of-run check.
 
-1. **Intake requirement:** before any workflow runs, Alter must capture an explicit, *structured* statement of what success looks like from the user (not just the workflow description itself). This structured statement is the reference every later check is judged against — required because Alter now serves arbitrary, self-invented workflows (not a fixed business domain with a known acceptance criteria set, unlike the old PRD's managed-client model).
+1. **Intake requirement:** before any workflow runs, Alter must capture an explicit, *structured* statement of what success looks like from the user (not just the workflow description itself). This structured statement is the reference every later check is judged against — required because Alter now serves arbitrary, self-invented workflows (not a fixed business domain with a known acceptance criteria set, unlike the old PRD's managed-client model). **Amended 2026-09-29 (D8):** the inferred criteria are shown on the plan step beside the steps, editable, and pressing Build confirms them; a criterion no step covers fails loudly.
 2. **Per-node check, immediately after that node executes** (not deferred to the end):
-   - **Mechanical check** — confirm the real external system actually reflects the claimed action (e.g. read the Slack channel back to confirm the message exists, read the sheet back to confirm the row exists) — never trust "the API call returned success" alone. This is the exact class of bug (mock/fake success) that broke the old build's workflow builder.
+   - **Mechanical check** — confirm the real external system actually reflects the claimed action (e.g. read the Slack channel back to confirm the message exists, read the sheet back to confirm the row exists) — never trust "the API call returned success" alone. This is the exact class of bug (mock/fake success) that broke the old build's workflow builder. **Amended 2026-09-29 (D14):** email passes on provider acceptance, and SES delivery events later mark a bounced send as "delivery failed" on the run and notify the owner; a browser click is confirmed by a page snapshot only when the step states the expected page state, otherwise it is recorded as unconfirmed, never as passed silently.
    - **Semantic check** — a reviewer compares the node's actual output against *that node's own assigned sub-task* (derived from the overall plan at compile time) — same reviewer mechanism as the final check, just scoped to one node instead of the whole run.
    - A node only passes if both checks clear. Either fails → Recovery Policy Engine's Classify stage fires immediately for that node, only that node — not a full workflow restart.
 3. **End-of-run holistic check:** even after every node passes individually, one final review compares the combined outcome against the original structured success criteria from step 1 — catches cases where each piece was fine alone but the combination didn't deliver what was actually wanted.
@@ -88,6 +92,8 @@ Reuse alter-x-4-'s final 8-layer + cross-cutting-plane target (L1 Front Door →
 3. Real machinery with nothing driving it (schedulers, verifiers with zero callers) → mandatory "driver exists" test for every scheduled/background component, not just "the mechanism works when called."
 4. Duplicated primitives drifting apart (two ID validators, empty stub packages) → single source of truth per shared primitive, enforced.
 
+**Amended 2026-09-29 (D13, from D-7a).** Pattern 1 is enforced by the mock-reachability gate plus the `RUNTIME_MODE` boot check (a mock selected in production refuses to boot), not by a marker type.
+
 ## 8. Workflow editing & override model (locked)
 
 Covers what happens after a workflow's initial graph is built — can the user change it, and how.
@@ -96,7 +102,7 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Direct canvas edits — structural, fully in the user's hands, no restriction.** Reorder nodes, delete one, rewire which node feeds which, drop in a placeholder node. This is the *shape* of the graph. The canvas must read/write the actual live WorkflowDAG object, never a separate visual copy reconciled on save — that exact gap (canvas shows one thing, save writes another) is what destroyed real user workflows in the old build.
 - **Direct canvas edits — internal configuration (which model, which tool, which prompt powers a node) — user CAN override by hand.** Reversed from an earlier draft of this log that restricted internals to Alter-only; superseded here. Alter still picks every internal by default, autonomously, same as always. But the user can open any node and change what's inside it directly.
 - **The override gets an informed pushback, not silence and not a rubber stamp.** Before a manual internal override takes effect, Alter states its own original pick and reasoning, and flags the override *only when the difference is materially significant* — real cost jump, real quality/capability mismatch, real latency problem, a tool that can't actually do what the node needs, expanded permission/security exposure, or a downstream contract break. **Not limited to cost — that was one example, not the scope.** The comparison itself isn't new machinery: it's the same Selection & Binding scoring already run to produce the default, just also shown to the user instead of only applied silently.
-- **Materiality threshold is required, not optional** — flagging every trivial difference turns this into constant nagging and trains the user to ignore all of it, including the warnings that matter. Only speak up when the override creates an actual meaningful risk.
+- **Materiality threshold is required, not optional** — flagging every trivial difference turns this into constant nagging and trains the user to ignore all of it, including the warnings that matter. Only speak up when the override creates an actual meaningful risk. **Amended 2026-09-29 (D20):** material means any of: cost per run up 25% or more and by at least ₹5; below the required model tier; a tool missing a required capability; a new outside action or wider account scope; 2x slower or more; an output a downstream node can no longer accept. The advisory never blocks.
 - **Two separate checkpoints, not one duplicated — both apply regardless of who configured the node:**
   1. **Pre-flight advisory** (this section) — happens before a manual override takes effect, reasoning-based, not a real test, doesn't block the user from proceeding anyway.
   2. **Post-execution verification** (Section 5, unchanged) — happens after the node actually runs, checks the real outcome. Applies exactly as strictly whether Alter or the user configured that node's internals — arguably more important on user-configured nodes since they're unproven by Alter's own scoring.
@@ -110,6 +116,8 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Per-workflow period budget (new, v1):** user sets a daily or monthly cap for one specific workflow — protects against many small runs of a recurring/event-triggered workflow (e.g. a lead-capture form firing dozens of times a day) quietly adding up past what a per-run cap alone would ever catch.
 - **Enforcement default: hard stop** when a period cap is hit — workflow stops running until the period resets or the user manually raises the cap. Matches the fail-closed instinct already used elsewhere in this design.
 - **Threshold alerts (v1):** notify at meaningful thresholds (e.g. 50%/80% of period budget) before the hard stop fires, so it's never a surprise. Reuses the same estimate machinery already required for the per-run display — not new infrastructure.
+- **Amended 2026-09-29 (Havish, decision D4): how the pre-run estimate is made.** Shown as "usually X (average of the workflow's last 5 verified runs), at most Y (worst case)"; before 5 runs exist, only "at most Y". The worst case is bounded from the compiled DAG (each node's configured `max_tokens` times its alias price, plus fixed tool costs), not from invented token counts. Run start reserves Y against the budget; run end trues up to the actual cost. See §34 D4.
+- **Amended 2026-09-29 (Havish, decision D3).** Budgets live in the engine and Run Manager checks them atomically at run start. Kinds: optional per-run cap, per-workflow daily or monthly budget, and the per-workspace monthly budget kept as the umbrella; alerts at 50% and 80%. At the cap the default is a hard stop; a budget may be set to "warn only" by its owner. See §34 D3.
 - **Explicitly deferred past v1, real ideas, not dismissed:** account-wide budget across all workflows combined; per-category caps (e.g. cap expensive operations like image-gen separately from cheap ones); degrade-to-cheaper-model instead of hard-stop as the cap nears (reuses Selection & Binding scoring, just not built first); rolling time windows instead of fixed calendar periods (closes a real gaming gap — spend up to cap at 11:59pm, again at 12:01am — but adds real complexity for v1).
 
 ## 10. Workflow organization & session model (locked)
@@ -118,6 +126,8 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Sessions group into named project folders**, plus an "Ungrouped" catch-all for anything not assigned to a group — sidebar pattern confirmed by the user against a real reference screenshot: group header, sessions nested under it, search + filter controls at the top.
 - **Cross-workflow context, within one user, is expected and required** — Alter should already have context on a user's other workflows when building a new related one, no need to re-explain from scratch. Concrete requirement this creates: ADS Client's retrieval scope must span *all* of that user's workflows/sessions, not just the current one.
 - **This does not weaken tenant isolation (Section 2)** — the isolation boundary is the tenant, not the individual workflow. Cross-workflow sharing happens freely inside one user's own space; the wall between different users' data stays exactly as strict as already locked.
+- **Amended 2026-09-29 (Havish, decision D9).** Folders are simple engine-owned named records; a workflow's folder is optional and "Ungrouped" means none; deleting a folder never deletes its workflows. Cross-workflow context spans the **workspace's** workflows (the workspace is a permission boundary), not every workspace a user belongs to. See §34 D9.
+- **Amended 2026-09-29 (Havish, decision D6).** One workflow = one chat, confirmed: the chat is where that workflow is built and changed, through the builder pipeline. Added: one read-only assistant per user ("Ask Alter") that answers questions and gives updates across the user's workflows from data the user can already read, and whose only action is to start a new workflow and send the user to its chat. It cannot change any existing workflow. See §34 D6.
 
 ## 11. Safety & Policy plane (locked): shared library, not a standalone service
 
@@ -125,6 +135,7 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Why not a standalone service:** safety checks fire constantly (every tool call, every model call, every node output) — a network hop on every one of those adds real latency to the hottest paths in the engine, and turns that service into a new single point of failure every gateway depends on.
 - **Why not per-gateway duplication:** exact bug the old build actually shipped — Tool Gateway's fetcher had no response-size cap while Sandbox's did, same logic reimplemented twice, drifted apart, one wrong. A shared library is one place to fix, one place to test, no drift — directly matches the Section 7 fix for duplicated primitives.
 - **Tradeoff accepted knowingly:** gives up independent scaling and hot-updating the logic without redeploying every gateway that uses it. Acceptable for a small team building v1 — revisit only if that specific need becomes real.
+- **Amended 2026-09-29 (Havish, decision D15): one implementation per language, proven not to drift.** The SSRF guard, injection classifier and PII redaction each have exactly one TypeScript implementation and, where a Python service needs one, one Python implementation; a CI parity test runs both classifiers over one shared case set and fails on any disagreement. That test, not a single folder, is what enforces "no drift". See §34 D15.
 
 ## 12. Cache/Reuse plane (locked): defer past v1
 
@@ -155,6 +166,7 @@ Closes gap #1 from the pre-microarchitecture review (Section 16 below lists all 
 - **Predefined roles (Admin, Editor, Viewer, Approver, etc.) plus custom roles, same data model underneath both.** A role is just `{name, set of the 9 permissions}` — predefined roles are shipped presets of that shape, a custom role is the owner naming their own combination. One simple model, not two systems.
 - **Custom roles are private per tenant**, following directly from the tenant-isolation wall already locked (Section 2) — never visible or shared across different companies' accounts.
 - **Single-person accounts are unaffected by any of this** — the owner has full power from day one, role system only becomes relevant the moment a second member is invited.
+- **Amended 2026-09-29 (Havish, decision D7).** v1 ships the fixed roles only (tenant owner; workspace admin, editor, operator, approver, viewer); custom roles are deferred, and the name-plus-permission-set model keeps them addable. See §34 D7.
 
 ## 16. HumanApproval node mechanics (locked)
 
@@ -170,6 +182,8 @@ Closes gap #2 from the pre-microarchitecture review. Complements Section 14 (Hum
 **Promotion is suggest-then-human-confirms, never silent** — Alter may notice the pattern ("you've approved the last N in a row") and offer the promotion, but the switch itself is always the user's explicit action. Consistent with the same principle already locked in Section 8 (materiality pushback: Alter surfaces judgment, the human decides) and Section 4 (self-heal notifies rather than silently deciding what a human should see).
 
 **Still open inside this section:** how a pending approval actually reaches the person — push notification, email, in-app dashboard badge, or some combination. Not yet decided; does not block component architecture, but must be settled before the approval flow is built end-to-end.
+
+**Amended 2026-09-29 (Havish, decision D5).** All four modes are built. Each approval step's main control is a two-choice switch set by a person with approval rights: "Ask me first" or "Always go ahead" (auto-approve, recorded as approved by policy); skip-on-timeout and the promotion suggestion (after 10 consecutive approvals, suggested, never applied without a person) are further settings. "Always go ahead" may be set on a step that acts outside Alter only through an explicit confirmation naming the consequence, recorded with who and when. The open question above is settled: pending approvals reach the approver in-app (bell, Action Centre) and by email (per-user preference, on by default for approvals); WhatsApp later. See §34 D5.
 
 ## 17. Proactive improvement (locked): notice and suggest, never act
 
@@ -202,6 +216,8 @@ Closes gap #4 from the pre-microarchitecture review. Directly reacting to the ol
 - **Verification must check what still exists, not re-check what was just deleted.** The old failure was a verifier iterating the same incomplete list the deleter used.
 - Fail-closed, consistent with Section 5: if erasure cannot be fully confirmed, it must not report success.
 
+**Amended 2026-09-29 (Havish, decision D2).** The audit-skeleton window is **90 days**. Records the law requires kept longer (tax invoices and billing, books of account, seller KYC and payouts) move to a minimal legal-hold store and are kept for exactly the prescribed period, then destroyed; staff access logs follow the 90-day window. Deleting a **workspace** is not immediate: it enters a pending-deletion state (hidden, triggers paused, restorable by an owner or admin) for a configurable window, default 7 days, then its data is erased by the schema-derived path above. See §34 D2.
+
 **Run history expiry — user-configurable from day one, deliberately scoped in now rather than revisited later.**
 - The user sets their own retention window; the expiry mechanism is identical whether the number is fixed or chosen, so making it configurable up front costs almost nothing and avoids a second pass over this area.
 - **Bounded range, not a free-form number.** A floor (a run's records must outlive the window in which anyone — the engine or a human — might need to inspect, verify, or review it; roughly 7 days) and a ceiling (unbounded retention is both an unpredictable storage cost and a standing liability; roughly 1 year), with a sane default in between.
@@ -223,13 +239,15 @@ Closes gap #5 from the pre-microarchitecture review.
 - Harvesting templates from real user workflows is **not** an extension of the cross-tenant abstracted pattern-learning approved in Section 2, and must not be treated as one. An abstract lesson ("summarization tasks suit fast model tiers") carries no customer-specific content. A template is a near-complete workflow shape — node structure, tool choices, sometimes prompt phrasing — materially closer to the real artifact, and harvesting one customer's working workflow into another customer's account is a different and higher risk class.
 - If template harvesting is ever wanted, it requires its own explicit decision and privacy review — never assumed.
 
+**Amended 2026-09-29 (Havish, decision D18).** The first set is 8 Alter-authored templates written by the builder and reviewed by Havish before launch: lead capture to CRM plus welcome email; support email triage; invoice extraction to a sheet; weekly report digest; knowledge Q&A; meeting-notes summary; brand-mention alert; WhatsApp FAQ responder. Each must compile and pass its own success criteria in a test. See §34 D18.
+
 ## 20. Authentication & sign-up (locked)
 
 Closes gap #6 from the pre-microarchitecture review.
 
 - **Managed identity provider (Auth0 / Cognito / Clerk class), never hand-rolled auth.** Grounded in precedent: the old build used a managed provider plus careful token validation, and its JWT validator was one of the few components its hardening audit called textbook-correct — algorithm pinned to RS256 at both the header check and the key-import filter (closing `alg:none` and HS256-confusion), issuer matched exactly, audience validated, expiry/issued-at/not-before all checked with bounded clock skew. That correctness came from using a real provider and validating properly, not from inventing anything. Same approach here.
 - **Sign-in methods at launch:** social login (Google/GitHub class) plus email/password. Social is lowest-friction for a self-serve product; email/password is expected.
-- **Member invite flow (follows from Section 15):** owner invites by email, invitee follows the link, creates their own credentials, lands in the tenant with the role the owner assigned. Each member's login is their own — never a shared credential.
+- **Member invite flow (follows from Section 15):** owner invites by email, invitee follows the link, creates their own credentials, lands in the tenant with the role the owner assigned. Each member's login is their own — never a shared credential. **Amended 2026-09-29 (D7):** the invitation record (role, workspace, status, 7-day expiry, inviter) is ours; Auth0 Organization invitations deliver the email and hosted sign-up; the first sign-in matches the invitation and creates the membership. Resend and revoke act on our record.
 - **Enterprise SSO deferred** — a real later-stage need for larger organizations, not v1.
 
 ## 21. Monetization — how Alter charges the customer (locked in shape, pricing deferred)
@@ -244,6 +262,8 @@ Closes gap #7 from the pre-microarchitecture review. Distinct from Section 9, wh
 - **What a credit actually costs, and how many credits a run consumes, are not decided.** The user will define these values.
 - **Build the full credit infrastructure now, with the numbers as configuration, not hardcoded values** — so setting real prices later is a config change, not a code change or a refactor.
 - Also unresolved and worth settling in that same pass: free-tier limits and abuse protection. A free tier that can trigger real model calls is a genuine abuse vector, and the guard for it should be designed alongside the pricing, not bolted on after.
+
+**Amended 2026-09-29 (Havish, decision D22).** Razorpay Subscriptions for checkout and recurring billing; prices shown before GST with 18% GST added and GSTIN captured; Alter absorbs gateway fees; every price and the free-tier limit are configuration Havish sets before launch; the free tier requires a verified email and has a runs-per-day cap. Marketplace listings are free-only in v1 until the tax obligations of paid listings are confirmed. See §34 D22.
 
 ## 22. Component list — structural findings and confirmed additions (in progress)
 
@@ -303,6 +323,8 @@ The old PRD had two modes on one engine: Workflow Mode (business automation, com
 
 **Architectural requirement so this stays addable:** keep Sandbox and Provisioning in the component list, scoped small. Project Mode must remain a later addition, never a rearchitecture. Do not design it out.
 
+**Amended 2026-09-29 (D13, from D-23a).** Project Mode code is present (plan-then-execute project skeleton, project run provisioning, Project Studio) but not offered in the v1 interface. It stays in the code; it is not designed out.
+
 ## 24. Two-path engine model (locked): design path and run path
 
 The engine is **not** one linear L1→L8 pipeline. It has two distinct paths through the same components, connected at exactly one point.
@@ -324,6 +346,7 @@ Section 1's own lead-capture example requires Alter to host a **public web form*
 - **Reason 2, decisive — blast radius.** This is the only surface anonymous, unauthenticated traffic touches directly. It needs its own boundary, its own rate limiting, and its own blast-radius declaration. If the public endpoint is flooded, that must degrade public form submissions only — not the trigger system that also serves scheduled and internal triggers.
 - **Distinct from Platform Web**, which is authenticated (log in, see your own workflows). Public Surface is deliberately the opposite: no login, anyone with the link, untrusted input by definition.
 - Consequently it is a primary consumer of the Safety & Policy shared library (Section 11) — untrusted input handling, injection defense, upload rules.
+- **Amended 2026-09-29 (Havish, decision D16).** Built for v1 as an **option**, not the default: users normally connect their own input (form tool, CRM, site) by connector or webhook; the hosted form is offered as one choice when setting up a submission trigger. Minimal: fields on the trigger, public link, Cloudflare Turnstile, per-form and per-visitor rate limits, D15 input checks, no uploads in v1, own process. See §34 D16.
 
 ## 26. Naming (locked): kill the "session" collision
 
@@ -334,6 +357,8 @@ Section 1's own lead-capture example requires Alter to host a **public web form*
 - Account plane `Workspace & Session Management` → **Workspace & Workflow Management**
 
 Neither name uses "session." Both describe what the component actually does. Earlier sections of this log that use the old names refer to these components.
+
+**Amended 2026-09-29 (Havish, decision D17): renamed when touched.** New code and documents use the new names; existing occurrences are renamed when their file is edited for another reason; a CI gate blocks the old name in added lines. See §34 D17.
 
 ## 27. Platform Web subdivision (locked): five surfaces
 
@@ -380,6 +405,8 @@ Sections 15 and 20 settled how a *person* is authenticated. Nothing settled how 
 
 **The limitation, stated rather than hidden.** Every service currently presents the *same* shared token, so this authenticates *that the caller is an Alter service*, not *which one*. Section 2's tenant isolation therefore rests on that shared secret plus requirement 2's data-level check. That is acceptable now and it is not the end state: when per-service M2M applications exist, the asserter check tightens to RS256 verification and every call site stays unchanged.
 
+**Amended 2026-09-29 (Havish, decision D1): background jobs use a system caller, not the shared token.** Platform work that runs with no user signed in reaches the engine on the existing two-token path: the identity broker mints the short-lived, single-use actor token for a named system principal (`system:platform-jobs`) instead of a user, bound to one tenant, carrying a fixed read-only permission set, and the engine validates and audits it like any call (recording the principal type). The shared-token internal-endpoint pattern above stays for service-to-service calls that already use it; it is not extended to platform jobs. See §34 D1.
+
 ## 31. Agent creation must not manufacture a doomed agent (locked 2026-09-08)
 
 Section 22 item 9 gave Agent Factory its own component. This section settles what it does when the requirement it is asked to satisfy is one policy will not allow.
@@ -397,6 +424,8 @@ Concretely, the architecture compile path writes an empty node-requirements map 
 
 **The residual problem, recorded rather than hidden.** Filling that column correctly still leaves the system with two sources for one fact: the stored map, and the fresh resolution the Executor and Recovery each perform at run time. That *is* pattern 4, arrived at from the other direction. The clean resolution is for run-time consumers to read the stored value rather than re-resolve, making it the single source of truth — or for the column to be deleted as redundant. **That decision is deferred, not answered**, because it touches components that are deliberately frozen during revival. It must not be forgotten: a correct value in a column nothing reads is still two answers waiting to disagree.
 
+**Amended 2026-09-29 (D13, from D-32a): closed.** The residual was answered on 2026-09-14 by deleting the write-only `node_requirements` and `policy_bindings` columns.
+
 ## 33. Voice and Repository Manager: cut from v1 (locked 2026-09-08)
 
 Both were declared as contracts with nothing behind them. Both are cut from the first release, deliberately and in writing, following the same reasoning Section 23 applied to Project Mode: an explicit cut is reversible, an ambiguous one compounds.
@@ -407,6 +436,45 @@ Both were declared as contracts with nothing behind them. Both are cut from the 
 **Cutting means removing or deprecating the declaration, not writing a note.** A contract that remains generates clients, appears in counts, and sits inside every estimate of remaining work — which is the cost that made this worth deciding at all. If either returns later it returns as a scoped addition with a named vendor or a written purpose, never as a rediscovered obligation.
 
 **Amended 2026-09-28 (Havish): the Repository Manager returns to v1, standalone.** It returns exactly as this section required — with a written purpose and a named vendor. **Purpose:** a workspace links GitHub repositories reachable through its own GitHub OAuth connection and reads their branches and open pull requests. **Vendor:** GitHub, through the existing OAuth Hub connector (scopes `read:user repo`), so no GitHub App is introduced. **Scope boundary:** read-only against GitHub; bindings store identifiers, never tokens; no repository creation, transfer or write — those belong to Project Mode, which stays out of v1 (§23). Voice stays cut.
+---
+
+## 34. Owner decisions of 2026-09-29
+
+Havish answered every open product question in one sitting, one question at a time, each put with options and an attacked recommendation. The full record (question, options, answer, consequence) is `../decisions/2026-09-29-owner-decisions.md`; this section is the binding summary, and sections a decision changes carry an "Amended 2026-09-29" note pointing here.
+
+- **D1. System identity for background jobs: system caller on the two-token path.** A named principal `system:platform-jobs`, one tenant per token, fixed read-only permissions, short-lived and single-use, audited as a system principal. Unblocks engine-originated notifications, budget alerts, drift suggestions and self-heal notices. Amends §30.
+- **D2. Retention.** Audit skeleton 90 days after tenant deletion; legally required records (invoices and billing, books of account, seller KYC and payouts) held in a minimal legal-hold store for exactly the prescribed period; staff access logs 90 days; everything else destroyed immediately. Workspace deletion has an undo window (pending deletion, default 7 days, configurable), then erasure. Amends §18.
+- **D3. Budgets.** Engine-owned budget records, atomic check-and-reserve in Run Manager at run start; per-run cap, per-workflow daily/monthly, per-workspace monthly; alerts at 50% and 80%; hard stop by default, per-budget warn-only option. Amends §9 and settles §22's budget ownership.
+- **D4. Pre-run estimate.** Usual cost from the last 5 verified runs plus a worst-case bound from the compiled DAG; reserve the worst case at run start, true up at the end. Cost Ledger freeze exemption granted for the per-workflow cost read. Amends §9.
+- **D5. Approvals.** All four §16 modes; main control "Ask me first" / "Always go ahead", set by a person; "Always go ahead" on external-action steps only with an explicit, recorded confirmation; promotion suggested after 10 consecutive approvals; delivery in-app plus email. Amends §16 and the add-never-remove safeguard rule for this one case.
+- **D6. Chat.** One workflow = one chat (builder pipeline). Plus a read-only "Ask Alter" assistant per user: updates and answers across workflows from what the user can read; its only action is starting a new workflow and handing off to that workflow's chat. Amends §10.
+- **D7. Members.** Hybrid invites (our record, Auth0 delivers, matched on first sign-in, 7-day expiry, resend/revoke); members screen shows the five enforced roles; fixed roles for v1, custom roles deferred. Amends §15 and §20.
+- **D8. Success criteria.** Shown and editable on the plan step; Build confirms them; an uncovered criterion fails loudly. Amends §5.1.
+- **D9. Folders and context.** Engine-owned simple folders with an Ungrouped bucket; cross-workflow context stays inside the workspace. Amends §10.
+- **D10. Workflow health.** Validation, availability, correctness, reliability over the last 20 runs or 7 days; overall = average; status set by the worst dimension (critical <50, warning <80); "not enough data" with no runs.
+- **D11. Event replay.** Replay is a dry run (Simulate on the stored event) by default; "Replay for real" is separate, confirms the outside actions it will repeat, and records who confirmed.
+- **D12. Memory settings.** Chat, workflow and workspace memory switches (on by default) enforced by memory-service; retention 7-365 days, default 90; no "allow sensitive data" in v1, memories always PII-redacted.
+- **D13. Track D amendments accepted.** §4 ten classes mapped to the five buckets, retry once then swap, classes added for target-missing and ambiguous; §7 pattern 1 by gate and RUNTIME_MODE; §23 Project Mode present, not offered; §32 closed by deletion.
+- **D14. Read-back.** Email: pass on acceptance, SES delivery events flag later bounces and notify. Clicks: snapshot only when the step declares the expected page state, otherwise "unconfirmed". Amends §5.2.
+- **D15. Safety library.** One implementation per language plus a CI parity test on a shared case set; the duplicate-safety gate narrowed to real duplicates. Amends §11.
+- **D16. Public form.** Minimal hosted form offered as an option beside connecting the user's own input; Turnstile, rate limits, input checks, no uploads, its own process. Amends §25.
+- **D17. Rename.** "Identity & Tenant Gateway" in new code; old name renamed when a file is touched; CI blocks it in new lines. Amends §26.
+- **D18. Templates.** 8 Alter-authored starter templates, tested to compile and pass their criteria, reviewed by Havish before launch. Amends §19.
+- **D19. Connections.** Platform writes connection records (type, status, secret reference) to an engine registry on every change and on its health sweep; the engine is authoritative at compile and run time; pre-compile batch "connect these" ask. Compile-path freeze exemption granted. Amends §4.
+- **D20. Override advisory.** Per-node model/tool override on the canvas; warn on +25% and +₹5 cost, lower tier, missing capability, wider outside reach, 2x latency, or a downstream break; never blocks. Amends §8.
+- **D21. Tool scanner.** OSV-Scanner now, plus staff review of every tool's first version; Socket later when outside publishers arrive.
+- **D22. Payments.** Razorpay Subscriptions; prices exclusive of 18% GST with GSTIN capture; Alter absorbs fees; prices and free tier are configuration set before launch; marketplace free-only in v1. Amends §21.
+- **D23. Seller KYC.** Razorpay Route linked-account KYC when paid listings start; Alter never stores identity documents; free listings need none in v1.
+- **D24. Cost visibility.** Tenants see the full price they pay per workflow and per run (Alter's cut included), never Alter's internal cost or margin; the full breakdown is staff-only.
+- **D25. Benchmarks.** Staff golden-set history in the admin console, and tenant benchmark datasets and runs (executed through Simulate, judged by the Verification & Quality Gate), both in v1.
+- **D26. Admin console.** Build tenant detail, notes, review assignment, billing retry/credit/resolve, tenant deployments page; drop the restricted state, MFA/risk display, provider maintenance state and list-page policy editing.
+- **D27. Marketplace review.** "Needs changes" with notes and resubmit; a risk score from real signals only (scan verdict, first listing, outside-action reach, past reports), reasons shown, orders the queue, never decides.
+- **D28. Images.** alterengine-6 gets write on the existing GHCR packages (owner action), alter-x-4- loses it; names unchanged.
+- **D29. Security.** Go-ahead on the privately reported items; details kept out of the repository.
+- **D30. Spend.** C18 re-embed and B3.6 media check approved, once each, stopped if the estimate exceeds USD 1.
+- **D31. Accounts.** Free accounts and the domain now (GitHub OAuth, Auth0 x2, Meta verification started, domain then SES); Temporal Cloud at launch; EC2 only after the build list is done.
+- **D32. Merging.** Squash-merge every PR; never delete a branch.
+
 ---
 
 ## Status as of 2026-09-01
