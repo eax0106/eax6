@@ -1175,6 +1175,13 @@ export async function createWhatsAppChannel(data: Partial<WhatsAppChannel>): Pro
   return mapWhatsAppChannel(created)
 }
 
+/** Removes the account from this workspace; inbound messages for its number stop routing. */
+export async function deleteWhatsAppChannel(id: string): Promise<void> {
+  await apiDelete(`/api/v1/channels/whatsapp/accounts/${encodeURIComponent(id)}`, {
+    idempotencyKey: mutationKey("whatsapp-channel-delete"),
+  })
+}
+
 function mapWhatsAppChannel(value: unknown): WhatsAppChannel {
   const item = value as AnyRecord
   const phoneNumberId = asString(item.phoneNumberId)

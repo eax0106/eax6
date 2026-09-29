@@ -1255,10 +1255,7 @@ class ApiClient {
   }
 
   async deleteWhatsAppChannel(id: string): Promise<void> {
-    // Not wired -- no delete/deactivate/disable route exists for a
-    // WhatsApp account at all (only DELETE .../escalations/:ruleId,
-    // which removes an escalation rule, a different sub-resource). See
-    // PR description for what real deletion would need.
+    if (isLiveApi) return live.deleteWhatsAppChannel(id)
     await delay(MOCK_DELAY)
     const idx = mockWhatsAppChannels.findIndex(c => c.id === id)
     if (idx > -1) mockWhatsAppChannels.splice(idx, 1)
