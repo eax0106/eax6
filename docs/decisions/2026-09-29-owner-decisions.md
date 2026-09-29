@@ -124,3 +124,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (c).** Replay runs the workflow's Simulate action on the stored event and shows what each step would do, touching nothing outside. "Replay for real" starts a new run from the stored event after a confirmation that lists the outside actions it will repeat (counted from the workflow's side-effect tools), and records who confirmed it.
 
 **What it means.** Engine replay route (dry run via simulate; real via a new run with the stored payload and a `replayed_from` link); platform-api routes (real replay needs the workflow run permission and the confirmation token); web Replay and "Replay for real" with the confirmation.
+
+## D12. Memory settings
+
+**Question.** The memory settings page's five controls (chat, workflow and workspace memory switches, a retention period, an "allow sensitive data" switch) govern nothing.
+
+**Options put.** (a) make all five work; (b) make four work and keep "allow sensitive data" permanently off for v1; (c) remove the page for v1.
+
+**Answer: (b).** Chat memory (the workflow's chat recalls earlier messages when building), workflow memory (lessons from a workflow's past runs reused in it) and workspace memory (lessons shared across the workspace through the ADS memory store) are real switches, all on by default, each checked by memory-service before it writes or reads that kind of memory. Retention: 7 to 365 days, default 90; older memories are deleted by the retention sweep. "Allow sensitive data" is removed for v1 (memories are always stored with PII redacted). The anonymised cross-tenant policy learning of §2 is unaffected.
+
+**What it means.** A per-workspace memory settings record (engine or memory-service, tenant RLS) with a read and an If-Match write route; memory-service enforces the switches and the retention window; platform-api routes; web page wired without the sensitive-data switch.
