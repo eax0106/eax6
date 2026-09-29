@@ -21,6 +21,7 @@ import {
   parseCreateRunRequest,
   parseRetryNodeRequest,
   parseRunId,
+  parseArtifactListQuery,
   parseRunListQuery,
   parseTraceparent,
   serializeQuery,
@@ -206,6 +207,19 @@ export class RunService {
       `/api/v1/runs/${encodeURIComponent(id)}/recovery-actions`,
       context,
       instance,
+    );
+  }
+
+  artifacts(
+    input: unknown,
+    actor: ActorContext,
+    traceparent: string | undefined,
+  ): Promise<EngineResponse<EnginePage<EngineResource>>> {
+    const instance = "/api/v1/artifacts";
+    const query = parseArtifactListQuery(input, instance);
+    return this.engine.get(
+      `/api/v1/artifacts${serializeQuery(query)}`,
+      callerContext(actor, traceparent, instance),
     );
   }
 

@@ -101,6 +101,7 @@ class ApiClient {
   }
 
   async getArtifacts(): Promise<Artifact[]> {
+    if (isLiveApi) return live.getArtifacts()
     await delay(MOCK_DELAY)
     return mockArtifacts
   }
