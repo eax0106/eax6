@@ -6,7 +6,7 @@ import type { VerifyGateService } from "./verify-gate.service";
 
 /** Why a completed run did, or did not, pass its end-of-run check. */
 export type RunAcceptance =
-  | { readonly checked: false; readonly reason: "no_success_criteria" | "no_compiled_dag" }
+  | { readonly checked: false; readonly reason: "no_success_criteria" | "no_compiled_dag" | "run_already_terminal" }
   | { readonly checked: true; readonly passed: boolean; readonly reason: string };
 
 export interface RunAcceptanceCheck {
@@ -48,6 +48,27 @@ export class PostgresRunAcceptanceCheck implements RunAcceptanceCheck {
     const tenantId = tenant.slice("ten_".length);
 
     const loaded = await this.store.withTenant(tenantId, async (tx) => {
+      // A finalize can be delivered again (an activity retry, a replayed
+      // workflow) after the run is already terminal, or after the check
+      // already ran and recorded its verdict. Neither must spend another
+      // model call or write a second verdict row.
+      const run = await tx.query<{ readonly status: string }>(
+        "SELECT status FROM runs WHERE tenant_id = $1 AND id = $2",
+        [tenantId, runId],
+      );
+      const status = run.rows[0]?.status;
+      if (status !== undefined && status !== "pending" && status !== "running") {
+        return { terminal: true as const };
+      }
+      const recorded = await tx.query<{ readonly verdict: string }>(
+        `SELECT verdict FROM verification_results
+         WHERE tenant_id = $1 AND run_id = $2 AND gate_type = 'acceptance'
+         ORDER BY created_at DESC LIMIT 1`,
+        [tenantId, runId],
+      );
+      if (recorded.rows[0] !== undefined) {
+        return { recordedVerdict: recorded.rows[0].verdict };
+      }
       const version = await tx.query<{ readonly compiled_dag: unknown }>(
         `SELECT v.compiled_dag FROM runs r
            JOIN workflow_versions v ON v.tenant_id = r.tenant_id AND v.id = r.workflow_version_id
@@ -83,6 +104,8 @@ export class PostgresRunAcceptanceCheck implements RunAcceptanceCheck {
     });
 
     if (loaded === undefined) return { checked: false, reason: "no_compiled_dag" };
+    if ("terminal" in loaded) return { checked: false, reason: "run_already_terminal" };
+    if ("recordedVerdict" in loaded) return acceptanceFrom(loaded.recordedVerdict);
     if (loaded.criteria.length === 0) return { checked: false, reason: "no_success_criteria" };
 
     let verdict: { verdict: string; score: number; threshold: number; reviewer_model: string; details_json: string };
@@ -117,11 +140,15 @@ export class PostgresRunAcceptanceCheck implements RunAcceptanceCheck {
       reviewerModel: verdict.reviewer_model,
       detailsJson: verdict.details_json,
     });
-    const passed = verdict.verdict !== "fail";
-    return {
-      checked: true,
-      passed,
-      reason: passed ? "combined outcome meets the success criteria" : "combined outcome does not meet every success criterion",
-    };
+    return acceptanceFrom(verdict.verdict);
   }
+}
+
+function acceptanceFrom(verdict: string): RunAcceptance {
+  const passed = verdict !== "fail";
+  return {
+    checked: true,
+    passed,
+    reason: passed ? "combined outcome meets the success criteria" : "combined outcome does not meet every success criterion",
+  };
 }

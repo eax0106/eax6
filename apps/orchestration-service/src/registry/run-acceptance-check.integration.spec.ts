@@ -14,6 +14,9 @@ const BARE_TENANT = "018f4d6e-2b4a-7a3e-8c1a-1234567890c1";
 const TENANT = `ten_${BARE_TENANT}`;
 const RUN = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c2";
 const RUN_NO_CRITERIA = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c3";
+const RUN_PASS = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c4";
+const RUN_UNAVAILABLE = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c5";
+const RUN_DONE = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c6";
 const CRITERIA = ["Refund total stated", "Customer is emailed"];
 
 // node_a feeds node_b and node_c; node_b and node_c are the run's outcome.
@@ -67,15 +70,21 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
         "INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id) VALUES ($2,$1,$1,'workflow','wf_acc','wfv_acc1'),($3,$1,$1,'workflow','wf_acc','wfv_acc2')",
         [BARE_TENANT, RUN, RUN_NO_CRITERIA],
       );
-      for (const key of ["node_a", "node_b", "node_c"]) {
-        await tx.query(
-          "INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,$4,'LLMTask','succeeded')",
-          [`node_${key}_${RUN.slice(-4)}`, BARE_TENANT, RUN, key],
-        );
-        await tx.query(
-          "INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES ($1,$2,$3,$4)",
-          [BARE_TENANT, RUN, key, JSON.stringify({ from: key })],
-        );
+      await tx.query(
+        "INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id,status) VALUES ($2,$1,$1,'workflow','wf_acc','wfv_acc1','running'),($3,$1,$1,'workflow','wf_acc','wfv_acc1','running'),($4,$1,$1,'workflow','wf_acc','wfv_acc1','completed')",
+        [BARE_TENANT, RUN_PASS, RUN_UNAVAILABLE, RUN_DONE],
+      );
+      for (const run of [RUN, RUN_PASS, RUN_UNAVAILABLE, RUN_DONE]) {
+        for (const key of ["node_a", "node_b", "node_c"]) {
+          await tx.query(
+            "INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,$4,'LLMTask','succeeded')",
+            [`node_${key}_${run.slice(-4)}`, BARE_TENANT, run, key],
+          );
+          await tx.query(
+            "INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES ($1,$2,$3,$4)",
+            [BARE_TENANT, run, key, JSON.stringify({ from: key })],
+          );
+        }
       }
     });
   }, 120_000);
@@ -114,7 +123,7 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
   });
 
   it("passes a run whose combined output meets the criteria", async () => {
-    await expect(new PostgresRunAcceptanceCheck(store, gate("pass"), ledger).check(TENANT, RUN)).resolves.toMatchObject({
+    await expect(new PostgresRunAcceptanceCheck(store, gate("pass"), ledger).check(TENANT, RUN_PASS)).resolves.toMatchObject({
       checked: true,
       passed: true,
     });
@@ -124,10 +133,34 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
     const verifyGate = {
       scoreNodeInline: vi.fn().mockRejectedValue(new Error("Verify Service call failed: unavailable")),
     } as unknown as VerifyGateService;
-    await expect(new PostgresRunAcceptanceCheck(store, verifyGate, ledger).check(TENANT, RUN)).resolves.toMatchObject({
+    await expect(new PostgresRunAcceptanceCheck(store, verifyGate, ledger).check(TENANT, RUN_UNAVAILABLE)).resolves.toMatchObject({
       checked: true,
       passed: false,
     });
+  });
+
+  it("reuses the recorded verdict when the finalize is delivered again, with no second model call or row", async () => {
+    const verifyGate = gate("pass");
+    // RUN's verdict ("fail") was recorded by the first test.
+    await expect(new PostgresRunAcceptanceCheck(store, verifyGate, ledger).check(TENANT, RUN)).resolves.toEqual({
+      checked: true,
+      passed: false,
+      reason: "combined outcome does not meet every success criterion",
+    });
+    expect(verifyGate.scoreNodeInline).not.toHaveBeenCalled();
+    const stored = await store.withTenant(BARE_TENANT, (tx) =>
+      tx.query("SELECT 1 FROM verification_results WHERE run_id = $1 AND gate_type = 'acceptance'", [RUN]),
+    );
+    expect(stored.rows).toHaveLength(1);
+  });
+
+  it("does not judge a run that is already terminal", async () => {
+    const verifyGate = gate("fail");
+    await expect(new PostgresRunAcceptanceCheck(store, verifyGate, ledger).check(TENANT, RUN_DONE)).resolves.toEqual({
+      checked: false,
+      reason: "run_already_terminal",
+    });
+    expect(verifyGate.scoreNodeInline).not.toHaveBeenCalled();
   });
 
   it("does not judge a run whose workflow has no intake criteria", async () => {
