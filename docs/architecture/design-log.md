@@ -471,6 +471,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D27. Marketplace review.** "Needs changes" with notes and resubmit; a risk score from real signals only (scan verdict, first listing, outside-action reach, past reports), reasons shown, orders the queue, never decides.
 - **D28. Images.** alterengine-6 gets write on the existing GHCR packages (owner action), alter-x-4- loses it; names unchanged.
 - **D29. Security.** Go-ahead on the privately reported items; details kept out of the repository.
+- **D30. Spend.** C18 re-embed and B3.6 media check approved, once each, stopped if the estimate exceeds USD 1.
 
 ---
 

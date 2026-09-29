@@ -296,6 +296,10 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 
 **Answer: go-ahead** on the private security items reported to Havish in chat (three earlier items, including C48's internal-route credential using the shared internal service token under §30, and the two later items). Details are deliberately not recorded in this public repository; the build instructions carry them privately.
 
+## D30. Spend approvals: re-embed run and media check (C18, B3.6)
+
+**Answer: both approved, each run once from the local machine against real AWS.** (a) The C18 re-embed backfill with `--apply`: one Titan embedding call per stale capability row. (b) The B3.6 media check: one real call each to Titan image generation, Polly and Transcribe. Each run first prints its row or call count and estimated cost and does not proceed if the estimate exceeds **USD 1**; the actual counts and cost are recorded in the work queue.
+
 ## Owner actions (Havish), collected
 
 1. **GitHub packages (D28):** give `alterengine-6` Write on each `alter-*` package, remove `alter-x-4-`.
