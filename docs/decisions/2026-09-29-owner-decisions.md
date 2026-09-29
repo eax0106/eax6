@@ -300,9 +300,14 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 
 **Answer: both approved, each run once from the local machine against real AWS.** (a) The C18 re-embed backfill with `--apply`: one Titan embedding call per stale capability row. (b) The B3.6 media check: one real call each to Titan image generation, Polly and Transcribe. Each run first prints its row or call count and estimated cost and does not proceed if the estimate exceeds **USD 1**; the actual counts and cost are recorded in the work queue.
 
+## D31. Accounts and launch timing (6.1b, 6.2b, 5.2, B1 live proof)
+
+**Answer: the proposed timing.** Now: GitHub OAuth app; Auth0 customer and staff tenants; start Meta WhatsApp Business verification; buy the domain. Once the domain exists: SES domain verification and the request to leave the SES sandbox. At launch: Temporal Cloud namespace and API key. Only after the build list is done: the EC2 server (about USD 142/month), then load and failure evidence (6.5). Secrets go into AWS Secrets Manager under the names the code already reads. Domain name: not yet chosen.
+
 ## Owner actions (Havish), collected
 
 1. **GitHub packages (D28):** give `alterengine-6` Write on each `alter-*` package, remove `alter-x-4-`.
 2. **CA confirmation (D2, D22):** legal retention periods; GST rate and treatment; marketplace TCS/TDS before paid listings.
 3. **Prices (D22):** plan price, included credits, extra-credit price, credits per verified run, free-tier limit, before launch.
 4. **Template review (D18):** review the eight starter templates before launch.
+5. **Accounts now (D31):** GitHub OAuth app; Auth0 customer and staff tenants; start Meta WhatsApp Business verification; buy the domain, then SES verification and sandbox exit. Later: Temporal Cloud at launch; EC2 only after the build list is done.
