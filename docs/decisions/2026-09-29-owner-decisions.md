@@ -206,3 +206,21 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (c).** Users connect accounts in the platform as now. On every connect, reconnect, revoke or health change, platform-api upserts an engine connection record (connector type, status, secret reference; never the token). The engine is authoritative at compile and run time: the Capability Resolver checks every required capability against those records before compiling and returns one batch list of missing connections; Tool Gateway resolves credentials through the record's secret reference. The platform's existing health sweep re-sends all records so a lost update heals; a missing or broken credential at run time is still a credential gap (§4 bucket 3), never silent. Havish granted the freeze exemption for the compile-path change this needs.
 
 **What it means.** Engine connection registry (tenant RLS, erasure-registered) with an upsert route for platform-api; platform-api calls it from the connection lifecycle and the health sweep; pre-compile check and batch ask in the compile path; Tool Gateway credential resolution through the registry. Record the exemption in memoryalter §2 before code.
+
+## D20. Manual override advisory thresholds (C42, design log §8)
+
+**Question.** §8's pre-flight advisory warns on a manual model or tool override only when the difference is material; the canvas has no per-node override yet and "material" was undefined.
+
+**Answer: the proposal as put.** The canvas gains per-node model and tool override, and the advisory warns when the override: raises estimated cost per run by 25% or more **and** by at least ₹5; drops below the node's required model tier; picks a tool lacking a required capability; adds an outside action or wider account scope; makes the node 2x slower or more (expected latency); or changes the node's output so a downstream node's input no longer fits. Any one triggers the warning, which shows Alter's original pick and reasoning (the Selection & Binding scores) and never blocks. Every manual edit also re-runs DAG validation (§8).
+
+**What it means.** Override fields on compiled nodes, a comparison endpoint reusing Selection & Binding scoring and the D4 cost bound, canvas override panel with the advisory; thresholds are configuration.
+
+## D21. Tool package scanner (B3.5)
+
+**Question.** No package scanner is wired, so every tool version scans "unavailable" and none can be verified clean.
+
+**Options put.** (a) OSV-Scanner (free, known vulnerabilities in dependencies); (b) Socket (paid, also malicious-package signals); (c) Snyk (paid, vulnerabilities and licences); (d) manual staff review only.
+
+**Answer: (a), with staff review of each tool's first published version; add Socket later when outside publishers can publish.**
+
+**What it means.** An OSV-Scanner adapter behind the registry's scanner port (verdicts: clean, vulnerable with severity, error); a tool's first version stays unverified until a staff reviewer approves it; later versions need a clean scan; the scanner port keeps Socket addable.
