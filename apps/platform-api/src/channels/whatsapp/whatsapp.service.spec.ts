@@ -55,4 +55,19 @@ describe("WhatsappService", () => {
     await expect(service.templates("missing", context)).rejects.toThrow("WhatsApp account not found");
     expect(post).toHaveBeenCalledWith(`/api/v1/channels/whatsapp/accounts/${account.id}/configuration`, { monitoringConfig: { enabled: true } }, context, { idempotencyKey: "idem_2" });
   });
+
+  it("matches the engine's ws_ workspace id against the actor's bare workspace UUID, and only that workspace", async () => {
+    const workspace = "22222222-2222-7222-8222-222222222222";
+    const account = { id: "wac_1", workspaceId: `ws_${workspace}`, phoneNumberId: "phone_1", wabaId: "waba_1", accessTokenRef: "secret://token", status: "connected" as const };
+    const get = vi.fn().mockResolvedValue({ status: 200, body: { accounts: [account] } });
+    const service = new WhatsappService(
+      { get } as unknown as EngineClient,
+      { getSecret: vi.fn() } as unknown as SecretsProvider,
+    );
+    (service as unknown as { provider: { getAccountHealth: () => Promise<unknown> } }).provider = { getAccountHealth: vi.fn().mockResolvedValue({ status: "healthy" }) };
+    const context = (workspaceId: string): EngineCallerContext => ({ userId: "usr_1", tenantId: "ten_1", workspaceId, sessionId: "session_1", authTime: 1, roles: ["admin"], permissions: ["integrations:read"], traceparent: "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01" });
+
+    await expect(service.health(account.id, context(workspace))).resolves.toEqual({ status: "healthy" });
+    await expect(service.health(account.id, context("33333333-3333-7333-8333-333333333333"))).rejects.toThrow("WhatsApp account not found");
+  });
 });

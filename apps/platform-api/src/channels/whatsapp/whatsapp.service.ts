@@ -103,9 +103,14 @@ export class WhatsappService {
   // can't leak a cross-workspace account through this path either.
   private async account(accountId: string, context: EngineCallerContext): Promise<WhatsappAccount> {
     const account = (await this.list(context)).find((item) => item.id === accountId);
-    if (!account || account.workspaceId !== context.workspaceId) {
+    // The engine answers with ws_ ids; the actor context holds the bare UUID.
+    if (!account || bareWorkspace(account.workspaceId) !== bareWorkspace(context.workspaceId)) {
       throw new NotFoundException("WhatsApp account not found");
     }
     return account;
   }
+}
+
+function bareWorkspace(workspaceId: string): string {
+  return workspaceId.startsWith("ws_") ? workspaceId.slice("ws_".length) : workspaceId;
 }
