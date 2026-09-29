@@ -44,6 +44,7 @@ import { RunWorkspaceLookupService } from "./runs/run-workspace-lookup.service";
 import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.constants";
 import { RUN_LEARNING_AUDIT, RunLearningController } from "./runs/run-learning.controller";
 import { runLearningAuditClient } from "./runs/run-learning-audit";
+import { RecoveryFeedController } from "./runs/recovery-feed.controller";
 import { RunObservabilityController } from "./runs/run-observability.controller";
 import { RunObservabilityService } from "./runs/run-observability.service";
 import { loadRunLauncherEnvironment } from "./config/run-launcher-environment";
@@ -186,6 +187,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     RunStreamController,
     RunsController,
     RunObservabilityController,
+    RecoveryFeedController,
     RunLearningController,
     ApprovalsController,
     EscalationsController,
