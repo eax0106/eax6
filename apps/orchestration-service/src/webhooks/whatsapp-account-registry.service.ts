@@ -75,6 +75,22 @@ export class WhatsappAccountRegistryService {
     });
   }
 
+  /**
+   * Removes an account from one workspace. Scoped by workspace as well as
+   * tenant, so an account registered in another workspace of the same
+   * tenant is not found. Inbound messages for its phone number stop routing
+   * at once, since routing reads this table.
+   */
+  async remove(tenantId: string, workspaceId: string, accountId: string): Promise<void> {
+    await this.store.withTenant(tenantId, async (tx) => {
+      const result = await tx.query(
+        "DELETE FROM whatsapp_accounts WHERE tenant_id = $1 AND workspace_id = $2 AND id = $3",
+        [tenantId, workspaceId, accountId],
+      );
+      if (result.rowCount === 0) throw new WhatsappAccountNotFoundError(accountId);
+    });
+  }
+
   async updateConfiguration(
     tenantId: string,
     accountId: string,

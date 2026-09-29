@@ -22,6 +22,11 @@ export class WhatsappController {
     return this.whatsapp.list(context(requireActor(actor), traceparent));
   }
 
+  @Delete("accounts/:id") @HttpCode(204) @RequireWorkspaceRole(...writeRoles) @RequirePermission("integrations:write") @Idempotent()
+  remove(@Param("id") id: string, @ActorContext() actor: ActorContextType | undefined, @Headers("traceparent") traceparent: string | undefined, @Headers("idempotency-key") idempotencyKey: string | undefined) {
+    return this.whatsapp.remove(id, context(requireActor(actor), traceparent), idempotencyKey!);
+  }
+
   @Get("accounts/:id/templates") @RequireWorkspaceRole(...readRoles) @RequirePermission("integrations:read")
   templates(@Param("id") id: string, @ActorContext() actor: ActorContextType | undefined, @Headers("traceparent") traceparent: string | undefined) {
     return this.whatsapp.templates(id, context(requireActor(actor), traceparent));

@@ -94,6 +94,15 @@ export class WhatsappService {
     return response.body;
   }
 
+  async remove(accountId: string, context: EngineCallerContext, idempotencyKey: string): Promise<void> {
+    await this.account(accountId, context);
+    await this.engine.delete(
+      `/api/v1/channels/whatsapp/accounts/${encodeURIComponent(accountId)}`,
+      context,
+      { idempotencyKey },
+    );
+  }
+
   // Confirms accountId belongs to the caller's own workspace before any
   // by-id operation touches it -- defense in depth. list() already asks Engine
   // with the caller's own tenantId/workspaceId, but that alone means

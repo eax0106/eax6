@@ -1,8 +1,8 @@
-import { Body, Controller, Get, HttpException, Param, Post, Req } from "@nestjs/common";
+import { Body, Controller, Delete, Get, HttpCode, HttpException, Param, Post, Req } from "@nestjs/common";
 import type { SessionGatewayRequest } from "@alterx/auth";
 import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
 import type { WhatsappAccount } from "./whatsapp-account-registry.service";
-import { WhatsappAccountRegistryService } from "./whatsapp-account-registry.service";
+import { WhatsappAccountNotFoundError, WhatsappAccountRegistryService } from "./whatsapp-account-registry.service";
 
 interface RegisterAccountBody {
   readonly workspaceId: string;
@@ -48,6 +48,17 @@ export class WhatsappAccountsController {
     return { accounts: (await this.registry.list(requiredTenantId(request))).map(toApi) };
   }
 
+  @Delete(":id")
+  @HttpCode(204)
+  async remove(@Req() request: SessionGatewayRequest, @Param("id") accountId: string): Promise<void> {
+    try {
+      await this.registry.remove(requiredTenantId(request), requiredWorkspaceId(request), accountId);
+    } catch (error: unknown) {
+      if (error instanceof WhatsappAccountNotFoundError) throw new HttpException("WhatsApp account not found", 404);
+      throw error;
+    }
+  }
+
   @Post(":id/configuration")
   async updateConfiguration(
     @Req() request: SessionGatewayRequest,
@@ -69,6 +80,12 @@ function requiredTenantId(request: SessionGatewayRequest): string {
   const tenantId = TenantIdSchema.safeParse(request.actorContext?.tenant_id);
   if (!tenantId.success) throw new HttpException("Missing authenticated tenant context", 500);
   return tenantId.data.slice("ten_".length);
+}
+
+function requiredWorkspaceId(request: SessionGatewayRequest): string {
+  const workspaceId = WorkspaceIdSchema.safeParse(request.actorContext?.workspace_id);
+  if (!workspaceId.success) throw new HttpException("Missing authenticated workspace context", 500);
+  return workspaceId.data.slice("ws_".length);
 }
 
 function toApi(account: WhatsappAccount): WhatsappAccount {

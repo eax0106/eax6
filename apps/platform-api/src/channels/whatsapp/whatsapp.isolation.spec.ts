@@ -183,6 +183,7 @@ class WorstCaseTenantOnlyScopedEngineClient {
     body: { accounts: context.tenantId === "ten_shared" ? [workspaceAAccount] : [] },
   }));
   readonly post = vi.fn(async () => ({ status: 200, body: workspaceAAccount }));
+  readonly delete = vi.fn(async () => ({ status: 204, body: undefined }));
 }
 
 describe("WhatsApp cross-workspace isolation (ENGINE-FIX-B7-1)", () => {
@@ -208,6 +209,27 @@ describe("WhatsApp cross-workspace isolation (ENGINE-FIX-B7-1)", () => {
       controller.health(workspaceAAccount.id, sameTenantActorB, undefined),
     ).rejects.toThrow("WhatsApp account not found");
     expect(engine.post).not.toHaveBeenCalled();
+  });
+
+  it("refuses to delete workspace A's account from workspace B, without reaching Engine", async () => {
+    const { controller, engine } = buildController(new WorstCaseTenantOnlyScopedEngineClient());
+
+    await expect(
+      controller.remove(workspaceAAccount.id, sameTenantActorB, undefined, "delete-b"),
+    ).rejects.toThrow("WhatsApp account not found");
+    expect(engine.delete).not.toHaveBeenCalled();
+  });
+
+  it("deletes workspace A's own account through Engine with the idempotency key", async () => {
+    const { controller, engine } = buildController(new WorstCaseTenantOnlyScopedEngineClient());
+
+    await controller.remove(workspaceAAccount.id, sameTenantActorA, undefined, "delete-a");
+
+    expect(engine.delete).toHaveBeenCalledWith(
+      `/api/v1/channels/whatsapp/accounts/${workspaceAAccount.id}`,
+      expect.objectContaining({ tenantId: "ten_shared", workspaceId: "ws_workspace_a" }),
+      { idempotencyKey: "delete-a" },
+    );
   });
 
   it("still allows workspace A to operate on its own account", async () => {
