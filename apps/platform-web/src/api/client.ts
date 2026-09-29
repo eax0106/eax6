@@ -970,10 +970,7 @@ class ApiClient {
   }
 
   async deleteKnowledgeSource(id: string): Promise<void> {
-    // Not wired to the live API -- deliberately investigate-and-report
-    // only for now, same treatment as deleteWorkspace: a destructive,
-    // cascading operation (source -> documents -> chunks) that needs its
-    // own design pass. See PR description.
+    if (isLiveApi) return live.deleteKnowledgeSource(id)
     await delay(MOCK_DELAY)
     const idx = mockKnowledgeSources.findIndex(s => s.id === id)
     if (idx > -1) mockKnowledgeSources.splice(idx, 1)

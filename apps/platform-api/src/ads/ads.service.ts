@@ -297,6 +297,21 @@ export class AdsService {
     );
   }
 
+  deleteSource(
+    sourceId: string,
+    actor: ActorContext,
+    traceparent: string | undefined,
+    idempotencyKey: string,
+  ): Promise<EngineResponse<AdsResource>> {
+    const instance = `/api/v1/ads/sources/${sourceId}`;
+    const id = parseAdsId(sourceId, "sourceId", instance);
+    return this.engine.delete(
+      `/api/v1/ads/sources/${encodeURIComponent(id)}`,
+      callerContext(actor, traceparent, instance),
+      { idempotencyKey },
+    );
+  }
+
   deleteDocument(
     documentId: string,
     actor: ActorContext,

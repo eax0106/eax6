@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -490,6 +490,76 @@ async def get_document_workspace(
             detail=str(exc),
         ) from exc
     return ResourceWorkspaceResponse(id=document_id, workspace_id=workspace_id)
+
+
+@router.delete(
+    "/documents/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_document(
+    document_id: str,
+    repository: RepositoryDep,
+    storage: StorageDep,
+    tenant_id: Annotated[str, Header(alias="X-Alter-Tenant-Id")],
+) -> None:
+    """Erase one document: stored objects, chunks, versions and the row."""
+    tenant_uuid = _tenant_uuid(tenant_id)
+    try:
+        await run_in_threadpool(
+            repository.delete_document,
+            tenant_uuid=tenant_uuid,
+            document_id=_document_id(document_id),
+            delete_objects=_object_deleter(storage, tenant_uuid),
+        )
+    except DocumentNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+@router.delete(
+    "/sources/{source_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_source(
+    source_id: str,
+    repository: RepositoryDep,
+    storage: StorageDep,
+    tenant_id: Annotated[str, Header(alias="X-Alter-Tenant-Id")],
+) -> None:
+    """Erase a source and every document, record and ingestion job under it."""
+    tenant_uuid = _tenant_uuid(tenant_id)
+    try:
+        await run_in_threadpool(
+            repository.delete_source,
+            tenant_uuid=tenant_uuid,
+            source_id=_source_id(source_id),
+            delete_objects=_object_deleter(storage, tenant_uuid),
+        )
+    except SourceNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+
+def _object_deleter(
+    storage: ObjectStorageProvider, tenant_uuid: str
+) -> Callable[[Sequence[str]], None]:
+    """Deletes stored objects, refusing any reference outside the tenant's own
+    prefix: a row pointing elsewhere is corrupt, and deleting through it would
+    reach another tenant's content. The refusal rolls the whole erase back."""
+
+    def delete_objects(references: Sequence[str]) -> None:
+        prefix = f"tenants/{tenant_uuid}/"
+        for reference in references:
+            path = reference
+            if "://" in path:
+                path = path.split("://", 1)[1].partition("/")[2]
+            if not path.startswith(prefix):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Stored content reference is outside the tenant's scope",
+                )
+        for reference in references:
+            storage.delete_object(key=reference)
+
+    return delete_objects
 
 
 @router.get(

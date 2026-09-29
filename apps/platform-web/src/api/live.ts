@@ -858,6 +858,13 @@ export async function syncKnowledgeSource(id: string): Promise<KnowledgeSource> 
   return getKnowledgeSource(id)
 }
 
+/** Erases the source and everything ingested through it (ads-core DELETE /ads/sources/:id). */
+export async function deleteKnowledgeSource(id: string): Promise<void> {
+  await apiDelete(`/api/v1/ads/sources/${encodeURIComponent(id)}`, {
+    idempotencyKey: mutationKey("knowledge-source-delete"),
+  })
+}
+
 export async function retryKnowledgeDocument(id: string): Promise<KnowledgeDocument> {
   const body = await apiPost<AnyRecord>(`/api/v1/ads/documents/${encodeURIComponent(id)}/actions/reindex`, {}, {
     idempotencyKey: mutationKey("knowledge-document-reindex"),

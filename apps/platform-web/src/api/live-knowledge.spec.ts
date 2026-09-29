@@ -34,4 +34,15 @@ describe("live knowledge documents", () => {
       { id: "doc_2", sourceId: "src_1", name: "doc_2", status: "failed", createdAt: "2026-09-28T09:00:00Z" },
     ])
   })
+
+  it("deletes a source through the real route with an idempotency key", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+
+    await api.deleteKnowledgeSource("src_1")
+
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toContain("/api/v1/ads/sources/src_1")
+    expect(init?.method).toBe("DELETE")
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^knowledge-source-delete-/)
+  })
 })
