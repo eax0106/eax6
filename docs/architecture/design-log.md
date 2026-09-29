@@ -173,6 +173,8 @@ Closes gap #2 from the pre-microarchitecture review. Complements Section 14 (Hum
 
 **Still open inside this section:** how a pending approval actually reaches the person — push notification, email, in-app dashboard badge, or some combination. Not yet decided; does not block component architecture, but must be settled before the approval flow is built end-to-end.
 
+**Amended 2026-09-29 (Havish, decision D5).** All four modes are built. Each approval step's main control is a two-choice switch set by a person with approval rights: "Ask me first" or "Always go ahead" (auto-approve, recorded as approved by policy); skip-on-timeout and the promotion suggestion (after 10 consecutive approvals, suggested, never applied without a person) are further settings. "Always go ahead" may be set on a step that acts outside Alter only through an explicit confirmation naming the consequence, recorded with who and when. The open question above is settled: pending approvals reach the approver in-app (bell, Action Centre) and by email (per-user preference, on by default for approvals); WhatsApp later. See §34 D5.
+
 ## 17. Proactive improvement (locked): notice and suggest, never act
 
 Closes gap #3 from the pre-microarchitecture review. Everything locked before this was reactive — self-heal fires on failure (Section 4), edits happen when the user asks (Section 8), verification catches problems after a run. This covers Alter noticing, absent any failure, that a working workflow could simply be better.
@@ -423,6 +425,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D2. Retention.** Audit skeleton 90 days after tenant deletion; legally required records (invoices and billing, books of account, seller KYC and payouts) held in a minimal legal-hold store for exactly the prescribed period; staff access logs 90 days; everything else destroyed immediately. Workspace deletion has an undo window (pending deletion, default 7 days, configurable), then erasure. Amends §18.
 - **D3. Budgets.** Engine-owned budget records, atomic check-and-reserve in Run Manager at run start; per-run cap, per-workflow daily/monthly, per-workspace monthly; alerts at 50% and 80%; hard stop by default, per-budget warn-only option. Amends §9 and settles §22's budget ownership.
 - **D4. Pre-run estimate.** Usual cost from the last 5 verified runs plus a worst-case bound from the compiled DAG; reserve the worst case at run start, true up at the end. Cost Ledger freeze exemption granted for the per-workflow cost read. Amends §9.
+- **D5. Approvals.** All four §16 modes; main control "Ask me first" / "Always go ahead", set by a person; "Always go ahead" on external-action steps only with an explicit, recorded confirmation; promotion suggested after 10 consecutive approvals; delivery in-app plus email. Amends §16 and the add-never-remove safeguard rule for this one case.
 
 ---
 

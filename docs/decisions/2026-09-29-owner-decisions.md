@@ -47,3 +47,16 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (c), with N = 5.** Havish also granted the **Cost Ledger freeze exemption for this item** (the ledger gains a per-workflow cost read), since C43 was not covered by the 2026-09-28 exemption.
 
 **What it means.** Cost Ledger records workflow id on run costs and answers the average of a workflow's last 5 verified runs; the engine computes the worst-case bound from the compiled DAG (node `max_tokens`, alias prices from the model policy, fixed tool costs); the estimate is shown before every run; Run Manager reserves the worst-case amount at start (D3) and releases or trues up at run end. §9's rounding rule holds: multiply unrounded unit prices, round once at the end. Record this exemption in memoryalter §2 before code, as the freeze rule requires.
+
+## D5. Approval modes and approval delivery (C30, design log §16)
+
+**Question.** Only "wait until someone decides" exists today; §16 describes four modes and left open how an approver is told.
+
+**Options put.** (5a) build all four §16 modes (always block, auto-approve with an audit record, skip on timeout and flag, promotion suggested after N consecutive approvals and confirmed by a person); (5b) delivery: in-app only, in-app plus email, or plus WhatsApp. Follow-up: whether "always go ahead" may be set on steps that act outside Alter.
+
+**Answers.**
+- **5a: all four modes, N = 10.** The main control on every approval step is a two-choice switch chosen by a person with approval rights: **"Ask me first"** (always block) or **"Always go ahead"** (auto-approve, every run still recorded as "approved by policy"). Skip-on-timeout (with its window) and the promotion suggestion ("you have approved the last 10 in a row: switch to Always go ahead?", never applied without a person confirming) are additional settings on the step.
+- **Follow-up: option (ii).** "Always go ahead" may be chosen on any step, including steps that act outside Alter (email, database writes, browser clicks), but only through an explicit confirmation naming the consequence ("this will send emails without asking"), and the choice records who made it and when. It is never a default.
+- **5b: in-app plus email.** Bell and Action Centre always; email per user preference, on by default for approvals; WhatsApp later as a preference once the Meta account exists. Sent through the D1 system caller.
+
+**What it means.** Approval mode stored on the node (engine approval record keeps the mode used and who set it); auto-approve and timeout paths in the Executor's approval wait; a promotion-suggestion counter per node; approval notification producer and email template. This amends the adopted rule "a workflow may add safeguards but never remove one" for one case: a person with approval rights may, with an explicit confirmation and an audit record, set an external-action step to go ahead without asking.
