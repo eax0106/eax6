@@ -37,3 +37,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **3c: hard stop by default, "warn only" as a per-budget option.** At the cap, runs do not start until the period resets or the cap is raised; a budget marked warn-only alerts but does not block, an explicit user choice recorded on the budget.
 
 **What it means.** Engine budget store with tenant RLS and erasure registration; atomic check-and-reserve at run start in Run Manager; reservation released or trued up at run end (the reservation amount comes from D4); platform-api budget routes become engine proxies; threshold alert job on the system caller.
+
+## D4. Pre-run estimate and run reservation (C43, design log §9)
+
+**Question.** §9 requires an estimate shown before every run, and D3's atomic budget check needs an amount to reserve at run start. Nothing produces a per-workflow figure today.
+
+**Options put.** (a) historical average of the workflow's last N verified runs; (b) a worst-case bound from each node's configured `max_tokens` times its model alias price, plus fixed tool-call costs; (c) both: show "usually X (last N runs), at most Y (worst case)", only "at most Y" until N runs exist, reserve Y at start and true up to actual cost at the end.
+
+**Answer: (c), with N = 5.** Havish also granted the **Cost Ledger freeze exemption for this item** (the ledger gains a per-workflow cost read), since C43 was not covered by the 2026-09-28 exemption.
+
+**What it means.** Cost Ledger records workflow id on run costs and answers the average of a workflow's last 5 verified runs; the engine computes the worst-case bound from the compiled DAG (node `max_tokens`, alias prices from the model policy, fixed tool costs); the estimate is shown before every run; Run Manager reserves the worst-case amount at start (D3) and releases or trues up at run end. §9's rounding rule holds: multiply unrounded unit prices, round once at the end. Record this exemption in memoryalter §2 before code, as the freeze rule requires.
