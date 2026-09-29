@@ -88,6 +88,7 @@ async function main(): Promise<void> {
   const pairs: [string, string, string, string][] = [
     ["platform-api", "EVAL_FACADE_TOKEN", "orchestration-service", "EVAL_FACADE_TOKEN_SHA256"],
     ["platform-api", "DEPLOYMENT_ADMIN_SERVICE_TOKEN", "orchestration-service", "DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256"],
+    ["platform-api", "INTERNAL_SERVICE_TOKEN", "ads-core", "INTERNAL_SERVICE_TOKEN_SHA256"],
   ];
   for (const [caller, tokenKey, receiver, hashKey] of pairs) {
     const token = env(caller, tokenKey);
@@ -98,6 +99,9 @@ async function main(): Promise<void> {
   }
   if (env("platform-api", "AUDIT_QUERY_SERVICE_TOKEN_REF") !== env("audit-service", "DELETION_SERVICE_TOKEN_REF")) {
     failures.push("platform-api AUDIT_QUERY_SERVICE_TOKEN_REF is not audit-service's DELETION_SERVICE_TOKEN_REF");
+  }
+  if (env("platform-api", "ADS_CORE_SERVICE_TOKEN_REF") !== "env:INTERNAL_SERVICE_TOKEN") {
+    failures.push("platform-api ADS_CORE_SERVICE_TOKEN_REF does not name the token ads-core checks");
   }
   const jwks = env("orchestration-service", "ACTOR_TOKEN_JWKS_URL") ?? "";
   if (!jwks.startsWith(`http://127.0.0.1:${env("platform-api", "PLATFORM_API_PORT")}/`)) {

@@ -332,6 +332,7 @@ export class AdsController {
   async documents(
     @Query("cursor") cursor: string | undefined,
     @Query("limit") limit: string | undefined,
+    @Query("sourceId") sourceId: string | undefined,
     @ActorContext() actor: ActorContextType | undefined,
     @Headers("traceparent") traceparent: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
@@ -342,6 +343,7 @@ export class AdsController {
         parseAdsPagination(cursor, limit, instance),
         requireActor(actor, instance),
         traceparent,
+        sourceId,
       ),
       reply,
     );

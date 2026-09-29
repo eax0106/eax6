@@ -59,7 +59,20 @@ export class EngineClient {
     private readonly authProvider: EngineAuthProvider,
     private readonly fetchImpl: typeof fetch = fetch,
     private readonly retryDelay: (milliseconds: number) => Promise<void> = delay,
+    private readonly resolveSecret?: (reference: string) => Promise<string>,
   ) {}
+
+  /**
+   * ads-core authenticates the shared internal service token, not an Auth0
+   * M2M token. When the reference is configured, knowledge calls carry that
+   * token as their bearer; the actor token still rides alongside.
+   */
+  async #adsBearer(authorization: { m2mAccessToken: string; actorToken: string }): Promise<string> {
+    if (this.config.adsCoreServiceTokenRef === undefined || this.resolveSecret === undefined) {
+      return `Bearer ${authorization.m2mAccessToken}`;
+    }
+    return `Bearer ${await this.resolveSecret(this.config.adsCoreServiceTokenRef)}`;
+  }
 
   get<TResponse>(
     path: EnginePath,
@@ -140,6 +153,7 @@ export class EngineClient {
             ...requestHeaders(context, authorization, {
               body: body as EngineRequestBody,
             }),
+            Authorization: await this.#adsBearer(authorization),
             "X-Alter-Tenant-Id": context.tenantId.startsWith("ten_") ? context.tenantId : `ten_${context.tenantId}`,
             "X-Alter-Workspace-Id": context.workspaceId,
             "X-Alter-Requester": context.userId,
@@ -230,6 +244,31 @@ export class EngineClient {
     }
   }
 
+  /**
+   * Knowledge (`/api/v1/ads/*`) lives in ads-core, not the orchestration
+   * engine. Every such call goes to ads-core's own `/ads/*` routes with the
+   * tenant, workspace and requester headers it scopes by -- the same way
+   * `queryAds` has always reached it. Sending them to the engine base URL
+   * reached no route at all.
+   */
+  #target(
+    path: EnginePath,
+    context: EngineCallerContext,
+  ): { readonly url: string; readonly headers: Record<string, string>; readonly ads: boolean } {
+    if (!path.startsWith("/api/v1/ads/")) {
+      return { url: `${this.config.baseUrl}${path}`, headers: {}, ads: false };
+    }
+    return {
+      ads: true,
+      url: `${this.config.adsCoreBaseUrl}${path.slice("/api/v1".length)}`,
+      headers: {
+        "X-Alter-Tenant-Id": context.tenantId.startsWith("ten_") ? context.tenantId : `ten_${context.tenantId}`,
+        "X-Alter-Workspace-Id": context.workspaceId,
+        "X-Alter-Requester": context.userId,
+      },
+    };
+  }
+
   private async request<TResponse>(
     method: EngineMethod,
     path: EnginePath,
@@ -250,11 +289,16 @@ export class EngineClient {
         throw authorizationFailed(error, path);
       }
       try {
+        const target = this.#target(path, context);
         const response = await this.fetchWithTimeout(
-          `${this.config.baseUrl}${path}`,
+          target.url,
           {
             method,
-            headers: requestHeaders(context, authorization, options),
+            headers: {
+              ...requestHeaders(context, authorization, options),
+              ...target.headers,
+              ...(target.ads ? { Authorization: await this.#adsBearer(authorization) } : {}),
+            },
             ...(options.body === undefined
               ? {}
               : { body: JSON.stringify(options.body) }),

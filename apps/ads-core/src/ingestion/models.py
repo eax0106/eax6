@@ -93,6 +93,25 @@ class SourcePageResponse(_StrictFrozenModel):
     page: SourcePageInfo
 
 
+class DocumentSummaryResponse(_StrictFrozenModel):
+    """One document in a workspace's knowledge list: what it is and where it
+    came from, never its content (chunks stay behind retrieval)."""
+
+    id: str
+    source_id: str
+    kind: str
+    title: str | None
+    status: str | None
+    current_version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class DocumentPageResponse(_StrictFrozenModel):
+    data: tuple[DocumentSummaryResponse, ...]
+    page: SourcePageInfo
+
+
 class ResourceWorkspaceResponse(_StrictFrozenModel):
     """Minimal shape for RBAC workspace-ownership resolution only (ENGINE-
     FIX-B5-2) -- not a general source/document read API. Sources and

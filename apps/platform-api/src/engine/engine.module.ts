@@ -53,7 +53,7 @@ import type { SecretsProvider } from "@alterx/shared-clients";
       useFactory: (
         config: EngineConfig,
         authProvider: IdentityBrokerEngineAuthProvider,
-      ) => new EngineClient(config, authProvider),
+      ) => new EngineClient(config, authProvider, fetch, undefined, resolveRuntimeSecret),
     },
     {
       provide: CostLedgerClient,

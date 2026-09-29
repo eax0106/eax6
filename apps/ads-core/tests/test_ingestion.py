@@ -41,6 +41,7 @@ from src.ingestion.repository import (
     IngestionRepository,
     SqlAlchemyIngestionRepository,
     StoredDocumentContent,
+    StoredDocumentSummary,
     StoredIngestionJob,
     StoredReindex,
     StoredSource,
@@ -325,6 +326,9 @@ class RecordingRepository:
 
     def get_source_detail(self, **kwargs: object) -> StoredSourceDetail:
         return self._delegate.get_source_detail(**kwargs)  # type: ignore[arg-type]
+
+    def list_documents(self, **kwargs: object) -> tuple[list[StoredDocumentSummary], bool]:
+        return self._delegate.list_documents(**kwargs)  # type: ignore[arg-type]
 
     def get_document_workspace_id(self, **kwargs: object) -> str:
         return self._delegate.get_document_workspace_id(**kwargs)  # type: ignore[arg-type]

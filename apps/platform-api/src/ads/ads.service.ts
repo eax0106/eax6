@@ -222,10 +222,16 @@ export class AdsService {
     pagination: AdsPagination,
     actor: ActorContext,
     traceparent: string | undefined,
+    sourceId?: string,
   ): Promise<EngineResponse<AdsPage>> {
     const instance = "/api/v1/ads/documents";
+    const path = withPagination(instance, pagination);
+    const source =
+      sourceId === undefined ? undefined : parseAdsId(sourceId, "sourceId", instance);
     return this.engine.get(
-      withPagination(instance, pagination),
+      source === undefined
+        ? path
+        : (`${path}${path.includes("?") ? "&" : "?"}source_id=${encodeURIComponent(source)}` as `/api/v1/${string}`),
       callerContext(actor, traceparent, instance),
     );
   }

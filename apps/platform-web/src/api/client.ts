@@ -980,11 +980,7 @@ class ApiClient {
   }
 
   async getKnowledgeDocuments(sourceId: string): Promise<KnowledgeDocument[]> {
-    // Not wired to the live API -- no documents-list route or repository
-    // query exists anywhere in ads-core (confirmed by reading
-    // apps/ads-core/src/ingestion/router.py and repository.py); this
-    // needs a real new build, not the query-param addition this was
-    // scoped as. See PR description.
+    if (isLiveApi) return live.getKnowledgeDocuments(sourceId)
     await delay(MOCK_DELAY)
     return mockKnowledgeDocuments.filter(d => d.sourceId === sourceId)
   }

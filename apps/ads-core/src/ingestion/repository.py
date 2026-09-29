@@ -56,6 +56,18 @@ class StoredSource:
 
 
 @dataclass(frozen=True)
+class StoredDocumentSummary:
+    document_id: str
+    source_id: str
+    kind: str
+    title: str | None
+    status: str | None
+    current_version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
 class StoredSourceDetail:
     """A source row plus the fields the platform-web read UI actually needs
     (document_count/chunk_count) that have no columns of their own on
@@ -193,6 +205,16 @@ class IngestionRepository(Protocol):
     def get_source_detail(
         self, *, tenant_uuid: str, source_id: str
     ) -> StoredSourceDetail: ...
+
+    def list_documents(
+        self,
+        *,
+        tenant_uuid: str,
+        workspace_id: str,
+        source_id: str | None,
+        cursor: str | None,
+        limit: int,
+    ) -> tuple[list[StoredDocumentSummary], bool]: ...
 
     def get_document_workspace_id(self, *, tenant_uuid: str, document_id: str) -> str: ...
 
@@ -633,6 +655,65 @@ class SqlAlchemyIngestionRepository:
                 for row in page
             ]
             return sources, has_more
+
+    def list_documents(
+        self,
+        *,
+        tenant_uuid: str,
+        workspace_id: str,
+        source_id: str | None,
+        cursor: str | None,
+        limit: int,
+    ) -> tuple[list[StoredDocumentSummary], bool]:
+        """A workspace's documents, newest first, optionally for one source.
+        Workspace comes through the document's scope, the same way sources
+        resolve it."""
+        with self._sessions.begin() as session:
+            self._set_tenant(session, tenant_uuid)
+            bare_workspace = workspace_id.removeprefix("ws_")
+            statement = (
+                select(Document)
+                .join(
+                    Scope,
+                    (Document.scope_id == Scope.id) & (Document.tenant_id == Scope.tenant_id),
+                )
+                .where(Document.tenant_id == tenant_uuid, Scope.workspace_id == bare_workspace)
+                .order_by(Document.created_at.desc(), Document.id.desc())
+            )
+            if source_id is not None:
+                statement = statement.where(Document.source_id == source_id)
+            if cursor is not None:
+                cursor_row = session.execute(
+                    select(Document.created_at, Document.id).where(
+                        Document.tenant_id == tenant_uuid, Document.id == cursor
+                    )
+                ).one_or_none()
+                if cursor_row is None:
+                    raise DocumentNotFoundError(
+                        "cursor does not belong to this tenant's documents"
+                    )
+                statement = statement.where(
+                    (Document.created_at < cursor_row.created_at)
+                    | (
+                        (Document.created_at == cursor_row.created_at)
+                        & (Document.id < cursor_row.id)
+                    )
+                )
+            rows = session.execute(statement.limit(limit + 1)).scalars().all()
+            has_more = len(rows) > limit
+            return [
+                StoredDocumentSummary(
+                    document_id=row.id,
+                    source_id=row.source_id,
+                    kind=row.kind,
+                    title=row.title,
+                    status=row.status,
+                    current_version=row.current_version,
+                    created_at=row.created_at,
+                    updated_at=row.updated_at,
+                )
+                for row in rows[:limit]
+            ], has_more
 
     def get_source_detail(self, *, tenant_uuid: str, source_id: str) -> StoredSourceDetail:
         with self._sessions.begin() as session:
