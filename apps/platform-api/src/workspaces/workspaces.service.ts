@@ -2,6 +2,7 @@ import { v7 as uuidv7 } from "uuid";
 import type { ActorContext } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
 import { PlatformHttpError } from "../signup/problem";
+import { bareWorkspaceId } from "./workspace-id";
 
 export interface WorkspaceView {
   id: string;
@@ -49,6 +50,10 @@ export class WorkspacesService {
   }
 
   async get(actor: ActorContext, workspaceId: string): Promise<WorkspaceView> {
+    const id = bareWorkspaceId(workspaceId);
+    if (id === undefined) {
+      throw new PlatformHttpError(404, "WORKSPACE_NOT_FOUND", "WORKSPACE_NOT_FOUND", `/api/v1/workspaces/${workspaceId}`);
+    }
     const rows = await this.db.queryTenant<WorkspaceView>(
       actor.tenant_id,
       `SELECT id, tenant_id AS "tenantId", name, status,
@@ -56,7 +61,7 @@ export class WorkspacesService {
          FROM workspaces
         WHERE id = $1 AND tenant_id = $2
         LIMIT 1`,
-      [workspaceId, actor.tenant_id],
+      [id, actor.tenant_id],
     );
     return required(
       rows[0],
@@ -93,10 +98,14 @@ export class WorkspacesService {
       actor.tenant_id,
       `UPDATE workspaces
           SET name = $1
-        WHERE id = $2 AND tenant_id = $3 AND updated_at = $4
+        WHERE id = $2 AND tenant_id = $3
+          -- The ETag carries milliseconds (a JS Date) while updated_at holds
+          -- microseconds, so an exact comparison never matched and every
+          -- rename answered 412. Compare at the precision the ETag has.
+          AND date_trunc('milliseconds', updated_at) = $4
         RETURNING id, tenant_id AS "tenantId", name, status,
                   updated_at AS "updatedAt"`,
-      [name.trim(), workspaceId, actor.tenant_id, current.updatedAt],
+      [name.trim(), current.id, actor.tenant_id, current.updatedAt],
     );
     return required(
       rows[0],

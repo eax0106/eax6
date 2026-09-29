@@ -11,7 +11,7 @@ const actor: ActorContext = {
   session_id: "session",
 };
 const workspace = {
-  id: "workspace",
+  id: "018f47a5-7b2c-7d10-8f11-123456789abc",
   tenantId: "tenant",
   name: "Default",
   status: "active",
@@ -26,17 +26,17 @@ describe("WorkspacesService", () => {
       .mockResolvedValueOnce([{ ...workspace, name: "Renamed" }]);
     const service = new WorkspacesService({ queryTenant } as unknown as PlatformDb);
     await expect(
-      service.update(actor, "workspace", "Renamed", workspaceEtag(workspace)),
+      service.update(actor, workspace.id, "Renamed", workspaceEtag(workspace)),
     ).resolves.toMatchObject({ name: "Renamed" });
 
     const mismatchService = new WorkspacesService({
       queryTenant: vi.fn().mockResolvedValue([workspace]),
     } as unknown as PlatformDb);
     await expect(
-      mismatchService.update(actor, "workspace", "Renamed", '"old"'),
+      mismatchService.update(actor, workspace.id, "Renamed", '"old"'),
     ).rejects.toMatchObject({ status: 412 });
     await expect(
-      mismatchService.update(actor, "workspace", "Renamed", undefined),
+      mismatchService.update(actor, workspace.id, "Renamed", undefined),
     ).rejects.toMatchObject({ status: 428 });
   });
 
@@ -45,7 +45,7 @@ describe("WorkspacesService", () => {
     const service = new WorkspacesService({ queryTenant } as unknown as PlatformDb);
     await expect(service.list(actor)).resolves.toEqual([workspace]);
     await expect(service.create(actor, " New ")).resolves.toEqual(workspace);
-    await expect(service.get(actor, "workspace")).resolves.toEqual(workspace);
+    await expect(service.get(actor, workspace.id)).resolves.toEqual(workspace);
     expect(queryTenant).toHaveBeenCalledTimes(3);
   });
 
@@ -64,7 +64,7 @@ describe("WorkspacesService", () => {
       .mockResolvedValueOnce([]);
     const service = new WorkspacesService({ queryTenant } as unknown as PlatformDb);
     await expect(
-      service.update(actor, "workspace", "Renamed", workspaceEtag(workspace)),
+      service.update(actor, workspace.id, "Renamed", workspaceEtag(workspace)),
     ).rejects.toMatchObject({ status: 412 });
   });
 });
