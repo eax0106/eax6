@@ -1,4 +1,4 @@
-import { RunIdSchema, TenantIdSchema } from "@alterx/contracts";
+import { RunIdSchema, TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
 import { randomUUID } from "node:crypto";
 import type { ObjectStorageProvider } from "@alterx/shared-clients";
 
@@ -51,6 +51,11 @@ export interface Artifact {
   readonly createdAt: string;
 }
 
+export interface ArtifactPage {
+  readonly data: readonly Artifact[];
+  readonly page: { readonly next_cursor: string | null; readonly has_more: boolean };
+}
+
 export interface CreateArtifactInput {
   readonly runId: string;
   readonly contentType: string;
@@ -61,6 +66,20 @@ function bareTenantUuid(tenantId: string): string {
   const parsed = TenantIdSchema.safeParse(tenantId);
   if (!parsed.success) throw new ArtifactValidationError("tenantId must be a ten_ prefixed UUIDv7");
   return parsed.data.slice("ten_".length);
+}
+
+function bareWorkspaceUuid(workspaceId: string): string {
+  const parsed = WorkspaceIdSchema.safeParse(workspaceId);
+  if (!parsed.success) throw new ArtifactValidationError("workspaceId must be a ws_ prefixed UUIDv7");
+  return parsed.data.slice("ws_".length);
+}
+
+function requireLimit(limit: number | undefined): number {
+  if (limit === undefined) return 50;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 200) {
+    throw new ArtifactValidationError("limit must be an integer from 1 to 200");
+  }
+  return limit;
 }
 
 function requireValue(name: string, value: string | undefined): string {
@@ -138,6 +157,55 @@ export class ArtifactsService {
         [tenant, run],
       );
       return result.rows.map(fromRow);
+    });
+  }
+
+  /**
+   * Every artifact produced by runs in one workspace, newest first, paged by
+   * artifact id. Workspace comes from the run that produced the artifact, so
+   * a caller sees only artifacts of runs in the workspace they are acting in.
+   */
+  async listForWorkspace(
+    tenantId: string,
+    workspaceId: string,
+    cursor: string | undefined,
+    limit: number | undefined,
+  ): Promise<ArtifactPage> {
+    const tenant = bareTenantUuid(requireValue("tenantId", tenantId));
+    const workspace = bareWorkspaceUuid(requireValue("workspaceId", workspaceId));
+    const pageSize = requireLimit(limit);
+    return this.store.withTenant(tenant, async (tx) => {
+      const conditions = ["a.tenant_id = $1", "r.workspace_id = $2"];
+      const values: unknown[] = [tenant, workspace];
+      if (cursor !== undefined) {
+        const cursorRow = await tx.query<{ readonly created_at: string }>(
+          `SELECT a.created_at::text FROM artifacts a
+           JOIN runs r ON r.tenant_id = a.tenant_id AND r.id = a.run_id
+           WHERE a.tenant_id = $1 AND r.workspace_id = $2 AND a.id = $3`,
+          [tenant, workspace, cursor],
+        );
+        const createdAt = cursorRow.rows[0]?.created_at;
+        if (createdAt === undefined) throw new ArtifactValidationError("cursor does not belong to this workspace");
+        values.push(createdAt, cursor);
+        conditions.push(`(a.created_at, a.id) < ($${values.length - 1}::timestamptz, $${values.length})`);
+      }
+      values.push(pageSize + 1);
+      const result = await tx.query<ArtifactRow>(
+        `SELECT a.id, a.tenant_id, a.run_id, a.storage_reference, a.content_type, a.size_bytes, a.created_at,
+           r.workspace_id::text AS workspace_id
+         FROM artifacts a
+         JOIN runs r ON r.tenant_id = a.tenant_id AND r.id = a.run_id
+         WHERE ${conditions.join(" AND ")}
+         ORDER BY a.created_at DESC, a.id DESC
+         LIMIT $${values.length}`,
+        values,
+      );
+      const rows = result.rows.slice(0, pageSize);
+      const hasMore = result.rows.length > pageSize;
+      return {
+        data: rows.map(fromRow),
+        page: { next_cursor: hasMore ? rows[rows.length - 1]!.id : null, has_more: hasMore },
+      };
     });
   }
 

@@ -614,6 +614,12 @@ export async function getArtifact(id: string): Promise<Artifact> {
   return mapArtifact(await apiGet<unknown>(`/api/v1/artifacts/${encodeURIComponent(id)}`))
 }
 
+/** Every artifact the workspace's runs produced, newest first (first 200). */
+export async function getArtifacts(): Promise<Artifact[]> {
+  const body = await apiGet<unknown>("/api/v1/artifacts?limit=200")
+  return asArray(body, "data").map(mapArtifact)
+}
+
 export async function getArtifactsByRun(runId: string): Promise<Artifact[]> {
   const run = await apiGet<AnyRecord>(`/api/v1/runs/${encodeURIComponent(runId)}`)
   return asArray(run, "artifacts").map(mapArtifact)
@@ -1367,7 +1373,7 @@ function mapArtifact(value: unknown): Artifact {
     nodeId: item.nodeId ?? item.node_id,
     name: String(item.name ?? item.filename ?? "Artifact"),
     type: String(item.type ?? "file") as Artifact["type"],
-    mimeType: item.mimeType ?? item.mime_type,
+    mimeType: item.mimeType ?? item.mime_type ?? item.contentType ?? item.content_type,
     sizeBytes: item.sizeBytes ?? item.size_bytes,
     createdAt: asDate(item.createdAt ?? item.created_at),
     previewUrl: item.previewUrl ?? item.preview_url,
