@@ -101,3 +101,16 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **9b: cross-workflow context stays within the workspace.** Retrieval spans every workflow in the workspace, never across workspaces, because workspaces are permission boundaries.
 
 **What it means.** Engine folders table and routes; `folder_id` on workflows; platform-api proxies; web sidebar groups by folder with an Ungrouped bucket. ADS retrieval unchanged (already workspace-scoped); §10's wording amended.
+
+## D10. Workflow health scoring
+
+**Question.** The web shows a health report per workflow (four dimensions, overall score, status); nothing computes it.
+
+**Answer: the proposal as put.**
+- **Validation:** latest validate/compile result: pass 100, warnings 70, fail 0.
+- **Availability:** active with every required connection healthy 100; paused 50; a required connection broken 0.
+- **Correctness:** share of runs passing verification (node and end-of-run), 0-100.
+- **Reliability:** share of runs completing rather than failing, 0-100.
+- **Window:** last 20 runs or last 7 days, whichever is smaller. **Overall:** average of the four. **Status from the worst dimension:** critical if any below 50, warning if any below 80, else healthy. **No runs yet:** "not enough data", never a default 100. Also shown: recent failures and degraded runs (finished but needed recovery).
+
+**What it means.** An engine read computing these from runs, verification_results, recovery actions and connection health; platform-api route; web health views wired.
