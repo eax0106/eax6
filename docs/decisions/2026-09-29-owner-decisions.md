@@ -224,3 +224,14 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (a), with staff review of each tool's first published version; add Socket later when outside publishers can publish.**
 
 **What it means.** An OSV-Scanner adapter behind the registry's scanner port (verdicts: clean, vulnerable with severity, error); a tool's first version stays unverified until a staff reviewer approves it; later versions need a clean scan; the scanner port keeps Socket addable.
+
+## D22. Payments (B2.3, B2.5, B2.6, design log §21)
+
+**Answers (Havish took each recommendation).**
+- **22a: Razorpay Subscriptions** for checkout and recurring billing (card tokenization under RBI rules and UPI Autopay handled by Razorpay; no card vault of ours).
+- **22b: prices shown exclusive of GST; 18% GST added at checkout; GSTIN captured** for business customers' input credit. Requires the company's GST registration; the rate and treatment to be confirmed with the CA.
+- **22c: marketplace listings are free-only in v1.** Paid listings and seller payouts wait until the CA confirms the marketplace's TCS/TDS obligations and Razorpay Route is set up.
+- **22d: Alter absorbs payment gateway fees** on subscriptions; customers pay the listed price.
+- **22e: all prices are configuration placeholders, set by Havish before launch** (plan price, credits included, extra-credit price, credits per verified run, free-tier limit). The free tier carries abuse limits: verified email and a runs-per-day cap (§21).
+
+**What it means.** Razorpay Subscriptions integration (create, webhook-driven status, cancel), checkout with GST line and GSTIN, invoices already rendered by Razorpay (B2.7); paid marketplace flows hidden in v1; pricing and free-tier limits in the plan-definition configuration. Tax treatment is an engineering reading, not legal advice.

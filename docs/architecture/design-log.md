@@ -263,6 +263,8 @@ Closes gap #7 from the pre-microarchitecture review. Distinct from Section 9, wh
 - **Build the full credit infrastructure now, with the numbers as configuration, not hardcoded values** — so setting real prices later is a config change, not a code change or a refactor.
 - Also unresolved and worth settling in that same pass: free-tier limits and abuse protection. A free tier that can trigger real model calls is a genuine abuse vector, and the guard for it should be designed alongside the pricing, not bolted on after.
 
+**Amended 2026-09-29 (Havish, decision D22).** Razorpay Subscriptions for checkout and recurring billing; prices shown before GST with 18% GST added and GSTIN captured; Alter absorbs gateway fees; every price and the free-tier limit are configuration Havish sets before launch; the free tier requires a verified email and has a runs-per-day cap. Marketplace listings are free-only in v1 until the tax obligations of paid listings are confirmed. See §34 D22.
+
 ## 22. Component list — structural findings and confirmed additions (in progress)
 
 Assembling the component list from Sections 1–21 surfaced a structural problem: an engine-only list silently dropped everything on the account/control side. The old build split this as Engine (execution pipeline) versus Platform (account/control surface); collapsing them lost real components.
@@ -461,6 +463,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D19. Connections.** Platform writes connection records (type, status, secret reference) to an engine registry on every change and on its health sweep; the engine is authoritative at compile and run time; pre-compile batch "connect these" ask. Compile-path freeze exemption granted. Amends §4.
 - **D20. Override advisory.** Per-node model/tool override on the canvas; warn on +25% and +₹5 cost, lower tier, missing capability, wider outside reach, 2x latency, or a downstream break; never blocks. Amends §8.
 - **D21. Tool scanner.** OSV-Scanner now, plus staff review of every tool's first version; Socket later when outside publishers arrive.
+- **D22. Payments.** Razorpay Subscriptions; prices exclusive of 18% GST with GSTIN capture; Alter absorbs fees; prices and free tier are configuration set before launch; marketplace free-only in v1. Amends §21.
 
 ---
 
