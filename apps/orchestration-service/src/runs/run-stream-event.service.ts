@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 
+import { Logger } from "@nestjs/common";
+
 import {
   RunIdSchema,
   ProjectIdSchema,
@@ -64,7 +66,7 @@ export class RunStreamEventService {
     });
   }
 
-  async listAfter(tenantIdInput: string, runId: string, after = 0): Promise<readonly SseEnvelope[]> {
+  async listAfter(tenantIdInput: string, runId: string, after = 0): Promise<StreamPage> {
     if (!RunIdSchema.safeParse(runId).success || !Number.isInteger(after) || after < 0) {
       throw new Error("invalid stream cursor");
     }
@@ -75,9 +77,7 @@ export class RunStreamEventService {
                 to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS occurred_at
          FROM run_stream_events WHERE tenant_id = $1 AND run_id = $2 AND seq > $3
          ORDER BY seq ASC LIMIT 256`, [tenantId, runId, after]);
-      return result.rows.map((row) => SseEnvelopeSchema.parse({
-        seq: row.seq, event: row.event, run_id: runId, ts: row.occurred_at, data: row.payload,
-      }));
+      return streamPage(runId, after, result.rows);
     });
   }
 
@@ -85,7 +85,7 @@ export class RunStreamEventService {
     tenantIdInput: string,
     runId: string,
     after = 0,
-  ): Promise<readonly SseEnvelope[]> {
+  ): Promise<StreamPage> {
     return this.listAfterWhere(tenantIdInput, runId, after, "AND event = 'terminal.frame'");
   }
 
@@ -127,7 +127,7 @@ export class RunStreamEventService {
     runId: string,
     after: number,
     eventFilter: string,
-  ): Promise<readonly SseEnvelope[]> {
+  ): Promise<StreamPage> {
     if (!RunIdSchema.safeParse(runId).success || !Number.isInteger(after) || after < 0) {
       throw new Error("invalid stream cursor");
     }
@@ -138,11 +138,43 @@ export class RunStreamEventService {
                 to_char(occurred_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS occurred_at
          FROM run_stream_events WHERE tenant_id = $1 AND run_id = $2 AND seq > $3 ${eventFilter}
          ORDER BY seq ASC LIMIT 256`, [tenantId, runId, after]);
-      return result.rows.map((row) => SseEnvelopeSchema.parse({
-        seq: row.seq, event: row.event, run_id: runId, ts: row.occurred_at, data: row.payload,
-      }));
+      return streamPage(runId, after, result.rows);
     });
   }
+}
+
+/**
+ * One page of a run's stored events. `readThrough` is the last sequence
+ * number read, including any row that failed the event contract: such a
+ * row is skipped with a warning instead of ending the stream, and the
+ * cursor still moves past it so it is not read again on every poll.
+ */
+export interface StreamPage {
+  readonly events: readonly SseEnvelope[];
+  readonly readThrough: number;
+}
+
+const streamLogger = new Logger("RunStreamEventService");
+
+function streamPage(
+  runId: string,
+  after: number,
+  rows: readonly { readonly seq: number; readonly event: string; readonly payload: unknown; readonly occurred_at: string }[],
+): StreamPage {
+  const events: SseEnvelope[] = [];
+  let readThrough = after;
+  for (const row of rows) {
+    readThrough = Number(row.seq);
+    const parsed = SseEnvelopeSchema.safeParse({
+      seq: row.seq, event: row.event, run_id: runId, ts: row.occurred_at, data: row.payload,
+    });
+    if (parsed.success) {
+      events.push(parsed.data);
+    } else {
+      streamLogger.warn(`Skipped stored ${row.event} event ${row.seq} of ${runId}: it does not match the event contract`);
+    }
+  }
+  return { events, readThrough };
 }
 
 async function appendLocked(

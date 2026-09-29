@@ -173,6 +173,22 @@ describe.sequential("EXEC-8 live run SSE", () => {
     expect(frames.map((frame) => frame.id)).toEqual([2]);
   });
 
+  it("skips a stored event that breaks the event contract and keeps streaming the ones after it", async () => {
+    await admin.withTenant(TENANT_A, async (tx) => {
+      await tx.query(
+        `INSERT INTO run_stream_events (id, tenant_id, run_id, seq, event, payload) VALUES
+           ('rse_invalid_1', $1, $2, 1, 'run.status', '{"status":"running"}'::jsonb),
+           ('rse_invalid_2', $1, $2, 2, 'run.status', '{"status":"not-a-status"}'::jsonb),
+           ('rse_invalid_3', $1, $2, 3, 'run.status', '{"status":"completed"}'::jsonb)`,
+        [TENANT_A, RUN_A],
+      );
+    });
+    const connection = await connect(TENANT_A_ID);
+    const frames = await connection.readEvents(2);
+    connection.close();
+    expect(frames.map((frame) => frame.id)).toEqual([1, 3]);
+  });
+
   it("relays terminal frames only for the matching project run", async () => {
     await admin.withTenant(TENANT_A, async (tx) => {
       await tx.query(

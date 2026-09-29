@@ -3,7 +3,7 @@ import { Controller, Get, Headers, HttpException, Param, Req, Res } from "@nestj
 import type { SessionGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
-import { RunStreamEventService } from "./run-stream-event.service";
+import { RunStreamEventService, type StreamPage } from "./run-stream-event.service";
 
 const HEARTBEAT_MS = 15_000;
 
@@ -55,7 +55,7 @@ export class RunStreamController {
     lastEventId: string | undefined,
     instance: string,
     visible: () => Promise<boolean>,
-    listEvents: (tenantId: string, cursor: number) => Promise<readonly unknown[]>,
+    listEvents: (tenantId: string, cursor: number) => Promise<StreamPage>,
   ): Promise<void> {
     const tenantId = request.actorContext?.tenant_id;
     if (!tenantId) {
@@ -80,12 +80,11 @@ export class RunStreamController {
     const deadline = request.actorTokenExpiresAtMs ?? Date.now() + 300_000;
     let heartbeatAt = Date.now() + HEARTBEAT_MS;
     while (!reply.raw.writableEnded && !reply.raw.destroyed && Date.now() < deadline) {
-      const events = await listEvents(tenantId, cursor);
-      for (const event of events) {
-        const envelope = event as { readonly seq: number; readonly event: string };
-        await write(reply, `id: ${envelope.seq}\nevent: ${envelope.event}\ndata: ${JSON.stringify(event)}\n\n`);
-        cursor = envelope.seq;
+      const page = await listEvents(tenantId, cursor);
+      for (const event of page.events) {
+        await write(reply, `id: ${event.seq}\nevent: ${event.event}\ndata: ${JSON.stringify(event)}\n\n`);
       }
+      cursor = page.readThrough;
       if (Date.now() >= heartbeatAt) {
         await write(reply, ": keepalive\n\n");
         heartbeatAt = Date.now() + HEARTBEAT_MS;

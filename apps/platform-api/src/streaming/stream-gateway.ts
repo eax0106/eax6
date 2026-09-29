@@ -1,4 +1,5 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
+import { ZodError } from "zod";
 import { EngineClient, type EngineEventStream } from "../engine";
 import { permissionRevokedEvent, platformEvent } from "./envelope";
 import {
@@ -16,6 +17,8 @@ import type {
   StreamTarget,
   StreamingConfig,
 } from "./types";
+
+const streamLogger = new Logger("StreamGateway");
 
 export const defaultStreamingConfig: StreamingConfig = {
   replayBufferSize: 256,
@@ -163,7 +166,20 @@ class StreamChannel {
         if (message.event === permissionRevokedEvent) {
           break;
         }
-        const event = platformEvent(this.target, message);
+        let event: PlatformStreamEvent;
+        try {
+          event = platformEvent(this.target, message);
+        } catch (error: unknown) {
+          if (!(error instanceof ZodError)) throw error;
+          // One stored event that breaks the contract is skipped, not
+          // allowed to end the stream: ending it makes the browser
+          // reconnect, replay to the same event and end again, so no later
+          // event would ever reach it.
+          streamLogger.warn(
+            `Skipped a contract-invalid ${message.event ?? "event"} (engine id ${message.id ?? "none"}) on ${this.target.runId}`,
+          );
+          continue;
+        }
         this.latestEventId = event.id;
         this.replayBuffer.push(event);
         if (this.replayBuffer.length > this.config.replayBufferSize) {
