@@ -1,6 +1,8 @@
 import {
   ActorTokenClaimsSchema,
+  SystemActorTokenClaimsSchema,
   type ActorTokenClaims,
+  type SystemActorTokenClaims,
 } from "@alterx/contracts";
 import { CachedJwks, type JwksFetch, verifyRs256 } from "./jwt";
 import {
@@ -81,25 +83,56 @@ export class ActorTokenValidator {
       throw new SessionGatewayAuthError("AUTH_ACTOR_TOKEN_EXPIRED");
     }
 
+    // A system principal (D1) is a different shape, chosen by `principal_type`.
+    // The user schema is strict, so a user token cannot carry the marker.
+    if (rawClaims.principal_type !== undefined) {
+      const system = SystemActorTokenClaimsSchema.safeParse(rawClaims);
+      if (!system.success) {
+        throw new SessionGatewayAuthError("AUTH_INVALID_ACTOR_TOKEN");
+      }
+      await this.#consumeOnce(system.data.jti, system.data.exp, now);
+      return {
+        claims: system.data,
+        actorContext: systemActorContext(system.data),
+      };
+    }
+
     const parsed = ActorTokenClaimsSchema.safeParse(rawClaims);
     if (!parsed.success) {
       throw new SessionGatewayAuthError("AUTH_INVALID_ACTOR_TOKEN");
     }
 
-    const remainingLifetime = Math.max(1, Math.ceil(parsed.data.exp - now));
-    const firstUse = await this.#replayStore.setIfAbsent(
-      `${REPLAY_KEY_PREFIX}${parsed.data.jti}`,
-      remainingLifetime,
-    );
-    if (!firstUse) {
-      throw new SessionGatewayAuthError("AUTH_ACTOR_TOKEN_REPLAY");
-    }
+    await this.#consumeOnce(parsed.data.jti, parsed.data.exp, now);
 
     return {
       claims: parsed.data,
       actorContext: actorContext(parsed.data),
     };
   }
+
+  async #consumeOnce(jti: string, exp: number, now: number): Promise<void> {
+    const remainingLifetime = Math.max(1, Math.ceil(exp - now));
+    const firstUse = await this.#replayStore.setIfAbsent(
+      `${REPLAY_KEY_PREFIX}${jti}`,
+      remainingLifetime,
+    );
+    if (!firstUse) {
+      throw new SessionGatewayAuthError("AUTH_ACTOR_TOKEN_REPLAY");
+    }
+  }
+}
+
+function systemActorContext(claims: SystemActorTokenClaims) {
+  return {
+    actor_type: "system" as const,
+    user_id: null,
+    tenant_id: claims.tenant_id,
+    workspace_id: null,
+    roles: [claims.principal],
+    permissions: claims.permissions,
+    session_id: null,
+    jti: claims.jti,
+  };
 }
 
 function actorContext(claims: ActorTokenClaims) {

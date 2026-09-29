@@ -2,12 +2,16 @@ import { z } from "../../src/zod";
 
 export {
   ActorTokenClaimsSchema,
+  SYSTEM_PLATFORM_JOBS_PERMISSIONS,
+  SYSTEM_PLATFORM_JOBS_PRINCIPAL,
+  SystemActorTokenClaimsSchema,
   type ActorTokenClaims,
+  type SystemActorTokenClaims,
 } from "../../src/actor-token";
 
 export const ActorContextSchema = z
   .object({
-    actor_type: z.enum(["user", "service"]),
+    actor_type: z.enum(["user", "service", "system"]),
     user_id: z.string().nullable(),
     tenant_id: z.string(),
     workspace_id: z.string().nullable(),

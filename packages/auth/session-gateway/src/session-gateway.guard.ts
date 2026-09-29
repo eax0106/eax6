@@ -26,7 +26,12 @@ const SAFE_DETAILS: Record<SessionGatewayErrorCode, string> = {
     "The delegation token lifetime exceeds the allowed maximum.",
   AUTH_ACTOR_TOKEN_EXPIRED: "The delegation token has expired.",
   AUTH_ACTOR_TOKEN_REPLAY: "The delegation token has already been used.",
+  AUTH_SYSTEM_PRINCIPAL_READ_ONLY:
+    "This credential may only read.",
 };
+
+/** A system principal (D1) reads; it never changes anything. */
+const SYSTEM_PRINCIPAL_METHODS: ReadonlySet<string> = new Set(["GET", "HEAD"]);
 
 @Injectable()
 export class SessionGatewayGuard implements CanActivate {
@@ -86,6 +91,13 @@ export class SessionGatewayGuard implements CanActivate {
         throw new SessionGatewayAuthError("AUTH_MISSING_ACTOR_TOKEN");
       }
 
+      if (
+        actor.actor_type === "system" &&
+        !SYSTEM_PRINCIPAL_METHODS.has((request.method ?? "").toUpperCase())
+      ) {
+        throw new SessionGatewayAuthError("AUTH_SYSTEM_PRINCIPAL_READ_ONLY");
+      }
+
       request.actorContext = actor;
       if (actorValidation) {
         request.actorTokenExpiresAtMs = actorValidation.claims.exp * 1_000;
@@ -102,7 +114,7 @@ export class SessionGatewayGuard implements CanActivate {
       setProblemContentType(response);
       throw new HttpException(
         problemBody(authError.errorCode, request.url),
-        401,
+        authError.errorCode === "AUTH_SYSTEM_PRINCIPAL_READ_ONLY" ? 403 : 401,
       );
     }
   }
@@ -158,10 +170,11 @@ function problemBody(
   requestUrl = "/",
 ): ProblemDetails {
   const key = errorCode.toLowerCase().replaceAll("_", "-");
+  const forbidden = errorCode === "AUTH_SYSTEM_PRINCIPAL_READ_ONLY";
   return {
     type: `https://alter.dev/problems/${key}`,
-    title: "Unauthorized",
-    status: 401,
+    title: forbidden ? "Forbidden" : "Unauthorized",
+    status: forbidden ? 403 : 401,
     detail: SAFE_DETAILS[errorCode],
     instance: requestUrl.startsWith("/") ? requestUrl : "/",
     error_code: errorCode,

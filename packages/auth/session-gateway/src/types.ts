@@ -1,6 +1,7 @@
 import type {
   ActorTokenClaims,
   ProblemDetails,
+  SystemActorTokenClaims,
 } from "@alterx/contracts";
 
 export type SessionGatewayErrorCode =
@@ -9,10 +10,17 @@ export type SessionGatewayErrorCode =
   | "AUTH_INVALID_ACTOR_TOKEN"
   | "AUTH_ACTOR_TOKEN_LIFETIME_EXCEEDED"
   | "AUTH_ACTOR_TOKEN_EXPIRED"
-  | "AUTH_ACTOR_TOKEN_REPLAY";
+  | "AUTH_ACTOR_TOKEN_REPLAY"
+  | "AUTH_SYSTEM_PRINCIPAL_READ_ONLY";
 
 export interface ActorContext {
-  readonly actor_type: "user" | "service";
+  /**
+   * `system` is a platform background job (D1, `system:platform-jobs`): no
+   * user, no workspace, one tenant, read-only. It is a third value on purpose:
+   * code that grants a `service` actor anything (a service-asserted tenant, for
+   * one) must never match it.
+   */
+  readonly actor_type: "user" | "service" | "system";
   readonly user_id: string | null;
   readonly tenant_id: string;
   readonly workspace_id: string | null;
@@ -83,7 +91,7 @@ export class SessionGatewayAuthError extends Error {
 }
 
 export interface ActorTokenValidationResult {
-  readonly claims: ActorTokenClaims;
+  readonly claims: ActorTokenClaims | SystemActorTokenClaims;
   readonly actorContext: ActorContext;
 }
 

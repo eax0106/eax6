@@ -111,4 +111,68 @@ describe("ActorTokenValidator", () => {
       ),
     ).rejects.toMatchObject({ errorCode: "AUTH_INVALID_ACTOR_TOKEN" });
   });
+
+  describe("system principal (D1)", () => {
+    const systemClaims = (overrides: Record<string, unknown> = {}) => ({
+      principal_type: "system",
+      principal: "system:platform-jobs",
+      tenant_id: TEST_TENANT,
+      permissions: ["runs:read", "billing:read"],
+      auth_time: TEST_NOW - 60,
+      jti: "jti-system",
+      iss: "alter-platform-api.identity-broker",
+      aud: "alter-engine",
+      iat: TEST_NOW,
+      exp: TEST_NOW + 300,
+      ...overrides,
+    });
+
+    it("accepts a system token and builds a system context with no user and no workspace", async () => {
+      const { validator, replayStore } = setup();
+      const result = await validator.validate(mintJwt(systemClaims(), key));
+      expect(result.actorContext).toEqual({
+        actor_type: "system",
+        user_id: null,
+        tenant_id: TEST_TENANT,
+        workspace_id: null,
+        roles: ["system:platform-jobs"],
+        permissions: ["runs:read", "billing:read"],
+        session_id: null,
+        jti: "jti-system",
+      });
+      expect(replayStore.setIfAbsent).toHaveBeenCalledWith(
+        "blackboard:actor_jti:jti-system",
+        300,
+      );
+    });
+
+    it("is single-use like every actor token", async () => {
+      const { validator } = setup(false);
+      await expect(
+        validator.validate(mintJwt(systemClaims(), key)),
+      ).rejects.toMatchObject({ errorCode: "AUTH_ACTOR_TOKEN_REPLAY" });
+    });
+
+    it.each([
+      ["a write permission", { permissions: ["runs:read", "workflows:write"] }],
+      ["a different principal", { principal: "system:other" }],
+      ["a user id beside the system marker", { user_id: TEST_USER }],
+      ["no tenant", { tenant_id: undefined }],
+    ])("refuses %s", async (_name, override) => {
+      const { validator, replayStore } = setup();
+      await expect(
+        validator.validate(mintJwt(systemClaims(override), key)),
+      ).rejects.toMatchObject({ errorCode: "AUTH_INVALID_ACTOR_TOKEN" });
+      expect(replayStore.setIfAbsent).not.toHaveBeenCalled();
+    });
+
+    it("refuses a user token that claims to be a system principal", async () => {
+      const { validator } = setup();
+      await expect(
+        validator.validate(
+          mintJwt({ ...actorClaims(), principal_type: "system" }, key),
+        ),
+      ).rejects.toMatchObject({ errorCode: "AUTH_INVALID_ACTOR_TOKEN" });
+    });
+  });
 });

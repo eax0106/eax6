@@ -30,7 +30,20 @@ const serviceActor: ActorContext = {
   jti: null,
 };
 
+const systemActor: ActorContext = {
+  actor_type: "system",
+  user_id: null,
+  tenant_id: "ten_00000000-0000-7000-8000-000000000001",
+  workspace_id: null,
+  roles: ["system:platform-jobs"],
+  permissions: ["runs:read"],
+  session_id: null,
+  jti: "jti-system",
+};
+
 function setup(options: {
+  actor?: ActorContext;
+  method?: string;
   serviceActor?: ActorContext | null;
   m2mError?: unknown;
   actorError?: unknown;
@@ -49,7 +62,7 @@ function setup(options: {
       ? vi.fn().mockRejectedValue(options.actorError)
       : vi.fn().mockResolvedValue({
           claims: { exp: 1_800_000_300 },
-          actorContext: userActor,
+          actorContext: options.actor ?? userActor,
         }),
   };
   const databaseScope: TenantDatabaseScope = {
@@ -65,6 +78,7 @@ function setup(options: {
       "x-alter-actor-token": "actor",
     },
     url: "/v1/workflows",
+    ...(options.method === undefined ? {} : { method: options.method }),
   };
   const response = { header: vi.fn() };
   const handler = () => undefined;
@@ -133,6 +147,39 @@ describe("SessionGatewayGuard", () => {
       "00000000-0000-7000-8000-000000000001",
       expect.any(Function),
     );
+  });
+
+  describe("system principal (D1)", () => {
+    it.each(["GET", "HEAD"])("lets a system principal %s", async (method) => {
+      const { executionContext, guard, request } = setup({ actor: systemActor, method });
+      await expect(guard.canActivate(executionContext)).resolves.toBe(true);
+      expect(request.actorContext).toEqual(systemActor);
+    });
+
+    it.each(["POST", "PUT", "PATCH", "DELETE", "OPTIONS"])(
+      "refuses a system principal %s with 403 and attaches nothing",
+      async (method) => {
+        const { executionContext, guard, request } = setup({ actor: systemActor, method });
+        const error = await captured(guard.canActivate(executionContext));
+        expect(error).toBeInstanceOf(HttpException);
+        expect((error as HttpException).getStatus()).toBe(403);
+        expect((error as HttpException).getResponse()).toMatchObject({
+          error_code: "AUTH_SYSTEM_PRINCIPAL_READ_ONLY",
+          status: 403,
+        });
+        expect(request.actorContext).toBeUndefined();
+      },
+    );
+
+    it("refuses a system principal when the method is unknown (fails closed)", async () => {
+      const { executionContext, guard } = setup({ actor: systemActor });
+      await expectProblem(guard.canActivate(executionContext), "AUTH_SYSTEM_PRINCIPAL_READ_ONLY");
+    });
+
+    it("does not restrict a user principal by method", async () => {
+      const { executionContext, guard } = setup({ method: "POST" });
+      await expect(guard.canActivate(executionContext)).resolves.toBe(true);
+    });
   });
 
   it("uses service context and skips actor-token validation", async () => {

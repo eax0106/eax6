@@ -6,6 +6,8 @@ import type { EngineClient } from "../engine/engine-client";
 import type { EngineCallerContext } from "../engine/types";
 import { CachedEngineResourceLookup } from "../rbac/param-workspace.resolver";
 import type { ActorContext } from "../rbac/types";
+import { IdentityBrokerEngineAuthProvider } from "../engine/auth";
+import { createSystemCallerContext } from "../system-jobs/system-caller";
 import { IdentityBrokerService } from "./identity-broker.service";
 
 /**
@@ -46,6 +48,16 @@ async function engineAccepts(context: EngineCallerContext) {
   );
   const minted = await broker.mintActorToken({ ...context, callingTenantId: context.tenantId });
   return validator.validate(minted.token);
+}
+
+async function engineValidator() {
+  const jwks = await broker.publicJwks();
+  const seen = new Set<string>();
+  return new ActorTokenValidator(
+    { issuer: "alter-platform-api.identity-broker", audience: "alter-engine", jwksUrl: "https://platform.test/jwks" },
+    { setIfAbsent: async (key: string) => (seen.has(key) ? false : (seen.add(key), true)) },
+    { fetch: (async () => ({ ok: true, json: async () => jwks })) as never },
+  );
 }
 
 function capturingEngine() {
@@ -96,5 +108,38 @@ describe("actor tokens platform-api mints for the engine", () => {
         traceparent: "",
       }),
     ).rejects.toThrow("AUTH_INVALID_ACTOR_TOKEN");
+  });
+});
+
+describe("the system caller's actor token (D1)", () => {
+  const tenantUuid = "019a1b2c-3d4e-7f50-8a61-72839405a6b2";
+
+  it("is accepted by the engine's validator as a read-only system actor with no user and no workspace", async () => {
+    const provider = new IdentityBrokerEngineAuthProvider(broker, { getAccessToken: async () => "m2m" });
+    const { actorToken } = await provider.authorize(
+      createSystemCallerContext({ tenantId: tenantUuid, traceparent: "00-a-b-01" }),
+    );
+
+    const accepted = await (await engineValidator()).validate(actorToken);
+
+    expect(accepted.actorContext).toMatchObject({
+      actor_type: "system",
+      user_id: null,
+      workspace_id: null,
+      tenant_id: `ten_${tenantUuid}`,
+      roles: ["system:platform-jobs"],
+    });
+    expect(accepted.actorContext.permissions.every((p) => p.endsWith(":read"))).toBe(true);
+  });
+
+  it("is single-use: the engine refuses a second presentation", async () => {
+    const provider = new IdentityBrokerEngineAuthProvider(broker, { getAccessToken: async () => "m2m" });
+    const { actorToken } = await provider.authorize(
+      createSystemCallerContext({ tenantId: tenantUuid, traceparent: "00-a-b-01" }),
+    );
+    const validator = await engineValidator();
+
+    await validator.validate(actorToken);
+    await expect(validator.validate(actorToken)).rejects.toThrow("AUTH_ACTOR_TOKEN_REPLAY");
   });
 });

@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { Injectable } from "@nestjs/common";
+import {
+  SYSTEM_PLATFORM_JOBS_PERMISSIONS,
+  SYSTEM_PLATFORM_JOBS_PRINCIPAL,
+  type SystemActorTokenClaims,
+} from "@alterx/contracts";
 import type {
   ActorTokenClaims,
   MintActorTokenInput,
   MintedActorToken,
+  MintedSystemActorToken,
   MintServiceActorTokenInput,
+  MintSystemActorTokenInput,
 } from "./actor-token.types";
 import { IdentityBrokerError } from "./identity-broker.error";
 import { toPrefixedUuidV7 } from "./id-compat";
@@ -54,6 +61,30 @@ export class IdentityBrokerService {
       auth_time: this.nowSeconds(),
       ...this.freshRegisteredClaims(),
     });
+  }
+
+  /**
+   * The system caller (D1): a single-use token for `system:platform-jobs`,
+   * bound to one tenant, no user, no workspace, the fixed read-only permission
+   * set. Not reachable from a request: the only caller is the engine auth
+   * provider, and only for a context made by `createSystemCallerContext`,
+   * which no controller may import (see system-caller.spec.ts).
+   */
+  async mintSystemActorToken(
+    input: MintSystemActorTokenInput,
+  ): Promise<MintedSystemActorToken> {
+    this.assertTenantScope(input.tenantId, input.callingTenantId);
+
+    const claims: SystemActorTokenClaims = {
+      principal_type: "system",
+      principal: SYSTEM_PLATFORM_JOBS_PRINCIPAL,
+      tenant_id: prefixedId("ten", input.tenantId),
+      permissions: [...SYSTEM_PLATFORM_JOBS_PERMISSIONS],
+      auth_time: this.nowSeconds(),
+      ...this.freshRegisteredClaims(),
+    };
+    const privateKey = await this.signingKeyResolver.resolvePrivateKey(this.signingKeyRef);
+    return { token: signActorToken(claims, privateKey), claims };
   }
 
   async publicJwks(): Promise<{ keys: Record<string, unknown>[] }> {

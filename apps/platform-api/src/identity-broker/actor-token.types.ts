@@ -1,3 +1,5 @@
+import type { SystemActorTokenClaims } from "@alterx/contracts";
+
 export interface ActorTokenClaims {
   user_id: string;
   tenant_id: string;
@@ -32,7 +34,17 @@ export interface MintServiceActorTokenInput {
   callingTenantId: string;
 }
 
+export interface MintSystemActorTokenInput {
+  tenantId: string;
+  callingTenantId: string;
+}
+
 export interface MintedActorToken {
   token: string;
   claims: ActorTokenClaims;
+}
+
+export interface MintedSystemActorToken {
+  token: string;
+  claims: SystemActorTokenClaims;
 }
