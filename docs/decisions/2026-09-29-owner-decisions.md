@@ -156,3 +156,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (c).**
 
 **What it means.** SES configuration set with delivery and bounce events (SNS or EventBridge, provisioned with the EC2 kit, 6.1b) into an engine endpoint that updates the side-effect record by provider message id; a bounce marks the run "delivery failed" and notifies through the D1 system caller. ToolCall browser.click takes a snapshot and checks it only when the node config states the expected page state (text or selector); otherwise the result stays "unconfirmed".
+
+## D15. Safety library shape (C4, design log §11, planes rule 37)
+
+**Question.** §11 wants the SSRF guard, prompt-injection classifier and PII redaction in one shared package; today there is one of each, in `packages/adapters` and `packages/auth`, plus a Python mirror of the injection classifier, and the imported gate flags every raw fetch (34).
+
+**Options put.** (a) relocate into a single `packages/safety` (touches frozen Model Gateway and Conversation Manager, no behaviour change); (b) amend §11 to "one implementation per language", add a parity test and narrow the gate.
+
+**Answer: (b).** Exactly one implementation per language (TypeScript, Python). A parity test runs both injection classifiers over one shared case set and fails if they disagree, in CI. The architecture gate is narrowed from "any raw fetch" to real duplicate safety logic (a second SSRF guard, classifier or redactor), and its baseline is regenerated with the count reported.
+
+**What it means.** Shared case file, parity spec wired into CI, gate rule change with a proven-to-fail case; §11 and planes rule 37 amended.

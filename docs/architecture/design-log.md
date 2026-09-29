@@ -133,6 +133,7 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Why not a standalone service:** safety checks fire constantly (every tool call, every model call, every node output) — a network hop on every one of those adds real latency to the hottest paths in the engine, and turns that service into a new single point of failure every gateway depends on.
 - **Why not per-gateway duplication:** exact bug the old build actually shipped — Tool Gateway's fetcher had no response-size cap while Sandbox's did, same logic reimplemented twice, drifted apart, one wrong. A shared library is one place to fix, one place to test, no drift — directly matches the Section 7 fix for duplicated primitives.
 - **Tradeoff accepted knowingly:** gives up independent scaling and hot-updating the logic without redeploying every gateway that uses it. Acceptable for a small team building v1 — revisit only if that specific need becomes real.
+- **Amended 2026-09-29 (Havish, decision D15): one implementation per language, proven not to drift.** The SSRF guard, injection classifier and PII redaction each have exactly one TypeScript implementation and, where a Python service needs one, one Python implementation; a CI parity test runs both classifiers over one shared case set and fails on any disagreement. That test, not a single folder, is what enforces "no drift". See §34 D15.
 
 ## 12. Cache/Reuse plane (locked): defer past v1
 
@@ -446,6 +447,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D12. Memory settings.** Chat, workflow and workspace memory switches (on by default) enforced by memory-service; retention 7-365 days, default 90; no "allow sensitive data" in v1, memories always PII-redacted.
 - **D13. Track D amendments accepted.** §4 ten classes mapped to the five buckets, retry once then swap, classes added for target-missing and ambiguous; §7 pattern 1 by gate and RUNTIME_MODE; §23 Project Mode present, not offered; §32 closed by deletion.
 - **D14. Read-back.** Email: pass on acceptance, SES delivery events flag later bounces and notify. Clicks: snapshot only when the step declares the expected page state, otherwise "unconfirmed". Amends §5.2.
+- **D15. Safety library.** One implementation per language plus a CI parity test on a shared case set; the duplicate-safety gate narrowed to real duplicates. Amends §11.
 
 ---
 
