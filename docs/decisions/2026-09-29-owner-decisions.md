@@ -186,3 +186,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (b).** New code and documents use "Identity & Tenant Gateway"; existing occurrences are renamed when their file is edited for another reason; a `scripts/check-*.sh` gate in CI fails on "Session Gateway" (and `SessionGateway` identifiers) appearing in added lines, with a baseline of today's occurrences.
 
 **What it means.** One CI gate with a baseline and a proven-to-fail case; §26 amended.
+
+## D18. Starter templates (design log §19, C38)
+
+**Question.** §19 requires a small curated set of hand-authored templates on the first-run screen, stored in the Capability Registry; none exist.
+
+**Options put.** (a) Havish writes them; (b) the builder session writes a first set of 8 and Havish reviews them before launch; (c) no templates at launch.
+
+**Answer: (b).** First set: (1) lead capture to CRM plus welcome email; (2) support email triage, label and route; (3) invoice email, extract details, sheet row; (4) weekly report digest by email; (5) knowledge Q&A over uploaded documents; (6) meeting notes to summary email with action items; (7) brand mention monitoring with alert; (8) WhatsApp FAQ responder (usable once the Meta account exists). Alter-authored only, never harvested from tenant workflows (§19). Each template must compile and pass its own success criteria in a test before it ships; Havish reviews the set before launch.
+
+**What it means.** Template store in the Capability Registry (C38, covered by the 2026-09-28 exemption) with list and instantiate routes; the first-run screen shows them below the describe box; instantiating creates a workflow and its chat (D6).

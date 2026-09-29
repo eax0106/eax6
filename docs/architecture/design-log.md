@@ -237,6 +237,8 @@ Closes gap #5 from the pre-microarchitecture review.
 - Harvesting templates from real user workflows is **not** an extension of the cross-tenant abstracted pattern-learning approved in Section 2, and must not be treated as one. An abstract lesson ("summarization tasks suit fast model tiers") carries no customer-specific content. A template is a near-complete workflow shape — node structure, tool choices, sometimes prompt phrasing — materially closer to the real artifact, and harvesting one customer's working workflow into another customer's account is a different and higher risk class.
 - If template harvesting is ever wanted, it requires its own explicit decision and privacy review — never assumed.
 
+**Amended 2026-09-29 (Havish, decision D18).** The first set is 8 Alter-authored templates written by the builder and reviewed by Havish before launch: lead capture to CRM plus welcome email; support email triage; invoice extraction to a sheet; weekly report digest; knowledge Q&A; meeting-notes summary; brand-mention alert; WhatsApp FAQ responder. Each must compile and pass its own success criteria in a test. See §34 D18.
+
 ## 20. Authentication & sign-up (locked)
 
 Closes gap #6 from the pre-microarchitecture review.
@@ -453,6 +455,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D15. Safety library.** One implementation per language plus a CI parity test on a shared case set; the duplicate-safety gate narrowed to real duplicates. Amends §11.
 - **D16. Public form.** Minimal hosted form offered as an option beside connecting the user's own input; Turnstile, rate limits, input checks, no uploads, its own process. Amends §25.
 - **D17. Rename.** "Identity & Tenant Gateway" in new code; old name renamed when a file is touched; CI blocks it in new lines. Amends §26.
+- **D18. Templates.** 8 Alter-authored starter templates, tested to compile and pass their criteria, reviewed by Havish before launch. Amends §19.
 
 ---
 
