@@ -473,6 +473,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D29. Security.** Go-ahead on the privately reported items; details kept out of the repository.
 - **D30. Spend.** C18 re-embed and B3.6 media check approved, once each, stopped if the estimate exceeds USD 1.
 - **D31. Accounts.** Free accounts and the domain now (GitHub OAuth, Auth0 x2, Meta verification started, domain then SES); Temporal Cloud at launch; EC2 only after the build list is done.
+- **D32. Merging.** Squash-merge every PR; never delete a branch.
 
 ---
 

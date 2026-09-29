@@ -304,6 +304,12 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 
 **Answer: the proposed timing.** Now: GitHub OAuth app; Auth0 customer and staff tenants; start Meta WhatsApp Business verification; buy the domain. Once the domain exists: SES domain verification and the request to leave the SES sandbox. At launch: Temporal Cloud namespace and API key. Only after the build list is done: the EC2 server (about USD 142/month), then load and failure evidence (6.5). Secrets go into AWS Secrets Manager under the names the code already reads. Domain name: not yet chosen.
 
+## D32. How pull requests are merged
+
+**Question.** AGENTS.md says squash-merge only; recent sessions used merge commits because the alter-x-4- imports needed ancestry, and the import of 2026-09-22 was the last.
+
+**Answer: squash-merge, as AGENTS.md says.** Every PR lands on main as one commit; branches are never deleted, so each branch keeps its full commit history. Merge commits are no longer used.
+
 ## Owner actions (Havish), collected
 
 1. **GitHub packages (D28):** give `alterengine-6` Write on each `alter-*` package, remove `alter-x-4-`.
