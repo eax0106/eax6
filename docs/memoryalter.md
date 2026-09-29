@@ -761,6 +761,19 @@ is possible, its own PR, CI green on the exact head before merging.
 
 ---
 
+### 2026-09-29 — build session opened: contracts pre-approval and two more freeze exemptions
+
+**Decision (Havish, at the start of the build session).**
+- **`packages/contracts`, additive changes pre-approved for D1–D32.** New optional fields, new messages or RPCs and new schemas may merge on green CI without a per-PR OK (AGENTS rule 5), each one listed in its PR body. Not covered, so each still waits for Havish: a change `buf breaking` rejects, and a new required field on an existing schema.
+- **Freeze exemption, D5 only:** HumanApproval (Category 1 #11) and the Executor's approval wait (#6), for the approval modes, skip-on-timeout, promotion counter and recorded confirmation. The 2026-09-28 exemption covered Executor for C8 only.
+- **Freeze exemption, one read-path change in Run Manager (#1):** the item named in Havish's private build instructions. Scoped to that item only. The item is not described here on purpose.
+
+**What it does not cover.** Anything else inside those components. Any further frozen component an item turns out to need is asked about when the builder reaches it.
+
+**Decided by.** Havish.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.
