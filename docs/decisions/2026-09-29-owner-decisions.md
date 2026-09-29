@@ -255,3 +255,15 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (a).** Tenants see what each workflow (and run) costs **them**: the full price after Alter's cut is included. They never see Alter's internal cost or its margin.
 
 **What it means.** The tenant cost routes return the billed price only, per workflow and per run as well as by month (with a test that fails if an internal-cost or margin field reappears); a staff-only admin route (staff role, audited) returns the full breakdown.
+
+## D25. Benchmarks (B3.2)
+
+**Question.** The customer console has a Benchmarks area (hidden in live mode, its calls mock); the engine has no tenant datasets or tenant eval runs, only Alter's golden sets and a staff-run release gate.
+
+**Options put.** (a) staff-only eval history in the admin console; (b) tenant datasets and benchmark runs in eval-service; (c) drop from v1.
+
+**Answer: both (a) and (b), in scope now,** so the feature can be tested.
+- **(a) Staff:** the admin console lists golden-set runs over time with their scores (a list-runs read on eval-service).
+- **(b) Tenants:** a workspace can create benchmark datasets (test cases: an input plus the success criteria it should meet), run a workflow against a dataset, and see per-case and overall pass rates over time. Benchmark runs execute through Simulate (D11), so no outside action ever fires; each case is judged by the Verification & Quality Gate against its criteria; runs are costed and billed like other model use.
+
+**What it means.** eval-service tenant datasets and runs (tenant RLS, erasure-registered), a list-runs read for staff, platform-api routes, the customer Benchmarks area un-hidden and wired, the staff history view in the admin console.
