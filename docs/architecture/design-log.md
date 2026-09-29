@@ -120,6 +120,7 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Sessions group into named project folders**, plus an "Ungrouped" catch-all for anything not assigned to a group — sidebar pattern confirmed by the user against a real reference screenshot: group header, sessions nested under it, search + filter controls at the top.
 - **Cross-workflow context, within one user, is expected and required** — Alter should already have context on a user's other workflows when building a new related one, no need to re-explain from scratch. Concrete requirement this creates: ADS Client's retrieval scope must span *all* of that user's workflows/sessions, not just the current one.
 - **This does not weaken tenant isolation (Section 2)** — the isolation boundary is the tenant, not the individual workflow. Cross-workflow sharing happens freely inside one user's own space; the wall between different users' data stays exactly as strict as already locked.
+- **Amended 2026-09-29 (Havish, decision D6).** One workflow = one chat, confirmed: the chat is where that workflow is built and changed, through the builder pipeline. Added: one read-only assistant per user ("Ask Alter") that answers questions and gives updates across the user's workflows from data the user can already read, and whose only action is to start a new workflow and send the user to its chat. It cannot change any existing workflow. See §34 D6.
 
 ## 11. Safety & Policy plane (locked): shared library, not a standalone service
 
@@ -426,6 +427,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D3. Budgets.** Engine-owned budget records, atomic check-and-reserve in Run Manager at run start; per-run cap, per-workflow daily/monthly, per-workspace monthly; alerts at 50% and 80%; hard stop by default, per-budget warn-only option. Amends §9 and settles §22's budget ownership.
 - **D4. Pre-run estimate.** Usual cost from the last 5 verified runs plus a worst-case bound from the compiled DAG; reserve the worst case at run start, true up at the end. Cost Ledger freeze exemption granted for the per-workflow cost read. Amends §9.
 - **D5. Approvals.** All four §16 modes; main control "Ask me first" / "Always go ahead", set by a person; "Always go ahead" on external-action steps only with an explicit, recorded confirmation; promotion suggested after 10 consecutive approvals; delivery in-app plus email. Amends §16 and the add-never-remove safeguard rule for this one case.
+- **D6. Chat.** One workflow = one chat (builder pipeline). Plus a read-only "Ask Alter" assistant per user: updates and answers across workflows from what the user can read; its only action is starting a new workflow and handing off to that workflow's chat. Amends §10.
 
 ---
 

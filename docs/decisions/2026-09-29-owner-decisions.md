@@ -60,3 +60,15 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **5b: in-app plus email.** Bell and Action Centre always; email per user preference, on by default for approvals; WhatsApp later as a preference once the Meta account exists. Sent through the D1 system caller.
 
 **What it means.** Approval mode stored on the node (engine approval record keeps the mode used and who set it); auto-approve and timeout paths in the Executor's approval wait; a promotion-suggestion counter per node; approval notification producer and email template. This amends the adopted rule "a workflow may add safeguards but never remove one" for one case: a person with approval rights may, with an explicit confirmation and an audit record, set an external-action step to go ahead without asking.
+
+## D6. What a chat is (design log §10, §27 surface 1)
+
+**Question.** The web chat is mock in live mode; the engine's conversations table has no title, no messages and no workflow link, and nothing decides what the assistant replies.
+
+**Options put.** (a) one workflow = one chat (§10), replies only from the builder pipeline; (b) a free-standing assistant that can create and edit any workflow; (c) both: per-workflow chats plus one cross-workflow assistant.
+
+**Answer: one workflow = one chat, plus a read-only assistant.**
+- **Per-workflow chat.** Every workflow has exactly one chat; it is where the workflow is built and changed. Messages go through the builder pipeline (understand, plan, clarify, compile) and the reply says what changed. The home page's "describe it" box creates a new workflow and its chat together.
+- **Assistant ("Ask Alter").** One assistant per user, across the workspace's workflows. It **has no power to change anything**: it answers questions and gives updates on the user's other workflows (status, recent runs, failures, verification results, spend), grounded only in data the user can already read. Its one action is to **start a new workflow**: it creates the new, empty workflow and its chat and sends the user there, where the workflow's own chat does the building.
+
+**What it means.** Engine stores chat messages (tenant RLS, erasure-registered), each workflow chat linked to its workflow; chat title is the workflow name; archiving a chat archives nothing else. The assistant is a separate conversation per user, read-only over the engine's run, verification and cost reads through the caller's own identity (it can see only what the user can see), with a single write: create a draft workflow and return its chat. Its answers are model calls and are costed like any other.
