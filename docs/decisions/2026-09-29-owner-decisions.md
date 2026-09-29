@@ -235,3 +235,23 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **22e: all prices are configuration placeholders, set by Havish before launch** (plan price, credits included, extra-credit price, credits per verified run, free-tier limit). The free tier carries abuse limits: verified email and a runs-per-day cap (§21).
 
 **What it means.** Razorpay Subscriptions integration (create, webhook-driven status, cancel), checkout with GST line and GSTIN, invoices already rendered by Razorpay (B2.7); paid marketplace flows hidden in v1; pricing and free-tier limits in the plan-definition configuration. Tax treatment is an engineering reading, not legal advice.
+
+## D23. Seller KYC (B2.4)
+
+**Question.** Sellers cannot submit identity documents in live mode: no document store, no KYC vendor. Staff KYC review exists. D22 made listings free-only in v1.
+
+**Options put.** (a) Razorpay Route linked-account KYC (Razorpay holds the documents); (b) a separate KYC vendor; (c) our own encrypted document store.
+
+**Answer: (a), switched on with paid listings.** Until paid listings exist, sellers publish free listings without uploading documents; staff review stays. When paid listings arrive, each seller onboards as a Razorpay Route linked account and Razorpay collects and verifies their documents; Alter stores no identity documents, only the linked-account id and its KYC status.
+
+**What it means.** No document upload built for v1; the seller upload screen stays hidden in live mode; the Route linked-account flow is built with paid listings.
+
+## D24. What tenants see of cost
+
+**Question.** `GET /api/v1/costs/summary`, readable by any workspace member with `billing:read`, returns the ledger's internal cost, retry and recovery cost, and margin; the web shows only billable spend, but the API exposes the rest.
+
+**Options put.** (a) strip internal, retry and recovery cost and margin from the tenant route, and add a staff-only route with the full breakdown; (b) leave it.
+
+**Answer: (a).** Tenants see what each workflow (and run) costs **them**: the full price after Alter's cut is included. They never see Alter's internal cost or its margin.
+
+**What it means.** The tenant cost routes return the billed price only, per workflow and per run as well as by month (with a test that fails if an internal-cost or margin field reappears); a staff-only admin route (staff role, audited) returns the full breakdown.

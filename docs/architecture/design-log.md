@@ -464,6 +464,8 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D20. Override advisory.** Per-node model/tool override on the canvas; warn on +25% and +₹5 cost, lower tier, missing capability, wider outside reach, 2x latency, or a downstream break; never blocks. Amends §8.
 - **D21. Tool scanner.** OSV-Scanner now, plus staff review of every tool's first version; Socket later when outside publishers arrive.
 - **D22. Payments.** Razorpay Subscriptions; prices exclusive of 18% GST with GSTIN capture; Alter absorbs fees; prices and free tier are configuration set before launch; marketplace free-only in v1. Amends §21.
+- **D23. Seller KYC.** Razorpay Route linked-account KYC when paid listings start; Alter never stores identity documents; free listings need none in v1.
+- **D24. Cost visibility.** Tenants see the full price they pay per workflow and per run (Alter's cut included), never Alter's internal cost or margin; the full breakdown is staff-only.
 
 ---
 
