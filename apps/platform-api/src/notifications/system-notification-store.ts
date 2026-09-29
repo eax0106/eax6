@@ -18,6 +18,20 @@ import type { DigestEligibleUser } from "./types";
 export class SystemNotificationStore {
   constructor(private readonly pool: Pool | undefined) {}
 
+  /**
+   * Every tenant that is live, for the engine-event producers, which read the
+   * engine once per tenant as the system principal (D1). Ids only.
+   */
+  async listActiveTenantIds(): Promise<string[]> {
+    if (!this.pool) {
+      throw new SystemNotificationStoreNotConfiguredError();
+    }
+    const result = await this.pool.query<{ id: string }>(
+      `SELECT id FROM tenants WHERE status = 'active' ORDER BY id`,
+    );
+    return result.rows.map((row) => row.id);
+  }
+
   async listUsersDueForDigest(
     periodStart: Date,
     periodEnd: Date,

@@ -52,6 +52,31 @@ function createNotificationDigestHandler(
 }
 
 /**
+ * Engine-event notification trigger (D1): calls platform-api's internal route,
+ * which reads the engine per tenant as the system principal and creates the
+ * notifications. Thin relay, no payload; the pass looks back a fixed window and
+ * platform-api dedupes what it has already sent.
+ */
+function createEngineEventNotificationsHandler(
+  baseUrl: string,
+  serviceToken: string,
+  fetchImpl: typeof fetch,
+): PlatformJobHandler {
+  return async (): Promise<JsonValue> => {
+    const response = await fetchImpl(`${baseUrl}/internal/notifications/run-engine-producers`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${serviceToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(
+        `engine-event notifications failed: HTTP ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as JsonValue;
+  };
+}
+
+/**
  * Real connector health sweep trigger: calls platform-api's real internal,
  * shared-secret-authenticated route, which does the real work (real
  * cross-tenant connection enumeration + real per-connection health()
@@ -332,6 +357,16 @@ export function createPlatformJobHandlers(
     handlers.set(
       "platform.notification-digest",
       createNotificationDigestHandler(
+        dependencies.platformApiInternalBaseUrl,
+        dependencies.notificationDigestServiceToken,
+        fetchImpl,
+      ),
+    );
+  }
+  if (dependencies?.platformApiInternalBaseUrl && dependencies.notificationDigestServiceToken) {
+    handlers.set(
+      "platform.engine-event-notifications",
+      createEngineEventNotificationsHandler(
         dependencies.platformApiInternalBaseUrl,
         dependencies.notificationDigestServiceToken,
         fetchImpl,

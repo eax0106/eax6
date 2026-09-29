@@ -32,6 +32,7 @@ describe("loadPlatformJobsEnvironment", () => {
       notificationDigestIntervalMs: 60 * 60 * 1000,
       connectorHealthSweepServiceTokenRef: "env:CONNECTOR_HEALTH_SWEEP_TOKEN",
       connectorHealthSweepIntervalMs: 60 * 60 * 1000,
+      engineEventNotificationsIntervalMs: 5 * 60 * 1000,
       adsCoreInternalBaseUrl: "http://ads-core.internal",
       retentionSweepServiceTokenRef: "env:RETENTION_SWEEP_TOKEN",
       retentionSweepIntervalMs: 24 * 60 * 60 * 1000,

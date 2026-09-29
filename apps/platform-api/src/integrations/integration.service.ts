@@ -350,7 +350,7 @@ export class IntegrationService {
         severity: "warning",
         title: `${definition.displayName} connection needs reconnecting`,
         body: `Alter could not use the ${definition.displayName} connection. Workflows that depend on it will stop at that step until someone reconnects it.`,
-        deepLink: `/connections/${encodeURIComponent(record.id)}`,
+        deepLink: `/app/connections/${encodeURIComponent(record.id)}`,
         sourceService: "platform-api.integrations",
       });
     } catch (error) {

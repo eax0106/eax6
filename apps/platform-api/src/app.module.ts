@@ -35,6 +35,7 @@ import { PublisherModule } from "./publisher";
 import { I18nModule } from "./i18n/i18n.module";
 import { RegistryModule } from "./registry";
 import { NotificationModule } from "./notifications";
+import { EngineEventNotificationModule } from "./notifications/engine-events/engine-event-notification.module";
 import { MediaModule } from "./media";
 import { DiscoveryModule } from "./discovery/discovery.module";
 import { SearchModule } from "./search";
@@ -88,6 +89,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     I18nModule,
     RegistryModule,
     NotificationModule,
+    EngineEventNotificationModule,
     MediaModule,
     DiscoveryModule,
     SearchModule,

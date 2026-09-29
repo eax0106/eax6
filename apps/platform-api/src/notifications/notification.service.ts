@@ -42,6 +42,25 @@ export class NotificationService {
   }
 
   /**
+   * createEvent for a producer that may meet the same happening twice: the
+   * input's `dedupeKey` makes the second call a no-op (`null`, nothing sent).
+   */
+  async createEventOnce(
+    input: CreateNotificationEventInput & { readonly dedupeKey: string },
+  ): Promise<NotificationEvent | null> {
+    const [inAppEnabled, emailPreference] = await Promise.all([
+      this.repository.preferenceEnabled(input.tenantId, input.userId, input.eventClass, "in_app"),
+      this.repository.emailDeliveryPreference(input.tenantId, input.userId, input.eventClass),
+    ]);
+    const event = await this.repository.createEventOnce(createEventId(), input, inAppEnabled);
+    if (event === null) return null;
+    if (emailPreference.enabled && emailPreference.deliveryMode === "immediate") {
+      await this.sendEventEmail(event, input.userId, input.locale);
+    }
+    return event;
+  }
+
+  /**
    * One event per member holding any of `roles` in the workspace, each
    * delivered by that member's own preferences. Returns how many were created.
    */
@@ -54,6 +73,25 @@ export class NotificationService {
       await this.createEvent({ ...input, userId });
     }
     return recipients.length;
+  }
+
+  /**
+   * notifyWorkspaceRoles for a happening a producer may see again: each
+   * recipient's event carries `<dedupeKey>:<user id>`. Returns how many
+   * recipients were newly told.
+   */
+  async notifyWorkspaceRolesOnce(
+    roles: readonly string[],
+    dedupeKey: string,
+    input: Omit<CreateNotificationEventInput, "userId" | "dedupeKey">,
+  ): Promise<number> {
+    const recipients = await this.repository.workspaceMemberIds(input.tenantId, input.workspaceId, roles);
+    let created = 0;
+    for (const userId of recipients) {
+      const event = await this.createEventOnce({ ...input, userId, dedupeKey: `${dedupeKey}:${userId}` });
+      if (event !== null) created += 1;
+    }
+    return created;
   }
 
   list(input: NotificationListInput): Promise<NotificationPage> {

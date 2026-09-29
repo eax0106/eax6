@@ -27,6 +27,10 @@
  * not to run on a schedule, so it has no caller by design.
  */
 export const CONNECTOR_HEALTH_SWEEP_JOB_TYPE = "platform.connector-health-sweep";
+// D1: platform-api reads the engine as the system principal and turns what it
+// finds (a failed run, ...) into notifications. Same trigger and shared secret
+// as the digest.
+export const ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE = "platform.engine-event-notifications";
 export const RETENTION_SWEEP_JOB_TYPE = "platform.retention-sweep";
 // P5-2: orchestration-service's own DeletionService.applyRetentionPolicy()
 // has always had a real, authenticated endpoint (/internal/deletion/retention)
@@ -44,6 +48,7 @@ export const AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE = "platform.audit-chain-full-verif
 export const SCHEDULED_PLATFORM_JOB_TYPES = [
   "platform.notification-digest",
   CONNECTOR_HEALTH_SWEEP_JOB_TYPE,
+  ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE,
   RETENTION_SWEEP_JOB_TYPE,
   ORCHESTRATION_RETENTION_SWEEP_JOB_TYPE,
   BENCHMARK_SWEEP_JOB_TYPE,

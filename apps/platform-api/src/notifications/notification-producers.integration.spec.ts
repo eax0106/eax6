@@ -124,6 +124,71 @@ describe.skipIf(!databaseUrl)("NotificationService.notifyWorkspaceRoles on Postg
     expect(sent).toEqual([`${adminA}@example.test`]);
   });
 
+  it("a producer that meets the same happening twice tells each recipient once", async () => {
+    const input = {
+      tenantId: tenantA,
+      workspaceId: workspaceA,
+      eventClass: "workflow" as const,
+      severity: "critical" as const,
+      title: "A workflow run failed",
+      body: "b",
+      deepLink: "/runs/run_1",
+      sourceService: "platform-api.engine-events",
+    };
+
+    const first = await service.notifyWorkspaceRolesOnce(["admin", "editor"], "run.failed:run_1", input);
+    const again = await service.notifyWorkspaceRolesOnce(["admin", "editor"], "run.failed:run_1", input);
+    const other = await service.notifyWorkspaceRolesOnce(["admin", "editor"], "run.failed:run_2", input);
+
+    expect([first, again, other]).toEqual([2, 0, 2]);
+    const events = await admin.query<{ n: string }>(`SELECT count(*) AS n FROM notification_events`);
+    const reads = await admin.query<{ n: string }>(`SELECT count(*) AS n FROM notification_reads`);
+    expect([events.rows[0]!.n, reads.rows[0]!.n]).toEqual(["4", "4"]);
+    // The repeat sent no second email either.
+    expect(sent.sort()).toEqual(
+      [adminA, adminA, editorA, editorA].map((user) => `${user}@example.test`).sort(),
+    );
+  });
+
+  it("the dedupe key is per tenant: another tenant's identical key is a different event", async () => {
+    const base = {
+      eventClass: "workflow" as const,
+      severity: "critical" as const,
+      title: "t",
+      body: "b",
+      deepLink: null,
+      sourceService: "platform-api.engine-events",
+    };
+    const a = await service.notifyWorkspaceRolesOnce(["admin"], "run.failed:same", {
+      ...base,
+      tenantId: tenantA,
+      workspaceId: workspaceA,
+    });
+    const b = await service.notifyWorkspaceRolesOnce(["admin"], "run.failed:same", {
+      ...base,
+      tenantId: tenantB,
+      workspaceId: workspaceB,
+    });
+    expect([a, b]).toEqual([1, 1]);
+  });
+
+  it("events made without a dedupe key are never merged", async () => {
+    const input = {
+      tenantId: tenantA,
+      workspaceId: workspaceA,
+      eventClass: "system" as const,
+      severity: "info" as const,
+      title: "t",
+      body: "b",
+      deepLink: null,
+      sourceService: "platform-api.integrations",
+    };
+    await service.notifyWorkspaceRoles(["admin"], input);
+    await service.notifyWorkspaceRoles(["admin"], input);
+    const events = await admin.query<{ n: string }>(`SELECT count(*) AS n FROM notification_events`);
+    expect(events.rows[0]!.n).toBe("2");
+  });
+
   it("finds no recipient across the tenant boundary", async () => {
     // Tenant A's context naming tenant B's workspace: RLS hides B's members.
     const count = await service.notifyWorkspaceRoles(["admin"], {

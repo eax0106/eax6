@@ -28,6 +28,11 @@ export interface CreateNotificationEventInput {
   readonly deepLink: string | null;
   readonly sourceService: string;
   readonly locale?: string;
+  /**
+   * When set, the database keeps one event per (tenant, key): a producer that
+   * meets the same happening again gets `null` back and sends nothing.
+   */
+  readonly dedupeKey?: string;
 }
 
 export interface NotificationEvent {
