@@ -35,6 +35,7 @@ import { NotificationDigestSchedulerRunner } from "./platform-jobs/notification-
 import { IntervalJobSchedulerRunner } from "./platform-jobs/interval-job-scheduler-runner";
 import {
   CONNECTOR_HEALTH_SWEEP_JOB_TYPE,
+  ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE,
   RETENTION_SWEEP_JOB_TYPE,
   ORCHESTRATION_RETENTION_SWEEP_JOB_TYPE,
   BENCHMARK_SWEEP_JOB_TYPE,
@@ -242,6 +243,17 @@ async function bootstrap(): Promise<void> {
   );
   connectorHealthSweepRunner.start();
 
+  // D1: notifications for what the engine reports (a failed run, ...), read
+  // as the system principal by platform-api. Same durable-workflow-owns-retry
+  // reasoning; a missed tick is caught by the next pass's look-back.
+  const engineEventNotificationsRunner = new IntervalJobSchedulerRunner(
+    digestDurableExecution,
+    ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE,
+    "engine-event-notifications",
+    platformJobsConfig.engineEventNotificationsIntervalMs,
+  );
+  engineEventNotificationsRunner.start();
+
   const retentionSweepRunner = new IntervalJobSchedulerRunner(
     digestDurableExecution,
     RETENTION_SWEEP_JOB_TYPE,
@@ -300,6 +312,7 @@ async function bootstrap(): Promise<void> {
     platformJobsWorker.shutdown();
     void digestSchedulerRunner.stop();
     void connectorHealthSweepRunner.stop();
+    void engineEventNotificationsRunner.stop();
     void retentionSweepRunner.stop();
     void orchestrationRetentionSweepRunner.stop();
     void benchmarkSweepRunner.stop();

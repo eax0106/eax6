@@ -204,6 +204,13 @@
       "when": 1790049600000,
       "tag": "0024_budgets",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1790053200000,
+      "tag": "0025_notification_dedupe",
+      "breakpoints": true
     }
   ]
 }

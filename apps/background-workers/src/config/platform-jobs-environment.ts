@@ -10,6 +10,7 @@ export interface PlatformJobsEnvironment {
   readonly notificationDigestIntervalMs: number;
   readonly connectorHealthSweepServiceTokenRef: string;
   readonly connectorHealthSweepIntervalMs: number;
+  readonly engineEventNotificationsIntervalMs: number;
   readonly adsCoreInternalBaseUrl: string;
   readonly retentionSweepServiceTokenRef: string;
   readonly retentionSweepIntervalMs: number;
@@ -42,6 +43,7 @@ const { requireValue } = createEnvironmentValidators(
 
 const DEFAULT_DIGEST_INTERVAL_MS = 60 * 60 * 1000; // hourly
 const DEFAULT_CONNECTOR_HEALTH_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
+const DEFAULT_ENGINE_EVENT_NOTIFICATIONS_INTERVAL_MS = 5 * 60 * 1000; // every 5 minutes
 const DEFAULT_RETENTION_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 const DEFAULT_ORCHESTRATION_RETENTION_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 const DEFAULT_BENCHMARK_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
@@ -98,6 +100,11 @@ export function loadPlatformJobsEnvironment(
       environment,
       "CONNECTOR_HEALTH_SWEEP_INTERVAL_MS",
       DEFAULT_CONNECTOR_HEALTH_SWEEP_INTERVAL_MS,
+    ),
+    engineEventNotificationsIntervalMs: parseIntervalMs(
+      environment,
+      "ENGINE_EVENT_NOTIFICATIONS_INTERVAL_MS",
+      DEFAULT_ENGINE_EVENT_NOTIFICATIONS_INTERVAL_MS,
     ),
     adsCoreInternalBaseUrl: requireValue(environment, "ADS_CORE_INTERNAL_BASE_URL"),
     retentionSweepServiceTokenRef: requireValue(

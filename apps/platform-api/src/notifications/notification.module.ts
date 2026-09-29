@@ -56,6 +56,6 @@ import { EMAIL_PROVIDER } from "./tokens";
     NotificationService,
     NotificationExceptionFilter,
   ],
-  exports: [NotificationService],
+  exports: [NotificationService, SystemNotificationStore, NOTIFICATION_DIGEST_SERVICE_TOKEN_HASH],
 })
 export class NotificationModule {}

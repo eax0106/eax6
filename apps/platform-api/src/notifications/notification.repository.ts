@@ -52,12 +52,33 @@ export class NotificationRepository implements OnModuleDestroy {
     input: CreateNotificationEventInput,
     inAppEnabled: boolean,
   ): Promise<NotificationEvent> {
+    return this.insertEvent(id, input, inAppEnabled).then((event) => event!);
+  }
+
+  /**
+   * Like createEvent, but `null` when an event with the same dedupe key already
+   * exists for the tenant: the second happening is not stored and not read.
+   */
+  createEventOnce(
+    id: string,
+    input: CreateNotificationEventInput & { readonly dedupeKey: string },
+    inAppEnabled: boolean,
+  ): Promise<NotificationEvent | null> {
+    return this.insertEvent(id, input, inAppEnabled);
+  }
+
+  private insertEvent(
+    id: string,
+    input: CreateNotificationEventInput,
+    inAppEnabled: boolean,
+  ): Promise<NotificationEvent | null> {
     return this.withTenant(input.tenantId, async (client) => {
       const event = await client.query<EventRow>(
         `INSERT INTO notification_events
            (id, tenant_id, workspace_id, event_class, severity, title, body,
-            deep_link, source_service)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            deep_link, source_service, dedupe_key)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (tenant_id, dedupe_key) WHERE dedupe_key IS NOT NULL DO NOTHING
          RETURNING id, tenant_id, workspace_id, event_class, severity, title, body,
                    deep_link, created_at, source_service, NULL::timestamptz AS read_at,
                    NULL::timestamptz AS acknowledged_at`,
@@ -71,15 +92,18 @@ export class NotificationRepository implements OnModuleDestroy {
           input.body,
           input.deepLink,
           input.sourceService,
+          input.dedupeKey ?? null,
         ],
       );
+      const row = event.rows[0];
+      if (row === undefined) return null;
       await client.query(
         `INSERT INTO notification_reads
            (id, tenant_id, notification_event_id, user_id, in_app_enabled)
          VALUES ($1, $2, $3, $4, $5)`,
         [randomUUID(), input.tenantId, id, input.userId, inAppEnabled],
       );
-      return mapEvent(event.rows[0]!);
+      return mapEvent(row);
     });
   }
 

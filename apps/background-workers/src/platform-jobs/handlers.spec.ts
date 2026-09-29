@@ -82,6 +82,49 @@ describe("createPlatformJobHandlers", () => {
     expect(handlers.get("platform.connector-health-sweep")).toBeUndefined();
   });
 
+  it("registers an engine-event-notifications handler that relays to platform-api's internal route with the shared secret", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ tenants: 2, tenants_failed: 0, notifications_created: 1 }),
+      text: async () => "",
+    })) as unknown as typeof fetch;
+
+    const handlers = createPlatformJobHandlers({
+      platformApiInternalBaseUrl: "http://platform-api.internal",
+      notificationDigestServiceToken: "digest-token",
+      fetchImpl,
+    });
+    const handler = handlers.get("platform.engine-event-notifications");
+    expect(handler).toBeDefined();
+
+    await expect(handler!({})).resolves.toEqual({ tenants: 2, tenants_failed: 0, notifications_created: 1 });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://platform-api.internal/internal/notifications/run-engine-producers",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer digest-token" }),
+      }),
+    );
+  });
+
+  it("fails the job when platform-api refuses, so the durable workflow retries it", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+      text: async () => "unavailable",
+    })) as unknown as typeof fetch;
+    const handlers = createPlatformJobHandlers({
+      platformApiInternalBaseUrl: "http://platform-api.internal",
+      notificationDigestServiceToken: "digest-token",
+      fetchImpl,
+    });
+    await expect(handlers.get("platform.engine-event-notifications")!({})).rejects.toThrow(
+      "engine-event notifications failed: HTTP 503 unavailable",
+    );
+  });
+
   it("registers a real connector-health-sweep handler that relays to platform-api's internal route", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

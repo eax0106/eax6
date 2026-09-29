@@ -145,7 +145,7 @@ describe("IntegrationService.health notifies when a connection turns unhealthy (
       eventClass: "system",
       severity: "warning",
       title: "GitHub connection needs reconnecting",
-      deepLink: "/connections/conn-1",
+      deepLink: "/app/connections/conn-1",
     });
   });
 
