@@ -1,5 +1,6 @@
 import { Body, Controller, Get, HttpException, Param, Post, Req } from "@nestjs/common";
 import type { SessionGatewayRequest } from "@alterx/auth";
+import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
 import type { WhatsappAccount } from "./whatsapp-account-registry.service";
 import { WhatsappAccountRegistryService } from "./whatsapp-account-registry.service";
 
@@ -24,8 +25,14 @@ export class WhatsappAccountsController {
     if (!body.workspaceId || !body.phoneNumberId || !body.wabaId || !body.accessTokenRef) {
       throw new HttpException("workspaceId, phoneNumberId, wabaId, and accessTokenRef are required", 400);
     }
-    return this.registry.register(tenantId, {
-      workspaceId: body.workspaceId,
+    // platform-api's actor context carries the bare workspace UUID; a
+    // prefixed id is accepted too.
+    const workspaceId = WorkspaceIdSchema.safeParse(
+      body.workspaceId.startsWith("ws_") ? body.workspaceId : `ws_${body.workspaceId}`,
+    );
+    if (!workspaceId.success) throw new HttpException("workspaceId must be a workspace UUIDv7", 400);
+    return toApi(await this.registry.register(tenantId, {
+      workspaceId: workspaceId.data.slice("ws_".length),
       phoneNumberId: body.phoneNumberId,
       wabaId: body.wabaId,
       accessTokenRef: body.accessTokenRef,
@@ -33,12 +40,12 @@ export class WhatsappAccountsController {
       monitoringConfig: body.monitoringConfig ?? {},
       mediaConfig: body.mediaConfig ?? {},
       escalationRules: body.escalationRules ?? [],
-    });
+    }));
   }
 
   @Get()
   async list(@Req() request: SessionGatewayRequest): Promise<{ readonly accounts: readonly WhatsappAccount[] }> {
-    return { accounts: await this.registry.list(requiredTenantId(request)) };
+    return { accounts: (await this.registry.list(requiredTenantId(request))).map(toApi) };
   }
 
   @Post(":id/configuration")
@@ -51,12 +58,19 @@ export class WhatsappAccountsController {
       readonly escalationRules?: readonly Readonly<Record<string, unknown>>[];
     },
   ): Promise<WhatsappAccount> {
-    return this.registry.updateConfiguration(requiredTenantId(request), accountId, body);
+    return toApi(await this.registry.updateConfiguration(requiredTenantId(request), accountId, body));
   }
 }
 
+// The registry works in database form (bare UUIDs); the API speaks prefixed
+// ids like every other route, and platform-api compares an account's
+// workspaceId with the caller's ws_ id before any by-id operation.
 function requiredTenantId(request: SessionGatewayRequest): string {
-  const tenantId = request.actorContext?.tenant_id;
-  if (!tenantId) throw new HttpException("Missing authenticated tenant context", 500);
-  return tenantId;
+  const tenantId = TenantIdSchema.safeParse(request.actorContext?.tenant_id);
+  if (!tenantId.success) throw new HttpException("Missing authenticated tenant context", 500);
+  return tenantId.data.slice("ten_".length);
+}
+
+function toApi(account: WhatsappAccount): WhatsappAccount {
+  return { ...account, tenantId: `ten_${account.tenantId}`, workspaceId: `ws_${account.workspaceId}` };
 }
