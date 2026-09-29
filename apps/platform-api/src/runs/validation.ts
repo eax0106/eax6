@@ -38,6 +38,21 @@ const listQuerySchema = z
     }
   });
 
+// The engine lists a workspace's artifacts newest first, paged by artifact id.
+const artifactListQuerySchema = z
+  .object({
+    cursor: z.string().regex(idPatterns.artifact).optional(),
+    limit: z.coerce.number().int().min(1).max(200).optional(),
+  })
+  .strict();
+
+export function parseArtifactListQuery(
+  input: unknown,
+  instance: string,
+): { cursor?: string | undefined; limit?: number | undefined } {
+  return parse(artifactListQuerySchema, input, instance);
+}
+
 export function parseRunListQuery(
   input: unknown,
   instance: string,

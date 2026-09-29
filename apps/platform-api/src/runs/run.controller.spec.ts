@@ -267,6 +267,16 @@ describe("RunController routes", () => {
     expect(response.json()).toEqual(engine.artifact);
   });
 
+  it("relays the workspace's artifact list with its cursor and limit", async () => {
+    const response = await request(`/api/v1/artifacts?limit=25&cursor=${artifactId}`, actor);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(engine.artifactList);
+    expect(engine.get).toHaveBeenCalledWith(
+      `/api/v1/artifacts?cursor=${artifactId}&limit=25`,
+      expect.any(Object),
+    );
+  });
+
   it("relays signed artifact download references through Platform", async () => {
     const response = await request(`/api/v1/artifacts/${artifactId}/download`, actor);
     expect(response.statusCode).toBe(200);
@@ -277,6 +287,7 @@ describe("RunController routes", () => {
     ["/api/v1/runs"],
     [`/api/v1/runs/${runId}`],
     [`/api/v1/artifacts/${artifactId}`],
+    ["/api/v1/artifacts"],
   ])("scope-gates %s", async (url) => {
     const response = await request(url, noScope);
     expectProblem(response, 403, "RBAC_PERMISSION_DENIED");
@@ -288,6 +299,9 @@ describe("RunController routes", () => {
     ["/api/v1/runs?limit=0"],
     ["/api/v1/runs/bad"],
     ["/api/v1/artifacts/bad"],
+    ["/api/v1/artifacts?limit=201"],
+    ["/api/v1/artifacts?cursor=bad"],
+    ["/api/v1/artifacts?run_id=x"],
   ])("rejects invalid request %s", async (url) => {
     const response = await request(url, actor);
     expectProblem(response, 400, "INVALID_RUN_REQUEST");
@@ -409,6 +423,9 @@ class RunEngine {
     media_type: "application/json",
     engine_extension: "kept",
   };
+  readonly artifactList = page([
+    { id: artifactId, runId, contentType: "text/plain", sizeBytes: 12 },
+  ]);
   private failurePath: string | undefined;
 
   reset(): void {
@@ -468,6 +485,9 @@ class RunEngine {
     }
     if (path.endsWith("/outcome")) {
       return { status: 200, body: this.outcome };
+    }
+    if (path === "/api/v1/artifacts" || path.startsWith("/api/v1/artifacts?")) {
+      return { status: 200, body: this.artifactList };
     }
     if (
       path === `/api/v1/artifacts/${artifactId}` ||

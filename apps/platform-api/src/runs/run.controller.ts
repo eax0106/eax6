@@ -181,6 +181,25 @@ export class RunController {
 export class ArtifactController {
   constructor(private readonly runs: RunService) {}
 
+  @Get()
+  @RequireWorkspaceRole(...readRoles)
+  @RequirePermission("runs:read")
+  async list(
+    @Query() query: unknown,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<EnginePage<EngineResource>> {
+    return project(
+      await this.runs.artifacts(
+        query,
+        requireActor(actor, "/api/v1/artifacts"),
+        traceparent,
+      ),
+      reply,
+    );
+  }
+
   @Get(":artifactId")
   @RequireWorkspaceRole(...readRoles)
   @RequirePermission("runs:read")

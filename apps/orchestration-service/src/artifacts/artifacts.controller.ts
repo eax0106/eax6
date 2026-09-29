@@ -9,9 +9,22 @@ export class ArtifactsController {
   constructor(private readonly artifacts: ArtifactsService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query("run_id") runId: string | undefined) {
+  async list(
+    @Req() request: SessionGatewayRequest,
+    @Query("run_id") runId: string | undefined,
+    @Query("cursor") cursor: string | undefined,
+    @Query("limit") rawLimit: string | undefined,
+  ) {
     try {
-      return { data: await this.artifacts.list(requiredTenantId(request), requiredQuery(runId)) };
+      if (runId !== undefined) {
+        return { data: await this.artifacts.list(requiredTenantId(request), runId) };
+      }
+      return await this.artifacts.listForWorkspace(
+        requiredTenantId(request),
+        requiredWorkspaceId(request),
+        cursor,
+        rawLimit === undefined ? undefined : Number(rawLimit),
+      );
     } catch (error: unknown) {
       throw mapArtifactError(error, request.url);
     }
@@ -42,9 +55,12 @@ function requiredTenantId(request: SessionGatewayRequest): string {
   return tenantId;
 }
 
-function requiredQuery(value: string | undefined): string {
-  if (value === undefined) throw new ArtifactValidationError("run_id is required");
-  return value;
+function requiredWorkspaceId(request: SessionGatewayRequest): string {
+  const workspaceId = request.actorContext?.workspace_id;
+  if (workspaceId === null || workspaceId === undefined) {
+    throw new HttpException(problem(request.url, 500, "ARTIFACTS_INTERNAL", "Missing authenticated workspace context"), 500);
+  }
+  return workspaceId;
 }
 
 function mapArtifactError(error: unknown, url: string | undefined): HttpException {
