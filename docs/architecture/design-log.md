@@ -110,6 +110,7 @@ Covers what happens after a workflow's initial graph is built — can the user c
 - **Per-workflow period budget (new, v1):** user sets a daily or monthly cap for one specific workflow — protects against many small runs of a recurring/event-triggered workflow (e.g. a lead-capture form firing dozens of times a day) quietly adding up past what a per-run cap alone would ever catch.
 - **Enforcement default: hard stop** when a period cap is hit — workflow stops running until the period resets or the user manually raises the cap. Matches the fail-closed instinct already used elsewhere in this design.
 - **Threshold alerts (v1):** notify at meaningful thresholds (e.g. 50%/80% of period budget) before the hard stop fires, so it's never a surprise. Reuses the same estimate machinery already required for the per-run display — not new infrastructure.
+- **Amended 2026-09-29 (Havish, decision D3).** Budgets live in the engine and Run Manager checks them atomically at run start. Kinds: optional per-run cap, per-workflow daily or monthly budget, and the per-workspace monthly budget kept as the umbrella; alerts at 50% and 80%. At the cap the default is a hard stop; a budget may be set to "warn only" by its owner. See §34 D3.
 - **Explicitly deferred past v1, real ideas, not dismissed:** account-wide budget across all workflows combined; per-category caps (e.g. cap expensive operations like image-gen separately from cheap ones); degrade-to-cheaper-model instead of hard-stop as the cap nears (reuses Selection & Binding scoring, just not built first); rolling time windows instead of fixed calendar periods (closes a real gaming gap — spend up to cap at 11:59pm, again at 12:01am — but adds real complexity for v1).
 
 ## 10. Workflow organization & session model (locked)
@@ -419,6 +420,7 @@ Havish answered every open product question in one sitting, one question at a ti
 
 - **D1. System identity for background jobs: system caller on the two-token path.** A named principal `system:platform-jobs`, one tenant per token, fixed read-only permissions, short-lived and single-use, audited as a system principal. Unblocks engine-originated notifications, budget alerts, drift suggestions and self-heal notices. Amends §30.
 - **D2. Retention.** Audit skeleton 90 days after tenant deletion; legally required records (invoices and billing, books of account, seller KYC and payouts) held in a minimal legal-hold store for exactly the prescribed period; staff access logs 90 days; everything else destroyed immediately. Workspace deletion has an undo window (pending deletion, default 7 days, configurable), then erasure. Amends §18.
+- **D3. Budgets.** Engine-owned budget records, atomic check-and-reserve in Run Manager at run start; per-run cap, per-workflow daily/monthly, per-workspace monthly; alerts at 50% and 80%; hard stop by default, per-budget warn-only option. Amends §9 and settles §22's budget ownership.
 
 ---
 

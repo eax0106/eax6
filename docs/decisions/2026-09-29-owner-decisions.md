@@ -24,3 +24,16 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **2c: a small undo window for workspace deletion.** Deleting a workspace (typed-name confirmation) moves it to a pending-deletion state: hidden, its triggers and schedules paused, no runs start, data untouched. The owner or an admin can restore it during the window. When the window ends, the workspace's data is erased by the same schema-derived path as §18. The window length is a configuration value; **default 7 days** unless Havish sets another.
 
 **What it means.** C3b builds the erasure providers against these rules; the legal-hold store and its periods are configuration; the retention sweeper destroys legal-hold rows at period end; workspace delete gets a pending-deletion state with restore and a scheduled erase. The periods in 2b are an engineering reading of Indian law, not legal advice.
+
+## D3. Budgets (C10, design log §9 and §22)
+
+**Question.** Budgets exist (per workspace, monthly, in platform_db) but nothing enforces them, and §22 requires Run Manager to check the budget atomically at run start.
+
+**Options put.** (3a) move budget records to the engine so Run Manager checks them atomically, or keep them in platform_db and amend §22 (non-atomic, parallel runs can overspend); (3b) which budget kinds; (3c) behaviour at the cap.
+
+**Answers (Havish took each recommendation).**
+- **3a: budgets move to the engine.** Run Manager owns the budget records and makes the start-of-run check atomic against them (row lock or conditional update, so two parallel runs cannot both pass); platform-api proxies budget reads and writes to the engine, as it does for workflows. The platform_db `budgets` table (migration 0024, B2.9b) is migrated to the engine and retired. Run Manager is frozen core; the 2026-09-28 exemption covers C10.
+- **3b: every kind in §9, plus the existing workspace budget.** Per-run hard cap (optional, set per workflow); per-workflow budget, daily or monthly; per-workspace monthly budget kept as the umbrella; threshold alerts at 50% and 80% (delivered through the D1 system caller and notifications).
+- **3c: hard stop by default, "warn only" as a per-budget option.** At the cap, runs do not start until the period resets or the cap is raised; a budget marked warn-only alerts but does not block, an explicit user choice recorded on the budget.
+
+**What it means.** Engine budget store with tenant RLS and erasure registration; atomic check-and-reserve at run start in Run Manager; reservation released or trued up at run end (the reservation amount comes from D4); platform-api budget routes become engine proxies; threshold alert job on the system caller.
