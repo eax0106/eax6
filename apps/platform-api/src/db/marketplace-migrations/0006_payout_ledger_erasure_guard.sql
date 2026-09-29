@@ -5,17 +5,32 @@
 -- application session cannot delete a row whatever tenant it has set. The
 -- minimum fields the law says to keep are copied to legal_hold_records before
 -- this runs. UPDATE stays refused.
+-- The role is cluster-wide and platform migration 0026 creates it too; whichever
+-- runs first creates it, and the other finds it there.
+DO $role$
+BEGIN
+  BEGIN
+    CREATE ROLE platform_erasure NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  EXCEPTION WHEN duplicate_object THEN
+    NULL;
+  END;
+  EXECUTE format('GRANT USAGE, CREATE ON SCHEMA %I TO platform_erasure', current_schema());
+END
+$role$;
+--> statement-breakpoint
 GRANT SELECT, DELETE ON "payout_ledger" TO platform_erasure;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION reject_payout_ledger_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  IF TG_OP = 'DELETE'
-     AND current_user = 'platform_erasure'
-     AND EXISTS (
-       SELECT 1 FROM tenant_erasure_manifests m
-        WHERE m.tenant_id::text = OLD.tenant_id AND m.state = 'active'
-     ) THEN
-    RETURN OLD;
+  -- Nested on purpose: the manifests table is the platform database's, and only
+  -- the erasure role ever needs to look at it.
+  IF TG_OP = 'DELETE' AND current_user = 'platform_erasure' THEN
+    IF EXISTS (
+      SELECT 1 FROM tenant_erasure_manifests m
+       WHERE m.tenant_id::text = OLD.tenant_id AND m.state = 'active'
+    ) THEN
+      RETURN OLD;
+    END IF;
   END IF;
   RAISE EXCEPTION 'payout_ledger is append-only';
 END;
