@@ -340,6 +340,7 @@ Section 1's own lead-capture example requires Alter to host a **public web form*
 - **Reason 2, decisive — blast radius.** This is the only surface anonymous, unauthenticated traffic touches directly. It needs its own boundary, its own rate limiting, and its own blast-radius declaration. If the public endpoint is flooded, that must degrade public form submissions only — not the trigger system that also serves scheduled and internal triggers.
 - **Distinct from Platform Web**, which is authenticated (log in, see your own workflows). Public Surface is deliberately the opposite: no login, anyone with the link, untrusted input by definition.
 - Consequently it is a primary consumer of the Safety & Policy shared library (Section 11) — untrusted input handling, injection defense, upload rules.
+- **Amended 2026-09-29 (Havish, decision D16).** Built for v1 as an **option**, not the default: users normally connect their own input (form tool, CRM, site) by connector or webhook; the hosted form is offered as one choice when setting up a submission trigger. Minimal: fields on the trigger, public link, Cloudflare Turnstile, per-form and per-visitor rate limits, D15 input checks, no uploads in v1, own process. See §34 D16.
 
 ## 26. Naming (locked): kill the "session" collision
 
@@ -448,6 +449,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D13. Track D amendments accepted.** §4 ten classes mapped to the five buckets, retry once then swap, classes added for target-missing and ambiguous; §7 pattern 1 by gate and RUNTIME_MODE; §23 Project Mode present, not offered; §32 closed by deletion.
 - **D14. Read-back.** Email: pass on acceptance, SES delivery events flag later bounces and notify. Clicks: snapshot only when the step declares the expected page state, otherwise "unconfirmed". Amends §5.2.
 - **D15. Safety library.** One implementation per language plus a CI parity test on a shared case set; the duplicate-safety gate narrowed to real duplicates. Amends §11.
+- **D16. Public form.** Minimal hosted form offered as an option beside connecting the user's own input; Turnstile, rate limits, input checks, no uploads, its own process. Amends §25.
 
 ---
 

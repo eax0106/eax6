@@ -166,3 +166,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (b).** Exactly one implementation per language (TypeScript, Python). A parity test runs both injection classifiers over one shared case set and fails if they disagree, in CI. The architecture gate is narrowed from "any raw fetch" to real duplicate safety logic (a second SSRF guard, classifier or redactor), and its baseline is regenerated with the count reported.
 
 **What it means.** Shared case file, parity spec wired into CI, gate rule change with a proven-to-fail case; §11 and planes rule 37 amended.
+
+## D16. Hosted public form (design log §25)
+
+**Question.** Alter cannot host a form; public input is webhooks only, though §1's own example is a lead-capture form.
+
+**Options put.** (a) webhooks only for v1; (b) a minimal hosted form (fields on the trigger, public link `/f/<token>`, Cloudflare Turnstile, per-form and per-visitor rate limits, D15 safety checks on input, no uploads in v1, its own component); (c) a full form builder.
+
+**Answer: (b), as an option, not the default.** The primary input stays the user's own source (their existing form tool, CRM or site connected through a connector or webhook). When a user sets up a trigger for incoming submissions, Alter offers the hosted form as one choice alongside connecting their own; it is never created unless chosen.
+
+**What it means.** Public Surface component (separate process, own rate limits); form definition on the trigger; hosted page and submission endpoint; Turnstile verification (site key and secret as configuration); submissions become trigger events.
