@@ -283,3 +283,22 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **Risk score:** computed only from real signals: the latest scanner verdict (D21), whether it is the seller's first listing, the outside actions the tool can perform (side-effect tools, account scopes), and prior reports or takedowns. The score shows its reasons beside it, orders the review queue, and never approves or rejects anything by itself.
 
 **What it means.** Governance status and notes, resubmit route, a risk computation over existing data, review queue sorted by risk with reasons shown; the web's hidden controls wired.
+
+## D28. Image publishing (C32)
+
+**Question.** The `images` workflow builds but cannot push: the `ghcr.io/havishalterx-eng/alter-*` packages were created by alter-x-4-, so only that repository may write them.
+
+**Options put.** (a) grant alterengine-6 write access to the existing packages and remove alter-x-4-'s access; (b) rename our images; (c) turn off publishing here.
+
+**Answer: (a).** Owner action (Havish, in GitHub): for each `alter-*` package under havishalterx-eng, Package settings, Manage Actions access, add `alterengine-6` with Write, and remove `alter-x-4-`. Image names, the EC2 kit and compose files stay unchanged. After the change, re-run the `images` workflow on main and confirm it pushes.
+
+## D29. Private security items
+
+**Answer: go-ahead** on the private security items reported to Havish in chat (three earlier items, including C48's internal-route credential using the shared internal service token under §30, and the two later items). Details are deliberately not recorded in this public repository; the build instructions carry them privately.
+
+## Owner actions (Havish), collected
+
+1. **GitHub packages (D28):** give `alterengine-6` Write on each `alter-*` package, remove `alter-x-4-`.
+2. **CA confirmation (D2, D22):** legal retention periods; GST rate and treatment; marketplace TCS/TDS before paid listings.
+3. **Prices (D22):** plan price, included credits, extra-credit price, credits per verified run, free-tier limit, before launch.
+4. **Template review (D18):** review the eight starter templates before launch.
