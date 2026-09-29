@@ -303,6 +303,19 @@ describe("ADS administration routes", () => {
     expect(removed.statusCode).toBe(200);
     expect(removed.json()).toEqual(engine.deletedResource);
     expect(removed.json()).not.toHaveProperty("deletion_certificate");
+
+    const removedSource = await request({
+      method: "DELETE",
+      url: `/api/v1/ads/sources/${sourceId}`,
+      actor,
+      headers: { "idempotency-key": "delete-source" },
+    });
+    expect(removedSource.statusCode).toBe(200);
+    expect(engine.delete).toHaveBeenLastCalledWith(
+      `/api/v1/ads/sources/${sourceId}`,
+      expect.any(Object),
+      { idempotencyKey: "delete-source" },
+    );
   });
 
   it("relays source list pagination and detail reads", async () => {
@@ -684,6 +697,14 @@ describe("ADS administration routes", () => {
       headers: { "idempotency-key": "editor-delete" },
     });
     expectProblem(editorDelete, 403, "RBAC_ROLE_DENIED");
+
+    const editorSourceDelete = await request({
+      method: "DELETE",
+      url: `/api/v1/ads/sources/${sourceId}`,
+      actor: { ...actor, roles: ["editor"] },
+      headers: { "idempotency-key": "editor-source-delete" },
+    });
+    expectProblem(editorSourceDelete, 403, "RBAC_ROLE_DENIED");
 
     const viewerCreate = await request({
       method: "POST",
@@ -1278,6 +1299,7 @@ function mutationCases() {
       202,
     ],
     ["DELETE", `/api/v1/ads/documents/${documentId}`, undefined, 200],
+    ["DELETE", `/api/v1/ads/sources/${sourceId}`, undefined, 200],
     [
       "POST",
       `/api/v1/ads/documents/${documentId}/actions/reindex`,
@@ -1330,6 +1352,7 @@ function routeCases(): ReadonlyArray<
       },
     ],
     ["DELETE", `/api/v1/ads/documents/${documentId}`, undefined],
+    ["DELETE", `/api/v1/ads/sources/${sourceId}`, undefined],
     [
       "POST",
       `/api/v1/ads/documents/${documentId}/actions/reindex`,
@@ -1409,6 +1432,12 @@ function engineErrorCases() {
       `/api/v1/ads/documents/${documentId}`,
       undefined,
       `/api/v1/ads/documents/${documentId}`,
+    ],
+    [
+      "DELETE",
+      `/api/v1/ads/sources/${sourceId}`,
+      undefined,
+      `/api/v1/ads/sources/${sourceId}`,
     ],
     [
       "GET",

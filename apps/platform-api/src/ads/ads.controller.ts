@@ -439,6 +439,29 @@ export class AdsController {
     );
   }
 
+  @Delete("sources/:sourceId")
+  @RequireWorkspaceRole(...deleteRoles)
+  @RequirePermission("knowledge:delete")
+  @Idempotent()
+  async deleteSource(
+    @Param("sourceId") sourceId: string,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<AdsResource> {
+    const instance = `/api/v1/ads/sources/${sourceId}`;
+    return project(
+      await this.ads.deleteSource(
+        sourceId,
+        requireActor(actor, instance),
+        traceparent,
+        idempotencyKey!,
+      ),
+      reply,
+    );
+  }
+
   @Delete("documents/:documentId")
   @RequireWorkspaceRole(...deleteRoles)
   @RequirePermission("knowledge:delete")

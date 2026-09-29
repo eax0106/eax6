@@ -1,15 +1,23 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol, cast
 
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.ids import new_prefixed_id, validate_prefixed_id
-from src.db.models import Chunk, Document, DocumentVersion, IngestionJob, Scope, Source
+from src.db.models import (
+    Chunk,
+    Document,
+    DocumentVersion,
+    IngestionJob,
+    Record,
+    Scope,
+    Source,
+)
 
 from .models import IngestionStage
 from .permissions import DocumentPermissions, DocumentPermissionsPatch, SourcePermissions
@@ -117,6 +125,13 @@ class StoredReindex:
     document_version: int
     embedding_version: str
     chunk_count: int
+
+
+@dataclass(frozen=True)
+class StoredDeletion:
+    deleted_documents: int
+    deleted_rows: int
+    deleted_objects: int
 
 
 class IngestionRepository(Protocol):
@@ -1085,6 +1100,74 @@ class SqlAlchemyIngestionRepository:
                 chunk_count=len(chunks),
             )
 
+    def delete_document(
+        self,
+        *,
+        tenant_uuid: str,
+        document_id: str,
+        delete_objects: Callable[[Sequence[str]], None],
+    ) -> StoredDeletion:
+        """Erase one document: its stored objects, chunks, versions and row.
+
+        The document row is locked first, so a concurrent reindex cannot add
+        a version between reading the object references and deleting them.
+        Objects are deleted before the rows, inside the same transaction: if
+        the object store fails, nothing is deleted and the call can simply be
+        repeated; the reverse order could leave tenant content in the store
+        with no row left to find it by.
+        """
+        with self._sessions.begin() as session:
+            self._set_tenant(session, tenant_uuid)
+            self._get_document(session, tenant_uuid, document_id, for_update=True)
+            references = _document_object_references(session, (document_id,))
+            delete_objects(references)
+            rows = _delete_document_rows(session, tenant_uuid, (document_id,))
+            return StoredDeletion(
+                deleted_documents=1, deleted_rows=rows, deleted_objects=len(references)
+            )
+
+    def delete_source(
+        self,
+        *,
+        tenant_uuid: str,
+        source_id: str,
+        delete_objects: Callable[[Sequence[str]], None],
+    ) -> StoredDeletion:
+        """Erase a source and everything ingested through it: its documents
+        (as `delete_document` does), connector records and ingestion jobs.
+        The scope row stays: it belongs to the workspace, not the source."""
+        with self._sessions.begin() as session:
+            self._set_tenant(session, tenant_uuid)
+            self._get_source(session, tenant_uuid, source_id, for_update=True)
+            document_ids = tuple(
+                session.scalars(
+                    select(Document.id)
+                    .where(Document.tenant_id == tenant_uuid, Document.source_id == source_id)
+                    .with_for_update()
+                ).all()
+            )
+            references = _document_object_references(session, document_ids)
+            delete_objects(references)
+            rows = _delete_document_rows(session, tenant_uuid, document_ids)
+            for model in (Record, IngestionJob):
+                rows += _rowcount(
+                    session.execute(
+                        delete(model).where(
+                            model.tenant_id == tenant_uuid, model.source_id == source_id
+                        )
+                    )
+                )
+            rows += _rowcount(
+                session.execute(
+                    delete(Source).where(Source.tenant_id == tenant_uuid, Source.id == source_id)
+                )
+            )
+            return StoredDeletion(
+                deleted_documents=len(document_ids),
+                deleted_rows=rows,
+                deleted_objects=len(references),
+            )
+
     @staticmethod
     def _set_tenant(session: Session, tenant_uuid: str) -> None:
         session.execute(_SET_TENANT, {"tenant_id": tenant_uuid})
@@ -1159,3 +1242,43 @@ class SqlAlchemyIngestionRepository:
             created_at=job.created_at,
             completed_at=job.completed_at,
         )
+
+
+def _document_object_references(session: Session, document_ids: Sequence[str]) -> tuple[str, ...]:
+    """Every stored object behind these documents' versions (raw and normalized)."""
+    if not document_ids:
+        return ()
+    rows = session.execute(
+        select(DocumentVersion.content_ref, DocumentVersion.normalized_ref).where(
+            DocumentVersion.document_id.in_(document_ids)
+        )
+    ).all()
+    return tuple(sorted({ref for row in rows for ref in row if ref}))
+
+
+def _delete_document_rows(session: Session, tenant_uuid: str, document_ids: Sequence[str]) -> int:
+    """Chunks, then versions (visible through their document under row
+    security), then the documents themselves -- foreign-key order."""
+    if not document_ids:
+        return 0
+    deleted = _rowcount(
+        session.execute(
+            delete(Chunk).where(Chunk.tenant_id == tenant_uuid, Chunk.document_id.in_(document_ids))
+        )
+    )
+    deleted += _rowcount(
+        session.execute(
+            delete(DocumentVersion).where(DocumentVersion.document_id.in_(document_ids))
+        )
+    )
+    deleted += _rowcount(
+        session.execute(
+            delete(Document).where(Document.tenant_id == tenant_uuid, Document.id.in_(document_ids))
+        )
+    )
+    return deleted
+
+
+def _rowcount(result: object) -> int:
+    value = getattr(result, "rowcount", 0)
+    return value if isinstance(value, int) else 0

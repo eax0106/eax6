@@ -64,7 +64,11 @@ export function SourceDetailPage() {
             </Button>
             <Button 
               variant="danger" 
-              onClick={() => deleteMutation.mutate()}
+              onClick={() => {
+                if (window.confirm(`Delete "${source.name}" and every document ingested through it? This cannot be undone.`)) {
+                  deleteMutation.mutate()
+                }
+              }}
               disabled={deleteMutation.isPending}
             >
               <Trash2 className="mr-2 h-4 w-4" />
