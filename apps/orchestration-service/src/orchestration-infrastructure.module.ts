@@ -7,6 +7,9 @@ import {
 import { lazyAuth0M2mTokenProviderFromEnvironment } from "@alterx/auth";
 import { ORCHESTRATION_MIGRATIONS_PATH } from "./database/migrations-path";
 import { RunOutcomeService, type RunVerdictSink } from "./runs/run-outcome.service";
+import { EngineBudgetService } from "./budgets/budget.service";
+import { HttpRunCostReader } from "./budgets/http-run-cost-reader";
+import { RunBudgetGate, type RunCostReader } from "./budgets/run-budget-gate";
 import { COST_CLIENT_PROTO_PATH } from "./registry/nodeexec-grpc.constants";
 
 export interface SessionGatewayEnvironment {
@@ -137,7 +140,22 @@ export function internalM2mTokenProvider() {
 export function buildRunOutcomeService(): RunOutcomeService {
   const dbConfig = sessionGatewayEnvironment(process.env);
   const store = orchestrationStore(dbConfig);
-  return new RunOutcomeService(store, runVerdictSink(process.env));
+  return new RunOutcomeService(store, runVerdictSink(process.env), buildRunBudgetGate(process.env));
+}
+
+/**
+ * D3: budgets live in the Engine's own database; the run's real cost comes
+ * from the Cost Ledger. A mock runtime has no ledger, so nothing is ever
+ * billed and a run settles at zero.
+ */
+export function buildRunBudgetGate(environment: NodeJS.ProcessEnv): RunBudgetGate {
+  const store = orchestrationStore(sessionGatewayEnvironment(environment));
+  const baseUrl = environment.COST_LEDGER_BASE_URL?.trim();
+  const reader: RunCostReader =
+    (environment.RUNTIME_MODE?.trim() || "mock") === "real" && baseUrl
+      ? new HttpRunCostReader(baseUrl, internalM2mTokenProvider())
+      : { billableMinor: async () => 0 };
+  return new RunBudgetGate(new EngineBudgetService(store), reader);
 }
 
 /**

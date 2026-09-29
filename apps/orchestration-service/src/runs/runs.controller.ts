@@ -14,6 +14,8 @@ import {
 import type { SessionGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply } from "fastify";
+
+import { BudgetExceededError } from "../budgets/budget.service";
 import {
   RunLauncherService,
   RunNotFoundError,
@@ -239,6 +241,12 @@ function mapRunError(error: unknown, requestUrl: string | undefined): HttpExcept
   }
   if (error instanceof WorkflowNotFoundError) {
     return notFound(requestUrl, error.message, "WORKFLOW_NOT_FOUND", "runs.workflow-not-found");
+  }
+  if (error instanceof BudgetExceededError) {
+    return new HttpException(
+      problem(requestUrl, 409, "BUDGET_EXCEEDED", error.message, "runs.budget-exceeded", false),
+      409,
+    );
   }
   if (error instanceof RunStateConflictError) {
     return conflict(requestUrl, error.message);

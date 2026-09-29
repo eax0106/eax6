@@ -12,7 +12,7 @@ import { M2mValidator, ServiceAuthGuard } from "@alterx/auth";
 import { COST_STORE_PROVIDER, type CostStoreProvider } from "./database/cost-store.token";
 import { CostStoreLifecycle } from "./database/store.lifecycle";
 import { CostIngestService, type CostEventStore } from "./ingest/cost-ingest.service";
-import { CostRollupService, type RollupStore } from "./rollup/cost-rollup.service";
+import { applyMargin, CostRollupService, type RollupStore } from "./rollup/cost-rollup.service";
 import { CostSummaryController } from "./rollup/cost-summary.controller";
 import { EstimationController } from "./estimation/estimation.controller";
 import { EstimationService } from "./estimation/estimation.service";
@@ -22,7 +22,7 @@ import { ModelOutcomesService } from "./model-outcomes/model-outcomes.service";
 import { RunVerdictsService } from "./run-verdicts/run-verdicts.service";
 import { NodeCostsController } from "./node-costs/node-costs.controller";
 import { NodeCostsService } from "./node-costs/node-costs.service";
-import { RUN_TOTAL_MARGIN_RATE, RunTotalService } from "./node-costs/run-total.service";
+import { RUN_TOTAL_MARGIN, RunTotalService } from "./node-costs/run-total.service";
 
 @Module({})
 export class AppModule {
@@ -48,7 +48,7 @@ export class AppModule {
         { provide: COST_STORE_PROVIDER, useValue: store },
         EstimationService,
         NodeCostsService,
-        { provide: RUN_TOTAL_MARGIN_RATE, useValue: marginRate },
+        { provide: RUN_TOTAL_MARGIN, useValue: (internalCostMinor: string) => applyMargin(internalCostMinor, marginRate) },
         RunTotalService,
         ModelOutcomesService,
         RunVerdictsService,

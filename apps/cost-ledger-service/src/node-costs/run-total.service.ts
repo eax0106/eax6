@@ -1,10 +1,11 @@
 import { Inject, Injectable } from "@nestjs/common";
 
 import { COST_STORE_PROVIDER, type CostStoreProvider } from "../database/cost-store.token";
-import { applyMargin } from "../rollup/cost-rollup.service";
 import { NodeCostValidationError } from "./node-costs.service";
 
-export const RUN_TOTAL_MARGIN_RATE = Symbol("RUN_TOTAL_MARGIN_RATE");
+/** Turns a run's internal cost into what is billed: the margin, applied once. */
+export type MarginApplier = (internalCostMinor: string) => string;
+export const RUN_TOTAL_MARGIN = Symbol("RUN_TOTAL_MARGIN");
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -23,7 +24,7 @@ export interface RunTotal {
 export class RunTotalService {
   constructor(
     @Inject(COST_STORE_PROVIDER) private readonly store: CostStoreProvider,
-    @Inject(RUN_TOTAL_MARGIN_RATE) private readonly marginRate: number,
+    @Inject(RUN_TOTAL_MARGIN) private readonly applyMargin: MarginApplier,
   ) {}
 
   async getForRun(input: {
@@ -43,7 +44,7 @@ export class RunTotalService {
         [tenantId, workspaceId, runId],
       );
       const row = result.rows[0]!;
-      return { billableMinor: applyMargin(row.internal_cost_minor, this.marginRate), eventCount: row.event_count };
+      return { billableMinor: this.applyMargin(row.internal_cost_minor), eventCount: row.event_count };
     });
   }
 }

@@ -12,6 +12,7 @@ import type {
   DurableExecutionProvider,
   DurableWorkflowHandle,
 } from "@alterx/shared-clients";
+import type { RunBudgetGate } from "../budgets/run-budget-gate";
 import type { RunOutcomeService } from "./run-outcome.service";
 import { DurableRunQueue } from "./durable-run-queue.service";
 import {
@@ -245,6 +246,7 @@ export class RunLauncherService {
     private readonly runOutcomes?: RunOutcomeService,
     private readonly projectProvisioning?: ProjectRunProvisioningService,
     private readonly queue?: DurableRunQueue,
+    private readonly budgetGate?: RunBudgetGate,
   ) {}
 
   async createRun(
@@ -267,8 +269,8 @@ export class RunLauncherService {
     const timeoutMs = normalizeTimeout(options.timeoutMs);
 
     const created = await this.store.withTenant(tenantId, async (tx) => {
-      const workflow = await tx.query<{ readonly id: string }>(
-        "SELECT id FROM workflows WHERE tenant_id = $1 AND id = $2",
+      const workflow = await tx.query<{ readonly id: string; readonly workspace_id: string }>(
+        "SELECT id, workspace_id FROM workflows WHERE tenant_id = $1 AND id = $2",
         [tenantId, workflowId],
       );
       if (workflow.rowCount === 0) {
@@ -287,7 +289,16 @@ export class RunLauncherService {
          RETURNING ${RUN_SELECT_COLUMNS}`,
         [tenantId, workflowId, runId, version.id, triggeringEventId ?? null, timeoutMs],
       );
-      return { row: inserted.rows[0]!, compiledDag: version.compiledDag };
+      const row = inserted.rows[0]!;
+      // D3: a run over budget is refused here, and its row rolls back with it.
+      await this.budgetGate?.reserve(tx, {
+        tenantId,
+        workspaceId: workflow.rows[0]!.workspace_id,
+        workflowId,
+        runId,
+        compiledDag: version.compiledDag,
+      });
+      return { row, compiledDag: version.compiledDag };
     });
 
     return this.startAndTransition(tenantId, created.row, created.compiledDag, {

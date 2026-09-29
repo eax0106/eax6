@@ -9,7 +9,7 @@ import type { OrchestrationTenantStore } from "../runs/run-observability.service
 import {
   BudgetConflictError,
   BudgetExceededError,
-  BudgetService,
+  EngineBudgetService,
   BudgetValidationError,
 } from "./budget.service";
 
@@ -26,7 +26,7 @@ let runCounter = 0;
 describe.sequential("Budgets", () => {
   let postgres: StartedPostgreSqlContainer;
   let store: PostgresOrchestrationStoreProvider;
-  let budgets: BudgetService;
+  let budgets: EngineBudgetService;
 
   const newRun = async (): Promise<string> => {
     const id = `run_018f4d6e-2b4a-7a3e-8c1a-${String(++runCounter).padStart(12, "0")}`;
@@ -64,7 +64,7 @@ describe.sequential("Budgets", () => {
       migrationsFolder,
     });
     await store.migrate();
-    budgets = new BudgetService(store as unknown as OrchestrationTenantStore);
+    budgets = new EngineBudgetService(store as unknown as OrchestrationTenantStore);
     await store.withTenant(BARE_TENANT, (tx) =>
       tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'w')", [WORKFLOW, BARE_TENANT, BARE_WORKSPACE]),
     );
@@ -144,6 +144,20 @@ describe.sequential("Budgets", () => {
     // what it spent counts against the next run
     await expect(reserveInOwnTransaction(900)).rejects.toBeInstanceOf(BudgetExceededError);
     await expect(reserveInOwnTransaction(880)).resolves.toHaveLength(1);
+  });
+
+  it("a run that reserves nothing up front is still refused once spent money has used the cap, and settles cleanly", async () => {
+    await clear();
+    const budget = await budgets.create(TENANT, { workspaceId: WORKSPACE, kind: "workspace", amountMinor: 100, createdBy: "u" });
+    const first = await newRun();
+    await store.withTenant(BARE_TENANT, (tx) =>
+      budgets.reserve(tx, { tenantId: TENANT, workspaceId: WORKSPACE, workflowId: WORKFLOW, runId: first, amountMinor: 0 }),
+    );
+    expect(await budgets.settle(TENANT, first, 100)).toBe(1);
+    expect(await usage(budget.id)).toEqual({ spent_minor: "100", reserved_minor: "0" });
+    // 100 of 100 spent: even a zero-estimate run fits (100 <= 100), one paisa more does not
+    await expect(reserveInOwnTransaction(0)).resolves.toHaveLength(1);
+    await expect(reserveInOwnTransaction(1)).rejects.toBeInstanceOf(BudgetExceededError);
   });
 
   it("a disabled budget binds nothing; another workspace's and another workflow's budgets do not apply", async () => {

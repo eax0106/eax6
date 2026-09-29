@@ -8,6 +8,7 @@ import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.const
 import { loadRunLauncherEnvironment } from "./config/run-launcher-environment";
 import {
   OrchestrationInfrastructureModule,
+  buildRunBudgetGate,
   buildRunOutcomeService,
   internalM2mTokenProvider,
   orchestrationStore,
@@ -55,6 +56,7 @@ import {
             }),
           ),
           new DurableRunQueue(store),
+          buildRunBudgetGate(process.env),
         );
       },
     },

@@ -32,6 +32,7 @@ import { loadConversationDispatchEnvironment } from "./config/conversation-dispa
 import { loadWhatsappWebhookEnvironment } from "./config/whatsapp-webhook-environment";
 import { RunLauncherService } from "./runs/run-launcher.service";
 import {
+  buildRunBudgetGate,
   OrchestrationInfrastructureModule,
   orchestrationStore,
   sessionGatewayEnvironment,
@@ -124,7 +125,7 @@ import { RunLauncherModule } from "./run-launcher.module";
       useFactory: (launcher: RunLauncherService) => {
         const dbConfig = sessionGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
-        return new TriggerEventDispatchService(store, launcher);
+        return new TriggerEventDispatchService(store, launcher, buildRunBudgetGate(process.env));
       },
     },
     {

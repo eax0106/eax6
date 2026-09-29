@@ -10,6 +10,7 @@ import {
 } from "@alterx/contracts";
 import type { RunDispatchHandler } from "@alterx/adapters";
 import type { OrchestrationTenantStore } from "../runs/run-launcher.service";
+import type { RunBudgetGate } from "../budgets/run-budget-gate";
 import { RunLauncherService, type RunRow } from "../runs/run-launcher.service";
 
 export class TriggerEventValidationError extends Error {
@@ -60,6 +61,7 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
   constructor(
     private readonly store: OrchestrationTenantStore,
     private readonly launcher: RunLauncherService,
+    private readonly budgetGate?: RunBudgetGate,
   ) {}
 
   async createRun(request: RunsCreateRunRequest): Promise<RunsCreateRunResponse> {
@@ -166,6 +168,15 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
         row,
         eventId,
       );
+      // D3: over budget refuses the run, and the event rolls back with it so a
+      // redelivery can start it once the budget allows.
+      await this.budgetGate?.reserve(tx, {
+        tenantId,
+        workspaceId: row.workspace_id,
+        workflowId: row.workflow_id,
+        runId: runRow.id,
+        compiledDag: parsedDag.data,
+      });
       return {
         kind: "dispatch" as const,
         eventId,

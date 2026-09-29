@@ -8,7 +8,7 @@ import type {
 } from "../runs/run-observability.service";
 
 export type BudgetKind = "run_cap" | "workflow" | "workspace";
-export type BudgetPeriod = "daily" | "monthly";
+export type EngineBudgetPeriod = "daily" | "monthly";
 export type BudgetMode = "hard" | "warn";
 
 export type BudgetRow = {
@@ -16,7 +16,7 @@ export type BudgetRow = {
   readonly workspace_id: string;
   readonly workflow_id: string | null;
   readonly kind: BudgetKind;
-  readonly period: BudgetPeriod | null;
+  readonly period: EngineBudgetPeriod | null;
   readonly amount_minor: string;
   readonly mode: BudgetMode;
   readonly enabled: boolean;
@@ -25,11 +25,11 @@ export type BudgetRow = {
   readonly updated_at: string;
 };
 
-export interface CreateBudgetInput {
+export interface CreateEngineBudgetInput {
   readonly workspaceId: string;
   readonly workflowId?: string;
   readonly kind: BudgetKind;
-  readonly period?: BudgetPeriod;
+  readonly period?: EngineBudgetPeriod;
   readonly amountMinor: number;
   readonly mode?: BudgetMode;
   readonly createdBy: string;
@@ -96,10 +96,10 @@ const BUDGET_COLUMNS = `id, workspace_id::text, workflow_id, kind, period, amoun
  *
  * Periods are calendar days and months in India time, the customers' clock.
  */
-export class BudgetService {
+export class EngineBudgetService {
   constructor(private readonly store: OrchestrationTenantStore) {}
 
-  async create(tenantIdInput: string, input: CreateBudgetInput): Promise<BudgetRow> {
+  async create(tenantIdInput: string, input: CreateEngineBudgetInput): Promise<BudgetRow> {
     const tenantId = bareTenant(tenantIdInput);
     const workspaceId = bareWorkspace(input.workspaceId);
     requireAmount(input.amountMinor);
@@ -180,14 +180,18 @@ export class BudgetService {
     tx: OrchestrationTransactionLike,
     input: { tenantId: string; workspaceId: string; workflowId: string; runId: string; amountMinor: number },
   ): Promise<readonly Reservation[]> {
-    requireAmount(input.amountMinor);
-    const budgets = await tx.query<{ id: string; kind: BudgetKind; period: BudgetPeriod | null; mode: BudgetMode; amount_minor: string }>(
+    if (!Number.isSafeInteger(input.amountMinor) || input.amountMinor < 0) {
+      throw new BudgetValidationError("a run's reserved amount must be a whole number of paise, zero or more");
+    }
+    const tenantId = bareTenant(input.tenantId);
+    const workspaceId = bareWorkspace(input.workspaceId);
+    const budgets = await tx.query<{ id: string; kind: BudgetKind; period: EngineBudgetPeriod | null; mode: BudgetMode; amount_minor: string }>(
       `SELECT id, kind, period, mode, amount_minor::text
          FROM budgets
         WHERE tenant_id = $1 AND workspace_id = $2 AND enabled
           AND (kind = 'workspace' OR workflow_id = $3)
         ORDER BY id`,
-      [input.tenantId, input.workspaceId, input.workflowId],
+      [tenantId, workspaceId, input.workflowId],
     );
     const reservations: Reservation[] = [];
     for (const budget of budgets.rows) {
@@ -202,7 +206,7 @@ export class BudgetService {
       const periodKey = await this.periodKey(tx, budget.period!);
       await tx.query(
         `INSERT INTO budget_usage (tenant_id, budget_id, period_key) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`,
-        [input.tenantId, budget.id, periodKey],
+        [tenantId, budget.id, periodKey],
       );
       const updated = await tx.query<{ over: boolean }>(
         `UPDATE budget_usage u
@@ -212,19 +216,19 @@ export class BudgetService {
             AND b.tenant_id = u.tenant_id AND b.id = u.budget_id
             AND (b.mode = 'warn' OR u.spent_minor + u.reserved_minor + $4::bigint <= b.amount_minor)
         RETURNING (u.spent_minor + u.reserved_minor > b.amount_minor) AS over`,
-        [input.tenantId, budget.id, periodKey, input.amountMinor],
+        [tenantId, budget.id, periodKey, input.amountMinor],
       );
       if (updated.rowCount === 0) {
         const usage = await tx.query<{ used: string }>(
           "SELECT (spent_minor + reserved_minor)::text AS used FROM budget_usage WHERE tenant_id = $1 AND budget_id = $2 AND period_key = $3",
-          [input.tenantId, budget.id, periodKey],
+          [tenantId, budget.id, periodKey],
         );
         throw new BudgetExceededError(budget.id, budget.kind, budget.amount_minor, usage.rows[0]?.used ?? "0", String(input.amountMinor));
       }
       await tx.query(
         `INSERT INTO budget_reservations (tenant_id, run_id, budget_id, period_key, reserved_minor)
          VALUES ($1, $2, $3, $4, $5)`,
-        [input.tenantId, input.runId, budget.id, periodKey, input.amountMinor],
+        [tenantId, input.runId, budget.id, periodKey, input.amountMinor],
       );
       reservations.push({ budgetId: budget.id, kind: budget.kind, mode: budget.mode, overCap: updated.rows[0]!.over });
     }
@@ -261,7 +265,7 @@ export class BudgetService {
     });
   }
 
-  private async periodKey(tx: OrchestrationTransactionLike, period: BudgetPeriod): Promise<string> {
+  private async periodKey(tx: OrchestrationTransactionLike, period: EngineBudgetPeriod): Promise<string> {
     const format = period === "daily" ? "YYYY-MM-DD" : "YYYY-MM";
     const result = await tx.query<{ key: string }>(
       `SELECT to_char(clock_timestamp() AT TIME ZONE 'Asia/Kolkata', '${format}') AS key`,
@@ -277,7 +281,7 @@ function requireAmount(amount: number): void {
 }
 
 function bareTenant(value: string): string {
-  const parsed = TenantIdSchema.safeParse(value);
+  const parsed = TenantIdSchema.safeParse(value.startsWith("ten_") ? value : `ten_${value}`);
   if (!parsed.success) throw new BudgetValidationError("tenant must be a ten_ prefixed UUIDv7");
   return parsed.data.slice("ten_".length);
 }

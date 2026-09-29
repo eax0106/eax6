@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import type { CostStoreProvider } from "../database/cost-store.token";
+import { applyMargin } from "../rollup/cost-rollup.service";
 import { RunTotalService } from "./run-total.service";
 
 const TENANT = "ten_018f4d6e-aaaa-7aaa-8aaa-aaaaaaaaaaaa";
@@ -12,7 +13,7 @@ function setup(internal: string, marginRate: number) {
   const store = {
     withTenant: async (_tenant: string, operation: (tx: { query: typeof query }) => Promise<unknown>) => operation({ query }),
   } as unknown as CostStoreProvider;
-  return { query, service: new RunTotalService(store, marginRate) };
+  return { query, service: new RunTotalService(store, (minor) => applyMargin(minor, marginRate)) };
 }
 
 describe("RunTotalService", () => {
