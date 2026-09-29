@@ -63,7 +63,7 @@ Honest build-feasibility read: every individual capability (durable multi-agent 
 
 Two-layer, per-node, plus one holistic pass — not a single end-of-run check.
 
-1. **Intake requirement:** before any workflow runs, Alter must capture an explicit, *structured* statement of what success looks like from the user (not just the workflow description itself). This structured statement is the reference every later check is judged against — required because Alter now serves arbitrary, self-invented workflows (not a fixed business domain with a known acceptance criteria set, unlike the old PRD's managed-client model).
+1. **Intake requirement:** before any workflow runs, Alter must capture an explicit, *structured* statement of what success looks like from the user (not just the workflow description itself). This structured statement is the reference every later check is judged against — required because Alter now serves arbitrary, self-invented workflows (not a fixed business domain with a known acceptance criteria set, unlike the old PRD's managed-client model). **Amended 2026-09-29 (D8):** the inferred criteria are shown on the plan step beside the steps, editable, and pressing Build confirms them; a criterion no step covers fails loudly.
 2. **Per-node check, immediately after that node executes** (not deferred to the end):
    - **Mechanical check** — confirm the real external system actually reflects the claimed action (e.g. read the Slack channel back to confirm the message exists, read the sheet back to confirm the row exists) — never trust "the API call returned success" alone. This is the exact class of bug (mock/fake success) that broke the old build's workflow builder.
    - **Semantic check** — a reviewer compares the node's actual output against *that node's own assigned sub-task* (derived from the overall plan at compile time) — same reviewer mechanism as the final check, just scoped to one node instead of the whole run.
@@ -430,6 +430,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D5. Approvals.** All four §16 modes; main control "Ask me first" / "Always go ahead", set by a person; "Always go ahead" on external-action steps only with an explicit, recorded confirmation; promotion suggested after 10 consecutive approvals; delivery in-app plus email. Amends §16 and the add-never-remove safeguard rule for this one case.
 - **D6. Chat.** One workflow = one chat (builder pipeline). Plus a read-only "Ask Alter" assistant per user: updates and answers across workflows from what the user can read; its only action is starting a new workflow and handing off to that workflow's chat. Amends §10.
 - **D7. Members.** Hybrid invites (our record, Auth0 delivers, matched on first sign-in, 7-day expiry, resend/revoke); members screen shows the five enforced roles; fixed roles for v1, custom roles deferred. Amends §15 and §20.
+- **D8. Success criteria.** Shown and editable on the plan step; Build confirms them; an uncovered criterion fails loudly. Amends §5.1.
 
 ---
 

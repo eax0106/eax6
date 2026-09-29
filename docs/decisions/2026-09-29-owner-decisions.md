@@ -83,3 +83,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 - **7c: fixed roles for v1; custom roles later.** §15's custom roles are deferred. The role model already stores a role as name plus permission set, so custom roles remain an addition, not a redesign.
 
 **What it means.** Invitation table and routes (create, list, resend, revoke), Auth0 invitation adapter and mock mirror, acceptance on callback; web invite dialog and member menu use the real roles; `PATCH` member role route with safeguards and audit. Password change stays with the identity provider (Auth0's change-password email), wired from the security page.
+
+## D8. Success criteria shown and confirmed (design log §5.1)
+
+**Question.** The model infers each workflow's success criteria and nobody sees them, though the end-of-run check judges runs against them.
+
+**Options put.** (a) show them in the existing plan step, editable, with Build as confirmation; (b) a separate required confirmation step; (c) amend §5.1 to "inferred, shown, editable" without confirmation.
+
+**Answer: (a).** The plan screen lists the success criteria beside the steps; the user can edit, add or remove them; pressing Build confirms them. A user-added criterion that no step covers makes the planner fail loudly and ask (C29 rule), never silently dropped. An edit to a live workflow that touches what the criteria depend on asks whether the goal changed (§8).
+
+**What it means.** Criteria returned with the plan and accepted back on build (editable list); planner re-assigns edited criteria to nodes; web plan step shows and edits them.
