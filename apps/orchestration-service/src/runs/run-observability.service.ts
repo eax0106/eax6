@@ -116,6 +116,74 @@ export class RunObservabilityService {
     return this.list("quality-gates", tenantId, runId, query);
   }
 
+  /**
+   * A tenant-wide feed of recoveries that worked: an action with a strategy
+   * that repaired the problem itself (not one that asked a person or stopped
+   * the run), newest first, each with its run's workspace. For the platform's
+   * system caller to tell people what Alter fixed; see RecoveryFeedController.
+   */
+  async recentResolvedRecoveries(
+    tenantIdInput: string,
+    query: { resolvedAfter?: string; cursor?: string; limit?: number } = {},
+  ): Promise<RunObservabilityPage> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    const limit = normalizeLimit(query.limit);
+    if (query.resolvedAfter !== undefined && Number.isNaN(Date.parse(query.resolvedAfter))) {
+      throw new RunObservabilityValidationError("resolved_after must be an ISO timestamp");
+    }
+    if (query.cursor !== undefined && !RecoveryActionIdSchema.safeParse(query.cursor).success) {
+      throw new RunObservabilityValidationError("cursor is invalid for this collection");
+    }
+
+    return this.store.withTenant(tenantId, async (tx) => {
+      const conditions = [
+        "a.tenant_id = $1",
+        "a.outcome = 'resolved'",
+        "a.strategy IS NOT NULL",
+        "a.strategy NOT IN ('ask_user', 'terminate')",
+      ];
+      const values: unknown[] = [tenantId];
+      if (query.resolvedAfter !== undefined) {
+        values.push(query.resolvedAfter);
+        conditions.push(`a.resolved_at > $${values.length}::timestamptz`);
+      }
+      if (query.cursor !== undefined) {
+        const cursor = await tx.query<{ readonly resolved_at: string }>(
+          "SELECT resolved_at::text FROM recovery_actions WHERE tenant_id = $1 AND id = $2 AND resolved_at IS NOT NULL",
+          [tenantId, query.cursor],
+        );
+        const resolvedAt = cursor.rows[0]?.resolved_at;
+        if (resolvedAt === undefined) {
+          throw new RunObservabilityValidationError("cursor does not belong to this tenant");
+        }
+        values.push(resolvedAt, query.cursor);
+        conditions.push(`(a.resolved_at, a.id) < ($${values.length - 1}::timestamptz, $${values.length})`);
+      }
+      values.push(limit + 1);
+      const result = await tx.query<Record<string, unknown>>(
+        `SELECT a.id, a.run_id, r.workspace_id, a.failure_class, a.strategy, a.outcome,
+                a.created_at::text, a.resolved_at::text
+           FROM recovery_actions a
+           JOIN runs r ON r.tenant_id = a.tenant_id AND r.id = a.run_id
+          WHERE ${conditions.join(" AND ")}
+          ORDER BY a.resolved_at DESC, a.id DESC
+          LIMIT $${values.length}`,
+        values,
+      );
+      const rows = [...result.rows];
+      const hasMore = rows.length > limit;
+      const data = hasMore ? rows.slice(0, limit) : rows;
+      return {
+        data,
+        page: {
+          next_cursor: hasMore ? (data.at(-1)?.["id"] as string | undefined) ?? null : null,
+          has_more: hasMore,
+          limit,
+        },
+      };
+    });
+  }
+
   private async list(
     collection: Collection,
     tenantIdInput: string,
