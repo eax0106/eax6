@@ -36,6 +36,7 @@ const TAGS = [
   "0003_search_indexes",
   "0004_scan_unavailable",
   "0005_listing_pricing",
+  "0006_payout_ledger_erasure_guard",
 ];
 
 describe.skipIf(!databaseUrl)("marketplace migration runner", () => {
@@ -95,7 +96,7 @@ describe.skipIf(!databaseUrl)("marketplace migration runner", () => {
     // checked while the tables it hangs off are still there.
     expect(
       await applyMarketplaceMigrations(admin, { direction: "down", steps: 3 }),
-    ).toEqual(["0005_listing_pricing", "0004_scan_unavailable", "0003_search_indexes"]);
+    ).toEqual(["0006_payout_ledger_erasure_guard", "0005_listing_pricing", "0004_scan_unavailable"]);
     const columns = await admin.query(
       `SELECT 1 FROM information_schema.columns
        WHERE table_schema = $1 AND column_name = 'search_document'`,

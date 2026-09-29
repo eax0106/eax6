@@ -21,6 +21,7 @@ import { AUDIT_QUERY_SERVICE_TOKEN_HASH, AuditQueryController } from "./audit/au
 export interface AuditDeletionWiring {
   readonly adsBaseUrl: string;
   readonly orchestrationBaseUrl: string;
+  readonly platformApiBaseUrl: string;
   readonly serviceToken: string;
   readonly serviceTokenHash: string;
   readonly pseudonymKey: string;
@@ -33,7 +34,8 @@ export class AppModule {
     const orchestrator = deletion === undefined ? undefined : new DeletionOrchestrator(
       store,
       [new HttpDeletionProvider(deletion.adsBaseUrl, deletion.serviceToken, "ads-core"),
-       new HttpDeletionProvider(deletion.orchestrationBaseUrl, deletion.serviceToken, "orchestration-service")],
+       new HttpDeletionProvider(deletion.orchestrationBaseUrl, deletion.serviceToken, "orchestration-service"),
+       new HttpDeletionProvider(deletion.platformApiBaseUrl, deletion.serviceToken, "platform-api")],
       deletion.objectStorage,
       deletion.pseudonymKey,
     );

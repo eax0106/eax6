@@ -1,0 +1,336 @@
+import { randomUUID } from "node:crypto";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import pg from "pg";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { MutableSecretsProvider } from "@alterx/shared-clients";
+import { applyMarketplaceMigrations } from "../db/marketplace-migrator";
+import { PgErasureStore } from "./pg-erasure-store";
+import { PLATFORM_DELETE_ORDER, PlatformDeletionService, PLATFORM_TABLES, pseudonymOf } from "./platform-deletion.service";
+import { SKELETON_TABLES } from "./retention-config";
+
+// D2 (C3b): erasing a tenant from platform_db, against real Postgres with the real
+// migrations, through a non-owner role held to row security, exactly as production
+// connects. Nothing here is mocked except the secrets store.
+const databaseUrl = process.env.DATABASE_URL ?? "";
+const A = "00000000-0000-7000-8000-0000000000a1";
+const B = "00000000-0000-7000-8000-0000000000b1";
+const ten = (id: string) => `ten_${id}`;
+const MANIFEST = "del_00000000-0000-7000-8000-00000000d001";
+const wsA = "00000000-0000-7000-8000-00000000a101";
+const wsB = "00000000-0000-7000-8000-00000000b101";
+const u1 = "00000000-0000-7000-8000-000000000101"; // only tenant A
+const u2 = "00000000-0000-7000-8000-000000000102"; // tenants A and B
+const u3 = "00000000-0000-7000-8000-000000000103"; // only tenant B
+
+class FakeSecrets {
+  readonly values = new Map<string, string>();
+  async getSecret(reference: string) {
+    const value = this.values.get(reference);
+    if (value === undefined) throw Object.assign(new Error("not found"), { name: "SecretNotFoundError" });
+    return value;
+  }
+  async putSecret(reference: string, value: string) {
+    this.values.set(reference, value);
+  }
+  async deleteSecret(reference: string) {
+    if (!this.values.delete(reference)) throw Object.assign(new Error("not found"), { name: "ResourceNotFoundException" });
+  }
+}
+
+describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
+  let admin: pg.Client;
+  let pool: pg.Pool;
+  let schemaName: string;
+  let roleName: string;
+  let secrets: FakeSecrets;
+  let service: PlatformDeletionService;
+
+  const one = async <T extends pg.QueryResultRow>(sql: string, values: unknown[] = []) =>
+    (await admin.query<T>(sql, values)).rows[0]!;
+  const count = async (table: string, tenantColumn = "tenant_id", tenant = A) =>
+    Number((await one<{ n: string }>(`SELECT count(*)::text AS n FROM "${table}" WHERE ${tenantColumn} = $1`, [tenant])).n);
+
+  beforeEach(async () => {
+    schemaName = `erase_${randomUUID().replaceAll("-", "_")}`;
+    roleName = `erase_role_${randomUUID().replaceAll("-", "_")}`;
+    admin = new pg.Client({ connectionString: databaseUrl });
+    await admin.connect();
+    await admin.query(`CREATE SCHEMA "${schemaName}"`);
+    await admin.query(`SET search_path TO "${schemaName}", public`);
+    await applyMainMigrations(admin);
+    await applyMarketplaceMigrations(admin);
+    await seed();
+
+    const password = randomUUID();
+    await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`);
+    await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
+    await admin.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "${schemaName}" TO "${roleName}"`);
+    await admin.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA "${schemaName}" TO "${roleName}"`);
+    const url = new URL(databaseUrl);
+    url.username = roleName;
+    url.password = password;
+    url.searchParams.set("options", `-c search_path=${schemaName}`);
+    pool = new pg.Pool({ connectionString: url.toString() });
+    secrets = new FakeSecrets();
+    for (const reference of [
+      `/alter/credentials/${A}/00000000-0000-7000-8000-0000000c0001`,
+      `/alter/env-vars/${A}/00000000-0000-7000-8000-0000000e0001`,
+      `/alter/integrations/${A}/${wsA}/00000000-0000-7000-8000-000000050001`,
+      `/alter/credentials/${B}/00000000-0000-7000-8000-0000000c0002`,
+    ]) {
+      secrets.values.set(reference, "s3cret");
+    }
+    service = new PlatformDeletionService(new PgErasureStore(pool), secrets as unknown as MutableSecretsProvider);
+  }, 60_000);
+
+  afterEach(async () => {
+    await pool?.end();
+    if (admin) {
+      await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
+      await admin.end();
+    }
+  }, 60_000);
+
+  async function seed(): Promise<void> {
+    const q = (sql: string, values: unknown[] = []) => admin.query(sql, values);
+    for (const [id, name] of [[A, "Acme"], [B, "Bravo"]] as const) {
+      await q(`INSERT INTO tenants (id, name, status, identity_org_ref, sso_config) VALUES ($1, $2, 'active', 'org_${name}', '{"x":1}')`, [id, name]);
+    }
+    await q(`INSERT INTO workspaces (id, tenant_id, name, status) VALUES ($1, $2, 'A', 'active'), ($3, $4, 'B', 'active')`, [wsA, A, wsB, B]);
+    for (const [id, email] of [[u1, "one@example.test"], [u2, "two@example.test"], [u3, "three@example.test"]] as const) {
+      await q(`INSERT INTO users (id, identity_ref, email, display_name, status) VALUES ($1, $2, $3, 'Real Name', 'active')`, [id, `auth0|${id}`, email]);
+    }
+    for (const [tenant, ws, user, role] of [[A, wsA, u1, "admin"], [A, wsA, u2, "editor"], [B, wsB, u2, "admin"], [B, wsB, u3, "editor"]] as const) {
+      await q(`INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES ($1, $2, $3, 'member')`, [randomUUID(), tenant, user]);
+      await q(`INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES ($1, $2, $3, $4, $5)`, [randomUUID(), tenant, ws, user, role]);
+    }
+    await q(`INSERT INTO user_sessions (id, user_id, tenant_id, refresh_token_hash, access_token_hash) VALUES ($1, $2, $3, 'r', 'a')`, [randomUUID(), u1, A]);
+    // notifications
+    for (const [tenant, ws, user] of [[A, wsA, u1], [B, wsB, u3]] as const) {
+      const id = `evt_00000000-0000-7000-8000-${tenant === A ? "0000000000a1" : "0000000000b1"}`;
+      await q(`INSERT INTO notification_events (id, tenant_id, workspace_id, event_class, severity, title, body, source_service) VALUES ($1, $2, $3, 'system', 'info', 't', 'b', 's')`, [id, tenant, ws]);
+      await q(`INSERT INTO notification_reads (id, tenant_id, notification_event_id, user_id) VALUES ($1, $2, $3, $4)`, [randomUUID(), tenant, id, user]);
+    }
+    // secrets-backed rows
+    await q(`INSERT INTO credential_refs (tenant_id, id, name, connector, scope, last4) VALUES ($1, '00000000-0000-7000-8000-0000000c0001', 'k', 'github', 'workspace', '1234'), ($2, '00000000-0000-7000-8000-0000000c0002', 'k', 'github', 'workspace', '1234')`, [A, B]);
+    await q(`INSERT INTO env_vars (tenant_id, id, project_id, environment, key, last4) VALUES ($1, '00000000-0000-7000-8000-0000000e0001', 'prj_1', 'production', 'K', '1234')`, [A]);
+    await q(`INSERT INTO oauth_connections (tenant_id, id, workspace_id, connector, external_account_id, scopes) VALUES ($1, '00000000-0000-7000-8000-000000050001', $2, 'github', 'x', 'repo')`, [A, wsA]);
+    await q(`INSERT INTO budgets (tenant_id, workspace_id, id, name, amount_minor, currency, period, created_by) VALUES ($1, $2, 'bud_00000000-0000-7000-8000-000000000001', 'b', 100, 'INR', 'monthly', 'u')`, [A, wsA]);
+    await q(`INSERT INTO onboarding_states (id, tenant_id, workspace_id, steps, status) VALUES ($1, $2, $3, '{}', 'in_progress')`, [randomUUID(), A, wsA]);
+    await q(`INSERT INTO entitlements (id, tenant_id, plan) VALUES ($1, $2, 'free')`, [randomUUID(), A]);
+    // circular: tenants.billing_profile_id <-> billing_profiles.tenant_id
+    const profile = randomUUID();
+    await q(`INSERT INTO billing_profiles (tenant_id, id, provider_id, status) VALUES ($1, $2, 'razorpay', 'active')`, [A, profile]);
+    await q(`UPDATE tenants SET billing_profile_id = $2 WHERE id = $1`, [A, profile]);
+    await q(`INSERT INTO billing_events (tenant_id, provider_id, provider_event_id, type, payload) VALUES ($1, 'razorpay', 'evt_1', 'invoice.paid', '{"card":"4111"}')`, [A]);
+    // append-only
+    await q(`INSERT INTO action_item_annotations (id, tenant_id, item_type, item_id, note, created_by) VALUES ('ain_1', $1, 'approval', 'apr_1', 'private note', 'u')`, [A]);
+    // marketplace: what the law keeps
+    await q(`INSERT INTO publishers (id, tenant_id, verification_status) VALUES ('pub_1', $1, 'verified'), ('pub_2', $2, 'verified')`, [A, B]);
+    await q(`INSERT INTO kyc_submissions (id, tenant_id, publisher_id, documents_json, status) VALUES ('kyc_1', $1, 'pub_1', '{"pan":"ABCDE1234F"}', 'approved')`, [A]);
+    await q(`INSERT INTO listings (id, tenant_id, type, name, license_type, status) VALUES ('lst_1', '${A}', 'agent', 'L', 'tenant_wide', 'draft'), ('lst_2', '${A}', 'agent', 'Own', 'tenant_wide', 'draft')`);
+    await q(`INSERT INTO listing_versions (id, listing_id, version, payload_ref, compatibility_json) VALUES ('lsv_2', 'lst_2', '1.0.0', 'ref', '{}')`);
+    await q(`INSERT INTO listing_versions (id, listing_id, version, payload_ref, compatibility_json) VALUES ('lsv_1', 'lst_1', '1.0.0', 'ref', '{}')`);
+    await q(`INSERT INTO orders (id, tenant_id, listing_id, listing_version_id, amount_minor, currency, status, idempotency_key) VALUES ('ord_1', $1, 'lst_1', 'lsv_1', 5000, 'INR', 'paid', 'k1'), ('ord_2', $2, 'lst_1', 'lsv_1', 7000, 'INR', 'paid', 'k2')`, [A, B]);
+    await q(`INSERT INTO payouts (id, tenant_id, order_id, publisher_id, total_minor, seller_share_minor, platform_share_minor, status) VALUES ('pay_1', $1, 'ord_1', 'pub_1', 5000, 4000, 1000, 'processed')`, [A]);
+    await q(`INSERT INTO payout_ledger (id, tenant_id, payout_id, entry_type, amount_minor) VALUES ('led_1', $1, 'pay_1', 'payout_created', 4000)`, [A]);
+    // staff access records: kept 90 days
+    await q(`INSERT INTO staff_users (id, identity_ref, email, roles) VALUES ('stf_1', 'auth0|s', 's@example.test', ARRAY['staff_support'])`);
+    await q(`INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action) VALUES ('taa_1', $1, 'stf_1', 'suspended')`, [A]);
+    await q(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action) VALUES ('uaa_1', $1, 'stf_1', 'suspended')`, [u1]);
+  }
+
+  it("names every table exactly once between the delete order and the special cases", () => {
+    const special = ["action_item_annotations", "payout_ledger", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
+    expect([...PLATFORM_DELETE_ORDER, ...special].sort()).toEqual([...PLATFORM_TABLES].sort());
+    expect(new Set(PLATFORM_DELETE_ORDER).size).toBe(PLATFORM_DELETE_ORDER.length);
+  });
+
+  it("finds tenant A's data in every table it is answerable for, and none of tenant B's", async () => {
+    const located = await service.locateSubjectData(ten(A));
+    expect(located.map((item) => item.table).sort()).toEqual([...PLATFORM_TABLES].sort());
+    const rows = Object.fromEntries(located.map((item) => [item.table, item.rowCount]));
+    expect(rows).toMatchObject({ tenants: 1, users: 2, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1 });
+  });
+
+  it("erases tenant A completely, leaves tenant B whole, and verification agrees", async () => {
+    const result = await service.deleteSubjectData(ten(A), MANIFEST);
+    const verified = await service.verifyDeletion(ten(A), MANIFEST);
+
+    expect(result.deletedRows).toBeGreaterThan(0);
+    expect(result.deletedObjects).toBe(3); // credential, env var, connection: tenant A's own secrets
+    expect(verified).toMatchObject({ deleted: true, remaining: [] });
+    for (const table of ["workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "budgets", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
+      expect(await count(table), table).toBe(0);
+    }
+    // tenant B is untouched
+    expect(await count("workspaces", "tenant_id", B)).toBe(1);
+    expect(await count("credential_refs", "tenant_id", B)).toBe(1);
+    expect(await count("orders", "tenant_id", B)).toBe(1);
+    // B's order depends on A's listing: kept, ownerless and blank. A's other listing is gone.
+    expect(await one("SELECT tenant_id, name, status FROM listings WHERE id = 'lst_1'")).toEqual({ tenant_id: null, name: "[removed listing]", status: "removed" });
+    expect((await admin.query("SELECT id FROM listings WHERE id = 'lst_2'")).rowCount).toBe(0);
+    expect((await admin.query("SELECT id FROM listing_versions WHERE id = 'lsv_2'")).rowCount).toBe(0);
+    expect(await count("notification_events", "tenant_id", B)).toBe(1);
+    expect(secrets.values.has(`/alter/credentials/${B}/00000000-0000-7000-8000-0000000c0002`)).toBe(true);
+    expect([...secrets.values.keys()].filter((key) => key.includes(`/${A}/`))).toEqual([]);
+  });
+
+  it("leaves a tombstone: the id and deleted_at, nothing else", async () => {
+    await service.deleteSubjectData(ten(A), MANIFEST);
+    const row = await one<Record<string, unknown>>("SELECT * FROM tenants WHERE id = $1", [A]);
+    expect(row).toMatchObject({
+      id: A,
+      name: "",
+      status: "deleted",
+      identity_org_ref: null,
+      data_residency: null,
+      security_policy: null,
+      sso_config: null,
+      billing_profile_id: null,
+    });
+    expect(row.deleted_at).toBeInstanceOf(Date);
+  });
+
+  it("keeps the staff access records for the 90-day window, and pseudonymises members nobody else holds", async () => {
+    await service.deleteSubjectData(ten(A), MANIFEST);
+    expect(await count("tenant_admin_actions")).toBe(1);
+    expect(await count("user_admin_actions", "user_id", u1)).toBe(1);
+
+    const rows = Object.fromEntries((await admin.query<{ id: string; email: string; display_name: string | null; status: string }>("SELECT id, email, display_name, status FROM users")).rows.map((row) => [row.id, row]));
+    expect(rows[u1]).toMatchObject({ email: `erased-${u1}@erased.invalid`, display_name: null, status: "suspended" });
+    expect(rows[u2]).toMatchObject({ email: "two@example.test", display_name: "Real Name", status: "active" }); // still in tenant B
+    expect(rows[u3]).toMatchObject({ email: "three@example.test", status: "active" });
+  });
+
+  it("copies to the legal-hold store only the minimum the law keeps, with no tenant reference", async () => {
+    await service.deleteSubjectData(ten(A), MANIFEST);
+    const held = (await admin.query<{ kind: string; source_table: string; source_id: string; minimal: Record<string, unknown>; tenant_pseudonym: string; retain_until: Date; held_at: Date }>("SELECT * FROM legal_hold_records ORDER BY source_table")).rows;
+
+    expect(held.map((row) => `${row.source_table}:${row.kind}`)).toEqual([
+      "billing_events:tax_invoice",
+      "kyc_submissions:seller_kyc",
+      "orders:books_of_account",
+      "payout_ledger:seller_payout",
+      "payouts:seller_payout",
+    ]);
+    expect(new Set(held.map((row) => row.tenant_pseudonym))).toEqual(new Set([pseudonymOf(ten(A))]));
+    const kyc = held.find((row) => row.source_table === "kyc_submissions")!;
+    expect(kyc.minimal).toEqual({ id: "kyc_1", publisher_id: "pub_1", status: "approved", submitted_at: expect.anything(), reviewed_at: null });
+    expect(JSON.stringify(held)).not.toMatch(/ABCDE1234F|4111|private note/);
+    const years = (row: (typeof held)[number]) => (row.retain_until.getTime() - row.held_at.getTime()) / (365.25 * 24 * 3600 * 1000);
+    expect(Math.round(years(held.find((row) => row.source_table === "orders")!))).toBe(8);
+    expect(Math.round(years(held.find((row) => row.source_table === "billing_events")!))).toBe(6);
+    expect(Math.round(years(held.find((row) => row.source_table === "payouts")!))).toBe(5);
+    const columns = (await admin.query<{ column_name: string }>("SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND table_name = 'legal_hold_records'", [schemaName])).rows.map((row) => row.column_name);
+    expect(columns).not.toContain("tenant_id");
+  });
+
+  it("can be run again with the same manifest, or a new one, without harm", async () => {
+    await service.deleteSubjectData(ten(A), MANIFEST);
+    const again = await service.deleteSubjectData(ten(A), MANIFEST);
+    const replay = await service.deleteSubjectData(ten(A), "del_00000000-0000-7000-8000-00000000d002");
+    expect(again.deletedRows).toBe(0);
+    expect(replay.deletedObjects).toBe(0);
+    expect(await service.verifyDeletion(ten(A), MANIFEST)).toMatchObject({ deleted: true });
+    expect(Number((await one<{ n: string }>("SELECT count(*)::text AS n FROM legal_hold_records")).n)).toBe(5);
+  });
+
+  it("verification fails while a tenant secret still exists in the secrets store", async () => {
+    await service.deleteSubjectData(ten(A), MANIFEST);
+    secrets.values.set(`/alter/credentials/${A}/00000000-0000-7000-8000-0000000c0001`, "came back");
+    const verified = await service.verifyDeletion(ten(A), MANIFEST);
+    expect(verified.deleted).toBe(false);
+    expect(verified.remaining).toEqual([expect.objectContaining({ table: "secrets-store", rowCount: 1 })]);
+  });
+
+  it("does not delete a secret before the erasure is committed", async () => {
+    const failing = new PlatformDeletionService(new PgErasureStore(pool), secrets as unknown as MutableSecretsProvider);
+    await admin.query("CREATE OR REPLACE FUNCTION erase_tenant_action_annotations(p_tenant uuid, p_manifest text) RETURNS integer LANGUAGE sql AS $$ SELECT 1/0 $$");
+    await expect(failing.deleteSubjectData(ten(A), MANIFEST)).rejects.toThrow();
+    expect(secrets.values.size).toBe(4);
+    expect(await count("credential_refs")).toBe(1);
+  });
+
+  describe("the append-only guards", () => {
+    it("a normal application session cannot delete an annotation, even naming its own tenant and with a manifest", async () => {
+      await admin.query(`INSERT INTO tenant_erasure_manifests (manifest_id, tenant_id) VALUES ($1, $2)`, [MANIFEST, A]);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [A]);
+        await client.query("SELECT set_config('alter.erasing_tenant', $1, true)", [A]);
+        await expect(client.query("DELETE FROM action_item_annotations WHERE tenant_id = $1", [A])).rejects.toThrow("append-only");
+      } finally {
+        await client.query("ROLLBACK");
+        client.release();
+      }
+      expect(await count("action_item_annotations")).toBe(1);
+    });
+
+    it("a normal application session cannot delete a payout ledger row either", async () => {
+      await admin.query(`INSERT INTO tenant_erasure_manifests (manifest_id, tenant_id) VALUES ($1, $2)`, [MANIFEST, A]);
+      const client = await pool.connect();
+      try {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [A]);
+        await client.query("SAVEPOINT s");
+        await expect(client.query("DELETE FROM payout_ledger WHERE tenant_id = $1", [A])).rejects.toThrow("append-only");
+        await client.query("ROLLBACK TO SAVEPOINT s");
+        await expect(client.query("UPDATE payout_ledger SET amount_minor = 1")).rejects.toThrow("append-only");
+      } finally {
+        await client.query("ROLLBACK");
+        client.release();
+      }
+      expect(await count("payout_ledger")).toBe(1);
+    });
+
+    it("the erase functions refuse without an active manifest for that very tenant", async () => {
+      const call = (fn: string, tenant: string, manifest: string) =>
+        pool.query(`SELECT ${fn}($1::uuid, $2)`, [tenant, manifest]);
+      await expect(call("erase_tenant_action_annotations", A, MANIFEST)).rejects.toThrow("no active erasure manifest");
+      await admin.query(`INSERT INTO tenant_erasure_manifests (manifest_id, tenant_id) VALUES ($1, $2)`, [MANIFEST, B]);
+      await expect(call("erase_tenant_action_annotations", A, MANIFEST)).rejects.toThrow("no active erasure manifest");
+      await expect(call("erase_tenant_payout_ledger", A, MANIFEST)).rejects.toThrow("no active erasure manifest");
+      expect(await count("action_item_annotations")).toBe(1);
+      expect(await count("payout_ledger")).toBe(1);
+    });
+
+    it("the erase function deletes only the named tenant's rows", async () => {
+      await admin.query(`INSERT INTO action_item_annotations (id, tenant_id, item_type, item_id, note, created_by) VALUES ('ain_b', $1, 'approval', 'apr_b', 'n', 'u')`, [B]);
+      await admin.query(`INSERT INTO tenant_erasure_manifests (manifest_id, tenant_id) VALUES ($1, $2)`, [MANIFEST, A]);
+      const result = await pool.query<{ n: number }>("SELECT erase_tenant_action_annotations($1::uuid, $2) AS n", [A, MANIFEST]);
+      expect(result.rows[0]!.n).toBe(1);
+      expect(await count("action_item_annotations", "tenant_id", B)).toBe(1);
+    });
+
+    it("no manifest is left able to authorise a later erasure of the same tenant", async () => {
+      await service.deleteSubjectData(ten(A), MANIFEST);
+      const state = await one<{ state: string }>("SELECT state FROM tenant_erasure_manifests WHERE manifest_id = $1", [MANIFEST]);
+      expect(state.state).toBe("complete");
+      await expect(pool.query("SELECT erase_tenant_action_annotations($1::uuid, $2)", [A, MANIFEST])).rejects.toThrow("no active erasure manifest");
+    });
+  });
+
+  it("lists every tenant, tombstones included, for the ledger replay", async () => {
+    await service.deleteSubjectData(ten(A), MANIFEST);
+    expect(await service.listSubjectIds()).toEqual([ten(A), ten(B)]);
+  });
+});
+
+async function applyMainMigrations(client: pg.Client): Promise<void> {
+  const directory = join(__dirname, "../db/migrations");
+  const sql = readdirSync(directory)
+    .filter((file) => file.endsWith(".sql"))
+    .sort()
+    .map((file) => readFileSync(join(directory, file), "utf8"))
+    .join("\n--> statement-breakpoint\n");
+  for (const statement of sql
+    .split("--> statement-breakpoint")
+    .map((value) => value.trim())
+    .filter(Boolean)) {
+    await client.query(statement);
+  }
+}

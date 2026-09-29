@@ -34,6 +34,7 @@ import { MarketplaceModule } from "./marketplace";
 import { PublisherModule } from "./publisher";
 import { I18nModule } from "./i18n/i18n.module";
 import { RegistryModule } from "./registry";
+import { PlatformDeletionModule } from "./deletion/platform-deletion.module";
 import { NotificationModule } from "./notifications";
 import { EngineEventNotificationModule } from "./notifications/engine-events/engine-event-notification.module";
 import { MediaModule } from "./media";
@@ -89,6 +90,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     I18nModule,
     RegistryModule,
     NotificationModule,
+    PlatformDeletionModule,
     EngineEventNotificationModule,
     MediaModule,
     DiscoveryModule,
