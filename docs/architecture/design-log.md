@@ -352,6 +352,8 @@ Section 1's own lead-capture example requires Alter to host a **public web form*
 
 Neither name uses "session." Both describe what the component actually does. Earlier sections of this log that use the old names refer to these components.
 
+**Amended 2026-09-29 (Havish, decision D17): renamed when touched.** New code and documents use the new names; existing occurrences are renamed when their file is edited for another reason; a CI gate blocks the old name in added lines. See §34 D17.
+
 ## 27. Platform Web subdivision (locked): five surfaces
 
 "Platform Web" as a single component was too coarse to contract — no single input, output, or blast radius across chat, canvas, sidebar, approvals, admin, settings, connections, and billing. Split into five surfaces, each with a coherent job and its own definition of done:
@@ -450,6 +452,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D14. Read-back.** Email: pass on acceptance, SES delivery events flag later bounces and notify. Clicks: snapshot only when the step declares the expected page state, otherwise "unconfirmed". Amends §5.2.
 - **D15. Safety library.** One implementation per language plus a CI parity test on a shared case set; the duplicate-safety gate narrowed to real duplicates. Amends §11.
 - **D16. Public form.** Minimal hosted form offered as an option beside connecting the user's own input; Turnstile, rate limits, input checks, no uploads, its own process. Amends §25.
+- **D17. Rename.** "Identity & Tenant Gateway" in new code; old name renamed when a file is touched; CI blocks it in new lines. Amends §26.
 
 ---
 

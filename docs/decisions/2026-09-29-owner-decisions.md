@@ -176,3 +176,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (b), as an option, not the default.** The primary input stays the user's own source (their existing form tool, CRM or site connected through a connector or webhook). When a user sets up a trigger for incoming submissions, Alter offers the hosted form as one choice alongside connecting their own; it is never created unless chosen.
 
 **What it means.** Public Surface component (separate process, own rate limits); form definition on the trigger; hosted page and submission endpoint; Turnstile verification (site key and secret as configuration); submissions become trigger events.
+
+## D17. The "Session Gateway" rename (design log §26)
+
+**Question.** §26 renamed "Session Gateway" to "Identity & Tenant Gateway"; the old name remains in 61 files, including `packages/auth` and contracts.
+
+**Options put.** (a) rename all 61 files now; (b) rename when touched, with a CI check that blocks the old name in new lines.
+
+**Answer: (b).** New code and documents use "Identity & Tenant Gateway"; existing occurrences are renamed when their file is edited for another reason; a `scripts/check-*.sh` gate in CI fails on "Session Gateway" (and `SessionGateway` identifiers) appearing in added lines, with a baseline of today's occurrences.
+
+**What it means.** One CI gate with a baseline and a proven-to-fail case; §26 amended.
