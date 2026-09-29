@@ -302,7 +302,24 @@ describe("StreamGateway", () => {
     }
   });
 
-  it("closes subscriber when sink fails or upstream data is invalid", async () => {
+  it("skips a contract-invalid event and keeps delivering the ones after it", async () => {
+    const source = new PushStream<EngineSseMessage>();
+    const gateway = new StreamGateway(engineStub(source).value, config, new StreamRevocationBus());
+    const frames: StreamFrame[] = [];
+    const connection = await gateway.connect(subscription("skip-invalid", frames));
+    connection.start();
+
+    source.push(runStatus(1, "running"));
+    source.push({ id: "2", event: "run.status", data: { seq: 2, event: "run.status", run_id: runId, ts: "2026-07-24T10:00:00.000Z", data: { status: "not-a-status" } } });
+    source.push({ id: "3", event: "run.status", data: { raw: true } });
+    source.push(runStatus(4, "completed"));
+
+    await vi.waitFor(() => expect(eventIds(frames)).toEqual([`${runId}:1`, `${runId}:4`]));
+    expect(gateway.activeChannelCount()).toBe(1);
+    connection.close();
+  });
+
+  it("closes subscriber when sink fails or upstream data is for another run", async () => {
     const source = new PushStream<EngineSseMessage>();
     const gateway = new StreamGateway(
       engineStub(source).value,
@@ -328,7 +345,10 @@ describe("StreamGateway", () => {
     );
     const invalid = await invalidGateway.connect(subscription("invalid", []));
     invalid.start();
-    invalidSource.push({ event: "run.status", data: { raw: true } });
+    invalidSource.push({
+      event: "run.status",
+      data: { seq: 1, event: "run.status", run_id: "run_018f47a5-7b2c-7d10-8f11-000000000000", ts: "2026-07-24T10:00:00.000Z", data: { status: "running" } },
+    });
     await invalid.closed;
     expect(invalidGateway.activeChannelCount()).toBe(0);
     invalid.start();
