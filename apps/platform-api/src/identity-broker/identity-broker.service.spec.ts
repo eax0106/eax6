@@ -1,4 +1,5 @@
 import { generateKeyPairSync } from "node:crypto";
+import { SystemActorTokenClaimsSchema } from "@alterx/contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { EngineHealthTransport } from "./engine-health.client";
 import { EngineHealthClient } from "./engine-health.client";
@@ -206,6 +207,51 @@ describe("service actor naming", () => {
       callingTenantId: tenantId,
     });
     expect(minted.claims.iat).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe("IdentityBrokerService system caller (D1)", () => {
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  });
+  const service = new IdentityBrokerService(
+    signingKeyRef,
+    new StaticSigningKeyResolver(privateKey, publicKey),
+    () => 1_785_000_000,
+  );
+
+  it("mints a one-tenant, read-only system token with no user and no workspace", async () => {
+    const minted = await service.mintSystemActorToken({ tenantId, callingTenantId: tenantId });
+    const decoded = decodeActorToken(minted.token) as unknown as Record<string, unknown>;
+
+    expect(verifyActorToken(minted.token, publicKey)).toBe(true);
+    expect(Object.keys(decoded).sort()).toEqual(
+      ["aud", "auth_time", "exp", "iat", "iss", "jti", "permissions", "principal", "principal_type", "tenant_id"],
+    );
+    expect(decoded).toMatchObject({
+      principal_type: "system",
+      principal: "system:platform-jobs",
+      tenant_id: expect.stringMatching(/^ten_/),
+      aud: "alter-engine",
+      iat: 1_785_000_000,
+      exp: 1_785_000_300,
+    });
+    expect(SystemActorTokenClaimsSchema.safeParse(decoded).success).toBe(true);
+    expect((decoded.permissions as string[]).every((p) => p.endsWith(":read"))).toBe(true);
+  });
+
+  it("mints a fresh single-use token every time", async () => {
+    const a = await service.mintSystemActorToken({ tenantId, callingTenantId: tenantId });
+    const b = await service.mintSystemActorToken({ tenantId, callingTenantId: tenantId });
+    expect(a.claims.jti).not.toBe(b.claims.jti);
+  });
+
+  it("refuses a tenant other than the calling one", async () => {
+    await expect(
+      service.mintSystemActorToken({ tenantId, callingTenantId: "00000000-0000-7000-8000-0000000000ff" }),
+    ).rejects.toMatchObject({ errorCode: "ACTOR_TOKEN_TENANT_MISMATCH" });
   });
 });
 

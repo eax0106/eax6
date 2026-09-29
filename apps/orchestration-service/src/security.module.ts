@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { APP_GUARD } from "@nestjs/core";
+import { APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import {
   ActorTokenValidator,
   M2mValidator,
@@ -10,6 +10,8 @@ import {
   SessionGatewayUploadAllowlistGuard,
 } from "@alterx/auth";
 
+import { runLearningAuditClient } from "./runs/run-learning-audit";
+import { SystemPrincipalAuditInterceptor } from "./system-principal-audit.interceptor";
 import {
   OrchestrationInfrastructureModule,
   orchestrationStore,
@@ -17,7 +19,8 @@ import {
 } from "./orchestration-infrastructure.module";
 
 /**
- * Owns the three global APP_GUARD registrations in their exact order --
+ * Owns the three global APP_GUARD registrations in their exact order (plus the
+ * system-principal audit interceptor, which runs after all guards) --
  * order is material (SessionGatewayGuard authenticates before the rate
  * limiter and upload allowlist run). Does not register
  * SessionGatewayPromptInjectionGuard (present and tested in
@@ -61,6 +64,12 @@ import {
     {
       provide: APP_GUARD,
       useFactory: () => new SessionGatewayUploadAllowlistGuard(),
+    },
+    {
+      // D1: every read by the system principal is recorded with its type.
+      provide: APP_INTERCEPTOR,
+      useFactory: () =>
+        new SystemPrincipalAuditInterceptor(runLearningAuditClient(process.env)),
     },
   ],
 })

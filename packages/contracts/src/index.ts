@@ -1,6 +1,10 @@
 export {
   ActorTokenClaimsSchema,
+  SYSTEM_PLATFORM_JOBS_PERMISSIONS,
+  SYSTEM_PLATFORM_JOBS_PRINCIPAL,
+  SystemActorTokenClaimsSchema,
   type ActorTokenClaims,
+  type SystemActorTokenClaims,
 } from "./actor-token";
 export {
   TriggerStatusSchema,

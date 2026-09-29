@@ -1,6 +1,7 @@
 import { Inject, Injectable } from "@nestjs/common";
 import { Auth0M2mTokenProvider } from "@alterx/auth";
 import { IdentityBrokerService } from "../identity-broker/identity-broker.service";
+import { isSystemCallerContext } from "../system-jobs/system-caller";
 import type { EngineAuthorization, EngineCallerContext } from "./types";
 
 export const ENGINE_M2M_TOKEN_PROVIDER = Symbol("ENGINE_M2M_TOKEN_PROVIDER");
@@ -66,6 +67,16 @@ export class IdentityBrokerEngineAuthProvider implements EngineAuthProvider {
   async authorize(
     context: EngineCallerContext,
   ): Promise<EngineAuthorization> {
+    if (isSystemCallerContext(context)) {
+      const [m2mAccessToken, system] = await Promise.all([
+        this.m2mTokenProvider.getAccessToken(),
+        this.identityBroker.mintSystemActorToken({
+          tenantId: context.tenantId,
+          callingTenantId: context.tenantId,
+        }),
+      ]);
+      return { m2mAccessToken, actorToken: system.token };
+    }
     const [m2mAccessToken, actor] = await Promise.all([
       this.m2mTokenProvider.getAccessToken(),
       this.identityBroker.mintActorToken({

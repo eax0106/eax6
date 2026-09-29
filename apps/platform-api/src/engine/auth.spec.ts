@@ -5,6 +5,7 @@ import {
   IdentityBrokerEngineAuthProvider,
   type EngineM2mTokenProvider,
 } from "./auth";
+import { createSystemCallerContext } from "../system-jobs/system-caller";
 import type { EngineCallerContext } from "./types";
 
 describe("Auth0EngineM2mTokenProvider", () => {
@@ -118,5 +119,45 @@ describe("IdentityBrokerEngineAuthProvider", () => {
     // Tenancy belongs to the actor token above, never to the service
     // credential -- the M2M call takes no arguments at all.
     expect(m2mProvider.getAccessToken).toHaveBeenCalledWith();
+  });
+
+  describe("system caller (D1)", () => {
+    function setup() {
+      const identityBroker = {
+        mintActorToken: vi.fn().mockResolvedValue({ token: "user-actor", claims: {} }),
+        mintSystemActorToken: vi.fn().mockResolvedValue({ token: "system-actor", claims: {} }),
+      };
+      const provider = new IdentityBrokerEngineAuthProvider(
+        identityBroker as unknown as IdentityBrokerService,
+        { getAccessToken: vi.fn().mockResolvedValue("m2m-token") },
+      );
+      return { identityBroker, provider };
+    }
+
+    it("mints the system token for a context made by createSystemCallerContext, for its own tenant", async () => {
+      const { identityBroker, provider } = setup();
+      const context = createSystemCallerContext({ tenantId: "tenant-a", traceparent: "trace" });
+
+      await expect(provider.authorize(context)).resolves.toEqual({
+        m2mAccessToken: "m2m-token",
+        actorToken: "system-actor",
+      });
+      expect(identityBroker.mintSystemActorToken).toHaveBeenCalledWith({
+        tenantId: "tenant-a",
+        callingTenantId: "tenant-a",
+      });
+      expect(identityBroker.mintActorToken).not.toHaveBeenCalled();
+    });
+
+    it("never treats a look-alike as a system caller, however it is shaped", async () => {
+      const { identityBroker, provider } = setup();
+      const real = createSystemCallerContext({ tenantId: "tenant-a", traceparent: "trace" });
+      const lookAlike: EngineCallerContext = { ...real };
+
+      await provider.authorize(lookAlike);
+
+      expect(identityBroker.mintSystemActorToken).not.toHaveBeenCalled();
+      expect(identityBroker.mintActorToken).toHaveBeenCalledOnce();
+    });
   });
 });

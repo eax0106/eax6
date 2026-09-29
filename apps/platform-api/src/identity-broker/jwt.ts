@@ -1,10 +1,14 @@
 import { createPublicKey, createSign, createVerify } from "node:crypto";
+import type { SystemActorTokenClaims } from "@alterx/contracts";
 import type { ActorTokenClaims } from "./actor-token.types";
 
 const algorithm = "RS256";
 export const actorTokenKeyId = "actor-token-key-1";
 
-export function signActorToken(claims: ActorTokenClaims, privateKey: string): string {
+export function signActorToken(
+  claims: ActorTokenClaims | SystemActorTokenClaims,
+  privateKey: string,
+): string {
   const header = { alg: algorithm, typ: "JWT", kid: actorTokenKeyId };
   const signingInput = `${base64UrlJson(header)}.${base64UrlJson(claims)}`;
   const signature = createSign("RSA-SHA256").update(signingInput).sign(privateKey);
