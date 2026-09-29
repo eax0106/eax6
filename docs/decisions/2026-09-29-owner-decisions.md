@@ -146,3 +146,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 4. **§32 (D-32a).** Closed on 2026-09-14 by deleting the write-only columns.
 
 **What it means.** The log sections are amended; Recovery gains the two missing failure classes and their routes (target missing: ask the user to redirect or recreate; ambiguous: clarification only, never retry or swap), and self-heal notices reach the user through the D1 system caller.
+
+## D14. Read-back of emails and clicks (design log §5.2)
+
+**Question.** An email passes on provider acceptance (it may bounce later); a browser click is recorded as unconfirmable.
+
+**Options put.** (a) accept today's level for v1; (b) full read-back: SES delivery events for every email and a page snapshot after every click (one extra paid Browserbase call per click); (c) split: SES delivery events wired, step passes on acceptance, a later bounce flags the run and notifies the owner; a click snapshot only when the step declares the expected page state, otherwise "unconfirmed", clearly labelled.
+
+**Answer: (c).**
+
+**What it means.** SES configuration set with delivery and bounce events (SNS or EventBridge, provisioned with the EC2 kit, 6.1b) into an engine endpoint that updates the side-effect record by provider message id; a bounce marks the run "delivery failed" and notifies through the D1 system caller. ToolCall browser.click takes a snapshot and checks it only when the node config states the expected page state (text or selector); otherwise the result stays "unconfirmed".
