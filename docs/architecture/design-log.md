@@ -59,6 +59,8 @@ Honest build-feasibility read: every individual capability (durable multi-agent 
 
 **Tool/credential connection timing (resolved, was open):** Alter asks for all needed connectors as a **batch, after Architecture Synthesizer finishes understanding the full workflow** — not one-by-one interruptions mid-conversation, and not a mandatory pre-connect-everything step before describing any workflow. Reason: the full tool list isn't actually known until the design is complete, so asking earlier risks asking for something that turns out unnecessary. Mechanism lives inside Tool Gateway (already has real credential resolution/token minting in the old build) plus a pre-compile check: Capability Resolver confirms a live connection exists for each required capability before the graph is built.
 
+**Amended 2026-09-29 (Havish, decision D19): who holds the connection record.** Users connect accounts in the platform; the platform pushes each connection's type, status and secret reference (never the token) to an engine connection registry on every change and on its health sweep. The engine is authoritative at compile and run time: the pre-compile check reads that registry and returns one batch "connect these" list, and Tool Gateway resolves credentials through it. See §34 D19.
+
 **Amended 2026-09-29 (Havish, decision D13, from D-4a/D-4c).** Classify uses ten failure classes that map onto the five buckets: transient = timeout, infrastructure_failure, rate_limit, sandbox_crash; node's own fault = logic_output_failure, agent_creation_failure; credential gap = credential_missing, tool_permission_denial; safety_violation is outside Recovery (halts the workflow); unknown goes to a person. Buckets 4 (target missing) and 5 (ambiguous outcome) get classes of their own. A transient failure that repeats is retried once, then swapped. See §34 D13.
 
 ## 5. Verification mechanism (locked)
@@ -456,6 +458,7 @@ Havish answered every open product question in one sitting, one question at a ti
 - **D16. Public form.** Minimal hosted form offered as an option beside connecting the user's own input; Turnstile, rate limits, input checks, no uploads, its own process. Amends §25.
 - **D17. Rename.** "Identity & Tenant Gateway" in new code; old name renamed when a file is touched; CI blocks it in new lines. Amends §26.
 - **D18. Templates.** 8 Alter-authored starter templates, tested to compile and pass their criteria, reviewed by Havish before launch. Amends §19.
+- **D19. Connections.** Platform writes connection records (type, status, secret reference) to an engine registry on every change and on its health sweep; the engine is authoritative at compile and run time; pre-compile batch "connect these" ask. Compile-path freeze exemption granted. Amends §4.
 
 ---
 

@@ -196,3 +196,13 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 **Answer: (b).** First set: (1) lead capture to CRM plus welcome email; (2) support email triage, label and route; (3) invoice email, extract details, sheet row; (4) weekly report digest by email; (5) knowledge Q&A over uploaded documents; (6) meeting notes to summary email with action items; (7) brand mention monitoring with alert; (8) WhatsApp FAQ responder (usable once the Meta account exists). Alter-authored only, never harvested from tenant workflows (§19). Each template must compile and pass its own success criteria in a test before it ships; Havish reviews the set before launch.
 
 **What it means.** Template store in the Capability Registry (C38, covered by the 2026-09-28 exemption) with list and instantiate routes; the first-run screen shows them below the describe box; instantiating creates a workflow and its chat (D6).
+
+## D19. Which connection store is authoritative (C41, design log §4)
+
+**Question.** Users connect accounts in platform-api (`oauth_connections`); Tool Gateway uses credentials at run time; nothing maps one to the other, and §4 wants a pre-compile live-connection check with one batch "connect these" ask. The engine must never depend on the platform (§22 item 11).
+
+**Options put.** (a) platform-api authoritative, the engine asks it (breaks §22 item 11); (b) Tool Gateway authoritative, users connect in two places; (c) the platform writes, the engine holds the record.
+
+**Answer: (c).** Users connect accounts in the platform as now. On every connect, reconnect, revoke or health change, platform-api upserts an engine connection record (connector type, status, secret reference; never the token). The engine is authoritative at compile and run time: the Capability Resolver checks every required capability against those records before compiling and returns one batch list of missing connections; Tool Gateway resolves credentials through the record's secret reference. The platform's existing health sweep re-sends all records so a lost update heals; a missing or broken credential at run time is still a credential gap (§4 bucket 3), never silent. Havish granted the freeze exemption for the compile-path change this needs.
+
+**What it means.** Engine connection registry (tenant RLS, erasure-registered) with an upsert route for platform-api; platform-api calls it from the connection lifecycle and the health sweep; pre-compile check and batch ask in the compile path; Tool Gateway credential resolution through the registry. Record the exemption in memoryalter §2 before code.
