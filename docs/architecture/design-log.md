@@ -202,6 +202,8 @@ Closes gap #4 from the pre-microarchitecture review. Directly reacting to the ol
 - **Verification must check what still exists, not re-check what was just deleted.** The old failure was a verifier iterating the same incomplete list the deleter used.
 - Fail-closed, consistent with Section 5: if erasure cannot be fully confirmed, it must not report success.
 
+**Amended 2026-09-29 (Havish, decision D2).** The audit-skeleton window is **90 days**. Records the law requires kept longer (tax invoices and billing, books of account, seller KYC and payouts) move to a minimal legal-hold store and are kept for exactly the prescribed period, then destroyed; staff access logs follow the 90-day window. Deleting a **workspace** is not immediate: it enters a pending-deletion state (hidden, triggers paused, restorable by an owner or admin) for a configurable window, default 7 days, then its data is erased by the schema-derived path above. See §34 D2.
+
 **Run history expiry — user-configurable from day one, deliberately scoped in now rather than revisited later.**
 - The user sets their own retention window; the expiry mechanism is identical whether the number is fixed or chosen, so making it configurable up front costs almost nothing and avoids a second pass over this area.
 - **Bounded range, not a free-form number.** A floor (a run's records must outlive the window in which anyone — the engine or a human — might need to inspect, verify, or review it; roughly 7 days) and a ceiling (unbounded retention is both an unpredictable storage cost and a standing liability; roughly 1 year), with a sane default in between.
@@ -416,6 +418,7 @@ Both were declared as contracts with nothing behind them. Both are cut from the 
 Havish answered every open product question in one sitting, one question at a time, each put with options and an attacked recommendation. The full record (question, options, answer, consequence) is `../decisions/2026-09-29-owner-decisions.md`; this section is the binding summary, and sections a decision changes carry an "Amended 2026-09-29" note pointing here.
 
 - **D1. System identity for background jobs: system caller on the two-token path.** A named principal `system:platform-jobs`, one tenant per token, fixed read-only permissions, short-lived and single-use, audited as a system principal. Unblocks engine-originated notifications, budget alerts, drift suggestions and self-heal notices. Amends §30.
+- **D2. Retention.** Audit skeleton 90 days after tenant deletion; legally required records (invoices and billing, books of account, seller KYC and payouts) held in a minimal legal-hold store for exactly the prescribed period; staff access logs 90 days; everything else destroyed immediately. Workspace deletion has an undo window (pending deletion, default 7 days, configurable), then erasure. Amends §18.
 
 ---
 
