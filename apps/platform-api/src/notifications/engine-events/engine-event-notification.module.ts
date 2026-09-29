@@ -3,6 +3,7 @@ import { EngineModule } from "../../engine";
 import { NotificationModule } from "../notification.module";
 import { EngineEventNotificationRunner } from "./engine-event-notification.runner";
 import { ENGINE_EVENT_PRODUCERS } from "./engine-event-producer";
+import { ApprovalWaitingProducer } from "./approval-waiting.producer";
 import { EngineEventSchedulerController } from "./engine-event-scheduler.controller";
 import { RunFailedProducer } from "./run-failed.producer";
 
@@ -16,11 +17,15 @@ import { RunFailedProducer } from "./run-failed.producer";
   controllers: [EngineEventSchedulerController],
   providers: [
     RunFailedProducer,
+    ApprovalWaitingProducer,
     {
       // One entry per kind of engine event that becomes a notification.
       provide: ENGINE_EVENT_PRODUCERS,
-      inject: [RunFailedProducer],
-      useFactory: (runFailed: RunFailedProducer) => [runFailed],
+      inject: [RunFailedProducer, ApprovalWaitingProducer],
+      useFactory: (runFailed: RunFailedProducer, approvalWaiting: ApprovalWaitingProducer) => [
+        runFailed,
+        approvalWaiting,
+      ],
     },
     EngineEventNotificationRunner,
   ],
