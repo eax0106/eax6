@@ -5,6 +5,7 @@ import type { FastifyRequest } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { PgIdempotencyStore, type IdempotencyExecution, type StoredHttpResponse } from "../idempotency";
 import { RbacModule, type ActorContextType, type RbacRequest } from "../rbac";
+import { resourceTenantResolverToken } from "../rbac/rbac.module";
 import { WorkspaceExportController } from "./workspace-export.controller";
 import { WorkspaceExportModule } from "./workspace-export.module";
 import { WorkspaceExportHttpError } from "./problem";
@@ -48,6 +49,17 @@ describe("WorkspaceExport routes (D2, admin only)", () => {
       controllers: [WorkspaceExportController],
       providers: [
         { provide: WorkspaceExportService, useValue: service },
+        // The tenant resolver reads the workspace's owning tenant from the
+        // database; echoing the actor's tenant keeps this unit spec
+        // independent of seeded rows (the mismatch denial itself belongs to
+        // rbac.guard.spec, and cross-workspace isolation is proven against
+        // real Postgres in workspace-export.integration.spec.ts).
+        {
+          provide: resourceTenantResolverToken,
+          useValue: {
+            resolveTenantId: async (request: RbacRequest) => request.actorContext?.tenant_id,
+          },
+        },
         {
           provide: PgIdempotencyStore,
           useValue: {
