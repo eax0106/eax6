@@ -1,16 +1,14 @@
 {
   "auditLevel": "high",
   "advisoryIds": [
-    "1102341",
-    "1138808",
-    "1138809"
+    "1102341"
   ],
   "metadata": {
     "vulnerabilities": {
       "info": 0,
       "low": 0,
       "moderate": 1,
-      "high": 2,
+      "high": 0,
       "critical": 0
     }
   }
