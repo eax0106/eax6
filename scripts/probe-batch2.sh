@@ -127,17 +127,14 @@ note "     connecting as the configured role -- a local test that does so passes
 note "     regardless of policy. Only intelligence_db and policy_db use a role that"
 note "     is subject to RLS at all."
 
-# orchestration_db: the connecting role bypasses RLS entirely.
+# orchestration_db: runtime role must remain subject to RLS.
 bypass=$(q "$ENGINE_HOST" "$ENGINE_PORT" orchestration_service "$AUDIT_DB_PASSWORD" orchestration_db "
   SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user;
 " | tail -1)
-if [ "$bypass" = "t" ]; then
-  note "orchestration_db  29 tables FORCE RLS, but orchestration_service has BYPASSRLS."
-  note "                  Isolation there is application-enforced via withTenant, not"
-  note "                  database-enforced. Deliberate: resolve_webhook_endpoint is"
-  note "                  SECURITY DEFINER and must resolve a path token across tenants."
+if [ "$bypass" = "f" ]; then
+  ok "orchestration_db  runtime role is held to FORCE RLS"
 else
-  bad "orchestration_db  expected orchestration_service to have BYPASSRLS per engine-db-init.sh"
+  bad "orchestration_db  runtime role bypasses RLS"
 fi
 
 echo
