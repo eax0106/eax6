@@ -377,7 +377,7 @@ describe("createPlatformJobHandlers", () => {
         body: JSON.stringify({ tenant_id: "ten_1", agent_id: "agent_1", task_class: "support" }),
       }),
     );
-    expect(result).toEqual({ candidates: 2, scored: 1, failed: 1 });
+    expect(result).toEqual({ candidates: 2, scored: 1, failed: 1, suggested: 0, suggestions_failed: 0 });
   });
 
   it("real isolates a single drift candidate score failure from the rest of the sweep", async () => {
@@ -413,7 +413,7 @@ describe("createPlatformJobHandlers", () => {
     // All three candidates' scores were at least attempted despite the
     // middle one throwing -- the sweep continued to the remaining ones.
     expect(fetchImpl).toHaveBeenCalledTimes(4);
-    expect(result).toEqual({ candidates: 3, scored: 2, failed: 1 });
+    expect(result).toEqual({ candidates: 3, scored: 2, failed: 1, suggested: 0, suggestions_failed: 0 });
     expect(logger.error).toHaveBeenCalledTimes(1);
     const logArgs = (logger.error as ReturnType<typeof vi.fn>).mock.calls[0] as [
       string,
@@ -421,6 +421,47 @@ describe("createPlatformJobHandlers", () => {
     ];
     expect(logArgs[0]).toMatch(/network blip/);
     expect(logArgs[0]).toMatch(/tenant_id=ten_2/);
+  });
+
+  it("reports a flagged or down-weighted agent to platform-api, and a failed report does not fail the sweep (section 17)", async () => {
+    const candidates = [
+      { tenant_id: "ten_1", agent_id: "agent_1", task_class: "support" },
+      { tenant_id: "ten_2", agent_id: "agent_2", task_class: "sales" },
+      { tenant_id: "ten_3", agent_id: "agent_3", task_class: "billing" },
+    ];
+    const fetchImpl = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("drift-candidates")) return { ok: true, status: 200, json: async () => ({ candidates }), text: async () => "" };
+      if (url.endsWith("/drift/agents/score")) {
+        const agent = JSON.parse(String(init?.body)).agent_id as string;
+        const action = agent === "agent_1" ? "weight_decay" : agent === "agent_2" ? "none" : "flagged";
+        return { ok: true, status: 200, json: async () => ({ action_taken: action }), text: async () => "" };
+      }
+      const agent = JSON.parse(String(init?.body)).agent_id as string;
+      return { ok: agent !== "agent_3", status: agent === "agent_3" ? 503 : 200, json: async () => ({}), text: async () => "" };
+    }) as unknown as typeof fetch;
+    const handlers = createPlatformJobHandlers({
+      intelligenceServiceInternalBaseUrl: "http://intelligence-service.internal",
+      memoryServiceInternalBaseUrl: "http://memory-service.internal",
+      platformApiInternalBaseUrl: "http://platform-api.internal",
+      notificationDigestServiceToken: "digest-token",
+      driftSweepServiceToken: "real-token",
+      driftSweepMinimumObservations: 40,
+      fetchImpl,
+    });
+
+    const result = await handlers.get("platform.drift-sweep")!({});
+
+    expect(result).toEqual({ candidates: 3, scored: 3, failed: 0, suggested: 1, suggestions_failed: 1 });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "http://platform-api.internal/internal/notifications/drift-suggestions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ authorization: "Bearer digest-token" }),
+        body: JSON.stringify({ tenant_id: "ten_1", agent_id: "agent_1", task_class: "support", action_taken: "weight_decay" }),
+      }),
+    );
+    const reported = (fetchImpl as unknown as ReturnType<typeof vi.fn>).mock.calls.filter(([url]) => String(url).includes("drift-suggestions"));
+    expect(reported).toHaveLength(2);
   });
 
   it("real relays a clean audit chain verification", async () => {

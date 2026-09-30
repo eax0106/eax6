@@ -236,6 +236,12 @@ interface DriftCandidate {
   readonly task_class: string;
 }
 
+/** Where a flagged agent is reported so its workflows' owners are told (section 17). */
+interface DriftSuggestionTarget {
+  readonly platformApiBaseUrl: string;
+  readonly serviceToken: string;
+}
+
 function createDriftSweepHandler(
   intelligenceBaseUrl: string,
   memoryBaseUrl: string,
@@ -243,6 +249,7 @@ function createDriftSweepHandler(
   minimumObservations: number,
   fetchImpl: typeof fetch,
   logger: Logger = new Logger("DriftSweepHandler"),
+  suggestions?: DriftSuggestionTarget,
 ): PlatformJobHandler {
   return async (): Promise<JsonValue> => {
     const candidatesResponse = await fetchImpl(
@@ -257,6 +264,8 @@ function createDriftSweepHandler(
     const payload = await candidatesResponse.json() as { candidates?: DriftCandidate[] };
     let scored = 0;
     let failed = 0;
+    let suggested = 0;
+    let suggestionsFailed = 0;
     for (const candidate of payload.candidates ?? []) {
       try {
         const response = await fetchImpl(`${memoryBaseUrl}/drift/agents/score`, {
@@ -269,6 +278,26 @@ function createDriftSweepHandler(
         });
         if (response.ok) {
           scored += 1;
+          // Section 17: a flagged or down-weighted agent is suggested to the
+          // people whose workflows it works in. A failed report never fails
+          // the sweep; the next sweep scores the agent again.
+          const action =
+            suggestions === undefined
+              ? undefined
+              : ((await response.json().catch(() => null)) as { action_taken?: unknown } | null)?.action_taken;
+          if (suggestions !== undefined && (action === "flagged" || action === "weight_decay")) {
+            try {
+              const reported = await fetchImpl(`${suggestions.platformApiBaseUrl}/internal/notifications/drift-suggestions`, {
+                method: "POST",
+                headers: { "content-type": "application/json", authorization: `Bearer ${suggestions.serviceToken}` },
+                body: JSON.stringify({ ...candidate, action_taken: action }),
+              });
+              if (reported.ok) suggested += 1;
+              else suggestionsFailed += 1;
+            } catch {
+              suggestionsFailed += 1;
+            }
+          }
         } else {
           failed += 1;
         }
@@ -282,7 +311,7 @@ function createDriftSweepHandler(
         );
       }
     }
-    return { candidates: payload.candidates?.length ?? 0, scored, failed };
+    return { candidates: payload.candidates?.length ?? 0, scored, failed, suggested, suggestions_failed: suggestionsFailed };
   };
 }
 
@@ -431,6 +460,12 @@ export function createPlatformJobHandlers(
         dependencies.driftSweepMinimumObservations,
         fetchImpl,
         dependencies.driftSweepLogger ?? new Logger("DriftSweepHandler"),
+        dependencies.platformApiInternalBaseUrl && dependencies.notificationDigestServiceToken
+          ? {
+              platformApiBaseUrl: dependencies.platformApiInternalBaseUrl,
+              serviceToken: dependencies.notificationDigestServiceToken,
+            }
+          : undefined,
       ),
     );
   }

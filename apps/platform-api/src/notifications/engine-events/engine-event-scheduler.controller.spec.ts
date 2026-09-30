@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { HttpException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import type { EngineEventNotificationRunner } from "./engine-event-notification.runner";
+import type { DriftSuggestionRunner } from "./drift-suggestion.runner";
 import { EngineEventSchedulerController } from "./engine-event-scheduler.controller";
 
 const TOKEN = "real-shared-secret";
@@ -11,7 +12,8 @@ function setup() {
   const runner = {
     run: vi.fn(async () => ({ tenants: 2, tenantsFailed: 1, notificationsCreated: 5 })),
   } as unknown as EngineEventNotificationRunner;
-  return { runner, controller: new EngineEventSchedulerController(runner, HASH) };
+  const drift = { run: vi.fn(async () => 3) } as unknown as DriftSuggestionRunner;
+  return { runner, drift, controller: new EngineEventSchedulerController(runner, drift, HASH) };
 }
 
 describe("EngineEventSchedulerController", () => {
@@ -37,5 +39,43 @@ describe("EngineEventSchedulerController", () => {
       notifications_created: 5,
     });
     expect(runner.run).toHaveBeenCalledOnce();
+  });
+
+  describe("drift suggestions (section 17)", () => {
+    const valid = {
+      tenant_id: "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890e1",
+      agent_id: "agt_018f4d6e-2b4a-7a3e-8c1a-1234567890a1",
+      task_class: "summarisation",
+      action_taken: "weight_decay",
+    };
+
+    it("refuses without the shared secret and does not run", async () => {
+      const { controller, drift } = setup();
+      await expect(controller.driftSuggestion(valid, "Bearer wrong")).rejects.toMatchObject({ status: 401 });
+      expect(drift.run).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [{ ...valid, tenant_id: "ten_x" }],
+      [{ ...valid, agent_id: "agt_1" }],
+      [{ ...valid, task_class: "<b>x</b>" }],
+      [{ ...valid, action_taken: "none" }],
+      [null],
+    ])("refuses a malformed report (%#)", async (body) => {
+      const { controller, drift } = setup();
+      await expect(controller.driftSuggestion(body, `Bearer ${TOKEN}`)).rejects.toMatchObject({ status: 400 });
+      expect(drift.run).not.toHaveBeenCalled();
+    });
+
+    it("runs a valid report and relays the count", async () => {
+      const { controller, drift } = setup();
+      await expect(controller.driftSuggestion(valid, `Bearer ${TOKEN}`)).resolves.toEqual({ notifications_created: 3 });
+      expect(drift.run).toHaveBeenCalledWith({
+        tenantId: valid.tenant_id,
+        agentId: valid.agent_id,
+        taskClass: "summarisation",
+        action: "weight_decay",
+      });
+    });
   });
 });
