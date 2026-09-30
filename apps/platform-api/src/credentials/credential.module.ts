@@ -48,6 +48,6 @@ import { CREDENTIAL_AUDIT_CLIENT, CREDENTIAL_SECRETS_PROVIDER } from "./tokens";
     ConcurrencyExceptionFilter,
     CredentialExceptionFilter,
   ],
-  exports: [CredentialService],
+  exports: [CredentialService, CREDENTIAL_SECRETS_PROVIDER],
 })
 export class CredentialModule {}

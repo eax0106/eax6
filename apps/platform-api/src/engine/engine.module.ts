@@ -86,6 +86,6 @@ import type { SecretsProvider } from "@alterx/shared-clients";
       useClass: EngineExceptionFilter,
     },
   ],
-  exports: [EngineClient, CostLedgerClient, EvalFacadeClient, DeploymentAdminClient, AuditEventsClient, ENGINE_M2M_TOKEN_PROVIDER],
+  exports: [EngineClient, CostLedgerClient, EvalFacadeClient, DeploymentAdminClient, AuditEventsClient, ENGINE_M2M_TOKEN_PROVIDER, ENGINE_CONFIG],
 })
 export class EngineModule {}

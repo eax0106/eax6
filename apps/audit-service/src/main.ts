@@ -63,6 +63,7 @@ async function bootstrap(): Promise<void> {
       AppModule.register(store, {
         adsBaseUrl: environment.adsDeletionBaseUrl,
         orchestrationBaseUrl: environment.orchestrationDeletionBaseUrl,
+        platformApiBaseUrl: environment.platformApiDeletionBaseUrl,
         serviceToken,
         serviceTokenHash,
         pseudonymKey,
