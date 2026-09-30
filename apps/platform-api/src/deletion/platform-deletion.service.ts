@@ -31,12 +31,12 @@ export interface ErasureStore {
 
 const STORE = "platform-api";
 
-// Every tenant-scoped table in platform_db that erasure is answerable for (49).
+// Every tenant-scoped table in platform_db that erasure is answerable for (48).
 // scripts/deletion/certify.ts parses this exact block and fails CI if it and
 // the deletion registry disagree, in either direction.
 export const PLATFORM_TABLES = [
   "abuse_signals", "action_item_annotations", "billing_dunning_audits", "billing_dunning_states",
-  "billing_events", "billing_payment_method_refs", "billing_profiles", "budgets",
+  "billing_events", "billing_payment_method_refs", "billing_profiles",
   "credential_refs", "credential_use_audits", "discovery_recommendations", "entitlements",
   "env_var_use_audits", "env_vars", "idempotency_keys", "installs", "jit_grant_audit",
   "jit_grants", "kyc_submissions", "listing_versions", "listings", "notification_digests",
@@ -57,7 +57,7 @@ export const PLATFORM_TABLES = [
 //   the SKELETON_TABLES                     staff access records, kept 90 days
 export const PLATFORM_DELETE_ORDER = [
   "abuse_signals", "billing_dunning_audits", "billing_dunning_states", "billing_events",
-  "billing_payment_method_refs", "billing_profiles", "budgets", "credential_use_audits",
+  "billing_payment_method_refs", "billing_profiles", "credential_use_audits",
   "credential_refs", "discovery_recommendations", "entitlements", "env_var_use_audits",
   "env_vars", "idempotency_keys", "kyc_submissions", "notification_digests",
   "notification_preferences", "notification_reads", "notification_events",

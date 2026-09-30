@@ -1,4 +1,4 @@
-import { type UsageSummary, type CostRecord, type ModelUsage, type Budget } from "../types"
+import { type UsageSummary, type CostRecord, type ModelUsage, type Budget, type BudgetInput } from "../types"
 import { isLiveApi } from "../http"
 import * as liveBudgets from "../live-budgets"
 
@@ -26,33 +26,30 @@ const mockModelUsage: ModelUsage[] = [
 let mockBudgets: Budget[] = [
   {
     id: "budg_1",
-    name: "Workspace Monthly",
-    scope: "workspace",
-    amount: 500,
-    currency: "USD",
+    kind: "workspace",
+    workflowId: null,
     period: "monthly",
-    currentSpend: 284.73,
+    amount: 500,
+    currency: "INR",
+    mode: "hard",
     enabled: true,
-    thresholds: [
-      { percent: 50, action: "notify" },
-      { percent: 80, action: "warn" },
-      { percent: 100, action: "block" }
-    ]
+    currentSpend: 284.73,
+    reserved: 12,
+    updatedAt: "2026-09-01T00:00:00.000Z",
   },
   {
     id: "budg_2",
-    name: "Customer Support Automation",
-    scope: "workflow",
-    scopeId: "wf_1",
+    kind: "workflow",
+    workflowId: "wf_1",
+    period: "daily",
     amount: 100,
-    currency: "USD",
-    period: "monthly",
-    currentSpend: 81.44,
+    currency: "INR",
+    mode: "warn",
     enabled: true,
-    thresholds: [
-      { percent: 80, action: "warn" }
-    ]
-  }
+    currentSpend: 81.44,
+    reserved: 0,
+    updatedAt: "2026-09-01T00:00:00.000Z",
+  },
 ]
 
 export const usageService = {
@@ -90,18 +87,30 @@ export const budgetsService = {
     await delay(300)
     return mockBudgets
   },
-  create: async (data: Partial<Budget>): Promise<Budget> => {
+  create: async (data: BudgetInput): Promise<Budget> => {
     if (isLiveApi) return liveBudgets.createBudget(data)
     await delay(400)
-    const budget = { ...mockBudgets[0], ...data, id: "budg_" + Date.now(), scope: "workspace", period: "monthly", currentSpend: 0 } as Budget
+    const budget: Budget = {
+      id: "budg_" + Date.now(),
+      kind: data.kind,
+      workflowId: data.workflowId ?? null,
+      period: data.kind === "run_cap" ? null : data.kind === "workspace" ? "monthly" : (data.period ?? "monthly"),
+      amount: data.amount,
+      currency: "INR",
+      mode: data.mode,
+      enabled: true,
+      currentSpend: data.kind === "run_cap" ? null : 0,
+      reserved: data.kind === "run_cap" ? null : 0,
+      updatedAt: new Date().toISOString(),
+    }
     mockBudgets = [...mockBudgets, budget]
     return budget
   },
-  update: async (_id: string, data: Partial<Budget>): Promise<Budget> => {
-    if (isLiveApi) return liveBudgets.updateBudget(_id, data)
+  update: async (budget: Budget, data: { amount?: number; mode?: Budget["mode"]; enabled?: boolean }): Promise<Budget> => {
+    if (isLiveApi) return liveBudgets.updateBudget(budget, data)
     await delay(400)
-    mockBudgets = mockBudgets.map(b => (b.id === _id ? { ...b, ...data } : b))
-    return mockBudgets.find(b => b.id === _id)!
+    mockBudgets = mockBudgets.map(b => (b.id === budget.id ? { ...b, ...data, updatedAt: new Date().toISOString() } : b))
+    return mockBudgets.find(b => b.id === budget.id)!
   },
   remove: async (_id: string): Promise<void> => {
     if (isLiveApi) return liveBudgets.deleteBudget(_id)

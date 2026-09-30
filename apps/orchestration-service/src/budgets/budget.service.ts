@@ -25,6 +25,25 @@ export type BudgetRow = {
   readonly updated_at: string;
 };
 
+/** A budget with what has been spent and reserved against it in the current period. */
+export type BudgetWithUsage = BudgetRow & {
+  /** Null for a per-run cap, which has no period to spend against. */
+  readonly spent_minor: string | null;
+  readonly reserved_minor: string | null;
+};
+
+/** One period budget's spend so far, for the 50% and 80% alerts (D3). */
+export type BudgetThresholdRow = {
+  readonly id: string;
+  readonly workspace_id: string;
+  readonly workflow_id: string | null;
+  readonly kind: "workflow" | "workspace";
+  readonly period: EngineBudgetPeriod;
+  readonly period_key: string;
+  readonly amount_minor: string;
+  readonly spent_minor: string;
+};
+
 export interface CreateEngineBudgetInput {
   readonly workspaceId: string;
   readonly workflowId?: string;
@@ -63,6 +82,14 @@ export class BudgetNotFoundError extends Error {
   }
 }
 
+/** The budget changed since the caller read it (If-Match). */
+export class BudgetStaleError extends Error {
+  constructor(id: string) {
+    super(`Budget ${id} changed since it was read`);
+    this.name = "BudgetStaleError";
+  }
+}
+
 export class BudgetConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -86,6 +113,10 @@ export class BudgetExceededError extends Error {
 
 const BUDGET_COLUMNS = `id, workspace_id::text, workflow_id, kind, period, amount_minor::text,
   mode, enabled, created_by, created_at::text, updated_at::text`;
+const BUDGET_COLUMNS_QUALIFIED = `b.id, b.workspace_id::text, b.workflow_id, b.kind, b.period, b.amount_minor::text,
+  b.mode, b.enabled, b.created_by, b.created_at::text, b.updated_at::text`;
+/** The current period of a budget row b, in India time, keyed as reserve() keys it. */
+const CURRENT_PERIOD_KEY_SQL = `to_char(clock_timestamp() AT TIME ZONE 'Asia/Kolkata', CASE b.period WHEN 'daily' THEN 'YYYY-MM-DD' ELSE 'YYYY-MM' END)`;
 
 /**
  * Engine-owned budgets (D3). Reservation is atomic: a run reserves its
@@ -117,6 +148,17 @@ export class EngineBudgetService {
     }
     const period = input.kind === "workspace" ? "monthly" : (input.period ?? null);
     return this.store.withTenant(tenantId, async (tx) => {
+      if (input.workflowId !== undefined) {
+        // A budget names a workflow of its own workspace only; another
+        // workspace's workflow is answered as missing, never confirmed.
+        const owner = await tx.query<{ workspace_id: string }>(
+          "SELECT workspace_id::text FROM workflows WHERE tenant_id = $1 AND id = $2",
+          [tenantId, input.workflowId],
+        );
+        if (owner.rows[0]?.workspace_id !== workspaceId) {
+          throw new BudgetValidationError("the workflow does not exist");
+        }
+      }
       try {
         const result = await tx.query<BudgetRow>(
           `INSERT INTO budgets (id, tenant_id, workspace_id, workflow_id, kind, period, amount_minor, mode, created_by)
@@ -131,23 +173,93 @@ export class EngineBudgetService {
     });
   }
 
-  list(tenantIdInput: string, workspaceIdInput: string): Promise<readonly BudgetRow[]> {
+  list(tenantIdInput: string, workspaceIdInput: string): Promise<readonly BudgetWithUsage[]> {
     const tenantId = bareTenant(tenantIdInput);
     const workspaceId = bareWorkspace(workspaceIdInput);
     return this.store.withTenant(tenantId, async (tx) => {
-      const result = await tx.query<BudgetRow>(
-        `SELECT ${BUDGET_COLUMNS} FROM budgets WHERE tenant_id = $1 AND workspace_id = $2 ORDER BY created_at, id`,
+      const result = await tx.query<BudgetWithUsage>(
+        `SELECT ${BUDGET_COLUMNS_QUALIFIED},
+                CASE WHEN b.period IS NULL THEN NULL ELSE COALESCE(u.spent_minor, 0)::text END AS spent_minor,
+                CASE WHEN b.period IS NULL THEN NULL ELSE COALESCE(u.reserved_minor, 0)::text END AS reserved_minor
+           FROM budgets b
+           LEFT JOIN budget_usage u
+             ON u.tenant_id = b.tenant_id AND u.budget_id = b.id AND u.period_key = ${CURRENT_PERIOD_KEY_SQL}
+          WHERE b.tenant_id = $1 AND b.workspace_id = $2
+          ORDER BY b.created_at, b.id`,
         [tenantId, workspaceId],
       );
       return result.rows;
     });
   }
 
-  update(tenantIdInput: string, workspaceIdInput: string, id: string, patch: BudgetPatch): Promise<BudgetRow> {
+  /**
+   * Every enabled period budget of the tenant with what has been spent against
+   * it this period, for the platform's 50% and 80% alerts (D3). Spent money
+   * only: a reservation is a worst case, not spend.
+   */
+  thresholdFeed(tenantIdInput: string): Promise<readonly BudgetThresholdRow[]> {
+    const tenantId = bareTenant(tenantIdInput);
+    return this.store.withTenant(tenantId, async (tx) => {
+      const result = await tx.query<BudgetThresholdRow>(
+        `SELECT b.id, b.workspace_id::text, b.workflow_id, b.kind, b.period,
+                ${CURRENT_PERIOD_KEY_SQL} AS period_key,
+                b.amount_minor::text, COALESCE(u.spent_minor, 0)::text AS spent_minor
+           FROM budgets b
+           LEFT JOIN budget_usage u
+             ON u.tenant_id = b.tenant_id AND u.budget_id = b.id AND u.period_key = ${CURRENT_PERIOD_KEY_SQL}
+          WHERE b.tenant_id = $1 AND b.enabled AND b.period IS NOT NULL
+          ORDER BY b.id`,
+        [tenantId],
+      );
+      return result.rows;
+    });
+  }
+
+  /**
+   * Runs that have ended but whose reservations were never settled (the
+   * settle at their end failed). Retried when a later run of the tenant ends.
+   */
+  unsettledEndedRuns(
+    tenantIdInput: string,
+    exceptRunId: string,
+    limit: number,
+  ): Promise<readonly { readonly run_id: string; readonly workspace_id: string }[]> {
+    const tenantId = bareTenant(tenantIdInput);
+    return this.store.withTenant(tenantId, async (tx) => {
+      const result = await tx.query<{ run_id: string; workspace_id: string }>(
+        `SELECT DISTINCT r.id AS run_id, r.workspace_id::text AS workspace_id
+           FROM budget_reservations br
+           JOIN runs r ON r.tenant_id = br.tenant_id AND r.id = br.run_id
+          WHERE r.workspace_id IS NOT NULL AND br.tenant_id = $1 AND br.state = 'reserved' AND br.run_id <> $2
+            AND r.status IN ('completed', 'failed', 'cancelled')
+          LIMIT $3`,
+        [tenantId, exceptRunId, limit],
+      );
+      return result.rows;
+    });
+  }
+
+  /**
+   * Change a budget. With `ifMatch` (the updated_at the caller read) the write
+   * happens only if nobody changed the budget since, compared at millisecond
+   * precision, the precision a JavaScript Date carries.
+   */
+  update(tenantIdInput: string, workspaceIdInput: string, id: string, patch: BudgetPatch, ifMatch?: string): Promise<BudgetRow> {
     const tenantId = bareTenant(tenantIdInput);
     const workspaceId = bareWorkspace(workspaceIdInput);
     if (patch.amountMinor !== undefined) requireAmount(patch.amountMinor);
+    if (ifMatch !== undefined && Number.isNaN(Date.parse(ifMatch))) {
+      throw new BudgetValidationError("If-Match must be the budget's updated_at");
+    }
     return this.store.withTenant(tenantId, async (tx) => {
+      const current = await tx.query<{ matches: boolean }>(
+        `SELECT ($4::timestamptz IS NULL
+                 OR date_trunc('milliseconds', updated_at) = date_trunc('milliseconds', $4::timestamptz)) AS matches
+           FROM budgets WHERE tenant_id = $1 AND workspace_id = $2 AND id = $3 FOR UPDATE`,
+        [tenantId, workspaceId, id, ifMatch ?? null],
+      );
+      if (current.rowCount === 0) throw new BudgetNotFoundError(id);
+      if (!current.rows[0]!.matches) throw new BudgetStaleError(id);
       const result = await tx.query<BudgetRow>(
         `UPDATE budgets
             SET amount_minor = COALESCE($4::bigint, amount_minor),
@@ -158,7 +270,6 @@ export class EngineBudgetService {
           RETURNING ${BUDGET_COLUMNS}`,
         [tenantId, workspaceId, id, patch.amountMinor ?? null, patch.mode ?? null, patch.enabled ?? null],
       );
-      if (result.rowCount === 0) throw new BudgetNotFoundError(id);
       return result.rows[0]!;
     });
   }

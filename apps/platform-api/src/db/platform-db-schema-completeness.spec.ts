@@ -30,22 +30,26 @@ function migrationStatements(): string[] {
 }
 
 function migrationDeclaredTableNames(): string[] {
-  const tableNames = readdirSync(migrationsPath)
-    .filter((file) => file.endsWith(".sql"))
-    .sort()
-    .flatMap((file) => {
-      const sql = readFileSync(join(migrationsPath, file), "utf8");
-      return [
-        ...sql.matchAll(
-          /CREATE TABLE(?: IF NOT EXISTS)?\s+(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))/gi,
-        ),
-      ].map((match) => match[1] ?? match[2] ?? "");
-    })
-    .filter(Boolean)
-    .sort();
-
-  expect(new Set(tableNames).size).toBe(tableNames.length);
-  return tableNames;
+  // Tables the migrations create, in order, less any a later migration drops
+  // (0027 retires budgets, which moved to the engine).
+  const created: string[] = [];
+  const dropped = new Set<string>();
+  for (const file of readdirSync(migrationsPath).filter((name) => name.endsWith(".sql")).sort()) {
+    const sql = readFileSync(join(migrationsPath, file), "utf8").replace(/--.*$/gm, "");
+    for (const match of sql.matchAll(
+      /(CREATE|DROP) TABLE(?: IF (?:NOT )?EXISTS)?\s+(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*))/gi,
+    )) {
+      const name = match[2] ?? match[3] ?? "";
+      if (match[1]!.toUpperCase() === "CREATE") {
+        created.push(name);
+        dropped.delete(name);
+      } else {
+        dropped.add(name);
+      }
+    }
+  }
+  expect(new Set(created).size).toBe(created.length);
+  return created.filter((name) => name && !dropped.has(name)).sort();
 }
 
 describe("platform_db schema completeness", () => {

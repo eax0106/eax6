@@ -9,6 +9,7 @@ import type { OrchestrationTenantStore } from "../runs/run-observability.service
 import {
   BudgetConflictError,
   BudgetExceededError,
+  BudgetStaleError,
   EngineBudgetService,
   BudgetValidationError,
 } from "./budget.service";
@@ -182,5 +183,88 @@ describe.sequential("Budgets", () => {
     await expect(budgets.update(TENANT, WORKSPACE, "bud_018f4d6e-2b4a-7a3e-8c1a-000000000000", { enabled: false })).rejects.toMatchObject({ name: "BudgetNotFoundError" });
     await budgets.delete(TENANT, WORKSPACE, created.id);
     expect(await budgets.list(TENANT, WORKSPACE)).toEqual([]);
+  });
+
+  it("lists each budget with this period's spend and reservations; a per-run cap has none", async () => {
+    await clear();
+    const workspace = await budgets.create(TENANT, { workspaceId: WORKSPACE, kind: "workspace", amountMinor: 1_000, createdBy: "usr_1" });
+    await budgets.create(TENANT, { workspaceId: WORKSPACE, workflowId: WORKFLOW, kind: "run_cap", amountMinor: 500, createdBy: "usr_1" });
+    await reserveInOwnTransaction(30);
+
+    const listed = await budgets.list(TENANT, WORKSPACE);
+
+    expect(listed.find((b) => b.id === workspace.id)).toMatchObject({ spent_minor: "0", reserved_minor: "30" });
+    expect(listed.find((b) => b.kind === "run_cap")).toMatchObject({ spent_minor: null, reserved_minor: null });
+  });
+
+  it("refuses a budget on a workflow of another workspace as if it did not exist", async () => {
+    await clear();
+    const OTHER_WORKFLOW = "wf_other_ws";
+    await store.withTenant(BARE_TENANT, (tx) =>
+      tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'w') ON CONFLICT DO NOTHING", [
+        OTHER_WORKFLOW,
+        BARE_TENANT,
+        "018f4d6e-2b4a-7a3e-8c1a-1234567890f9",
+      ]),
+    );
+    await expect(
+      budgets.create(TENANT, { workspaceId: WORKSPACE, workflowId: OTHER_WORKFLOW, kind: "workflow", period: "daily", amountMinor: 10, createdBy: "usr_1" }),
+    ).rejects.toThrow(new BudgetValidationError("the workflow does not exist"));
+  });
+
+  it("feeds the period budgets' spend (not reservations) for the alerts, enabled ones only", async () => {
+    await clear();
+    const workspace = await budgets.create(TENANT, { workspaceId: WORKSPACE, kind: "workspace", amountMinor: 1_000, createdBy: "usr_1" });
+    const paused = await budgets.create(TENANT, { workspaceId: WORKSPACE, workflowId: WORKFLOW, kind: "workflow", period: "daily", amountMinor: 100, createdBy: "usr_1" });
+    await budgets.update(TENANT, WORKSPACE, paused.id, { enabled: false });
+    await budgets.create(TENANT, { workspaceId: WORKSPACE, workflowId: WORKFLOW, kind: "run_cap", amountMinor: 5_000, createdBy: "usr_1" });
+    const runId = await newRun();
+    await store.withTenant(BARE_TENANT, (tx) =>
+      budgets.reserve(tx, { tenantId: BARE_TENANT, workspaceId: BARE_WORKSPACE, workflowId: WORKFLOW, runId, amountMinor: 900 }),
+    );
+    await budgets.settle(TENANT, runId, 600);
+    await reserveInOwnTransaction(50);
+
+    const feed = await budgets.thresholdFeed(TENANT);
+
+    expect(feed).toHaveLength(1);
+    expect(feed[0]).toMatchObject({ id: workspace.id, kind: "workspace", period: "monthly", amount_minor: "1000", spent_minor: "600" });
+    expect(feed[0]!.period_key).toMatch(/^\d{4}-\d{2}$/);
+    // Another tenant sees nothing of this one.
+    expect(await budgets.thresholdFeed(`ten_${OTHER_TENANT}`)).toEqual([]);
+  });
+
+  it("finds ended runs whose reservation was never settled, and not the run now ending", async () => {
+    await clear();
+    await budgets.create(TENANT, { workspaceId: WORKSPACE, kind: "workspace", amountMinor: 100_000, createdBy: "usr_1" });
+    const ended = await newRun();
+    const running = await newRun();
+    const current = await newRun();
+    for (const runId of [ended, running, current]) {
+      await store.withTenant(BARE_TENANT, (tx) =>
+        budgets.reserve(tx, { tenantId: BARE_TENANT, workspaceId: BARE_WORKSPACE, workflowId: WORKFLOW, runId, amountMinor: 10 }),
+      );
+    }
+    await store.withTenant(BARE_TENANT, (tx) =>
+      tx.query("UPDATE runs SET status = 'failed' WHERE tenant_id = $1 AND id = ANY($2::text[])", [BARE_TENANT, [ended, current]]),
+    );
+
+    await expect(budgets.unsettledEndedRuns(TENANT, current, 20)).resolves.toEqual([{ run_id: ended, workspace_id: BARE_WORKSPACE }]);
+    await budgets.settle(TENANT, ended, 5);
+    await expect(budgets.unsettledEndedRuns(TENANT, current, 20)).resolves.toEqual([]);
+  });
+
+  it("writes a change only while the caller's copy is current (If-Match at millisecond precision)", async () => {
+    await clear();
+    const created = await budgets.create(TENANT, { workspaceId: WORKSPACE, kind: "workspace", amountMinor: 1_000, createdBy: "usr_1" });
+    const readAt = new Date(created.updated_at).toISOString();
+
+    const changed = await budgets.update(TENANT, WORKSPACE, created.id, { amountMinor: 2_000 }, readAt);
+    expect(changed.amount_minor).toBe("2000");
+
+    await expect(budgets.update(TENANT, WORKSPACE, created.id, { amountMinor: 3_000 }, readAt)).rejects.toThrow(BudgetStaleError);
+    await expect(budgets.update(TENANT, WORKSPACE, "bud_018f4d6e-2b4a-7a3e-8c1a-1234567890ff", { enabled: false }, readAt)).rejects.toThrow(
+      "was not found",
+    );
   });
 });
