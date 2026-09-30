@@ -31,7 +31,7 @@ export interface ErasureStore {
 
 const STORE = "platform-api";
 
-// Every tenant-scoped table in platform_db that erasure is answerable for (48).
+// Every tenant-scoped table in platform_db that erasure is answerable for (49).
 // scripts/deletion/certify.ts parses this exact block and fails CI if it and
 // the deletion registry disagree, in either direction.
 export const PLATFORM_TABLES = [
@@ -43,9 +43,9 @@ export const PLATFORM_TABLES = [
   "notification_events", "notification_preferences", "notification_reads",
   "oauth_connection_use_audits", "oauth_connections", "oauth_states", "onboarding_states",
   "orders", "payout_ledger", "payouts", "publishers", "repository_bindings", "reviews",
-  "tenant_admin_actions", "tenant_members", "tenants", "tool_manifests", "tool_revocations",
+  "tenant_admin_actions", "tenant_members", "tenants",   "tool_manifests", "tool_revocations",
   "tool_scan_reports", "tool_versions", "user_admin_actions", "user_sessions", "users",
-  "workflow_safeguards", "workspace_connector_configs", "workspace_members", "workspaces",
+  "workflow_safeguards", "workspace_connector_configs", "workspace_exports", "workspace_members", "workspaces",
 ] as const;
 
 // Children before parents (a topological sort over every foreign key among the
@@ -64,7 +64,7 @@ export const PLATFORM_DELETE_ORDER = [
   "oauth_connection_use_audits", "oauth_connections", "oauth_states", "onboarding_states",
   "payouts", "orders", "repository_bindings", "reviews", "installs", "tenant_members", "tool_revocations", "tool_scan_reports", "tool_versions",
   "tool_manifests", "publishers", "user_sessions", "workflow_safeguards",
-  "workspace_connector_configs", "workspace_members", "workspaces",
+  "workspace_connector_configs", "workspace_exports", "workspace_members", "workspaces",
 ] as const;
 
 const skeleton: ReadonlySet<string> = new Set(SKELETON_TABLES);

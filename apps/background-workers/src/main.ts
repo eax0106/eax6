@@ -44,6 +44,7 @@ import {
   DRIFT_SWEEP_JOB_TYPE,
   AUDIT_CHAIN_VERIFY_JOB_TYPE,
   AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
+  WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
 } from "./platform-jobs/scheduled-job-types";
 
 const { parsePort, scopedValue } = createEnvironmentValidators(
@@ -316,6 +317,16 @@ async function bootstrap(): Promise<void> {
   );
   auditChainFullVerifyRunner.start();
 
+  // D2 (C74): requested workspace archives are built asynchronously; this
+  // sweep drives the platform-api trigger that processes the pending records.
+  const workspaceExportSweepRunner = new IntervalJobSchedulerRunner(
+    digestDurableExecution,
+    WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
+    "workspace-export-sweep",
+    platformJobsConfig.workspaceExportSweepIntervalMs,
+  );
+  workspaceExportSweepRunner.start();
+
   app.enableShutdownHooks();
   app.getHttpAdapter().getInstance().addHook("onClose", () => {
     worker.shutdown();
@@ -332,6 +343,7 @@ async function bootstrap(): Promise<void> {
     void driftSweepRunner.stop();
     void auditChainVerifyRunner.stop();
     void auditChainFullVerifyRunner.stop();
+    void workspaceExportSweepRunner.stop();
   });
 
   await app.listen(
