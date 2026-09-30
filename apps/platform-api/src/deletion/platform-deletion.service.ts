@@ -74,6 +74,7 @@ export class PlatformDeletionService implements DeletionProvider {
   constructor(
     private readonly store: ErasureStore,
     private readonly secrets: MutableSecretsProvider,
+    private readonly retentionStore?: ErasureStore,
   ) {}
 
   async locateSubjectData(tenantId: string): Promise<readonly SubjectDataLocation[]> {
@@ -115,6 +116,7 @@ export class PlatformDeletionService implements DeletionProvider {
       const members = (
         await tx.query<{ user_id: string }>("SELECT DISTINCT user_id::text FROM tenant_members WHERE tenant_id = $1", [tenant])
       ).rows.map((member) => member.user_id);
+      await tx.query("UPDATE tenant_erasure_manifests SET retained_user_ids = $2::uuid[] WHERE manifest_id = $1", [manifestId, members]);
 
       await holdWhatTheLawKeeps(tx, tenant, pseudonym);
 
@@ -188,6 +190,8 @@ export class PlatformDeletionService implements DeletionProvider {
   }
 
   async applyRetentionPolicy(): Promise<RetentionSweepResult> {
+    const retentionStore = this.retentionStore;
+    if (!retentionStore) throw new Error("Dedicated retention connection required");
     const result = await this.store.withoutTenant(async (tx) => {
       const clock = await tx.query<{ swept_at: string }>("SELECT transaction_timestamp()::text AS swept_at");
       const sweptAt = clock.rows[0]?.swept_at;
@@ -197,9 +201,9 @@ export class PlatformDeletionService implements DeletionProvider {
       // access rows, manifests and themselves, only through the dedicated
       // expiry function. The cutoff is inclusive: exactly 90 days goes.
       const cutoff = new Date(new Date(sweptAt).getTime() - SKELETON_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-      const expired = await tx.query<{ n: number }>("SELECT expire_erasure_skeleton($1::timestamptz) AS n", [
-        cutoff.toISOString(),
-      ]);
+      const expired = await retentionStore.withoutTenant((retention) =>
+        retention.query<{ n: number }>("SELECT expire_erasure_skeleton($1::timestamptz) AS n", [cutoff.toISOString()]),
+      );
       return {
         deletedRows: removed.rowCount + Number(expired.rows[0]?.n ?? 0),
         sweptAt: new Date(sweptAt).toISOString(),

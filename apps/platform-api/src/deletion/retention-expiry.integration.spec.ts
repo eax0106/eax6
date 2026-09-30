@@ -1,4 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { Test } from "@nestjs/testing";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
@@ -6,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { MutableSecretsProvider } from "@alterx/shared-clients";
 import { PlatformDeletionService } from "./platform-deletion.service";
 import { PgErasureStore } from "./pg-erasure-store";
+import { PLATFORM_DELETION_TOKEN_HASH, PlatformDeletionController } from "./platform-deletion.controller";
 
 // D2 (Y1): tombstones past the 90-day window lose their retained staff
 // access rows, manifests and themselves through the dedicated expiry
@@ -30,7 +34,10 @@ async function expectDeleteToRaise(query: Promise<unknown>, pattern: RegExp): Pr
   expect.unreachable("direct delete resolved instead of raising");
 }describe.skipIf(!databaseUrl)("Retention tombstone expiry (Y1)", () => {  let admin: pg.Client;
   let pool: pg.Pool;
+  let retentionPool: pg.Pool;
   let schemaName: string;
+  let roleName: string;
+  let retentionRole: string;
   let service: PlatformDeletionService;
 
   async function count(table: string, column: string, value: string): Promise<number> {
@@ -40,7 +47,8 @@ async function expectDeleteToRaise(query: Promise<unknown>, pattern: RegExp): Pr
 
   beforeEach(async () => {
     schemaName = `expiry_${randomUUID().replaceAll("-", "_")}`;
-    const roleName = `expiry_role_${randomUUID().replaceAll("-", "_")}`;
+    roleName = `expiry_role_${randomUUID().replaceAll("-", "_")}`;
+    retentionRole = `expiry_retention_${randomUUID().replaceAll("-", "_")}`;
     admin = new pg.Client({ connectionString: databaseUrl });
     await admin.connect();
     await admin.query(`CREATE SCHEMA "${schemaName}"`);
@@ -90,29 +98,62 @@ async function expectDeleteToRaise(query: Promise<unknown>, pattern: RegExp): Pr
         await admin.query(`INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES (gen_random_uuid(), $1, $2, 'member')`, [LIVE_TENANT, user]);
       }
     }
+    await admin.query("UPDATE tenant_erasure_manifests SET retained_user_ids = $2::uuid[] WHERE tenant_id = $1", [OLD_TENANT, [OLD_USER]]);
 
     const password = randomUUID();
     await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`);
     await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
     await admin.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA "${schemaName}" TO "${roleName}"`);
     await admin.query(`GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA "${schemaName}" TO "${roleName}"`);
+    await admin.query(`REVOKE ALL ON FUNCTION "${schemaName}".expire_erasure_skeleton(timestamptz) FROM "${roleName}"`);
+    await admin.query(`CREATE ROLE "${retentionRole}" LOGIN PASSWORD '${password}' NOSUPERUSER NOBYPASSRLS`);
+    await admin.query(`GRANT platform_retention TO "${retentionRole}"`);
     const url = new URL(databaseUrl);
     url.username = roleName;
     url.password = password;
     url.searchParams.set("options", `-c search_path=${schemaName}`);
     pool = new pg.Pool({ connectionString: url.toString() });
+    url.username = retentionRole;
+    retentionPool = new pg.Pool({ connectionString: url.toString() });
     const secrets = { getSecret: async () => { throw new Error("no secrets in this spec"); } };
-    service = new PlatformDeletionService(new PgErasureStore(pool), secrets as unknown as MutableSecretsProvider);
+    service = new PlatformDeletionService(new PgErasureStore(pool), secrets as unknown as MutableSecretsProvider, new PgErasureStore(retentionPool));
   });
 
   afterEach(async () => {
     await pool?.end().catch(() => undefined);
-    await admin?.end().catch(() => undefined);
+    await retentionPool?.end().catch(() => undefined);
+    if (admin) {
+      await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
+      await admin.query(`DROP ROLE IF EXISTS "${retentionRole}"`);
+      await admin.end();
+    }
   });
 
   it("holds the session to row security", async () => {
     const roles = await pool.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user");
     expect(roles.rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+  });
+
+  it("requires the dedicated retention connection without giving it table access", async () => {
+    await expect(pool.query("SELECT expire_erasure_skeleton(NULL)")).rejects.toThrow(/permission denied/);
+    await expect(retentionPool.query("DELETE FROM tenant_admin_actions")).rejects.toThrow(/permission denied/);
+    await expect(retentionPool.query("SELECT * FROM tenants")).rejects.toThrow(/permission denied/);
+    expect((await retentionPool.query("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")).rows)
+      .toEqual([{ rolsuper: false, rolbypassrls: false }]);
+    expect((await retentionPool.query("SELECT expire_erasure_skeleton(NULL) AS n")).rows).toEqual([{ n: 0 }]);
+  });
+
+  it("retains old user actions without a tenant deletion anchor", async () => {
+    await admin.query("UPDATE tenant_erasure_manifests SET retained_user_ids = '{}' WHERE tenant_id = $1", [OLD_TENANT]);
+    await service.applyRetentionPolicy();
+    expect(await count("user_admin_actions", "user_id", OLD_USER)).toBe(1);
+  });
+
+  it("retains anchored user actions when another tenant still has a membership", async () => {
+    await admin.query("INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES (gen_random_uuid(), $1, $2, 'member')", [LIVE_TENANT, OLD_USER]);
+    await service.applyRetentionPolicy();
+    expect(await count("user_admin_actions", "user_id", OLD_USER)).toBe(1);
   });
 
   it("refuses direct deletes of skeleton rows, manifests and tombstones", async () => {
@@ -166,5 +207,34 @@ async function expectDeleteToRaise(query: Promise<unknown>, pattern: RegExp): Pr
     expect(await count("tenant_admin_actions", "tenant_id", LIVE_TENANT)).toBe(1);
     expect(await count("tenants", "id", LIVE_TENANT)).toBe(1);
     expect(sweep.deletedRows).toBe(6);
+  });
+
+  it("expires through listening HTTP with the credential and dedicated database role", async () => {
+    const token = randomUUID();
+    const module = await Test.createTestingModule({ controllers: [PlatformDeletionController], providers: [
+      { provide: PlatformDeletionService, useValue: service },
+      { provide: PLATFORM_DELETION_TOKEN_HASH, useValue: createHash("sha256").update(token).digest("hex") },
+    ] }).compile();
+    const app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), { logger: false });
+    try {
+      await app.listen(0, "127.0.0.1");
+      const endpoint = `${await app.getUrl()}/internal/deletion/retention`;
+      const observed = await new Promise<unknown>((resolve, reject) => {
+        const child = spawn(process.execPath, ["scripts/testing/probe-platform-retention.mjs"], { stdio: ["pipe", "pipe", "pipe"] });
+        let output = "";
+        child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+        child.on("error", reject);
+        child.on("close", (code) => {
+          if (code !== 0) { reject(new Error("Retention socket probe failed")); return; }
+          try { resolve(JSON.parse(output)); } catch (error) { reject(error); }
+        });
+        child.stdin.end(JSON.stringify({ endpoint, token }));
+      });
+      expect(observed).toMatchObject({ missing: 401, wrong: 401, accepted: 201,
+        body: { deletedRows: 6, deletedObjects: 0, store: "platform-api" } });
+      expect(await count("tenants", "id", OLD_TENANT)).toBe(0);
+      expect(await count("tenants", "id", YOUNG_TENANT)).toBe(1);
+      expect(await count("tenants", "id", LIVE_TENANT)).toBe(1);
+    } finally { await app.close(); }
   });
 });

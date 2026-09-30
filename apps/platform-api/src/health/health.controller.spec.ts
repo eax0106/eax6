@@ -10,6 +10,7 @@ describe("GET /health", () => {
   beforeEach(async () => {
     process.env.DATABASE_URL =
       "postgres://platform_api:platform_api_local@localhost:5432/platform_db";
+    process.env.PLATFORM_RETENTION_DATABASE_URL = "postgres://platform_retention:fixture-only@localhost:5432/platform_db";
     process.env.MARKETPLACE_DATABASE_URL =
       "postgres://platform_api:platform_api_local@localhost:5432/marketplace_db";
     process.env.NODE_ENV = "test";
@@ -56,5 +57,10 @@ describe("GET /health", () => {
       status: "ok",
       service: "platform-api",
     });
+  });
+
+  it("refuses application boot without the retention connection", async () => {
+    delete process.env.PLATFORM_RETENTION_DATABASE_URL;
+    await expect(Test.createTestingModule({ imports: [AppModule] }).compile()).rejects.toThrow(/PLATFORM_RETENTION_DATABASE_URL/);
   });
 });

@@ -13,6 +13,7 @@
 -- twice: before migrations (roles must exist for their GRANTs) and after them
 -- (privileges on what they created). Idempotent.
 SELECT set_config('alter.app_password', :'app_password', false),
+       set_config('alter.retention_password', :'retention_password', false),
        set_config('alter.operations_password', :'operations_password', false);
 
 DO $roles$
@@ -23,6 +24,11 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platform_operations') THEN
     CREATE ROLE platform_operations LOGIN;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platform_retention') THEN
+    CREATE ROLE platform_retention LOGIN;
+  END IF;
+  EXECUTE format('ALTER ROLE platform_retention LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
+                 current_setting('alter.retention_password'));
   EXECUTE format('ALTER ROLE platform_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
                  current_setting('alter.app_password'));
   EXECUTE format('ALTER ROLE platform_operations LOGIN NOSUPERUSER BYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD %L',
@@ -45,3 +51,16 @@ BEGIN
   END LOOP;
 END
 $grants$;
+
+-- Retention has no direct table DML. Keep the expiry-only grant after the
+-- existing runtime grants, including on the second post-migration run.
+DO $retention$
+BEGIN
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO platform_retention', current_database());
+  GRANT USAGE ON SCHEMA public TO platform_retention;
+  IF to_regprocedure('public.expire_erasure_skeleton(timestamptz)') IS NOT NULL THEN
+    REVOKE ALL ON FUNCTION public.expire_erasure_skeleton(timestamptz) FROM PUBLIC, platform_app, platform_operations;
+    GRANT EXECUTE ON FUNCTION public.expire_erasure_skeleton(timestamptz) TO platform_retention;
+  END IF;
+END
+$retention$;

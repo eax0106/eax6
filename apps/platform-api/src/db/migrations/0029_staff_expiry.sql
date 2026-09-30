@@ -25,15 +25,14 @@
 --    guard changes no live flow.
 -- 3. expire_erasure_skeleton() walks the manifests (the cross-tenant
 --    discovery the sweep cannot do under row security), enforces the same
---    predicate per tenant, and counts what it removes. EXECUTE is granted to
---    platform_api (the migration pattern for definer functions); production's
---    platform_app reaches it through the EC2 roles script until security (b)
---    narrows the blanket function grant, which must carry this function over
---    explicitly.
+--    predicate per tenant, and counts what it removes. EXECUTE is granted
+--    only to platform_retention, which has a separate runtime connection.
 --
 -- Rollback: restore the unconditional guards from 0010 (jit_grant_audit),
 --   0013 (tenant_admin_actions) and 0022 (user_admin_actions); drop the three
---   expiry guards; DROP FUNCTION expire_erasure_skeleton(timestamptz).
+--   expiry guards; DROP FUNCTION expire_erasure_skeleton(timestamptz),
+--   staff_user_expiry_allowed(uuid); ALTER TABLE tenant_erasure_manifests
+--   DROP COLUMN retained_user_ids. Revoke the retention role's expiry grant.
 DO $role$
 BEGIN
   BEGIN
@@ -43,6 +42,58 @@ BEGIN
   END;
 END
 $role$;
+--> statement-breakpoint
+DO $role$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'platform_retention') THEN
+    CREATE ROLE platform_retention NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  END IF;
+  EXECUTE format('GRANT USAGE ON SCHEMA %I TO platform_retention', current_schema());
+END
+$role$;
+--> statement-breakpoint
+-- Captured before tenant membership erasure, not inferred from user age.
+-- Existing manifests without this anchor retain their user-action rows.
+ALTER TABLE tenant_erasure_manifests ADD COLUMN retained_user_ids uuid[] NOT NULL DEFAULT '{}';
+--> statement-breakpoint
+-- Prove no surviving membership by visiting each tenant under its own RLS
+-- context. The existing erasure discovery function returns tenant IDs only.
+DO $fn$
+BEGIN
+  EXECUTE format($def$
+    CREATE FUNCTION staff_user_expiry_allowed(p_user uuid) RETURNS boolean
+    LANGUAGE plpgsql SET search_path = %I, pg_temp AS $body$
+    DECLARE
+      anchor text := current_setting('app.current_tenant_id', true);
+      tid uuid;
+      member boolean;
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM tenant_erasure_manifests m JOIN tenants t ON t.id = m.tenant_id
+        WHERE p_user = ANY(m.retained_user_ids) AND m.state = 'complete'
+          AND t.status = 'deleted'
+          AND t.deleted_at <= transaction_timestamp() - interval '90 days'
+      ) THEN RETURN false; END IF;
+      FOR tid IN SELECT list_platform_tenant_ids() LOOP
+        PERFORM set_config('app.current_tenant_id', tid::text, true);
+        SELECT EXISTS(SELECT 1 FROM tenant_members WHERE user_id = p_user)
+            OR EXISTS(SELECT 1 FROM workspace_members WHERE user_id = p_user) INTO member;
+        IF member THEN
+          PERFORM set_config('app.current_tenant_id', COALESCE(anchor, ''), true);
+          RETURN false;
+        END IF;
+      END LOOP;
+      PERFORM set_config('app.current_tenant_id', COALESCE(anchor, ''), true);
+      RETURN true;
+    END;
+    $body$
+  $def$, current_schema());
+END
+$fn$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION staff_user_expiry_allowed(uuid) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION staff_user_expiry_allowed(uuid), list_platform_tenant_ids() TO platform_erasure;
 --> statement-breakpoint
 -- Shared predicate for the guards below. Plain (like 0026's guard): it reads
 -- the tenant row under the caller's own context, so a session without the
@@ -94,15 +145,14 @@ END;
 $$;
 --> statement-breakpoint
 -- user_admin_actions: no tenant column, so the predicate joins through the
--- user. A row may go only from a platform_erasure session, when its user is
--- pseudonymised (the 'erased:' marker the erasure writer stamps), untouched
--- since the window, and holding no membership anywhere. A live user always
+-- manifest's captured user IDs. A row may go only from a platform_erasure
+-- session with an expired tenant anchor, when its user is pseudonymised,
+-- untouched since the window, and holding no membership anywhere. A live user always
 -- fails at least one of those, whatever the session's tenant context.
 CREATE OR REPLACE FUNCTION prevent_user_admin_action_deletion() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF current_user = 'platform_erasure'
-     AND NOT EXISTS (SELECT 1 FROM tenant_members m WHERE m.user_id = OLD.user_id)
-     AND NOT EXISTS (SELECT 1 FROM workspace_members m WHERE m.user_id = OLD.user_id)
+     AND staff_user_expiry_allowed(OLD.user_id)
      AND EXISTS (
        SELECT 1 FROM users u
         WHERE u.id = OLD.user_id
@@ -180,6 +230,7 @@ BEGIN
         PERFORM set_config('app.current_tenant_id', tid::text, true);
         SELECT deleted_at INTO tomb FROM tenants
          WHERE id = tid AND status = 'deleted' AND deleted_at <= p_cutoff
+           AND deleted_at <= transaction_timestamp() - interval '90 days'
            AND NOT EXISTS (
              SELECT 1 FROM tenant_erasure_manifests m
               WHERE m.tenant_id = tid AND m.state <> 'complete'
@@ -194,19 +245,19 @@ BEGIN
         GET DIAGNOSTICS n = ROW_COUNT; removed := removed + n;
         DELETE FROM tenant_admin_actions WHERE tenant_id = tid;
         GET DIAGNOSTICS n = ROW_COUNT; removed := removed + n;
+        DELETE FROM user_admin_actions ua USING users u, tenant_erasure_manifests m
+         WHERE ua.user_id = u.id AND m.tenant_id = tid
+           AND u.id = ANY(m.retained_user_ids)
+           AND u.identity_ref LIKE 'erased:%%'
+           AND u.updated_at <= p_cutoff
+           AND staff_user_expiry_allowed(u.id);
+        GET DIAGNOSTICS n = ROW_COUNT; removed := removed + n;
         DELETE FROM tenant_erasure_manifests WHERE tenant_id = tid;
         GET DIAGNOSTICS n = ROW_COUNT; removed := removed + n;
         DELETE FROM tenants WHERE id = tid;
         GET DIAGNOSTICS n = ROW_COUNT; removed := removed + n;
       END LOOP;
       PERFORM set_config('app.current_tenant_id', '', true);
-      DELETE FROM user_admin_actions ua USING users u
-       WHERE ua.user_id = u.id
-         AND u.identity_ref LIKE 'erased:%%'
-         AND u.updated_at <= p_cutoff
-         AND NOT EXISTS (SELECT 1 FROM tenant_members m WHERE m.user_id = u.id)
-         AND NOT EXISTS (SELECT 1 FROM workspace_members m WHERE m.user_id = u.id);
-      GET DIAGNOSTICS n = ROW_COUNT; removed := removed + n;
       RETURN removed;
     END;
     $body$
@@ -218,7 +269,7 @@ ALTER FUNCTION expire_erasure_skeleton(timestamptz) OWNER TO platform_erasure;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION expire_erasure_skeleton(timestamptz) FROM PUBLIC;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION expire_erasure_skeleton(timestamptz) TO platform_api;
+GRANT EXECUTE ON FUNCTION expire_erasure_skeleton(timestamptz) TO platform_retention;
 --> statement-breakpoint
 -- The function runs as platform_erasure, so it needs its own privileges on
 -- every table it touches (definer rights do not confer them). DELETE rights
