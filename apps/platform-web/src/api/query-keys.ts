@@ -99,6 +99,8 @@ export const queryKeys = {
   },
   dataExport: {
     status: ["dataExport", "status"] as const,
+    list: (workspaceId: string) => ["dataExport", "list", workspaceId] as const,
+    detail: (workspaceId: string, exportId: string) => ["dataExport", "detail", workspaceId, exportId] as const,
   },
   integrations: {
     list: ["integrations", "list"] as const,

@@ -28,6 +28,7 @@ import { BillingModule } from "./billing";
 import { EnvVarModule } from "./env-vars";
 import { RepositoryModule } from "./repositories";
 import { BudgetModule } from "./budgets";
+import { WorkspaceExportModule } from "./workspace-export";
 import { CostsModule } from "./costs/costs.module";
 import { WhatsappModule } from "./channels/whatsapp/whatsapp.module";
 import { MarketplaceModule } from "./marketplace";
@@ -84,6 +85,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     EnvVarModule,
     RepositoryModule,
     BudgetModule,
+    WorkspaceExportModule,
     WhatsappModule,
     MarketplaceModule,
     PublisherModule,

@@ -55,7 +55,10 @@ describe("system caller (D1)", () => {
   });
 
   it("a controller may reach a runner only if it is one of the trigger controllers", () => {
-    const triggerControllers = ["notifications/engine-events/engine-event-scheduler.controller.ts"];
+    const triggerControllers = [
+      "notifications/engine-events/engine-event-scheduler.controller.ts",
+      "workspace-export/workspace-export-trigger.controller.ts",
+    ];
     const importsRunner = (source: string) => /from\s+["'][^"']*\.(runner|producer)["']/.test(source);
     expect(importsRunner('import { X } from "./engine-event-notification.runner";')).toBe(true);
     expect(importsRunner('import { X } from "./notification.service";')).toBe(false);

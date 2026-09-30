@@ -14,8 +14,17 @@ describe("createPlatformJobHandlers", () => {
     const refused = createPlatformJobHandlers({ ...dependencies, fetchImpl: async () => new Response("unauthorized", { status: 401 }) }).get("platform.platform-db-retention-sweep")!;
     await expect(refused({})).rejects.toThrow("retention sweep failed: HTTP 401 unauthorized");
   });
-  it("registers the real health-ping handler", async () => {
-    const handlers = createPlatformJobHandlers();
+  it("registers the workspace export sweep on the digest credential and propagates refusal", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({ exports_processed: 2 })) as unknown as typeof fetch;
+    const dependencies = { platformApiInternalBaseUrl: "http://platform-api.internal", notificationDigestServiceToken: "jobs-token", fetchImpl };
+    const handler = createPlatformJobHandlers(dependencies).get("platform.workspace-export-sweep")!;
+    await expect(handler({})).resolves.toEqual({ exports_processed: 2 });
+    expect(fetchImpl).toHaveBeenCalledWith("http://platform-api.internal/internal/workspace-exports/process-pending", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ authorization: "Bearer jobs-token" }) }));
+    expect(createPlatformJobHandlers({ platformApiInternalBaseUrl: dependencies.platformApiInternalBaseUrl }).get("platform.workspace-export-sweep")).toBeUndefined();
+    const refused = createPlatformJobHandlers({ ...dependencies, fetchImpl: async () => new Response("unauthorized", { status: 401 }) }).get("platform.workspace-export-sweep")!;
+    await expect(refused({})).rejects.toThrow("workspace export sweep failed: HTTP 401 unauthorized");
+  });
+  it("registers the real health-ping handler", async () => {    const handlers = createPlatformJobHandlers();
     const handler = handlers.get("platform.health-ping");
     expect(handler).toBeDefined();
 

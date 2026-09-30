@@ -45,6 +45,10 @@ export const BENCHMARK_SWEEP_JOB_TYPE = "platform.benchmark-sweep";
 export const DRIFT_SWEEP_JOB_TYPE = "platform.drift-sweep";
 export const AUDIT_CHAIN_VERIFY_JOB_TYPE = "platform.audit-chain-verify";
 export const AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE = "platform.audit-chain-full-verify";
+// D2 (C74): workspace data exports requested by workspace admins are built
+// asynchronously; this sweep drives the platform-api trigger that processes
+// the pending records.
+export const WORKSPACE_EXPORT_SWEEP_JOB_TYPE = "platform.workspace-export-sweep";
 
 export const SCHEDULED_PLATFORM_JOB_TYPES = [
   "platform.notification-digest",
@@ -57,6 +61,7 @@ export const SCHEDULED_PLATFORM_JOB_TYPES = [
   DRIFT_SWEEP_JOB_TYPE,
   AUDIT_CHAIN_VERIFY_JOB_TYPE,
   AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
+  WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
 ] as const;
 
 export type ScheduledPlatformJobType =
