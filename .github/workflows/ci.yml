@@ -128,6 +128,9 @@ jobs:
         # AWS CLI stubbed and asserts every rewrite the EC2 services depend on.
         run: bash deploy/ec2/check-bootstrap-env.sh
 
+      - name: engine database runtime roles check
+        run: bash deploy/ec2/check-engine-db-runtime-roles.sh
+
       - name: migration rollback pairing check
         run: scripts/check-migration-rollback-pairing.sh
 

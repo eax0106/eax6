@@ -53,13 +53,7 @@ WHERE NOT EXISTS (
   SELECT 1 FROM pg_roles WHERE rolname = 'orchestration_service'
 ) \gexec
 
-ALTER ROLE orchestration_service WITH LOGIN PASSWORD :'orchestration_db_password';
-
--- resolve_webhook_endpoint is SECURITY DEFINER but the webhook tables use
--- FORCE ROW LEVEL SECURITY, so the defining role must be able to read
--- across tenants to resolve a path token; the app still scopes every other
--- query with set_config('app.current_tenant_id', ...) inside withTenant.
-ALTER ROLE orchestration_service BYPASSRLS;
+ALTER ROLE orchestration_service WITH LOGIN NOBYPASSRLS PASSWORD :'orchestration_db_password';
 
 SELECT 'CREATE DATABASE orchestration_db OWNER orchestration_service'
 WHERE NOT EXISTS (

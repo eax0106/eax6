@@ -180,7 +180,13 @@ describe.sequential("WorkflowLifecycleService Postgres integration", () => {
       { id: VERSION_2, status: "canary", trafficPercent: 10 },
     ]);
 
-    const startedAt = Date.now();
+    // Read the clock that records the timestamp: Docker's database clock can
+    // differ from the host clock even though promotion is correct.
+    const databaseNow = async () => store.withTenant(TENANT_A, async (tx) => {
+      const result = await tx.query<{ now: Date }>("SELECT clock_timestamp() AS now");
+      return result.rows[0]!.now.getTime();
+    });
+    const startedAt = await databaseNow();
     const result = await service.promoteVersion({
       tenant_id: TENANT_A_REQUEST,
       workflow_id: WORKFLOW_A,
@@ -190,7 +196,7 @@ describe.sequential("WorkflowLifecycleService Postgres integration", () => {
     expect(result.status).toBe("promoted");
     expect(new Date(result.promoted_at).toISOString()).toBe(result.promoted_at);
     expect(new Date(result.promoted_at).getTime()).toBeGreaterThanOrEqual(startedAt);
-    expect(new Date(result.promoted_at).getTime()).toBeLessThanOrEqual(Date.now());
+    expect(new Date(result.promoted_at).getTime()).toBeLessThanOrEqual(await databaseNow());
     expect(await storedVersions()).toEqual([
       { id: VERSION_1, status: "retired", traffic_percent: null },
       { id: VERSION_2, status: "promoted", traffic_percent: null },
