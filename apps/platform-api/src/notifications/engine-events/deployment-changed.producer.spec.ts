@@ -9,7 +9,7 @@ const tenantId = "00000000-0000-7000-8000-000000000001";
 const workspace = "00000000-0000-7000-8000-0000000000a1";
 const caller = { userId: "system:platform-jobs" } as unknown as EngineCallerContext;
 const context = { tenantId, caller, now: new Date("2026-09-29T12:00:00.000Z") };
-const change = (extra: Record<string, unknown> = {}) => ({ workflow_id: "wf_1", workflow_version_id: "wfv_1", workspace_id: `ws_${workspace}`, version: 3, kind: "promoted", ...extra });
+const change = (extra: Record<string, unknown> = {}) => ({ workflow_id: "wf_1", workflow_version_id: "wfv_1", workspace_id: `ws_${workspace}`, version: 3, kind: "promoted", changed_at: "2026-09-29T11:00:00.000Z", ...extra });
 function setup(data: unknown[]) {
   const get = vi.fn().mockResolvedValue({ body: { data } });
   const notifyWorkspaceRolesOnce = vi.fn().mockResolvedValue(1);
@@ -26,17 +26,22 @@ describe("DeploymentChangedProducer", () => {
     const { producer, notifyWorkspaceRolesOnce } = setup([change(), change({ kind: "restored" })]);
     await expect(producer.produce(context)).resolves.toBe(2);
     const shared = { tenantId, workspaceId: workspace, eventClass: "workflow", severity: "info", title: "A workflow's live version changed", deepLink: "/app/workflows/wf_1", sourceService: "platform-api.engine-events" };
-    expect(notifyWorkspaceRolesOnce).toHaveBeenNthCalledWith(1, ["admin", "editor"], "deploy:wfv_1:promoted", { ...shared, body: "Version 3 of this workflow is now live" });
-    expect(notifyWorkspaceRolesOnce).toHaveBeenNthCalledWith(2, ["admin", "editor"], "deploy:wfv_1:restored", { ...shared, body: "This workflow was rolled back to version 3" });
+    expect(notifyWorkspaceRolesOnce).toHaveBeenNthCalledWith(1, ["admin", "editor"], "deploy:wfv_1:promoted:2026-09-29T11:00:00.000Z", { ...shared, body: "Version 3 of this workflow is now live" });
+    expect(notifyWorkspaceRolesOnce).toHaveBeenNthCalledWith(2, ["admin", "editor"], "deploy:wfv_1:restored:2026-09-29T11:00:00.000Z", { ...shared, body: "This workflow was rolled back to version 3" });
   });
   it("uses a stable key for repeated observations", async () => {
     const { producer, notifyWorkspaceRolesOnce } = setup([change(), change()]);
     notifyWorkspaceRolesOnce.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
     await expect(producer.produce(context)).resolves.toBe(2);
-    expect(notifyWorkspaceRolesOnce.mock.calls.map((call) => call[1])).toEqual(["deploy:wfv_1:promoted", "deploy:wfv_1:promoted"]);
+    expect(notifyWorkspaceRolesOnce.mock.calls.map((call) => call[1])).toEqual(["deploy:wfv_1:promoted:2026-09-29T11:00:00.000Z", "deploy:wfv_1:promoted:2026-09-29T11:00:00.000Z"]);
+  });
+  it("announces the same version restored twice when the timestamps differ", async () => {
+    const { producer, notifyWorkspaceRolesOnce } = setup([change({ kind: "restored", changed_at: "2026-09-29T11:00:00.000Z" }), change({ kind: "restored", changed_at: "2026-09-29T11:30:00.000Z" })]);
+    await expect(producer.produce(context)).resolves.toBe(2);
+    expect(notifyWorkspaceRolesOnce.mock.calls.map((call) => call[1])).toEqual(["deploy:wfv_1:restored:2026-09-29T11:00:00.000Z", "deploy:wfv_1:restored:2026-09-29T11:30:00.000Z"]);
   });
   it("skips malformed records rather than guessing their destination", async () => {
-    const { producer, notifyWorkspaceRolesOnce } = setup([change({ workspace_id: null }), change({ workflow_id: "" }), change({ workflow_version_id: null }), change({ kind: "draft" }), change({ version: 0 }), change({ version: 1.5 })]);
+    const { producer, notifyWorkspaceRolesOnce } = setup([change({ workspace_id: null }), change({ workflow_id: "" }), change({ workflow_version_id: null }), change({ kind: "draft" }), change({ version: 0 }), change({ version: 1.5 }), change({ changed_at: null }), change({ changed_at: "" })]);
     await expect(producer.produce(context)).resolves.toBe(0);
     expect(notifyWorkspaceRolesOnce).not.toHaveBeenCalled();
   });

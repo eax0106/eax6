@@ -26,10 +26,12 @@ export class DeploymentChangedProducer implements EngineEventProducer {
       const versionId = change.workflow_version_id;
       const version = change.version;
       const kind = change.kind;
+      const changedAt = change.changed_at;
       if (!workspaceId || typeof workflowId !== "string" || !workflowId || typeof versionId !== "string" || !versionId ||
-          typeof version !== "number" || !Number.isSafeInteger(version) || version < 1 || (kind !== "promoted" && kind !== "restored")) continue;
+          typeof version !== "number" || !Number.isSafeInteger(version) || version < 1 || (kind !== "promoted" && kind !== "restored") ||
+          typeof changedAt !== "string" || !changedAt) continue;
       try {
-        created += await this.notifications.notifyWorkspaceRolesOnce(["admin", "editor"], `deploy:${versionId}:${kind}`, {
+        created += await this.notifications.notifyWorkspaceRolesOnce(["admin", "editor"], `deploy:${versionId}:${kind}:${changedAt}`, {
           tenantId: context.tenantId, workspaceId, eventClass: "workflow", severity: "info",
           title: "A workflow's live version changed",
           body: kind === "promoted" ? `Version ${version} of this workflow is now live` : `This workflow was rolled back to version ${version}`,
