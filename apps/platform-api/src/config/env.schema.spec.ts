@@ -4,6 +4,14 @@ import { platformApiConfigSource, validatePlatformApiEnv } from "./env.schema";
 describe("platformApiEnvSchema", () => {
   const cursorSecret = "test-search-cursor-secret";
 
+  it("requires a dedicated retention URL in real mode", () => {
+    const base = { DATABASE_URL: "postgres://localhost/platform_db", MARKETPLACE_DATABASE_URL: "postgres://localhost/platform_db",
+      MARKETPLACE_SEARCH_CURSOR_SECRET: cursorSecret, SIGNING_KEY_PROVIDER: "mock", RUNTIME_MODE: "real" };
+    expect(() => validatePlatformApiEnv(base)).toThrow(/PLATFORM_RETENTION_DATABASE_URL/);
+    expect(() => validatePlatformApiEnv({ ...base, PLATFORM_RETENTION_DATABASE_URL: "postgres://platform_app:fixture@localhost/platform_db" })).toThrow(/platform_retention/);
+    expect(validatePlatformApiEnv({ ...base, PLATFORM_RETENTION_DATABASE_URL: "postgres://platform_retention:fixture@localhost/platform_db" }).RUNTIME_MODE).toBe("real");
+  });
+
   it("throws when DATABASE_URL is missing", () => {
     expect(() => validatePlatformApiEnv({})).toThrow(
       "Invalid platform-api environment",

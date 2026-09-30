@@ -3,6 +3,7 @@ import { z } from "zod";
 export const platformApiEnvSchema = z
   .object({
     DATABASE_URL: z.string().url(),
+    PLATFORM_RETENTION_DATABASE_URL: z.string().url().optional(),
     MARKETPLACE_DATABASE_URL: z.string().url(),
     MARKETPLACE_SEARCH_CURSOR_SECRET: z.string().min(1),
     OPERATIONS_PLATFORM_DATABASE_URL: z.string().url().optional(),
@@ -76,6 +77,11 @@ export const platformApiEnvSchema = z
     REGISTRY_SCAN_PROVIDER: z.enum(["sandbox", "mock"]).default("mock"),
   })
   .superRefine((env, context) => {
+    if (env.RUNTIME_MODE === "real" && (!env.PLATFORM_RETENTION_DATABASE_URL ||
+        new URL(env.PLATFORM_RETENTION_DATABASE_URL).username !== "platform_retention")) {
+      context.addIssue({ code: "custom", path: ["PLATFORM_RETENTION_DATABASE_URL"],
+        message: "PLATFORM_RETENTION_DATABASE_URL with platform_retention required in real mode" });
+    }
     if (env.RUNTIME_MODE === "mock" && env.NODE_ENV === "production") {
       context.addIssue({
         code: "custom",

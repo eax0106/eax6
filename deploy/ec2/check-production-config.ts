@@ -61,6 +61,19 @@ async function main(): Promise<void> {
   );
 
   await check("platform-api", "environment", () => validatePlatformApiEnv(process.env));
+  for (const value of [undefined, "postgresql://platform_app:fixture@localhost/platform_db"]) {
+    await check("platform-api", "retention configuration control", () => {
+      const environment: NodeJS.ProcessEnv = Object.assign({}, process.env);
+      if (value === undefined) delete environment.PLATFORM_RETENTION_DATABASE_URL;
+      else environment.PLATFORM_RETENTION_DATABASE_URL = value;
+      try { validatePlatformApiEnv(environment); }
+      catch (error) {
+        if (error instanceof Error && error.message.includes("PLATFORM_RETENTION_DATABASE_URL")) return;
+        throw error;
+      }
+      throw new Error("invalid retention configuration accepted");
+    });
+  }
   await check("platform-api", "identity provider", () =>
     createIdentityProvider(new InMemorySessionStore(), new InMemorySsoConfigStore()),
   );

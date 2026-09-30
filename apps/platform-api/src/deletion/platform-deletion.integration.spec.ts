@@ -85,7 +85,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     ]) {
       secrets.values.set(reference, "s3cret");
     }
-    service = new PlatformDeletionService(new PgErasureStore(pool), secrets as unknown as MutableSecretsProvider);
+    service = new PlatformDeletionService(new PgErasureStore(pool), secrets as unknown as MutableSecretsProvider, new PgErasureStore(pool));
   }, 60_000);
 
   afterEach(async () => {
@@ -160,7 +160,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
                ('pseudo', 'tax_invoice', 'billing_events', 'unexpired', '{}', transaction_timestamp() + interval '1 second')`);
       const sameTransactionService = new PlatformDeletionService({
         withTenant: store.withTenant.bind(store), withoutTenant: async (operation) => operation(tx),
-      }, secrets as unknown as MutableSecretsProvider);
+      }, secrets as unknown as MutableSecretsProvider, { withTenant: store.withTenant.bind(store), withoutTenant: async (operation) => operation(tx) });
       expect(await sameTransactionService.applyRetentionPolicy()).toMatchObject({ deletedRows: 2, deletedObjects: 0, store: "platform-api" });
       expect((await tx.query("SELECT source_id FROM legal_hold_records ORDER BY source_id")).rows).toEqual([{ source_id: "unexpired" }]);
       expect(await sameTransactionService.applyRetentionPolicy()).toMatchObject({ deletedRows: 0 });

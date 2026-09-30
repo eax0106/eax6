@@ -68,6 +68,10 @@ if [[ ! -f .db-roles.env ]]; then
 fi
 # shellcheck disable=SC1091
 . ./.db-roles.env
+if ! grep -q '^PLATFORM_RETENTION_DB_PASSWORD=' .db-roles.env; then
+  printf 'PLATFORM_RETENTION_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" >>.db-roles.env
+fi
+. ./.db-roles.env
 # Keys and service tokens this host generates for itself, once (kept across
 # re-runs; a key added later is appended): platform-api's session cookie key and
 # the tokens platform-api presents to orchestration's eval facade and
@@ -166,6 +170,7 @@ expand() {
   printf 'ACTOR_TOKEN_JWKS_URL=http://127.0.0.1:%s/.well-known/actor-jwks.json\n' "${seen[PLATFORM_API_PORT]}"
   platform_db="127.0.0.1:${seen[PLATFORM_DB_PORT]:-5432}/platform_db"
   printf 'DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"
+  printf 'PLATFORM_RETENTION_DATABASE_URL=postgresql://platform_retention:%s@%s\n' "$PLATFORM_RETENTION_DB_PASSWORD" "$platform_db"
   printf 'MARKETPLACE_DATABASE_URL=postgresql://platform_app:%s@%s\n' "$PLATFORM_APP_DB_PASSWORD" "$platform_db"
   printf 'OPERATIONS_PLATFORM_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
   printf 'OPERATIONS_MARKETPLACE_DATABASE_URL=postgresql://platform_operations:%s@%s\n' "$PLATFORM_OPERATIONS_DB_PASSWORD" "$platform_db"
@@ -213,7 +218,7 @@ log "starting data services"
 compose up -d --wait platform-db engine-db ads-db cost-db redis presidio-analyzer presidio-anonymizer
 platform_db_roles() {
   compose exec -T platform-db psql -U platform_api -d platform_db -X -q -v ON_ERROR_STOP=1 \
-    -v app_password="$PLATFORM_APP_DB_PASSWORD" -v operations_password="$PLATFORM_OPERATIONS_DB_PASSWORD" \
+    -v app_password="$PLATFORM_APP_DB_PASSWORD" -v operations_password="$PLATFORM_OPERATIONS_DB_PASSWORD" -v retention_password="$PLATFORM_RETENTION_DB_PASSWORD" \
     <platform-db-roles.sql >/dev/null
 }
 engine_db_runtime_role() {
