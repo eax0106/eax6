@@ -12,6 +12,7 @@ import type { MutableSecretsProvider } from "@alterx/shared-clients";
 import {
   LEGAL_HOLD_MONTHS,
   LEGAL_HOLD_SOURCES,
+  SKELETON_RETENTION_DAYS,
   SKELETON_TABLES,
 } from "./retention-config";
 
@@ -192,7 +193,17 @@ export class PlatformDeletionService implements DeletionProvider {
       const sweptAt = clock.rows[0]?.swept_at;
       if (!sweptAt) throw new Error("retention sweep database clock unavailable");
       const removed = await tx.query("DELETE FROM legal_hold_records WHERE retain_until <= $1::timestamptz", [sweptAt]);
-      return { deletedRows: removed.rowCount, sweptAt: new Date(sweptAt).toISOString() };
+      // Y1: tombstones past the skeleton window lose their retained staff
+      // access rows, manifests and themselves, only through the dedicated
+      // expiry function. The cutoff is inclusive: exactly 90 days goes.
+      const cutoff = new Date(new Date(sweptAt).getTime() - SKELETON_RETENTION_DAYS * 24 * 60 * 60 * 1000);
+      const expired = await tx.query<{ n: number }>("SELECT expire_erasure_skeleton($1::timestamptz) AS n", [
+        cutoff.toISOString(),
+      ]);
+      return {
+        deletedRows: removed.rowCount + Number(expired.rows[0]?.n ?? 0),
+        sweptAt: new Date(sweptAt).toISOString(),
+      };
     });
     return { store: STORE, ...result, deletedObjects: 0 };
   }
