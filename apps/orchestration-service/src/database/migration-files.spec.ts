@@ -60,6 +60,7 @@ describe("orchestration migration files", () => {
       "0040_create_side_effects.sql",
       "0041_create_budgets.sql",
       "0042_restrict_webhook_resolver_rls.sql",
+      "0043_workflow_version_deploy_marks.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -109,6 +110,7 @@ describe("orchestration migration files", () => {
       "0040_drop_side_effects.sql",
       "0041_drop_budgets.sql",
       "0042_restore_webhook_resolver.sql",
+      "0043_drop_workflow_version_deploy_marks.sql",
     ]);
   });
 

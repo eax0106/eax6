@@ -47,6 +47,8 @@ import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.const
 import { RUN_LEARNING_AUDIT, RunLearningController } from "./runs/run-learning.controller";
 import { runLearningAuditClient } from "./runs/run-learning-audit";
 import { RecoveryFeedController } from "./runs/recovery-feed.controller";
+import { DeploymentChangesController } from "./deployment-feed/deployment-changes.controller";
+import { DeploymentChangesService } from "./deployment-feed/deployment-changes.service";
 import { AgentWorkflowsController } from "./agent-usage/agent-workflows.controller";
 import { AgentWorkflowsService } from "./agent-usage/agent-workflows.service";
 import { BudgetsController } from "./budgets/budgets.controller";
@@ -195,6 +197,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     RunsController,
     RunObservabilityController,
     RecoveryFeedController,
+    DeploymentChangesController,
     AgentWorkflowsController,
     BudgetsController,
     RunLearningController,
@@ -203,6 +206,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     NodeTypeController,
   ],
   providers: [
+    {
+      provide: DeploymentChangesService,
+      useFactory: () => new DeploymentChangesService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+    },
     {
       provide: AgentWorkflowsService,
       useFactory: () => new AgentWorkflowsService(orchestrationStore(sessionGatewayEnvironment(process.env))),

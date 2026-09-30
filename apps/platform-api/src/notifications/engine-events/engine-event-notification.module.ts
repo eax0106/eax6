@@ -8,6 +8,7 @@ import { BudgetThresholdProducer } from "./budget-threshold.producer";
 import { EngineEventSchedulerController } from "./engine-event-scheduler.controller";
 import { RunFailedProducer } from "./run-failed.producer";
 import { SelfHealProducer } from "./self-heal.producer";
+import { DeploymentChangedProducer } from "./deployment-changed.producer";
 import { DriftSuggestionRunner } from "./drift-suggestion.runner";
 
 /**
@@ -22,17 +23,19 @@ import { DriftSuggestionRunner } from "./drift-suggestion.runner";
     RunFailedProducer,
     ApprovalWaitingProducer,
     SelfHealProducer,
+    DeploymentChangedProducer,
     BudgetThresholdProducer,
     {
       // One entry per kind of engine event that becomes a notification.
       provide: ENGINE_EVENT_PRODUCERS,
-      inject: [RunFailedProducer, ApprovalWaitingProducer, SelfHealProducer, BudgetThresholdProducer],
+      inject: [RunFailedProducer, ApprovalWaitingProducer, SelfHealProducer, BudgetThresholdProducer, DeploymentChangedProducer],
       useFactory: (
         runFailed: RunFailedProducer,
         approvalWaiting: ApprovalWaitingProducer,
         selfHeal: SelfHealProducer,
         budgetThreshold: BudgetThresholdProducer,
-      ) => [runFailed, approvalWaiting, selfHeal, budgetThreshold],
+        deploymentChanged: DeploymentChangedProducer,
+      ) => [runFailed, approvalWaiting, selfHeal, budgetThreshold, deploymentChanged],
     },
     EngineEventNotificationRunner,
     DriftSuggestionRunner,
