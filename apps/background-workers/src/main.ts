@@ -3,6 +3,7 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { NestFactory } from "@nestjs/core";
 import {
   CostClient,
+  AwsSecretsManagerProvider,
   EventBridgeEventPublisher,
   RunDispatchClient,
   SqsQueueProvider,
@@ -37,6 +38,7 @@ import {
   CONNECTOR_HEALTH_SWEEP_JOB_TYPE,
   ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE,
   RETENTION_SWEEP_JOB_TYPE,
+  PLATFORM_DB_RETENTION_SWEEP_JOB_TYPE,
   ORCHESTRATION_RETENTION_SWEEP_JOB_TYPE,
   BENCHMARK_SWEEP_JOB_TYPE,
   DRIFT_SWEEP_JOB_TYPE,
@@ -168,6 +170,10 @@ async function bootstrap(): Promise<void> {
   const orchestrationRetentionSweepServiceToken = await resolveRuntimeSecret(
     platformJobsConfig.orchestrationRetentionSweepServiceTokenRef,
   );
+  const platformRetentionSweepServiceToken = await resolveRuntimeSecret(
+    platformJobsConfig.platformRetentionSweepServiceTokenRef,
+    new AwsSecretsManagerProvider({ region: platformJobsConfig.awsRegion }),
+  );
   const evalFacadeServiceToken = await resolveRuntimeSecret(
     platformJobsConfig.evalFacadeServiceTokenRef,
   );
@@ -203,6 +209,7 @@ async function bootstrap(): Promise<void> {
       connectorHealthSweepServiceToken,
       adsCoreInternalBaseUrl: platformJobsConfig.adsCoreInternalBaseUrl,
       retentionSweepServiceToken,
+      platformRetentionSweepServiceToken,
       orchestrationServiceInternalBaseUrl: platformJobsConfig.orchestrationServiceInternalBaseUrl,
       orchestrationRetentionSweepServiceToken,
       evalFacadeServiceToken,
@@ -261,6 +268,11 @@ async function bootstrap(): Promise<void> {
     platformJobsConfig.retentionSweepIntervalMs,
   );
   retentionSweepRunner.start();
+  const platformDbRetentionSweepRunner = new IntervalJobSchedulerRunner(
+    digestDurableExecution, PLATFORM_DB_RETENTION_SWEEP_JOB_TYPE, "platform-db-retention-sweep",
+    platformJobsConfig.platformRetentionSweepIntervalMs,
+  );
+  platformDbRetentionSweepRunner.start();
 
   // P5-2: orchestration-service's own retention sweep -- distinct tables,
   // distinct policy, distinct schedule from ads-core's above.
@@ -314,6 +326,7 @@ async function bootstrap(): Promise<void> {
     void connectorHealthSweepRunner.stop();
     void engineEventNotificationsRunner.stop();
     void retentionSweepRunner.stop();
+    void platformDbRetentionSweepRunner.stop();
     void orchestrationRetentionSweepRunner.stop();
     void benchmarkSweepRunner.stop();
     void driftSweepRunner.stop();

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createMockMutableSecretsProvider } from "@alterx/shared-clients";
 import {
   PlatformJobsConfigurationError,
   loadPlatformJobsEnvironment,
@@ -7,11 +8,13 @@ import {
 
 function environment(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   return {
+    AWS_REGION: "ap-south-1",
     PLATFORM_API_INTERNAL_BASE_URL: "http://platform-api.internal",
     NOTIFICATION_DIGEST_SERVICE_TOKEN_REF: "env:NOTIFICATION_DIGEST_TOKEN",
     CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF: "env:CONNECTOR_HEALTH_SWEEP_TOKEN",
     ADS_CORE_INTERNAL_BASE_URL: "http://ads-core.internal",
     RETENTION_SWEEP_SERVICE_TOKEN_REF: "env:RETENTION_SWEEP_TOKEN",
+    AUDIT_QUERY_SERVICE_TOKEN_REF: "env:PLATFORM_DELETION_TOKEN",
     ORCHESTRATION_SERVICE_INTERNAL_BASE_URL: "http://orchestration-service.internal",
     ORCHESTRATION_RETENTION_SWEEP_SERVICE_TOKEN_REF: "env:ORCHESTRATION_RETENTION_SWEEP_TOKEN",
     EVAL_FACADE_SERVICE_TOKEN_REF: "env:EVAL_FACADE_SERVICE_TOKEN",
@@ -25,8 +28,14 @@ function environment(overrides: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 }
 
 describe("loadPlatformJobsEnvironment", () => {
+  it("requires the platform deletion credential and validates its daily sweep interval", () => {
+    expect(() => loadPlatformJobsEnvironment(environment({ AUDIT_QUERY_SERVICE_TOKEN_REF: "" }))).toThrow(PlatformJobsConfigurationError);
+    expect(() => loadPlatformJobsEnvironment(environment({ PLATFORM_DB_RETENTION_SWEEP_INTERVAL_MS: "0" }))).toThrow(PlatformJobsConfigurationError);
+    expect(loadPlatformJobsEnvironment(environment({ PLATFORM_DB_RETENTION_SWEEP_INTERVAL_MS: "5000" })).platformRetentionSweepIntervalMs).toBe(5000);
+  });
   it("validates and returns the documented environment with real default intervals", () => {
     expect(loadPlatformJobsEnvironment(environment())).toEqual({
+      awsRegion: "ap-south-1",
       platformApiInternalBaseUrl: "http://platform-api.internal",
       notificationDigestServiceTokenRef: "env:NOTIFICATION_DIGEST_TOKEN",
       notificationDigestIntervalMs: 60 * 60 * 1000,
@@ -36,6 +45,8 @@ describe("loadPlatformJobsEnvironment", () => {
       adsCoreInternalBaseUrl: "http://ads-core.internal",
       retentionSweepServiceTokenRef: "env:RETENTION_SWEEP_TOKEN",
       retentionSweepIntervalMs: 24 * 60 * 60 * 1000,
+      platformRetentionSweepServiceTokenRef: "env:PLATFORM_DELETION_TOKEN",
+      platformRetentionSweepIntervalMs: 24 * 60 * 60 * 1000,
       orchestrationServiceInternalBaseUrl: "http://orchestration-service.internal",
       orchestrationRetentionSweepServiceTokenRef: "env:ORCHESTRATION_RETENTION_SWEEP_TOKEN",
       orchestrationRetentionSweepIntervalMs: 24 * 60 * 60 * 1000,
@@ -160,6 +171,11 @@ describe("loadPlatformJobsEnvironment", () => {
 });
 
 describe("resolveRuntimeSecret", () => {
+  it("resolves the deployment deletion reference through the real provider port and refuses unavailable references", async () => {
+    const provider = createMockMutableSecretsProvider({ secrets: { "alter/dev/audit-service/deletion-service-token": "test-token" } });
+    await expect(resolveRuntimeSecret("alter/dev/audit-service/deletion-service-token", provider)).resolves.toBe("test-token");
+    await expect(resolveRuntimeSecret("alter/dev/audit-service/missing", provider)).rejects.toThrow();
+  });
   it("resolves an env:-prefixed reference from process.env", async () => {
     process.env.NOTIFICATION_DIGEST_TOKEN = "real-token-value";
     await expect(resolveRuntimeSecret("env:NOTIFICATION_DIGEST_TOKEN")).resolves.toBe(

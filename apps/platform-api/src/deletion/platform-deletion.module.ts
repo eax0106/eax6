@@ -31,12 +31,14 @@ import { PlatformDeletionService } from "./platform-deletion.service";
     },
     {
       provide: PLATFORM_DELETION_TOKEN_HASH,
-      inject: [ENGINE_CONFIG],
+      inject: [ENGINE_CONFIG, CREDENTIAL_SECRETS_PROVIDER],
       // Resolved on first use, so an unconfigured environment fails the route (401), not the boot of every service that builds the app.
-      useFactory: (config: EngineConfig) => {
+      useFactory: (config: EngineConfig, secrets: MutableSecretsProvider) => {
         let hash: Promise<string> | undefined;
         return () =>
-          (hash ??= resolveRuntimeSecret(config.auditQueryServiceTokenRef).then((token) =>
+          (hash ??= (config.auditQueryServiceTokenRef.startsWith("env:")
+            ? resolveRuntimeSecret(config.auditQueryServiceTokenRef)
+            : secrets.getSecret(config.auditQueryServiceTokenRef)).then((token) =>
             createHash("sha256").update(token).digest("hex"),
           ));
       },

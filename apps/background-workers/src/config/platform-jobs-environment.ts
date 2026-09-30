@@ -1,10 +1,12 @@
 import { createEnvironmentValidators } from "@alterx/adapters";
+import type { SecretsProvider } from "@alterx/shared-clients";
 
 // Config for the Platform Jobs handlers + digest scheduler runner
 // (Engagement Phase, doc 12). Own file, same reasoning as every other
 // per-ticket environment loader in this monorepo.
 
 export interface PlatformJobsEnvironment {
+  readonly awsRegion: string;
   readonly platformApiInternalBaseUrl: string;
   readonly notificationDigestServiceTokenRef: string;
   readonly notificationDigestIntervalMs: number;
@@ -14,6 +16,8 @@ export interface PlatformJobsEnvironment {
   readonly adsCoreInternalBaseUrl: string;
   readonly retentionSweepServiceTokenRef: string;
   readonly retentionSweepIntervalMs: number;
+  readonly platformRetentionSweepServiceTokenRef: string;
+  readonly platformRetentionSweepIntervalMs: number;
   readonly orchestrationServiceInternalBaseUrl: string;
   readonly orchestrationRetentionSweepServiceTokenRef: string;
   readonly orchestrationRetentionSweepIntervalMs: number;
@@ -82,6 +86,7 @@ export function loadPlatformJobsEnvironment(
   environment: NodeJS.ProcessEnv,
 ): PlatformJobsEnvironment {
   return {
+    awsRegion: requireValue(environment, "AWS_REGION"),
     platformApiInternalBaseUrl: requireValue(environment, "PLATFORM_API_INTERNAL_BASE_URL"),
     notificationDigestServiceTokenRef: requireValue(
       environment,
@@ -120,6 +125,8 @@ export function loadPlatformJobsEnvironment(
       environment,
       "ORCHESTRATION_SERVICE_INTERNAL_BASE_URL",
     ),
+    platformRetentionSweepServiceTokenRef: requireValue(environment, "AUDIT_QUERY_SERVICE_TOKEN_REF"),
+    platformRetentionSweepIntervalMs: parseIntervalMs(environment, "PLATFORM_DB_RETENTION_SWEEP_INTERVAL_MS", DEFAULT_RETENTION_SWEEP_INTERVAL_MS),
     orchestrationRetentionSweepServiceTokenRef: requireValue(
       environment,
       "ORCHESTRATION_RETENTION_SWEEP_SERVICE_TOKEN_REF",
@@ -172,7 +179,10 @@ export function loadPlatformJobsEnvironment(
 /** Mirrors platform-api's own resolveRuntimeSecret shape exactly (apps
  * don't import each other's internals in this monorepo -- duplicated
  * on purpose, same real behavior). */
-export async function resolveRuntimeSecret(reference: string): Promise<string> {
+export async function resolveRuntimeSecret(reference: string, secrets?: SecretsProvider): Promise<string> {
+  if (!reference.startsWith("env:") && reference.includes("/") && secrets) {
+    return secrets.getSecret(reference);
+  }
   const environmentKey = reference.startsWith("env:") ? reference.slice("env:".length) : reference;
   const value = process.env[environmentKey];
   if (!value) {

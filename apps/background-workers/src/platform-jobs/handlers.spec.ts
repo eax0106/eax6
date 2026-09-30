@@ -4,6 +4,16 @@ import { describe, expect, it, vi } from "vitest";
 import { createPlatformJobHandlers } from "./handlers";
 
 describe("createPlatformJobHandlers", () => {
+  it("registers authenticated platform-db retention only with its own credential and propagates refusal", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({ deletedRows: 3 })) as unknown as typeof fetch;
+    const dependencies = { platformApiInternalBaseUrl: "http://platform-api.internal", platformRetentionSweepServiceToken: "deletion-token", fetchImpl };
+    const handler = createPlatformJobHandlers(dependencies).get("platform.platform-db-retention-sweep")!;
+    await expect(handler({})).resolves.toEqual({ deletedRows: 3 });
+    expect(fetchImpl).toHaveBeenCalledWith("http://platform-api.internal/internal/deletion/retention", expect.objectContaining({ method: "POST", headers: expect.objectContaining({ authorization: "Bearer deletion-token" }) }));
+    expect(createPlatformJobHandlers({ platformApiInternalBaseUrl: dependencies.platformApiInternalBaseUrl, retentionSweepServiceToken: "ads-token" }).get("platform.platform-db-retention-sweep")).toBeUndefined();
+    const refused = createPlatformJobHandlers({ ...dependencies, fetchImpl: async () => new Response("unauthorized", { status: 401 }) }).get("platform.platform-db-retention-sweep")!;
+    await expect(refused({})).rejects.toThrow("retention sweep failed: HTTP 401 unauthorized");
+  });
   it("registers the real health-ping handler", async () => {
     const handlers = createPlatformJobHandlers();
     const handler = handlers.get("platform.health-ping");

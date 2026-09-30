@@ -1,4 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
+import { Test } from "@nestjs/testing";
+import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
@@ -8,6 +11,7 @@ import { applyMarketplaceMigrations } from "../db/marketplace-migrator";
 import { PgErasureStore } from "./pg-erasure-store";
 import { PLATFORM_DELETE_ORDER, PlatformDeletionService, PLATFORM_TABLES, pseudonymOf } from "./platform-deletion.service";
 import { SKELETON_TABLES } from "./retention-config";
+import { PlatformDeletionController, PLATFORM_DELETION_TOKEN_HASH } from "./platform-deletion.controller";
 
 // D2 (C3b): erasing a tenant from platform_db, against real Postgres with the real
 // migrations, through a non-owner role held to row security, exactly as production
@@ -145,6 +149,60 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     const special = ["action_item_annotations", "payout_ledger", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
     expect([...PLATFORM_DELETE_ORDER, ...special].sort()).toEqual([...PLATFORM_TABLES].sort());
     expect(new Set(PLATFORM_DELETE_ORDER).size).toBe(PLATFORM_DELETE_ORDER.length);
+  });
+
+  it("expires legal holds exactly at the database clock and preserves records one second before expiry, tenants and staff records", async () => {
+    const store = new PgErasureStore(pool);
+    await store.withoutTenant(async (tx) => {
+      await tx.query(`INSERT INTO legal_hold_records (tenant_pseudonym, kind, source_table, source_id, minimal, retain_until)
+        VALUES ('pseudo', 'tax_invoice', 'billing_events', 'expired', '{}', transaction_timestamp() - interval '1 second'),
+               ('pseudo', 'tax_invoice', 'billing_events', 'exact', '{}', transaction_timestamp()),
+               ('pseudo', 'tax_invoice', 'billing_events', 'unexpired', '{}', transaction_timestamp() + interval '1 second')`);
+      const sameTransactionService = new PlatformDeletionService({
+        withTenant: store.withTenant.bind(store), withoutTenant: async (operation) => operation(tx),
+      }, secrets as unknown as MutableSecretsProvider);
+      expect(await sameTransactionService.applyRetentionPolicy()).toMatchObject({ deletedRows: 2, deletedObjects: 0, store: "platform-api" });
+      expect((await tx.query("SELECT source_id FROM legal_hold_records ORDER BY source_id")).rows).toEqual([{ source_id: "unexpired" }]);
+      expect(await sameTransactionService.applyRetentionPolicy()).toMatchObject({ deletedRows: 0 });
+    });
+    expect(await count("tenants", "id")).toBe(1);
+    expect(await count("tenant_admin_actions")).toBe(1);
+    expect(await count("workspaces")).toBe(1);
+    expect(await count("tenants", "id", B)).toBe(1);
+  });
+
+  it("sweeps through the listening internal route only with the configured shared credential", async () => {
+    await admin.query(`INSERT INTO legal_hold_records (tenant_pseudonym, kind, source_table, source_id, minimal, retain_until)
+      VALUES ('pseudo', 'seller_kyc', 'kyc_submissions', 'expired-http', '{}', now() - interval '1 second')`);
+    const token = randomUUID();
+    const module = await Test.createTestingModule({
+      controllers: [PlatformDeletionController], providers: [
+        { provide: PlatformDeletionService, useValue: service },
+        { provide: PLATFORM_DELETION_TOKEN_HASH, useValue: createHash("sha256").update(token).digest("hex") },
+      ],
+    }).compile();
+    const app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), { logger: false });
+    try {
+      await app.listen(0, "127.0.0.1");
+      const endpoint = `${await app.getUrl()}/internal/deletion/retention`;
+      const observed = await new Promise<{ missing: number; wrong: number; accepted: number; body: unknown }>((resolve, reject) => {
+        const child = spawn(process.execPath, ["scripts/testing/probe-platform-retention.mjs"], { stdio: ["pipe", "pipe", "pipe"] });
+        let output = "";
+        child.stdout.on("data", (chunk: Buffer) => { output += chunk.toString(); });
+        child.on("error", reject);
+        child.on("close", (code) => {
+          if (code !== 0) { reject(new Error("Platform retention socket probe failed")); return; }
+          try { resolve(JSON.parse(output)); } catch (error) { reject(error); }
+        });
+        child.stdin.end(JSON.stringify({ endpoint, token }));
+      });
+      expect(observed).toMatchObject({ missing: 401, wrong: 401, accepted: 201 });
+      expect(observed.body).toMatchObject({ store: "platform-api", deletedRows: 1, deletedObjects: 0 });
+      expect((await admin.query("SELECT source_id FROM legal_hold_records")).rows).toEqual([]);
+      expect(await count("tenants", "id")).toBe(1);
+    } finally {
+      await app.close();
+    }
   });
 
   it("finds tenant A's data in every table it is answerable for, and none of tenant B's", async () => {

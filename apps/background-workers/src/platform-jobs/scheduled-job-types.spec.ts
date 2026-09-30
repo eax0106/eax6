@@ -36,6 +36,7 @@ describe("platform job driver wiring", () => {
     connectorHealthSweepServiceToken: "token",
     adsCoreInternalBaseUrl: "http://ads-core.internal",
     retentionSweepServiceToken: "token",
+    platformRetentionSweepServiceToken: "token",
     orchestrationServiceInternalBaseUrl: "http://orchestration-service.internal",
     orchestrationRetentionSweepServiceToken: "token",
     evalFacadeServiceToken: "token",
