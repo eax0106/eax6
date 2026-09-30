@@ -461,17 +461,6 @@ export type HumanActionResolution = "approved" | "rejected" | "answered" | "reso
 export type HumanActionPriority = "low" | "normal" | "high" | "critical"
 
 /** What a workflow's plans run with, from the workspace and the workflow. */
-/** D4: what a run of a workflow costs the tenant, in paise, shown before it runs. */
-export interface RunEstimate {
-  /** The worst case; what a run reserves against its budgets. */
-  atMostMinor: number
-  /** The average of the last five verified runs; null until five exist. */
-  usuallyMinor: number | null
-  sampleRuns: number
-  /** Model calls with no price on record: the worst case is too low by their share. */
-  unpricedCalls: number
-}
-
 export interface WorkflowSafeguards {
   /** The workspace's rules. A workflow can add to these, never switch them off. */
   workspace: { containsPii: boolean; approveExternalActions: boolean }
@@ -1317,4 +1306,15 @@ export interface RepositoryPullRequest {
   baseBranch: string
   htmlUrl: string
   updatedAt: string
+}
+
+/** D4: what a run of a workflow costs the tenant, in paise, shown before it runs. */
+export interface RunCostEstimate {
+  /** The worst case; what a run reserves against its budgets. */
+  atMostMinor: number
+  /** The average of the last five verified runs; null until five exist. */
+  usuallyMinor: number | null
+  sampleRuns: number
+  /** Model calls with no price on record: the worst case is too low by their share. */
+  unpricedCalls: number
 }

@@ -38,7 +38,7 @@ import {
   mockCredentials, mockWhatsAppChannels, mockMemoryConfig
 } from "./mock/data"
 import { 
-  type Workflow, type WorkflowSafeguards, type WorkflowVersion, type RunEstimate, type Run, type DashboardSummary, 
+  type Workflow, type WorkflowSafeguards, type WorkflowVersion, type RunCostEstimate, type Run, type DashboardSummary, 
   type Workspace, type Member, type WorkspaceRole, type TenantDataResidency,
   type TenantDataResidencySettings,
   type Profile, type Session,
@@ -282,7 +282,7 @@ class ApiClient {
     return wf
   }
 
-  async getRunEstimate(id: string): Promise<RunEstimate> {
+  async getRunEstimate(id: string): Promise<RunCostEstimate> {
     if (isLiveApi) return live.getRunEstimate(id)
     await delay(MOCK_DELAY)
     return { atMostMinor: 1250, usuallyMinor: null, sampleRuns: 0, unpricedCalls: 0 }

@@ -14,7 +14,7 @@ import type {
   EnginePage,
   EngineResource,
   RunDetail,
-  RunEstimate,
+  EngineRunEstimate,
 } from "./types";
 import {
   parseArtifactId,
@@ -56,10 +56,10 @@ export class RunService {
     input: unknown,
     actor: ActorContext,
     traceparent: string | undefined,
-  ): Promise<EngineResponse<RunEstimate>> {
+  ): Promise<EngineResponse<EngineRunEstimate>> {
     const instance = "/api/v1/runs/estimate";
     const query = parseRunEstimateQuery(input, instance);
-    return this.engine.get<RunEstimate>(
+    return this.engine.get<EngineRunEstimate>(
       `/api/v1/runs/estimate${serializeQuery(query)}`,
       callerContext(actor, traceparent, instance),
     );

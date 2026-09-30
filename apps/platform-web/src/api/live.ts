@@ -22,7 +22,7 @@ import type {
   Trigger,
   WebhookEndpoint,
   Workflow,
-  RunEstimate,
+  RunCostEstimate,
   WorkflowSafeguards,
   WorkflowVersion,
   Workspace,
@@ -272,7 +272,7 @@ function minorOrNull(value: unknown): number | null {
 }
 
 // D4: "usually X, at most Y" before a run, billed price only.
-export async function getRunEstimate(workflowId: string): Promise<RunEstimate> {
+export async function getRunEstimate(workflowId: string): Promise<RunCostEstimate> {
   const body = await apiGet<Record<string, unknown>>(
     `/api/v1/runs/estimate?workflow_id=${encodeURIComponent(workflowId)}`,
   )

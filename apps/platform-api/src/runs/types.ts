@@ -44,7 +44,7 @@ export interface RunDetail {
 }
 
 /** D4: the figure shown before a run, in paise, billed price only (D24). */
-export type RunEstimate = {
+export type EngineRunEstimate = {
   readonly currency: "INR";
   readonly at_most_minor: number;
   readonly usually_minor: number | null;
