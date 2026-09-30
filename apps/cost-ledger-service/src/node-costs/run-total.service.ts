@@ -7,6 +7,7 @@ import { NodeCostValidationError } from "./node-costs.service";
 export type MarginApplier = (internalCostMinor: string) => string;
 export const RUN_TOTAL_MARGIN = Symbol("RUN_TOTAL_MARGIN");
 
+const MAX_RUNS_PER_REQUEST = 200;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export interface RunTotal {
@@ -26,6 +27,43 @@ export class RunTotalService {
     @Inject(COST_STORE_PROVIDER) private readonly store: CostStoreProvider,
     @Inject(RUN_TOTAL_MARGIN) private readonly applyMargin: MarginApplier,
   ) {}
+
+  /** What an internal amount is billed at: the margin applied once to it. */
+  bill(internalCostMinor: string): string {
+    return this.applyMargin(internalCostMinor);
+  }
+
+  /**
+   * The billed cost of each of several runs, each billed on its own total
+   * (D24: what a workflow costs the tenant is the sum of its runs' bills).
+   * A run with no cost events is billed zero.
+   */
+  async getForRuns(input: {
+    readonly tenantId: unknown;
+    readonly workspaceId: unknown;
+    readonly runIds: unknown;
+  }): Promise<readonly { readonly runId: string; readonly billableMinor: string }[]> {
+    const tenantId = prefixedUuid(input.tenantId, "ten", "tenantId");
+    const workspaceId = prefixedUuid(input.workspaceId, "ws", "workspaceId");
+    if (!Array.isArray(input.runIds) || input.runIds.length === 0 || input.runIds.length > MAX_RUNS_PER_REQUEST) {
+      throw new NodeCostValidationError(`runIds must list from 1 to ${MAX_RUNS_PER_REQUEST} runs`);
+    }
+    const runIds = [...new Set(input.runIds.map((id) => prefixedUuid(id, "run", "runIds")))];
+    const internalByRun = await this.store.withTenant(tenantId, async (tx) => {
+      const result = await tx.query<{ run_id: string; internal_cost_minor: string }>(
+        `SELECT run_id::text, SUM(internal_cost_minor)::text AS internal_cost_minor
+           FROM cost_events
+          WHERE tenant_id = $1 AND workspace_id = $2 AND run_id = ANY($3::uuid[])
+          GROUP BY run_id`,
+        [tenantId, workspaceId, runIds],
+      );
+      return new Map(result.rows.map((row) => [row.run_id, row.internal_cost_minor]));
+    });
+    return runIds.map((runId) => ({
+      runId: `run_${runId}`,
+      billableMinor: this.applyMargin(internalByRun.get(runId) ?? "0"),
+    }));
+  }
 
   async getForRun(input: {
     readonly tenantId: unknown;

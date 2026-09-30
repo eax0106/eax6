@@ -50,6 +50,12 @@ describe("GET /health", () => {
       CONVERSATION_LIFECYCLE_TASK_QUEUE: "conversation-lifecycle",
       EXECUTOR_TASK_QUEUE: "executor",
       WEBHOOK_PUBLIC_BASE_URL: "https://hooks.example.test",
+      // D4: the pre-run estimate prices through the Cost Ledger with the model
+      // gateway's own AppConfig policy; real mode refuses to start without them.
+      COST_LEDGER_BASE_URL: "http://127.0.0.1:3070",
+      APPCONFIG_APPLICATION_ID: "alter",
+      APPCONFIG_ENVIRONMENT_ID: "prod",
+      APPCONFIG_CONFIGURATION_PROFILE_ID: "model-policy",
     };
     for (const [name, value] of Object.entries(config)) {
       vi.stubEnv(name, value);

@@ -37,6 +37,8 @@ import { NodeExecutionsController } from "./runs/node-executions.controller";
 import { NodeExecutionLedgerService } from "./runs/node-execution-ledger.service";
 import { RunStreamEventService } from "./runs/run-stream-event.service";
 import { RunStreamController } from "./runs/run-stream.controller";
+import { RunEstimateService } from "./budgets/run-estimate.service";
+import { RunLauncherService } from "./runs/run-launcher.service";
 import { RunsController } from "./runs/runs.controller";
 import { RunOutcomeService } from "./runs/run-outcome.service";
 import { ProjectRunProvisioningService } from "./runs/project-run-provisioning.service";
@@ -75,6 +77,7 @@ import { ArtifactsService } from "./artifacts/artifacts.service";
 import { GeneratedFileMaterializer } from "./registry/generated-file-materializer";
 import {
   OrchestrationInfrastructureModule,
+  buildRunEstimateService,
   buildRunOutcomeService,
   internalM2mTokenProvider,
   orchestrationStore,
@@ -403,6 +406,11 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: RunOutcomeService,
       useFactory: () => buildRunOutcomeService(),
+    },
+    {
+      provide: RunEstimateService,
+      inject: [RunLauncherService],
+      useFactory: (launcher: RunLauncherService) => buildRunEstimateService(process.env, launcher),
     },
     {
       provide: RUN_LEARNING_AUDIT,

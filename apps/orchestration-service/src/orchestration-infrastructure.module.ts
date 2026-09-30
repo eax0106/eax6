@@ -1,5 +1,7 @@
 import { Module } from "@nestjs/common";
+import { createMockConfigProvider } from "@alterx/shared-clients";
 import {
+  AwsAppConfigConfigProvider,
   CostClient,
   PostgresOrchestrationStoreProvider,
   sharedOrchestrationPoolFactory,
@@ -8,8 +10,12 @@ import { lazyAuth0M2mTokenProviderFromEnvironment } from "@alterx/auth";
 import { ORCHESTRATION_MIGRATIONS_PATH } from "./database/migrations-path";
 import { RunOutcomeService, type RunVerdictSink } from "./runs/run-outcome.service";
 import { EngineBudgetService } from "./budgets/budget.service";
+import { ConfigModelPolicy } from "./budgets/config-model-policy";
 import { HttpRunCostReader } from "./budgets/http-run-cost-reader";
+import { HttpRunEstimatesLedger } from "./budgets/http-run-estimates-ledger";
 import { RunBudgetGate, type RunCostReader } from "./budgets/run-budget-gate";
+import { RunEstimateService, type RunPreviewSource } from "./budgets/run-estimate.service";
+import { WorstCaseRunCostEstimator, type ModelPolicyReader, type RunEstimatesLedger } from "./budgets/worst-case-run-cost-estimator";
 import { COST_CLIENT_PROTO_PATH } from "./registry/nodeexec-grpc.constants";
 
 export interface SessionGatewayEnvironment {
@@ -155,7 +161,56 @@ export function buildRunBudgetGate(environment: NodeJS.ProcessEnv): RunBudgetGat
     (environment.RUNTIME_MODE?.trim() || "mock") === "real" && baseUrl
       ? new HttpRunCostReader(baseUrl, internalM2mTokenProvider())
       : { billableMinor: async () => 0 };
-  return new RunBudgetGate(new EngineBudgetService(store), reader);
+  return new RunBudgetGate(new EngineBudgetService(store), reader, buildWorstCaseEstimator(environment));
+}
+
+/**
+ * D4: the worst-case bound a run reserves, and the figure shown before it
+ * starts. The model policy comes from the same AppConfig profile the gateway
+ * reads and prices come from the Cost Ledger. A mock runtime has neither, so
+ * every bound is zero there, as every cost is.
+ */
+export function buildWorstCaseEstimator(environment: NodeJS.ProcessEnv): WorstCaseRunCostEstimator {
+  return new WorstCaseRunCostEstimator(...runEstimationPorts(environment));
+}
+
+export function buildRunEstimateService(environment: NodeJS.ProcessEnv, source: RunPreviewSource): RunEstimateService {
+  const store = orchestrationStore(sessionGatewayEnvironment(environment));
+  const [, ledger] = runEstimationPorts(environment);
+  return new RunEstimateService(store, source, buildWorstCaseEstimator(environment), ledger);
+}
+
+function runEstimationPorts(environment: NodeJS.ProcessEnv): [ModelPolicyReader, RunEstimatesLedger] {
+  const baseUrl = environment.COST_LEDGER_BASE_URL?.trim();
+  const applicationId = environment.APPCONFIG_APPLICATION_ID?.trim();
+  const environmentId = environment.APPCONFIG_ENVIRONMENT_ID?.trim();
+  const profileId = environment.APPCONFIG_CONFIGURATION_PROFILE_ID?.trim();
+  if ((environment.RUNTIME_MODE?.trim() || "mock") === "real") {
+    if (!baseUrl || !applicationId || !environmentId || !profileId) {
+      throw new Error(
+        "Pre-run cost estimates need COST_LEDGER_BASE_URL and the APPCONFIG_APPLICATION_ID, APPCONFIG_ENVIRONMENT_ID and APPCONFIG_CONFIGURATION_PROFILE_ID the model gateway reads",
+      );
+    }
+    return [
+      new ConfigModelPolicy(
+        new AwsAppConfigConfigProvider({
+          region: requiredEnvironment(environment, "AWS_REGION"),
+          applicationIdentifier: applicationId,
+          environmentIdentifier: environmentId,
+          configurationProfileIdentifier: profileId,
+        }),
+      ),
+      new HttpRunEstimatesLedger(baseUrl, internalM2mTokenProvider()),
+    ];
+  }
+  return [
+    new ConfigModelPolicy(createMockConfigProvider()),
+    {
+      worstCase: async ({ lines }) => ({ billableMinor: 0, unpricedLines: lines.length }),
+      // A mock runtime has no ledger, so no run has any cost history.
+      runsAverage: /* @constant */ async () => ({ averageBillableMinor: null, runCount: 0 }),
+    },
+  ];
 }
 
 /**

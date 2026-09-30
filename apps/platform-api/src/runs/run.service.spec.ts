@@ -38,6 +38,39 @@ describe("RunService", () => {
     );
   });
 
+  it("relays the pre-run estimate for a workflow through the engine (D4)", async () => {
+    const figure = {
+      currency: "INR",
+      at_most_minor: 500,
+      usually_minor: 320,
+      sample_runs: 5,
+      model_calls: 2,
+      unpriced_calls: 0,
+    };
+    const engine = engineStub(async () => ({ status: 200, body: figure }));
+    const service = new RunService(engine.value, costLedgerStub().value);
+    const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc";
+
+    const response = await service.estimate({ workflow_id: workflowId }, actor, traceparent);
+
+    expect(engine.get).toHaveBeenCalledWith(
+      `/api/v1/runs/estimate?workflow_id=${workflowId}`,
+      expectedContext(),
+    );
+    expect(response.body).toEqual(figure);
+  });
+
+  it("refuses an estimate without a valid workflow id, or with extra fields, without calling the engine", async () => {
+    const engine = engineStub(async () => ({ status: 200, body: page([]) }));
+    const service = new RunService(engine.value, costLedgerStub().value);
+    for (const query of [{}, { workflow_id: "bad" }, { workflow_id: "wf_018f47a5-7b2c-7d10-8f11-123456789abc", margin: "1" }]) {
+      expect(() => service.estimate(query, actor, traceparent)).toThrow(
+        expect.objectContaining({ status: 400 }),
+      );
+    }
+    expect(engine.get).not.toHaveBeenCalled();
+  });
+
   it("relays real list filters, pagination, and opaque cross-mode rows", async () => {
     const response = page([
       { run_id: runId, parent_kind: "workflow" },
@@ -110,10 +143,10 @@ describe("RunService", () => {
     const costs = costLedgerStub(async () => [
       {
         nodeExecutionId: "node_018f47a5-7b2c-7d10-8f11-123456789abc",
-        internalCostMinor: "37",
+        billableMinor: "37",
         eventCount: 2,
       },
-    ]);
+    ], "120");
     const service = new RunService(engine.value, costs.value);
 
     const response = await service.detail(runId, actor, traceparent);
@@ -128,8 +161,10 @@ describe("RunService", () => {
       recovery_actions: [recovery],
       quality_gates: [qualityGate],
       outcome,
+      run_cost_minor: "120",
     });
     expect(costs.getNodeCosts).toHaveBeenCalledWith(runId, expectedContext());
+    expect(costs.getRunTotals).toHaveBeenCalledWith([runId], expectedContext(), `/api/v1/runs/${runId}`);
     expect(response.body.node_executions[0]).toEqual({
       ...executionA,
       node_cost_minor: "37",
@@ -329,11 +364,14 @@ function costLedgerStub(
   implementation: (
     run: string,
     context: EngineCallerContext,
-  ) => Promise<readonly { nodeExecutionId: string; internalCostMinor: string; eventCount: number }[]> = async () => [],
-): { value: CostLedgerClient; getNodeCosts: ReturnType<typeof vi.fn> } {
+  ) => Promise<readonly { nodeExecutionId: string; billableMinor: string; eventCount: number }[]> = async () => [],
+  runTotal = "0",
+): { value: CostLedgerClient; getNodeCosts: ReturnType<typeof vi.fn>; getRunTotals: ReturnType<typeof vi.fn> } {
   const getNodeCosts = vi.fn(implementation);
+  const getRunTotals = vi.fn(async (runIds: readonly string[]) => new Map(runIds.map((id) => [id, runTotal])));
   return {
-    value: { getNodeCosts } as unknown as CostLedgerClient,
+    value: { getNodeCosts, getRunTotals } as unknown as CostLedgerClient,
     getNodeCosts,
+    getRunTotals,
   };
 }

@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { CreateRunRequestSchema, type CreateRunRequest } from "@alterx/contracts";
+import {
+  CreateRunRequestSchema,
+  WorkflowIdSchema,
+  WorkflowVersionIdSchema,
+  type CreateRunRequest,
+} from "@alterx/contracts";
 import { RunHttpError } from "./problem";
 import type { CancelRunRequest, RetryNodeRequest, RunListQuery } from "./types";
 
@@ -58,6 +63,22 @@ export function parseRunListQuery(
   instance: string,
 ): RunListQuery {
   return parse(listQuerySchema, input, instance);
+}
+
+// D4: the pre-run estimate names the workflow (and optionally a version) the
+// same way creating a run does.
+const runEstimateQuerySchema = z
+  .object({
+    workflow_id: WorkflowIdSchema,
+    workflow_version_id: WorkflowVersionIdSchema.optional(),
+  })
+  .strict();
+
+export function parseRunEstimateQuery(
+  input: unknown,
+  instance: string,
+): { workflow_id: string; workflow_version_id?: string | undefined } {
+  return parse(runEstimateQuerySchema, input, instance);
 }
 
 export function parseCreateRunRequest(input: unknown, instance: string): CreateRunRequest {

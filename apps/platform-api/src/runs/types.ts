@@ -41,4 +41,16 @@ export interface RunDetail {
   recovery_actions: readonly EngineResource[];
   quality_gates: readonly EngineResource[];
   outcome: EngineResource;
+  /** D24: what the run cost the tenant so far, billed price, in minor units. */
+  run_cost_minor: string;
 }
+
+/** D4: the figure shown before a run, in paise, billed price only (D24). */
+export type EngineRunEstimate = {
+  readonly currency: "INR";
+  readonly at_most_minor: number;
+  readonly usually_minor: number | null;
+  readonly sample_runs: number;
+  readonly model_calls: number;
+  readonly unpriced_calls: number;
+};

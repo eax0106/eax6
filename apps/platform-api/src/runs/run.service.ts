@@ -14,6 +14,7 @@ import type {
   EnginePage,
   EngineResource,
   RunDetail,
+  EngineRunEstimate,
 } from "./types";
 import {
   parseArtifactId,
@@ -22,6 +23,7 @@ import {
   parseRetryNodeRequest,
   parseRunId,
   parseArtifactListQuery,
+  parseRunEstimateQuery,
   parseRunListQuery,
   parseTraceparent,
   serializeQuery,
@@ -45,6 +47,20 @@ export class RunService {
     const query = parseRunListQuery(input, instance);
     return this.engine.get(
       `/api/v1/runs${serializeQuery(query)}`,
+      callerContext(actor, traceparent, instance),
+    );
+  }
+
+  /** D4: what a run of the workflow would cost, shown before it starts. */
+  estimate(
+    input: unknown,
+    actor: ActorContext,
+    traceparent: string | undefined,
+  ): Promise<EngineResponse<EngineRunEstimate>> {
+    const instance = "/api/v1/runs/estimate";
+    const query = parseRunEstimateQuery(input, instance);
+    return this.engine.get<EngineRunEstimate>(
+      `/api/v1/runs/estimate${serializeQuery(query)}`,
       callerContext(actor, traceparent, instance),
     );
   }
@@ -110,7 +126,7 @@ export class RunService {
     const id = parseRunId(runId, instance);
     const context = callerContext(actor, traceparent, instance);
     const encodedId = encodeURIComponent(id);
-    const [run, executions, verification, recovery, qualityGates, outcome, nodeCosts] =
+    const [run, executions, verification, recovery, qualityGates, outcome, nodeCosts, runTotals] =
       await Promise.all([
         this.engine.get<EngineResource>(`/api/v1/runs/${encodedId}`, context),
         this.allPages(
@@ -138,10 +154,12 @@ export class RunService {
           context,
         ),
         this.costLedger.getNodeCosts(id, context),
+        this.costLedger.getRunTotals([id], context, instance),
       ]);
 
+    // D24: the tenant sees what each step and the run cost it, billed price only.
     const costsByNode = new Map(
-      nodeCosts.map((cost) => [cost.nodeExecutionId, cost.internalCostMinor]),
+      nodeCosts.map((cost) => [cost.nodeExecutionId, cost.billableMinor]),
     );
 
     return {
@@ -167,6 +185,7 @@ export class RunService {
         recovery_actions: recovery,
         quality_gates: qualityGates,
         outcome: outcome.body,
+        run_cost_minor: runTotals.get(id) ?? "0",
       },
     };
   }

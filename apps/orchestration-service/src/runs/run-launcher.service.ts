@@ -249,6 +249,34 @@ export class RunLauncherService {
     private readonly budgetGate?: RunBudgetGate,
   ) {}
 
+  /**
+   * The compiled DAG a run of this workflow would execute and the workspace it
+   * would belong to, without creating anything: the input to a pre-run cost
+   * estimate (D4).
+   */
+  async previewRun(
+    tenantIdInput: string,
+    workflowId: string,
+    workflowVersionId?: string,
+  ): Promise<{ readonly workspaceId: string; readonly compiledDag: CompiledDag }> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    requireWorkflowId(workflowId);
+    if (workflowVersionId !== undefined) {
+      requireWorkflowVersionId(workflowVersionId);
+    }
+    return this.store.withTenant(tenantId, async (tx) => {
+      const workflow = await tx.query<{ readonly workspace_id: string }>(
+        "SELECT workspace_id FROM workflows WHERE tenant_id = $1 AND id = $2",
+        [tenantId, workflowId],
+      );
+      if (workflow.rowCount === 0) {
+        throw new WorkflowNotFoundError(workflowId);
+      }
+      const version = await this.resolveVersion(tx, tenantId, workflowId, workflowVersionId);
+      return { workspaceId: workflow.rows[0]!.workspace_id, compiledDag: version.compiledDag };
+    });
+  }
+
   async createRun(
     tenantIdInput: string,
     workflowId: string,
