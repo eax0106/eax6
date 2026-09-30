@@ -15,7 +15,7 @@
     "dev:mock-auth0": "node scripts/local-mock-auth0/server.js"
   },
   "devDependencies": {
-    "@nestjs/testing": "11.2.4",
+    "@nestjs/testing": "11.2.7",
     "@nx/eslint": "23.1.1",
     "@nx/js": "23.1.1",
     "@nx/nest": "23.1.1",
