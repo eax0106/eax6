@@ -45,6 +45,9 @@ export class WorkspaceExportService {
       if (!row) {
         throw new WorkspaceExportHttpError(500, "EXPORT_NOT_CREATED", "Export request could not be recorded", instance);
       }
+      // Audit context carries only allow-listed keys (audit-service
+      // accepts ip_class, request_id and scope); the export rides as the
+      // request id.
       await this.audit.recordEvent({
         tenant_id: actor.tenant_id,
         actor_type: "user",
@@ -54,7 +57,7 @@ export class WorkspaceExportService {
         target_ref: workspace,
         result: "success",
         reason_code: "",
-        context_json: JSON.stringify({ export_id: `${EXPORT_ID_PREFIX}${row.id}` }),
+        context_json: JSON.stringify({ request_id: `${EXPORT_ID_PREFIX}${row.id}` }),
         occurred_at: new Date().toISOString(),
       });
       return toView(row);

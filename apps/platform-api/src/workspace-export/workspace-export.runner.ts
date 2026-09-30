@@ -250,7 +250,7 @@ export class WorkspaceExportRunner {
       target_ref: record.workspace_id,
       result,
       reason_code: reason,
-      context_json: JSON.stringify({ export_id: `exp_${record.id}` }),
+      context_json: JSON.stringify({ request_id: `exp_${record.id}` }),
       occurred_at: new Date().toISOString(),
     });
   }
