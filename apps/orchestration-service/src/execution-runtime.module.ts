@@ -49,6 +49,8 @@ import { runLearningAuditClient } from "./runs/run-learning-audit";
 import { RecoveryFeedController } from "./runs/recovery-feed.controller";
 import { AgentWorkflowsController } from "./agent-usage/agent-workflows.controller";
 import { AgentWorkflowsService } from "./agent-usage/agent-workflows.service";
+import { BudgetsController } from "./budgets/budgets.controller";
+import { EngineBudgetService } from "./budgets/budget.service";
 import { RunObservabilityController } from "./runs/run-observability.controller";
 import { RunObservabilityService } from "./runs/run-observability.service";
 import { loadRunLauncherEnvironment } from "./config/run-launcher-environment";
@@ -194,6 +196,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     RunObservabilityController,
     RecoveryFeedController,
     AgentWorkflowsController,
+    BudgetsController,
     RunLearningController,
     ApprovalsController,
     EscalationsController,
@@ -203,6 +206,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: AgentWorkflowsService,
       useFactory: () => new AgentWorkflowsService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+    },
+    {
+      provide: EngineBudgetService,
+      useFactory: () => new EngineBudgetService(orchestrationStore(sessionGatewayEnvironment(process.env))),
     },
     {
       // No PostgresOrchestrationStoreProvider here -- the Node Type

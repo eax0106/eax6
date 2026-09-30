@@ -838,23 +838,34 @@ export interface ModelUsage {
   runCount: number;
 }
 
-export interface BudgetThreshold {
-  percent: number;
-  action: "notify" | "warn" | "block";
-}
-
+/**
+ * D3: a budget the engine enforces when a run starts. Amounts are rupees
+ * (major units); the API keeps paise.
+ */
 export interface Budget {
   id: string;
-  name: string;
-  scope: "workspace" | "workflow" | "project";
-  scopeId?: string;
+  kind: "workspace" | "workflow" | "run_cap";
+  workflowId: string | null;
+  /** Null for a per-run cap, which caps each run rather than a period. */
+  period: "daily" | "monthly" | null;
   amount: number;
-  currency: string;
-  period: "monthly" | "weekly";
-  /** Null when the cost ledger could not be read or counts another currency. */
-  currentSpend: number | null;
+  currency: "INR";
+  /** hard: runs stop at the limit. warn: alerts only. */
+  mode: "hard" | "warn";
   enabled: boolean;
-  thresholds: BudgetThreshold[];
+  /** This period's spend; null for a per-run cap or when it could not be read. */
+  currentSpend: number | null;
+  /** Held for runs still going (their worst case); null for a per-run cap. */
+  reserved: number | null;
+  updatedAt: string;
+}
+
+export interface BudgetInput {
+  kind: Budget["kind"];
+  workflowId?: string;
+  period?: "daily" | "monthly";
+  amount: number;
+  mode: Budget["mode"];
 }
 
 export interface BillingPlan {
