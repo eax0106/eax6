@@ -9,6 +9,7 @@ import { EngineEventSchedulerController } from "./engine-event-scheduler.control
 import { RunFailedProducer } from "./run-failed.producer";
 import { SelfHealProducer } from "./self-heal.producer";
 import { DeploymentChangedProducer } from "./deployment-changed.producer";
+import { DriftSuggestionRunner } from "./drift-suggestion.runner";
 
 /**
  * Notifications for what the engine reports (D1), read as the system principal.
@@ -37,6 +38,7 @@ import { DeploymentChangedProducer } from "./deployment-changed.producer";
       ) => [runFailed, approvalWaiting, selfHeal, budgetThreshold, deploymentChanged],
     },
     EngineEventNotificationRunner,
+    DriftSuggestionRunner,
   ],
 })
 export class EngineEventNotificationModule {}

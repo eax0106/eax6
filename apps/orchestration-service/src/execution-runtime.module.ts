@@ -49,6 +49,8 @@ import { runLearningAuditClient } from "./runs/run-learning-audit";
 import { RecoveryFeedController } from "./runs/recovery-feed.controller";
 import { DeploymentChangesController } from "./deployment-feed/deployment-changes.controller";
 import { DeploymentChangesService } from "./deployment-feed/deployment-changes.service";
+import { AgentWorkflowsController } from "./agent-usage/agent-workflows.controller";
+import { AgentWorkflowsService } from "./agent-usage/agent-workflows.service";
 import { BudgetsController } from "./budgets/budgets.controller";
 import { EngineBudgetService } from "./budgets/budget.service";
 import { RunObservabilityController } from "./runs/run-observability.controller";
@@ -196,6 +198,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     RunObservabilityController,
     RecoveryFeedController,
     DeploymentChangesController,
+    AgentWorkflowsController,
     BudgetsController,
     RunLearningController,
     ApprovalsController,
@@ -206,6 +209,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: DeploymentChangesService,
       useFactory: () => new DeploymentChangesService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+    },
+    {
+      provide: AgentWorkflowsService,
+      useFactory: () => new AgentWorkflowsService(orchestrationStore(sessionGatewayEnvironment(process.env))),
     },
     {
       provide: EngineBudgetService,
