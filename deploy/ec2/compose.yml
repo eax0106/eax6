@@ -94,7 +94,7 @@ services:
     restart: unless-stopped
 
   # --- Node services (one image, service name as the argument) ---------------
-  # The three that read AppConfig each get their own identifiers: the shared
+  # Services that read AppConfig get scoped identifiers: the shared
   # .env holds one scoped set per service (see .env.local.example), mapped
   # here onto the unscoped names each service reads.
   audit-service: { <<: *node, command: ["audit-service"] }
@@ -121,7 +121,15 @@ services:
       APPCONFIG_ENVIRONMENT_ID: ${SANDBOX_SERVICE_APPCONFIG_ENVIRONMENT_ID:?}
       APPCONFIG_CONFIGURATION_PROFILE_ID: ${SANDBOX_SERVICE_APPCONFIG_CONFIGURATION_PROFILE_ID:?}
   provisioning-service: { <<: *node, command: ["provisioning-service"] }
-  orchestration-service: { <<: *node, command: ["orchestration-service"] }
+  # Pre-run estimation reads the same model policy and token caps as the gateway.
+  orchestration-service:
+    <<: *node
+    command: ["orchestration-service"]
+    environment:
+      APPCONFIG_APPLICATION_ID: ${MODEL_GATEWAY_APPCONFIG_APPLICATION_ID:?}
+      APPCONFIG_ENVIRONMENT_ID: ${MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID:?}
+      APPCONFIG_CONFIGURATION_PROFILE_ID: ${MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID:?}
+      COST_LEDGER_BASE_URL: http://127.0.0.1:${COST_PORT:-3022}
   background-workers: { <<: *node, command: ["background-workers"] }
   platform-api:
     <<: *node

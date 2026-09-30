@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const { createIdentityProvider } = await import("../../apps/platform-api/src/identity/identity.module");
   const { InMemorySessionStore } = await import("../../apps/platform-api/src/identity/session-store");
   const { InMemorySsoConfigStore } = await import("../../apps/platform-api/src/identity/sso-config-store");
-  const { sessionGatewayEnvironment } = await import(
+  const { sessionGatewayEnvironment, buildWorstCaseEstimator } = await import(
     "../../apps/orchestration-service/src/orchestration-infrastructure.module"
   );
 
@@ -74,6 +74,7 @@ async function main(): Promise<void> {
     resolveSpeechToTextProvider(objects);
   });
   await check("orchestration-service", "Session Gateway", () => sessionGatewayEnvironment(process.env));
+  await check("orchestration-service", "pre-run estimation", () => buildWorstCaseEstimator(process.env));
   const { runLearningAuditClient } = await import(
     "../../apps/orchestration-service/src/runs/run-learning-audit"
   );
@@ -84,6 +85,14 @@ async function main(): Promise<void> {
 
   // Pairs whose halves live in different containers: each must agree.
   const env = (service: string, key: string) => services[service]?.environment?.[key] ?? undefined;
+  for (const key of ["APPCONFIG_APPLICATION_ID", "APPCONFIG_ENVIRONMENT_ID", "APPCONFIG_CONFIGURATION_PROFILE_ID"]) {
+    if (!env("orchestration-service", key) || env("orchestration-service", key) !== env("model-gateway", key)) {
+      failures.push(`orchestration-service ${key} must match model-gateway`);
+    }
+  }
+  if (env("orchestration-service", "COST_LEDGER_BASE_URL") !== `http://127.0.0.1:${env("cost-ledger-service", "COST_PORT")}`) {
+    failures.push("orchestration-service COST_LEDGER_BASE_URL must use cost-ledger-service's host-network port");
+  }
   const sha256 = async (value: string) => (await import("node:crypto")).createHash("sha256").update(value).digest("hex");
   const pairs: [string, string, string, string][] = [
     ["platform-api", "EVAL_FACADE_TOKEN", "orchestration-service", "EVAL_FACADE_TOKEN_SHA256"],
