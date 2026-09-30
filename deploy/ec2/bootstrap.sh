@@ -216,8 +216,14 @@ platform_db_roles() {
     -v app_password="$PLATFORM_APP_DB_PASSWORD" -v operations_password="$PLATFORM_OPERATIONS_DB_PASSWORD" \
     <platform-db-roles.sql >/dev/null
 }
+engine_db_runtime_role() {
+  compose exec -T engine-db psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 \
+    --command 'ALTER ROLE orchestration_service NOBYPASSRLS' >/dev/null
+}
 log "platform_db runtime roles"
 platform_db_roles
+log "engine_db runtime role"
+engine_db_runtime_role
 
 # --- 5. migrations ------------------------------------------------------------
 node_image="$ALTER_REGISTRY/node:$ALTER_IMAGE_TAG"
