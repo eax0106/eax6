@@ -50,3 +50,37 @@ describe("RunTotalService", () => {
     expect(query).not.toHaveBeenCalled();
   });
 });
+
+describe("RunTotalService.getForRuns (D24)", () => {
+  const RUN_B = "run_018f4d6e-dddd-7ddd-8ddd-dddddddddddd";
+
+  function setupMany(rows: { run_id: string; internal_cost_minor: string }[]) {
+    const query = vi.fn(async () => ({ rowCount: rows.length, rows }));
+    const store = {
+      withTenant: async (_tenant: string, operation: (tx: { query: typeof query }) => Promise<unknown>) => operation({ query }),
+    } as unknown as CostStoreProvider;
+    return { query, service: new RunTotalService(store, (minor) => applyMargin(minor, 0.2)) };
+  }
+
+  it("bills each run on its own total and a run with no events at zero", async () => {
+    const { service, query } = setupMany([{ run_id: "018f4d6e-cccc-7ccc-8ccc-cccccccccccc", internal_cost_minor: "3" }]);
+    await expect(service.getForRuns({ tenantId: TENANT, workspaceId: WORKSPACE, runIds: [RUN, RUN_B, RUN] })).resolves.toEqual([
+      { runId: RUN, billableMinor: "4" },
+      { runId: RUN_B, billableMinor: "0" },
+    ]);
+    expect((query.mock.calls[0] as unknown[])[1]).toEqual([
+      "018f4d6e-aaaa-7aaa-8aaa-aaaaaaaaaaaa",
+      "018f4d6e-bbbb-7bbb-8bbb-bbbbbbbbbbbb",
+      ["018f4d6e-cccc-7ccc-8ccc-cccccccccccc", "018f4d6e-dddd-7ddd-8ddd-dddddddddddd"],
+    ]);
+  });
+
+  it.each([[[]], [Array.from({ length: 201 }, () => RUN)], [["run_1"]], ["nope"]])(
+    "refuses a bad run list before reading (%#)",
+    async (runIds) => {
+      const { service, query } = setupMany([]);
+      await expect(service.getForRuns({ tenantId: TENANT, workspaceId: WORKSPACE, runIds })).rejects.toThrow();
+      expect(query).not.toHaveBeenCalled();
+    },
+  );
+});

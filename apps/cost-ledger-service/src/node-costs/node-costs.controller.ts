@@ -1,4 +1,4 @@
-import { BadRequestException, Controller, Get, Param, Query } from "@nestjs/common";
+import { BadRequestException, Body, Controller, Get, HttpCode, Param, Post, Query } from "@nestjs/common";
 
 import { NodeCostsService, NodeCostValidationError } from "./node-costs.service";
 import { RunTotalService } from "./run-total.service";
@@ -17,6 +17,27 @@ export class NodeCostsController {
     private readonly nodeCosts: NodeCostsService,
     private readonly runTotals: RunTotalService,
   ) {}
+
+  /** D24: each run's billed cost, for what a workflow costs its tenant. */
+  @Post("run-totals")
+  @HttpCode(200)
+  async getRunTotals(
+    @Body() body: { readonly tenantId?: unknown; readonly workspaceId?: unknown; readonly runIds?: unknown } | undefined,
+  ): Promise<{ readonly runs: readonly { readonly run_id: string; readonly billable_minor: string }[] }> {
+    try {
+      const totals = await this.runTotals.getForRuns({
+        tenantId: body?.tenantId,
+        workspaceId: body?.workspaceId,
+        runIds: body?.runIds,
+      });
+      return { runs: totals.map((total) => ({ run_id: total.runId, billable_minor: total.billableMinor })) };
+    } catch (error: unknown) {
+      if (error instanceof NodeCostValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+  }
 
   @Get("run-total/:runId")
   async getRunTotal(
@@ -38,7 +59,14 @@ export class NodeCostsController {
   async getForRun(
     @Param("runId") runId: string,
     @Query() query: NodeCostsQuery,
-  ): Promise<{ readonly node_costs: readonly { readonly node_execution_id: string; readonly internal_cost_minor: string; readonly event_count: number }[] }> {
+  ): Promise<{
+    readonly node_costs: readonly {
+      readonly node_execution_id: string;
+      readonly internal_cost_minor: string;
+      readonly billable_minor: string;
+      readonly event_count: number;
+    }[];
+  }> {
     try {
       const nodeCosts = await this.nodeCosts.getForRun({
         tenantId: query.tenantId,
@@ -49,6 +77,8 @@ export class NodeCostsController {
         node_costs: nodeCosts.map((cost) => ({
           node_execution_id: cost.nodeExecutionId,
           internal_cost_minor: cost.internalCostMinor,
+          // D24: what the tenant is shown for the step.
+          billable_minor: this.runTotals.bill(cost.internalCostMinor),
           event_count: cost.eventCount,
         })),
       };

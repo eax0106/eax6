@@ -59,6 +59,7 @@ describe("CostLedgerClient", () => {
         {
           node_execution_id: "node_018f47a5-7b2c-7d10-8f11-123456789abd",
           internal_cost_minor: "37",
+          billable_minor: "45",
           event_count: 2,
         },
       ],
@@ -68,7 +69,7 @@ describe("CostLedgerClient", () => {
     await expect(client.getNodeCosts(runId, context)).resolves.toEqual([
       {
         nodeExecutionId: "node_018f47a5-7b2c-7d10-8f11-123456789abd",
-        internalCostMinor: "37",
+        billableMinor: "45",
         eventCount: 2,
       },
     ]);
@@ -142,30 +143,45 @@ describe("CostLedgerClient", () => {
     );
   });
 
-  it("relays estimate with bare upstream tenant ID and fails closed for malformed data", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, estimateResponse()));
-    const client = new CostLedgerClient(config, authProvider(), fetchImpl);
-    await expect(client.estimate({
-      mode: "workflow",
-      lineItems: [{
-        source: "model_gateway",
-        provider: "bedrock",
-        resource: "claude",
-        expectedQuantity: 2,
-      }],
-    }, bareContext)).resolves.toMatchObject({ currency: "INR" });
-    const request = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
-    expect(JSON.parse(String(request?.body))).toMatchObject({
-      tenantId: bareContext.tenantId,
-      mode: "workflow",
+  it("never hands the internal cost of a step onward, only its billed price (D24)", async () => {
+    const client = new CostLedgerClient(
+      config,
+      authProvider(),
+      vi.fn().mockResolvedValue(jsonResponse(200, {
+        node_costs: [{ node_execution_id: "node_018f47a5-7b2c-7d10-8f11-123456789abd", internal_cost_minor: "37", billable_minor: "45", event_count: 2 }],
+      })),
+    );
+    const [cost] = await client.getNodeCosts(runId, context);
+    expect(Object.keys(cost!)).toEqual(["nodeExecutionId", "billableMinor", "eventCount"]);
+  });
+
+  it("asks for each run's billed total in batches of 200 and fails closed on a malformed answer", async () => {
+    const runIds = Array.from({ length: 201 }, (_, index) =>
+      `run_018f47a5-7b2c-7d10-8f11-${index.toString(16).padStart(12, "0")}`,
+    );
+    const fetchImpl = vi.fn(async (_url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { runIds: string[] };
+      return jsonResponse(200, { runs: body.runIds.map((id) => ({ run_id: id, billable_minor: "2" })) });
     });
+    const client = new CostLedgerClient(config, authProvider(), fetchImpl as unknown as typeof fetch);
+
+    const totals = await client.getRunTotals(runIds, bareContext, "/api/v1/workflows/x/costs");
+
+    expect(totals.size).toBe(201);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toContain("https://costs.test/costs/run-totals");
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toMatchObject({
+      tenantId: context.tenantId,
+      workspaceId: context.workspaceId,
+    });
+    expect(JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body)).runIds).toHaveLength(1);
 
     const malformed = new CostLedgerClient(
       config,
       authProvider(),
-      vi.fn().mockResolvedValue(jsonResponse(200, { currency: "USD" })),
+      vi.fn().mockResolvedValue(jsonResponse(200, { runs: [{ run_id: runId, billable_minor: "-1" }] })),
     );
-    await expect(malformed.estimate({ mode: "workflow", lineItems: [] }, context)).rejects.toMatchObject({
+    await expect(malformed.getRunTotals([runId], context, "/x")).rejects.toMatchObject({
       problem: { status: 502, error_code: "UPSTREAM_SERVICE_ERROR" },
     });
   });
@@ -185,25 +201,4 @@ function jsonResponse(status: number, body: unknown): Response {
     status,
     headers: { "content-type": "application/json" },
   });
-}
-
-function estimateResponse(): unknown {
-  return {
-    currency: "INR",
-    lineItems: [{
-      source: "model_gateway",
-      provider: "bedrock",
-      resource: "claude",
-      expectedQuantity: 2,
-      confidence: "tenant_historical",
-      sampleSize: 3,
-      historicalUnitCostMinor: "4",
-      estimatedBaseCostMinor: "8",
-      historicalRetryRate: 0,
-      estimatedRetryCostMinor: "0",
-      estimatedTotalCostMinor: "8",
-    }],
-    totalEstimatedInternalCostMinor: "8",
-    hasUnestimatedLineItems: false,
-  };
 }

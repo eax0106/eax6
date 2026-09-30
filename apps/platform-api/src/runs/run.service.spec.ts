@@ -143,10 +143,10 @@ describe("RunService", () => {
     const costs = costLedgerStub(async () => [
       {
         nodeExecutionId: "node_018f47a5-7b2c-7d10-8f11-123456789abc",
-        internalCostMinor: "37",
+        billableMinor: "37",
         eventCount: 2,
       },
-    ]);
+    ], "120");
     const service = new RunService(engine.value, costs.value);
 
     const response = await service.detail(runId, actor, traceparent);
@@ -161,8 +161,10 @@ describe("RunService", () => {
       recovery_actions: [recovery],
       quality_gates: [qualityGate],
       outcome,
+      run_cost_minor: "120",
     });
     expect(costs.getNodeCosts).toHaveBeenCalledWith(runId, expectedContext());
+    expect(costs.getRunTotals).toHaveBeenCalledWith([runId], expectedContext(), `/api/v1/runs/${runId}`);
     expect(response.body.node_executions[0]).toEqual({
       ...executionA,
       node_cost_minor: "37",
@@ -362,11 +364,14 @@ function costLedgerStub(
   implementation: (
     run: string,
     context: EngineCallerContext,
-  ) => Promise<readonly { nodeExecutionId: string; internalCostMinor: string; eventCount: number }[]> = async () => [],
-): { value: CostLedgerClient; getNodeCosts: ReturnType<typeof vi.fn> } {
+  ) => Promise<readonly { nodeExecutionId: string; billableMinor: string; eventCount: number }[]> = async () => [],
+  runTotal = "0",
+): { value: CostLedgerClient; getNodeCosts: ReturnType<typeof vi.fn>; getRunTotals: ReturnType<typeof vi.fn> } {
   const getNodeCosts = vi.fn(implementation);
+  const getRunTotals = vi.fn(async (runIds: readonly string[]) => new Map(runIds.map((id) => [id, runTotal])));
   return {
-    value: { getNodeCosts } as unknown as CostLedgerClient,
+    value: { getNodeCosts, getRunTotals } as unknown as CostLedgerClient,
     getNodeCosts,
+    getRunTotals,
   };
 }

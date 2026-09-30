@@ -11,25 +11,10 @@ import type { EngineCallerContext } from "./types";
 
 export interface NodeCost {
   readonly nodeExecutionId: string;
-  readonly internalCostMinor: string;
+  /** What the tenant is billed for the step (D24); the internal cost never leaves this client. */
+  readonly billableMinor: string;
   readonly eventCount: number;
 }
-
-const costSources = [
-  "model_gateway",
-  "tool_gateway",
-  "sandbox",
-  "storage",
-  "browser",
-] as const;
-const estimateConfidences = [
-  "tenant_historical",
-  "global_historical",
-  "no_data",
-] as const;
-
-export type CostSource = (typeof costSources)[number];
-export type CostMode = "workflow" | "project";
 
 export interface CostSummaryQuery {
   readonly startAt: string;
@@ -37,39 +22,10 @@ export interface CostSummaryQuery {
   readonly dimensions: readonly string[];
 }
 
-export interface EstimateCostRequest {
-  readonly mode: CostMode;
-  readonly lineItems: readonly {
-    readonly source: CostSource;
-    readonly provider: string;
-    readonly resource: string;
-    readonly expectedQuantity: number;
-  }[];
-}
-
-export interface EstimateCostResponse {
-  readonly currency: "INR";
-  readonly lineItems: readonly {
-    readonly source: CostSource;
-    readonly provider: string;
-    readonly resource: string;
-    readonly expectedQuantity: number;
-    readonly confidence: (typeof estimateConfidences)[number];
-    readonly sampleSize: number;
-    readonly historicalUnitCostMinor: string | null;
-    readonly estimatedBaseCostMinor: string;
-    readonly historicalRetryRate: number;
-    readonly estimatedRetryCostMinor: string;
-    readonly estimatedTotalCostMinor: string;
-  }[];
-  readonly totalEstimatedInternalCostMinor: string;
-  readonly hasUnestimatedLineItems: boolean;
-}
-
 interface NodeCostsResponse {
   readonly node_costs: readonly {
     readonly node_execution_id: string;
-    readonly internal_cost_minor: string;
+    readonly billable_minor: string;
     readonly event_count: number;
   }[];
 }
@@ -132,9 +88,39 @@ export class CostLedgerClient {
     const parsed = await parseNodeCosts(response, runId);
     return parsed.node_costs.map((cost) => ({
       nodeExecutionId: cost.node_execution_id,
-      internalCostMinor: cost.internal_cost_minor,
+      billableMinor: cost.billable_minor,
       eventCount: cost.event_count,
     }));
+  }
+
+  /**
+   * D24: the billed cost of each run, each billed on its own total. Runs are
+   * asked for 200 at a time; a run with no cost events is billed zero.
+   */
+  async getRunTotals(
+    runIds: readonly string[],
+    context: EngineCallerContext,
+    instance: string,
+  ): Promise<ReadonlyMap<string, string>> {
+    const totals = new Map<string, string>();
+    for (let start = 0; start < runIds.length; start += RUN_TOTALS_BATCH) {
+      const response = await this.request(
+        "POST",
+        "/costs/run-totals",
+        context,
+        instance,
+        {
+          tenantId: prefixedId("ten", context.tenantId),
+          workspaceId: prefixedId("ws", context.workspaceId),
+          runIds: runIds.slice(start, start + RUN_TOTALS_BATCH),
+        },
+      );
+      const body = (await parseJson(response, instance, isRunTotals)) as {
+        readonly runs: readonly { readonly run_id: string; readonly billable_minor: string }[];
+      };
+      for (const run of body.runs) totals.set(run.run_id, run.billable_minor);
+    }
+    return totals;
   }
 
   async getSummary(
@@ -153,24 +139,9 @@ export class CostLedgerClient {
     return (await parseRollups(response, instance)).rollups_json;
   }
 
-  async estimate(
-    input: EstimateCostRequest,
-    context: EngineCallerContext,
-  ): Promise<EstimateCostResponse> {
-    const instance = "/api/v1/costs/estimate";
-    const response = await this.request(
-      "POST",
-      "/costs/estimate",
-      context,
-      instance,
-      { tenantId: bareId("ten", context.tenantId), ...input },
-    );
-    return parseEstimate(response, instance);
-  }
-
   private async request(
     method: "GET" | "POST",
-    path: "/costs/summary" | "/costs/estimate",
+    path: "/costs/summary" | "/costs/run-totals",
     context: EngineCallerContext,
     instance: string,
     body?: object,
@@ -224,12 +195,24 @@ export class CostLedgerClient {
   }
 }
 
-function prefixedId(prefix: "ten" | "ws", id: string): string {
-  return id.startsWith(`${prefix}_`) ? id : `${prefix}_${id}`;
+const RUN_TOTALS_BATCH = 200;
+
+function isRunTotals(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.runs) &&
+    value.runs.every(
+      (run: unknown) =>
+        isRecord(run) &&
+        typeof run.run_id === "string" &&
+        /^run_[0-9a-f-]{36}$/i.test(run.run_id) &&
+        isMinor(run.billable_minor),
+    )
+  );
 }
 
-function bareId(prefix: "ten" | "ws", id: string): string {
-  return id.startsWith(`${prefix}_`) ? id.slice(prefix.length + 1) : id;
+function prefixedId(prefix: "ten" | "ws", id: string): string {
+  return id.startsWith(`${prefix}_`) ? id : `${prefix}_${id}`;
 }
 
 async function parseNodeCosts(response: Response, runId: string): Promise<NodeCostsResponse> {
@@ -259,8 +242,7 @@ function isNodeCost(value: unknown): value is NodeCostsResponse["node_costs"][nu
     isRecord(value) &&
     typeof value.node_execution_id === "string" &&
     /^node_[0-9a-f-]{36}$/i.test(value.node_execution_id) &&
-    typeof value.internal_cost_minor === "string" &&
-    /^\d+$/.test(value.internal_cost_minor) &&
+    isMinor(value.billable_minor) &&
     typeof value.event_count === "number" &&
     Number.isSafeInteger(value.event_count) &&
     value.event_count > 0
@@ -276,10 +258,6 @@ async function parseRollups(
   ) as Promise<{ readonly rollups_json: string }>;
 }
 
-async function parseEstimate(response: Response, instance: string): Promise<EstimateCostResponse> {
-  return parseJson(response, instance, isEstimateResponse) as Promise<EstimateCostResponse>;
-}
-
 async function parseJson(
   response: Response,
   instance: string,
@@ -292,55 +270,6 @@ async function parseJson(
   } catch {
     throw new EngineProblemError(upstreamProblem(502, instance, "UPSTREAM_SERVICE_ERROR"));
   }
-}
-
-function isEstimateResponse(value: unknown): value is EstimateCostResponse {
-  return (
-    isRecord(value) &&
-    value.currency === "INR" &&
-    Array.isArray(value.lineItems) &&
-    value.lineItems.every(isEstimateLineItem) &&
-    typeof value.totalEstimatedInternalCostMinor === "string" &&
-    /^\d+$/.test(value.totalEstimatedInternalCostMinor) &&
-    typeof value.hasUnestimatedLineItems === "boolean"
-  );
-}
-
-function isEstimateLineItem(
-  value: unknown,
-): value is EstimateCostResponse["lineItems"][number] {
-  return (
-    isRecord(value) &&
-    isCostSource(value.source) &&
-    typeof value.provider === "string" &&
-    typeof value.resource === "string" &&
-    typeof value.expectedQuantity === "number" &&
-    Number.isFinite(value.expectedQuantity) &&
-    isEstimateConfidence(value.confidence) &&
-    typeof value.sampleSize === "number" &&
-    Number.isSafeInteger(value.sampleSize) &&
-    (value.historicalUnitCostMinor === null || isMinor(value.historicalUnitCostMinor)) &&
-    isMinor(value.estimatedBaseCostMinor) &&
-    typeof value.historicalRetryRate === "number" &&
-    Number.isFinite(value.historicalRetryRate) &&
-    isMinor(value.estimatedRetryCostMinor) &&
-    isMinor(value.estimatedTotalCostMinor)
-  );
-}
-
-function isCostSource(value: unknown): value is CostSource {
-  return typeof value === "string" && costSources.includes(value as CostSource);
-}
-
-function isEstimateConfidence(
-  value: unknown,
-): value is EstimateCostResponse["lineItems"][number]["confidence"] {
-  return (
-    typeof value === "string" &&
-    estimateConfidences.includes(
-      value as EstimateCostResponse["lineItems"][number]["confidence"],
-    )
-  );
 }
 
 function isMinor(value: unknown): value is string {
