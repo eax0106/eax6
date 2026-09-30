@@ -9,10 +9,13 @@ import {
   RunValidationError,
   WorkflowNotFoundError,
 } from "./run-launcher.service";
+import { BudgetExceededError } from "../budgets/budget.service";
+import { RunEstimateService } from "../budgets/run-estimate.service";
 import { RunOutcomeService } from "./run-outcome.service";
 import { RunsController } from "./runs.controller";
 
 const TENANT = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
+const WORKSPACE = "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ac";
 const RUN = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
 const WORKFLOW = "wf_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
 
@@ -32,8 +35,12 @@ function outcomes(): RunOutcomeService {
   } as unknown as RunOutcomeService;
 }
 
+function estimates(): RunEstimateService {
+  return { estimate: vi.fn() } as unknown as RunEstimateService;
+}
+
 function request(tenantId: string | undefined = TENANT) {
-  return { actorContext: tenantId === undefined ? undefined : { tenant_id: tenantId }, url: `/api/v1/runs` };
+  return { actorContext: tenantId === undefined ? undefined : { tenant_id: tenantId, workspace_id: WORKSPACE }, url: `/api/v1/runs` };
 }
 
 function runRow(status = "pending") {
@@ -59,7 +66,7 @@ describe("RunsController.create", () => {
     vi.mocked(service.createRun).mockResolvedValue(runRow());
     const reply = fakeReply();
 
-    const response = await new RunsController(service, outcomes()).create(
+    const response = await new RunsController(service, outcomes(), estimates()).create(
       request() as never,
       reply as never,
       { workflow_id: WORKFLOW },
@@ -80,7 +87,7 @@ describe("RunsController.create", () => {
     const service = launcher();
     vi.mocked(service.createRun).mockResolvedValue(runRow());
 
-    await new RunsController(service, outcomes()).create(
+    await new RunsController(service, outcomes(), estimates()).create(
       request() as never,
       fakeReply() as never,
       { workflow_id: WORKFLOW, timeout_ms: 5_000 },
@@ -98,7 +105,7 @@ describe("RunsController.create", () => {
   it("rejects a missing workflow_id with a 400 ProblemDetails", async () => {
     const service = launcher();
     await expect(
-      new RunsController(service, outcomes()).create(request() as never, fakeReply() as never, {} as never),
+      new RunsController(service, outcomes(), estimates()).create(request() as never, fakeReply() as never, {} as never),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 400 }) });
     expect(service.createRun).not.toHaveBeenCalled();
   });
@@ -108,7 +115,7 @@ describe("RunsController.create", () => {
     vi.mocked(service.createRun).mockRejectedValue(new WorkflowNotFoundError(WORKFLOW));
 
     await expect(
-      new RunsController(service, outcomes()).create(request() as never, fakeReply() as never, {
+      new RunsController(service, outcomes(), estimates()).create(request() as never, fakeReply() as never, {
         workflow_id: WORKFLOW,
       }),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 404 }) });
@@ -119,7 +126,7 @@ describe("RunsController.create", () => {
     vi.mocked(service.createRun).mockRejectedValue(new RunStartFailedError(RUN, new Error("x")));
 
     await expect(
-      new RunsController(service, outcomes()).create(request() as never, fakeReply() as never, {
+      new RunsController(service, outcomes(), estimates()).create(request() as never, fakeReply() as never, {
         workflow_id: WORKFLOW,
       }),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 502 }) });
@@ -130,7 +137,7 @@ describe("RunsController.create", () => {
     vi.mocked(service.createRun).mockRejectedValue(new RunValidationError("no promoted version"));
 
     await expect(
-      new RunsController(service, outcomes()).create(request() as never, fakeReply() as never, {
+      new RunsController(service, outcomes(), estimates()).create(request() as never, fakeReply() as never, {
         workflow_id: WORKFLOW,
       }),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 400 }) });
@@ -138,7 +145,7 @@ describe("RunsController.create", () => {
 
   it("returns 500 with real ProblemDetails identifiers when tenant context is missing", async () => {
     await expect(
-      new RunsController(launcher(), outcomes()).create(
+      new RunsController(launcher(), outcomes(), estimates()).create(
         request(undefined) as never,
         fakeReply() as never,
         { workflow_id: WORKFLOW },
@@ -161,7 +168,7 @@ describe("RunsController.list/get", () => {
       page: { next_cursor: null, has_more: false, limit: 50 },
     });
 
-    const response = await new RunsController(service, outcomes()).list(request() as never, {
+    const response = await new RunsController(service, outcomes(), estimates()).list(request() as never, {
       workflow_id: WORKFLOW,
       status: "running",
     });
@@ -178,7 +185,7 @@ describe("RunsController.list/get", () => {
     vi.mocked(service.getRun).mockRejectedValue(new RunNotFoundError(RUN));
 
     await expect(
-      new RunsController(service, outcomes()).get(request() as never, RUN),
+      new RunsController(service, outcomes(), estimates()).get(request() as never, RUN),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 404 }) });
   });
 });
@@ -188,7 +195,7 @@ describe("RunsController.cancel", () => {
     const service = launcher();
     vi.mocked(service.cancelRun).mockResolvedValue(runRow("cancelled"));
 
-    const response = await new RunsController(service, outcomes()).cancel(request() as never, RUN);
+    const response = await new RunsController(service, outcomes(), estimates()).cancel(request() as never, RUN);
     expect(response).toMatchObject({ status: "cancelled" });
   });
 
@@ -208,7 +215,7 @@ describe("RunsController.retryNode", () => {
   it("retries a node and rejects a missing node_key", async () => {
     const service = launcher();
     await expect(
-      new RunsController(service, outcomes()).retryNode(request() as never, RUN, {} as never),
+      new RunsController(service, outcomes(), estimates()).retryNode(request() as never, RUN, {} as never),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 400 }) });
     expect(service.retryNode).not.toHaveBeenCalled();
   });
@@ -220,7 +227,7 @@ describe("RunsController.retryNode", () => {
     );
 
     await expect(
-      new RunsController(service, outcomes()).retryNode(request() as never, RUN, { node_key: "node_a" }),
+      new RunsController(service, outcomes(), estimates()).retryNode(request() as never, RUN, { node_key: "node_a" }),
     ).rejects.toMatchObject({ response: expect.objectContaining({ status: 409 }) });
   });
 
@@ -228,7 +235,7 @@ describe("RunsController.retryNode", () => {
     const service = launcher();
     vi.mocked(service.retryNode).mockResolvedValue(runRow("running"));
 
-    const response = await new RunsController(service, outcomes()).retryNode(request() as never, RUN, {
+    const response = await new RunsController(service, outcomes(), estimates()).retryNode(request() as never, RUN, {
       node_key: "node_a",
     });
     expect(response).toMatchObject({ status: "running" });
@@ -241,8 +248,44 @@ describe("RunsController error mapping fallback", () => {
     const service = launcher();
     vi.mocked(service.getRun).mockRejectedValue(new Error("unexpected"));
 
-    await expect(new RunsController(service, outcomes()).get(request() as never, RUN)).rejects.toBeInstanceOf(
+    await expect(new RunsController(service, outcomes(), estimates()).get(request() as never, RUN)).rejects.toBeInstanceOf(
       HttpException,
     );
+  });
+});
+
+describe("RunsController budgets and estimates (D3, D4)", () => {
+  it("answers 409 BUDGET_EXCEEDED when a run would go over budget", async () => {
+    const service = launcher();
+    vi.mocked(service.createRun).mockRejectedValue(new BudgetExceededError("bud_1", "workspace", "100", "100", "10"));
+    await expect(
+      new RunsController(service, outcomes(), estimates()).create(request() as never, fakeReply() as never, { workflow_id: WORKFLOW }),
+    ).rejects.toMatchObject({ status: 409, response: { error_code: "BUDGET_EXCEEDED" } });
+  });
+
+  it("returns the pre-run estimate for the caller's tenant", async () => {
+    const service = estimates();
+    const figure = { currency: "INR", at_most_minor: 500, usually_minor: null, sample_runs: 0, model_calls: 2, unpriced_calls: 0 };
+    vi.mocked(service.estimate).mockResolvedValue(figure as never);
+    const response = await new RunsController(launcher(), outcomes(), service).estimate(request() as never, { workflow_id: WORKFLOW });
+    expect(response).toEqual(figure);
+    expect(service.estimate).toHaveBeenCalledWith(TENANT, WORKSPACE, WORKFLOW, undefined);
+  });
+
+  it("refuses an estimate with no authenticated workspace", async () => {
+    const service = estimates();
+    await expect(
+      new RunsController(launcher(), outcomes(), service).estimate(
+        { actorContext: { tenant_id: TENANT }, url: "/api/v1/runs/estimate" } as never,
+        { workflow_id: WORKFLOW },
+      ),
+    ).rejects.toMatchObject({ status: 500 });
+    expect(service.estimate).not.toHaveBeenCalled();
+  });
+
+  it("refuses an estimate with no workflow", async () => {
+    await expect(
+      new RunsController(launcher(), outcomes(), estimates()).estimate(request() as never, {}),
+    ).rejects.toMatchObject({ status: 400 });
   });
 });

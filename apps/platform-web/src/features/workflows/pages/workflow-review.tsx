@@ -4,6 +4,7 @@ import { Play, FileCheck, AlertTriangle, CheckCircle2 } from "lucide-react"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { Button } from "@/components/ui/button"
+import { formatMinorCurrency } from "@/lib/formatters"
 import { SafeguardsSection } from "../components/safeguards-section"
 import { toast } from "sonner"
 
@@ -47,6 +48,12 @@ export function WorkflowReview() {
     enabled: toolNodes.length > 0,
   })
 
+  const { data: estimate, isLoading: estimateLoading, isError: estimateError } = useQuery({
+    queryKey: queryKeys.workflows.estimate(workflowId!),
+    queryFn: () => api.getRunEstimate(workflowId!),
+    enabled: !!workflowId,
+  })
+
   const activateMutation = useMutation({
     mutationFn: () => api.activateWorkflow(workflowId!),
     onSuccess: () => {
@@ -76,6 +83,17 @@ export function WorkflowReview() {
   const hasMissingCredentialReferences = toolNodes.some(
     (node) => integrationIdFromCredentialReference(node.config.credential_ref) === undefined,
   )
+
+  // D4: shown before any run starts. Billed price only (D24).
+  let costSummary = "Loading…"
+  if (estimateError) costSummary = "Unavailable"
+  else if (estimate) {
+    const atMost = `at most ${formatMinorCurrency(String(estimate.atMostMinor), "INR")}`
+    costSummary =
+      estimate.usuallyMinor === null
+        ? atMost
+        : `usually ${formatMinorCurrency(String(estimate.usuallyMinor), "INR")} (last ${estimate.sampleRuns} runs), ${atMost}`
+  } else if (!estimateLoading) costSummary = "Unavailable"
 
   let triggerSummary = "Manual only"
   if (triggersLoading) triggerSummary = "Loading…"
@@ -141,6 +159,17 @@ export function WorkflowReview() {
             <div className="flex justify-between border-b border-border pb-4">
               <span className="text-muted-foreground">Trigger</span>
               <span className="font-medium">{triggerSummary}</span>
+            </div>
+            <div className="flex justify-between border-b border-border pb-4">
+              <span className="text-muted-foreground">Cost per run</span>
+              <span className="text-right">
+                <span className="font-medium">{costSummary}</span>
+                {estimate && estimate.unpricedCalls > 0 ? (
+                  <span className="block text-xs text-muted-foreground">
+                    {estimate.unpricedCalls} {estimate.unpricedCalls === 1 ? "step has" : "steps have"} no price on record yet, so the real cost can be higher.
+                  </span>
+                ) : null}
+              </span>
             </div>
             <div className="flex justify-between border-b border-border pb-4">
               <span className="text-muted-foreground">Nodes</span>

@@ -194,6 +194,27 @@ describe("RunController routes", () => {
     },
   );
 
+  it("answers the pre-run estimate on its own route, not as a run id (D4)", async () => {
+    const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc";
+    const response = await request(`/api/v1/runs/estimate?workflow_id=${workflowId}`, actor);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(engine.estimate);
+    expect(engine.get).toHaveBeenCalledWith(
+      `/api/v1/runs/estimate?workflow_id=${workflowId}`,
+      expect.objectContaining({ tenantId: actor.tenant_id, workspaceId: actor.workspace_id }),
+    );
+  });
+
+  it("refuses the estimate to a caller without runs:read", async () => {
+    const response = await request(
+      "/api/v1/runs/estimate?workflow_id=wf_018f47a5-7b2c-7d10-8f11-123456789abc",
+      noScope,
+    );
+    expect(response.statusCode).toBe(403);
+    expect(engine.get).not.toHaveBeenCalled();
+  });
+
   it("lists paginated opaque rows using only real filters", async () => {
     const response = await request(
       "/api/v1/runs?cursor=next&limit=25&status=running&started_after=2026-07-01T00%3A00%3A00.000Z&started_before=2026-07-26T00%3A00%3A00.000Z",
@@ -422,6 +443,14 @@ class RunEngine {
     { quality_gate_id: "qg_1", status: "passed" },
   ]);
   readonly outcome = { status: "completed", summary: "done" };
+  readonly estimate = {
+    currency: "INR",
+    at_most_minor: 500,
+    usually_minor: null,
+    sample_runs: 0,
+    model_calls: 2,
+    unpriced_calls: 0,
+  };
   readonly artifact = {
     artifact_id: artifactId,
     media_type: "application/json",
@@ -463,6 +492,9 @@ class RunEngine {
         field_errors: [],
         documentation_key: "engine.run.unavailable",
       });
+    }
+    if (path.startsWith("/api/v1/runs/estimate?")) {
+      return { status: 200, body: this.estimate };
     }
     if (path.startsWith("/api/v1/runs?") || path === "/api/v1/runs") {
       return { status: 200, body: this.runList };

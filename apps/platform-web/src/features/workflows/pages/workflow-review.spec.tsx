@@ -92,6 +92,12 @@ describe("Review & Activate", () => {
     vi.spyOn(api, "getTriggers").mockResolvedValue([trigger])
     vi.spyOn(api, "getConnections").mockResolvedValue([connection])
     vi.spyOn(api, "activateWorkflow").mockResolvedValue(undefined)
+    vi.spyOn(api, "getRunEstimate").mockResolvedValue({
+      atMostMinor: 125050,
+      usuallyMinor: null,
+      sampleRuns: 0,
+      unpricedCalls: 0,
+    })
   })
 
   afterEach(cleanup)
@@ -124,5 +130,33 @@ describe("Review & Activate", () => {
     renderReview()
 
     expect(await screen.findByText("Connection status unverified")).toBeTruthy()
+  })
+  it("shows only the worst case before five verified runs exist (D4)", async () => {
+    renderReview()
+
+    expect(await screen.findByText("at most ₹1,250.50")).toBeTruthy()
+    expect(api.getRunEstimate).toHaveBeenCalledWith(workflowId)
+  })
+
+  it("shows the usual cost beside the worst case once five runs exist, and flags unpriced steps", async () => {
+    vi.mocked(api.getRunEstimate).mockResolvedValue({
+      atMostMinor: 90000,
+      usuallyMinor: 4210,
+      sampleRuns: 5,
+      unpricedCalls: 1,
+    })
+
+    renderReview()
+
+    expect(await screen.findByText("usually ₹42.10 (last 5 runs), at most ₹900.00")).toBeTruthy()
+    expect(screen.getByText(/1 step has no price on record yet/)).toBeTruthy()
+  })
+
+  it("says the estimate is unavailable rather than inventing one", async () => {
+    vi.mocked(api.getRunEstimate).mockRejectedValue(new Error("down"))
+
+    renderReview()
+
+    expect(await screen.findByText("Unavailable")).toBeTruthy()
   })
 })
