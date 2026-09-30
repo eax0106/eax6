@@ -15,36 +15,42 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 const apiBudget = {
-  id: "bud_1", name: "Monthly", amountMinor: 50_000, currency: "INR", period: "monthly",
-  thresholds: [{ percent: 80, action: "warn" }], enabled: true, currentSpendMinor: 12_345, createdAt: "x", updatedAt: "x",
+  id: "bud_1", workspace_id: "ws_1", workflow_id: null, kind: "workspace", period: "monthly", currency: "INR",
+  amount_minor: 50_000, mode: "hard", enabled: true, spent_minor: 12_345, reserved_minor: 500,
+  created_by: "usr_1", created_at: "x", updated_at: "2026-09-30T00:00:00.000Z",
 }
 
-describe("live budgets (B2.9b)", () => {
-  it("reads minor units as major units and keeps unknown spend unknown", async () => {
-    fetchMock.mockResolvedValue(Response.json([apiBudget, { ...apiBudget, id: "bud_2", currentSpendMinor: null }]))
-    const [known, unknown] = await budgetsService.list()
-    expect(known).toMatchObject({ amount: 500, currentSpend: 123.45, scope: "workspace", period: "monthly" })
-    expect(unknown!.currentSpend).toBeNull()
+describe("live budgets (D3, engine budgets relayed by platform-api)", () => {
+  it("reads paise as rupees, and a per-run cap has no spend", async () => {
+    fetchMock.mockImplementation(async () => Response.json([apiBudget, { ...apiBudget, id: "bud_2", kind: "run_cap", workflow_id: "wf_1", period: null, spent_minor: null, reserved_minor: null }]))
+    const [workspace, cap] = await budgetsService.list()
+    expect(workspace).toMatchObject({ kind: "workspace", amount: 500, currentSpend: 123.45, reserved: 5, mode: "hard", period: "monthly" })
+    expect(cap).toMatchObject({ kind: "run_cap", workflowId: "wf_1", period: null, currentSpend: null })
   })
 
-  it("creates with minor units and an idempotency key, and refuses a zero limit locally", async () => {
-    fetchMock.mockResolvedValue(Response.json(apiBudget, { status: 201 }))
-    await budgetsService.create({ name: "Monthly", amount: 500.1, currency: "INR", thresholds: [{ percent: 100, action: "block" }] })
+  it("creates each kind in the engine's shape, with an idempotency key, and refuses a zero limit locally", async () => {
+    fetchMock.mockImplementation(async () => Response.json(apiBudget, { status: 201 }))
+    await budgetsService.create({ kind: "workflow", workflowId: "wf_1", period: "daily", amount: 500.1, mode: "warn" })
     const [url, init] = fetchMock.mock.calls[0]!
     expect(String(url)).toContain("/api/v1/budgets")
-    expect(JSON.parse(String(init!.body))).toEqual({ name: "Monthly", amount_minor: 50_010, currency: "INR", thresholds: [{ percent: 100, action: "block" }], enabled: true })
+    expect(JSON.parse(String(init!.body))).toEqual({ kind: "workflow", workflow_id: "wf_1", period: "daily", amount_minor: 50010, mode: "warn" })
     expect(new Headers(init!.headers).get("Idempotency-Key")).toMatch(/^budget-create/)
-    await expect(budgetsService.create({ name: "x", amount: 0, currency: "INR" })).rejects.toThrow(/greater than zero/)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    await budgetsService.create({ kind: "workspace", amount: 10, mode: "hard" })
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]!.body))).toEqual({ kind: "workspace", amount_minor: 1000, mode: "hard" })
+    await expect(budgetsService.create({ kind: "workspace", amount: 0, mode: "hard" })).rejects.toThrow(/greater than zero/)
+    await expect(budgetsService.create({ kind: "run_cap", amount: 5, mode: "hard" })).rejects.toThrow(/workflow/)
   })
 
-  it("sends only the changed field on update and deletes by id", async () => {
-    fetchMock.mockResolvedValueOnce(Response.json({ ...apiBudget, enabled: false }))
-    await budgetsService.update("bud_1", { enabled: false })
-    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toEqual({ enabled: false })
-    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }))
+  it("updates with If-Match from the budget it read, and deletes by id", async () => {
+    fetchMock.mockImplementationOnce(async () => Response.json([apiBudget]))
+    const [budget] = await budgetsService.list()
+    fetchMock.mockImplementationOnce(async () => Response.json({ ...apiBudget, enabled: false }))
+    await budgetsService.update({ ...budget!, id: "bud_1" }, { enabled: false })
+    const [url, init] = fetchMock.mock.calls[1]!
+    expect(String(url)).toContain("/api/v1/budgets/bud_1")
+    expect(new Headers(init!.headers).get("If-Match")).toBe("2026-09-30T00:00:00.000Z")
+    fetchMock.mockImplementationOnce(async () => new Response(null, { status: 204 }))
     await budgetsService.remove("bud_1")
-    expect(fetchMock.mock.calls[1]![1]!.method).toBe("DELETE")
-    expect(String(fetchMock.mock.calls[1]![0])).toContain("/api/v1/budgets/bud_1")
+    expect(String(fetchMock.mock.calls[2]![0])).toContain("/api/v1/budgets/bud_1")
   })
 })

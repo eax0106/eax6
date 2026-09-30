@@ -1,81 +1,79 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { v7 as uuidv7 } from "uuid";
-import { CostsService } from "../costs/costs.service";
+import { randomBytes } from "node:crypto";
+import { Injectable } from "@nestjs/common";
+import { EngineClient, type EngineCallerContext, type EngineRequestBody } from "../engine";
 import type { ActorContext } from "../rbac/types";
-import { BudgetRepository } from "./budget.repository";
-import { budgetNotFound } from "./problem";
-import type { BudgetActor, BudgetRecord, BudgetView, CreateBudgetInput, UpdateBudgetInput } from "./types";
+import { BudgetHttpError } from "./problem";
+import type { BudgetView, CreateBudgetInput, UpdateBudgetInput } from "./types";
 
 /**
- * Budgets (task B2.9b): a workspace's monthly spending limits. Spend is the
- * cost ledger's billable total for the current month; a ledger outage leaves
- * spend unknown rather than failing the page. Thresholds are stored here and
- * enforced by the Run Manager's budget gate (C10) and notifications (B3.1).
+ * Budgets (D3): the engine owns them so Run Manager can check and reserve
+ * atomically at run start. This relays the web's budget routes to the engine
+ * through the caller's identity; the engine scopes every read and write to the
+ * caller's workspace.
  */
 @Injectable()
 export class BudgetService {
-  private readonly logger = new Logger(BudgetService.name);
+  constructor(private readonly engine: EngineClient) {}
 
-  constructor(
-    private readonly repository: BudgetRepository,
-    private readonly costs: CostsService,
-  ) {}
-
-  async list(actor: BudgetActor, context: ActorContext, traceparent: string | undefined, now = new Date()): Promise<BudgetView[]> {
-    const budgets = await this.repository.list(actor.tenantId, actor.workspaceId);
-    if (budgets.length === 0) return [];
-    const spend = await this.monthToDateSpend(context, traceparent, now);
-    return budgets.map((budget) => view(budget, spend && spend.currency === budget.currency ? spend.billableMinor : null));
+  async list(actor: ActorContext, traceparent: string | undefined): Promise<BudgetView[]> {
+    const instance = "/api/v1/budgets";
+    const response = await this.engine.get<{ data: BudgetView[] }>("/api/v1/budgets", callerContext(actor, traceparent, instance));
+    return response.body.data;
   }
 
-  async create(actor: BudgetActor, input: CreateBudgetInput): Promise<BudgetView> {
-    const record = await this.repository.insert({
-      tenantId: actor.tenantId,
-      workspaceId: actor.workspaceId,
-      id: `bud_${uuidv7()}`,
-      createdBy: actor.userId,
-      ...input,
-    });
-    return view(record, null);
+  async create(actor: ActorContext, input: CreateBudgetInput, idempotencyKey: string, traceparent: string | undefined): Promise<BudgetView> {
+    const instance = "/api/v1/budgets";
+    const response = await this.engine.post<EngineRequestBody, BudgetView>(
+      "/api/v1/budgets",
+      input as unknown as EngineRequestBody,
+      callerContext(actor, traceparent, instance),
+      { idempotencyKey },
+    );
+    return response.body;
   }
 
-  async update(actor: BudgetActor, id: string, input: UpdateBudgetInput, instance: string): Promise<BudgetView> {
-    const record = await this.repository.update(actor.tenantId, actor.workspaceId, id, input);
-    if (!record) throw budgetNotFound(instance);
-    return view(record, null);
-  }
-
-  async remove(actor: BudgetActor, id: string, instance: string): Promise<void> {
-    if (!(await this.repository.remove(actor.tenantId, actor.workspaceId, id))) throw budgetNotFound(instance);
-  }
-
-  private async monthToDateSpend(
-    context: ActorContext,
+  async update(
+    actor: ActorContext,
+    id: string,
+    input: UpdateBudgetInput,
+    ifMatch: string,
+    idempotencyKey: string,
     traceparent: string | undefined,
-    now: Date,
-  ): Promise<{ currency: string; billableMinor: number } | undefined> {
-    const startAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-    try {
-      const summary = await this.costs.summary({ startAt, endAt: now.toISOString() }, context, traceparent);
-      return { currency: summary.currency, billableMinor: Number(summary.totals.billableMinor) };
-    } catch (error) {
-      this.logger.warn(`Budget spend unavailable: ${error instanceof Error ? error.message : String(error)}`);
-      return undefined;
-    }
+  ): Promise<BudgetView> {
+    const instance = `/api/v1/budgets/${id}`;
+    const response = await this.engine.patch<EngineRequestBody, BudgetView>(
+      `/api/v1/budgets/${encodeURIComponent(id)}`,
+      input as unknown as EngineRequestBody,
+      callerContext(actor, traceparent, instance),
+      { idempotencyKey, ifMatch },
+    );
+    return response.body;
+  }
+
+  async remove(actor: ActorContext, id: string, idempotencyKey: string, traceparent: string | undefined): Promise<void> {
+    const instance = `/api/v1/budgets/${id}`;
+    await this.engine.delete(`/api/v1/budgets/${encodeURIComponent(id)}`, callerContext(actor, traceparent, instance), { idempotencyKey });
   }
 }
 
-function view(record: BudgetRecord, currentSpendMinor: number | null): BudgetView {
+function callerContext(actor: ActorContext, traceparent: string | undefined, instance: string): EngineCallerContext {
+  if (!actor.workspace_id) throw new BudgetHttpError(403, "BUDGET_WORKSPACE_REQUIRED", "Workspace actor context required", instance);
   return {
-    id: record.id,
-    name: record.name,
-    amountMinor: record.amountMinor,
-    currency: record.currency,
-    period: record.period,
-    thresholds: record.thresholds,
-    enabled: record.enabled,
-    currentSpendMinor,
-    createdAt: record.createdAt,
-    updatedAt: record.updatedAt,
+    userId: actor.user_id,
+    tenantId: actor.tenant_id,
+    workspaceId: actor.workspace_id,
+    sessionId: actor.session_id,
+    authTime: actor.auth_time ?? Math.floor(Date.now() / 1000),
+    roles: actor.roles,
+    permissions: actor.permissions,
+    traceparent: validTraceparent(traceparent) ? traceparent : newTraceparent(),
   };
+}
+
+function validTraceparent(value: string | undefined): value is string {
+  return typeof value === "string" && /^00-[0-9a-f]{32}-[0-9a-f]{16}-[01]$/i.test(value);
+}
+
+function newTraceparent(): string {
+  return `00-${randomBytes(16).toString("hex")}-${randomBytes(8).toString("hex")}-01`;
 }

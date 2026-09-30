@@ -59,6 +59,7 @@ describe("orchestration migration files", () => {
       "0039_run_owner_tenant.sql",
       "0040_create_side_effects.sql",
       "0041_create_budgets.sql",
+      "0042_restrict_webhook_resolver_rls.sql",
       "0043_workflow_version_deploy_marks.sql",
     ]);
     expect(
@@ -108,6 +109,7 @@ describe("orchestration migration files", () => {
       "0039_drop_run_owner_tenant.sql",
       "0040_drop_side_effects.sql",
       "0041_drop_budgets.sql",
+      "0042_restore_webhook_resolver.sql",
       "0043_drop_workflow_version_deploy_marks.sql",
     ]);
   });
@@ -312,6 +314,8 @@ describe("orchestration migration files", () => {
     );
 
     expect(script).toContain("CREATE ROLE orchestration_service LOGIN PASSWORD");
+    expect(script).toContain("ALTER ROLE orchestration_service WITH LOGIN NOBYPASSRLS");
+    expect(script).not.toContain("ALTER ROLE orchestration_service BYPASSRLS");
     expect(script).toContain(
       "CREATE DATABASE orchestration_db OWNER orchestration_service",
     );

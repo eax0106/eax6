@@ -4,6 +4,7 @@ import { NotificationModule } from "../notification.module";
 import { EngineEventNotificationRunner } from "./engine-event-notification.runner";
 import { ENGINE_EVENT_PRODUCERS } from "./engine-event-producer";
 import { ApprovalWaitingProducer } from "./approval-waiting.producer";
+import { BudgetThresholdProducer } from "./budget-threshold.producer";
 import { EngineEventSchedulerController } from "./engine-event-scheduler.controller";
 import { RunFailedProducer } from "./run-failed.producer";
 import { SelfHealProducer } from "./self-heal.producer";
@@ -22,16 +23,18 @@ import { DeploymentChangedProducer } from "./deployment-changed.producer";
     ApprovalWaitingProducer,
     SelfHealProducer,
     DeploymentChangedProducer,
+    BudgetThresholdProducer,
     {
       // One entry per kind of engine event that becomes a notification.
       provide: ENGINE_EVENT_PRODUCERS,
-      inject: [RunFailedProducer, ApprovalWaitingProducer, SelfHealProducer, DeploymentChangedProducer],
+      inject: [RunFailedProducer, ApprovalWaitingProducer, SelfHealProducer, BudgetThresholdProducer, DeploymentChangedProducer],
       useFactory: (
         runFailed: RunFailedProducer,
         approvalWaiting: ApprovalWaitingProducer,
         selfHeal: SelfHealProducer,
+        budgetThreshold: BudgetThresholdProducer,
         deploymentChanged: DeploymentChangedProducer,
-      ) => [runFailed, approvalWaiting, selfHeal, deploymentChanged],
+      ) => [runFailed, approvalWaiting, selfHeal, budgetThreshold, deploymentChanged],
     },
     EngineEventNotificationRunner,
   ],

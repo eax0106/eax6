@@ -24,10 +24,33 @@ describe("RunBudgetGate", () => {
   it("settles to what the Cost Ledger says the run cost, asking with prefixed ids", async () => {
     const settle = vi.fn(async () => 1);
     const billableMinor = vi.fn(async () => 321);
-    const gate = new RunBudgetGate({ settle } as unknown as EngineBudgetService, { billableMinor });
+    const gate = new RunBudgetGate({ settle, unsettledEndedRuns: async () => [] } as unknown as EngineBudgetService, { billableMinor });
     await gate.settle({ tenantId: TENANT, workspaceId: WORKSPACE, runId: RUN });
     expect(billableMinor).toHaveBeenCalledWith({ tenantId: `ten_${TENANT}`, workspaceId: `ws_${WORKSPACE}`, runId: RUN });
     expect(settle).toHaveBeenCalledWith(TENANT, RUN, 321);
+  });
+
+  it("retries earlier ended runs whose settle failed, and one that fails again waits for the next run", async () => {
+    const OLD_A = "run_018f4d6e-2b4a-7a3e-8c1a-00000000000a";
+    const OLD_B = "run_018f4d6e-2b4a-7a3e-8c1a-00000000000b";
+    const settle = vi.fn(async () => 1);
+    const unsettledEndedRuns = vi.fn(async () => [
+      { run_id: OLD_A, workspace_id: WORKSPACE },
+      { run_id: OLD_B, workspace_id: WORKSPACE },
+    ]);
+    const billableMinor = vi.fn(async ({ runId }: { runId: string }) => {
+      if (runId === OLD_A) throw new Error("ledger down");
+      return runId === OLD_B ? 40 : 321;
+    });
+    const gate = new RunBudgetGate({ settle, unsettledEndedRuns } as unknown as EngineBudgetService, { billableMinor });
+
+    await gate.settle({ tenantId: TENANT, workspaceId: WORKSPACE, runId: RUN });
+
+    expect(unsettledEndedRuns).toHaveBeenCalledWith(TENANT, RUN, 20);
+    expect(settle.mock.calls).toEqual([
+      [TENANT, RUN, 321],
+      [TENANT, OLD_B, 40],
+    ]);
   });
 
   it("does not settle when the cost cannot be read, so the reservation stays for a later try", async () => {
