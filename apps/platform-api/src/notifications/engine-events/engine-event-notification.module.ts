@@ -7,6 +7,7 @@ import { ApprovalWaitingProducer } from "./approval-waiting.producer";
 import { EngineEventSchedulerController } from "./engine-event-scheduler.controller";
 import { RunFailedProducer } from "./run-failed.producer";
 import { SelfHealProducer } from "./self-heal.producer";
+import { DriftSuggestionRunner } from "./drift-suggestion.runner";
 
 /**
  * Notifications for what the engine reports (D1), read as the system principal.
@@ -31,6 +32,7 @@ import { SelfHealProducer } from "./self-heal.producer";
       ) => [runFailed, approvalWaiting, selfHeal],
     },
     EngineEventNotificationRunner,
+    DriftSuggestionRunner,
   ],
 })
 export class EngineEventNotificationModule {}
