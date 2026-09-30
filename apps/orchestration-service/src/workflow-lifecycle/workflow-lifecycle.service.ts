@@ -558,7 +558,8 @@ export class WorkflowLifecycleService {
 
       const promoted = await tx.query<PromotedAtRow>(
         `UPDATE workflow_versions
-         SET status = 'promoted', traffic_percent = NULL
+         SET status = 'promoted', traffic_percent = NULL,
+             last_deployed_at = clock_timestamp(), last_deploy_kind = 'promoted'
          WHERE tenant_id = $1 AND workflow_id = $2 AND id = $3 AND status = $4
          RETURNING clock_timestamp() AS promoted_at`,
         [
@@ -675,7 +676,8 @@ export class WorkflowLifecycleService {
 
       const restored = await tx.query(
         `UPDATE workflow_versions
-         SET status = 'promoted', traffic_percent = NULL
+         SET status = 'promoted', traffic_percent = NULL,
+             last_deployed_at = clock_timestamp(), last_deploy_kind = 'restored'
          WHERE tenant_id = $1 AND workflow_id = $2 AND id = $3 AND status = 'retired'`,
         [tenantId, request.workflow_id, request.target_version_id],
       );

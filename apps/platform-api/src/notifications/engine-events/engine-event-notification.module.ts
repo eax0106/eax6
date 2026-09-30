@@ -7,6 +7,7 @@ import { ApprovalWaitingProducer } from "./approval-waiting.producer";
 import { EngineEventSchedulerController } from "./engine-event-scheduler.controller";
 import { RunFailedProducer } from "./run-failed.producer";
 import { SelfHealProducer } from "./self-heal.producer";
+import { DeploymentChangedProducer } from "./deployment-changed.producer";
 
 /**
  * Notifications for what the engine reports (D1), read as the system principal.
@@ -20,15 +21,17 @@ import { SelfHealProducer } from "./self-heal.producer";
     RunFailedProducer,
     ApprovalWaitingProducer,
     SelfHealProducer,
+    DeploymentChangedProducer,
     {
       // One entry per kind of engine event that becomes a notification.
       provide: ENGINE_EVENT_PRODUCERS,
-      inject: [RunFailedProducer, ApprovalWaitingProducer, SelfHealProducer],
+      inject: [RunFailedProducer, ApprovalWaitingProducer, SelfHealProducer, DeploymentChangedProducer],
       useFactory: (
         runFailed: RunFailedProducer,
         approvalWaiting: ApprovalWaitingProducer,
         selfHeal: SelfHealProducer,
-      ) => [runFailed, approvalWaiting, selfHeal],
+        deploymentChanged: DeploymentChangedProducer,
+      ) => [runFailed, approvalWaiting, selfHeal, deploymentChanged],
     },
     EngineEventNotificationRunner,
   ],

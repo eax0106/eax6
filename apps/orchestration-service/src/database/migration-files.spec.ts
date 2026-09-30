@@ -59,6 +59,7 @@ describe("orchestration migration files", () => {
       "0039_run_owner_tenant.sql",
       "0040_create_side_effects.sql",
       "0041_create_budgets.sql",
+      "0043_workflow_version_deploy_marks.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -107,6 +108,7 @@ describe("orchestration migration files", () => {
       "0039_drop_run_owner_tenant.sql",
       "0040_drop_side_effects.sql",
       "0041_drop_budgets.sql",
+      "0043_drop_workflow_version_deploy_marks.sql",
     ]);
   });
 
