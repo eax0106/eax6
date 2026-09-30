@@ -774,6 +774,18 @@ is possible, its own PR, CI green on the exact head before merging.
 
 ---
 
+### 2026-09-30 — two more approvals for D2 retention
+
+**Decision (Havish, 2026-09-30).**
+- **Expiry exception for append-only staff access records (D2):** a tenant's retained staff access records, erasure manifest and tombstone may be deleted once 90 days past the tenant's `deleted_at`, only through dedicated `SECURITY DEFINER` expiry functions executable only by the erasure/retention role; normal application sessions still cannot delete them.
+- **Freeze exemption, Audit Ledger (Category 1 #21), D2 only:** compaction of the audit hash chain for the 90-day skeleton expiry — a signed checkpoint seals the chain to the cut, verification starts from the latest checkpoint, sealed skeleton rows older than 90 days after tenant deletion are deleted. Nothing else in the Audit Ledger.
+
+**What it does not cover.** Anything else in those components or tables.
+
+**Decided by.** Havish.
+
+---
+
 ## 3. Checklist context
 
 Why each block of work on `checklist.md` exists, and what blocks it.
