@@ -65,12 +65,11 @@ export class WorkspaceExportRunner {
         const result = await this.runTenant(tenantId, now);
         exportsProcessed += result.processed;
         exportsFailed += result.failed;
-      } catch (error: unknown) {
+      } catch {
         tenantsFailed += 1;
         this.logger.error({
           tenantId,
           message: "workspace export tenant pass failed",
-          error: error instanceof Error ? error.message : String(error),
         });
       }
     }
@@ -78,6 +77,11 @@ export class WorkspaceExportRunner {
   }
 
   private async runTenant(tenantId: string, now: Date): Promise<{ processed: number; failed: number }> {
+    await this.db.queryTenant(tenantId,
+      `UPDATE workspace_exports SET status = 'expired', archive = NULL, updated_at = $2
+        WHERE tenant_id = $1 AND status = 'ready' AND expires_at <= $2`,
+      [tenantId, now.toISOString()],
+    );
     const pending = await this.db.queryTenant<PendingExport>(
       tenantId,
       `SELECT id, workspace_id, requested_by
@@ -92,47 +96,57 @@ export class WorkspaceExportRunner {
     for (const record of pending) {
       processed += 1;
       try {
-        await this.processExport(tenantId, record, now);
-      } catch (error: unknown) {
+        const outcome = await this.processExport(tenantId, record, now);
+        if (outcome === "failed") failed += 1;
+        if (outcome === "skipped") processed -= 1;
+      } catch {
         failed += 1;
         this.logger.error({
           tenantId,
           exportId: record.id,
           message: "workspace export failed",
-          error: error instanceof Error ? error.message : String(error),
         });
       }
     }
     return { processed, failed };
   }
 
-  private async processExport(tenantId: string, record: PendingExport, now: Date): Promise<void> {
+  private async processExport(tenantId: string, record: PendingExport, now: Date): Promise<"ready" | "failed" | "skipped"> {
     const claimed = await this.db.queryTenant<{ id: string }>(
       tenantId,
       `UPDATE workspace_exports SET status = 'running', updated_at = $1, failure_reason = NULL
-        WHERE tenant_id = $2 AND id = $3 AND status IN ('requested', 'running')
+        WHERE tenant_id = $2 AND id = $3
+          AND (status = 'requested' OR (status = 'running' AND updated_at < $4))
         RETURNING id`,
-      [now.toISOString(), tenantId, record.id],
+      [now.toISOString(), tenantId, record.id, new Date(now.getTime() - RUNNING_STALE_MS)],
     );
-    if (claimed.length === 0) return;
+    if (claimed.length === 0) return "skipped";
     try {
       const archive = await this.buildArchive(tenantId, record, now);
-      await this.db.queryTenant(tenantId,
+      const ready = await this.db.queryTenant(tenantId,
         `UPDATE workspace_exports
             SET status = 'ready', archive = $1, updated_at = $2, expires_at = $3
-          WHERE tenant_id = $4 AND id = $5`,
+          WHERE tenant_id = $4 AND id = $5 AND status = 'running' AND updated_at = $2::timestamptz
+          RETURNING id`,
         [JSON.stringify(archive), now.toISOString(), new Date(now.getTime() + EXPORT_TTL_MS).toISOString(), tenantId, record.id],
       );
+      if (ready.length === 0) return "skipped";
       await this.auditExport(tenantId, record, "workspace.exports.ready", "success", "");
+      return "ready";
     } catch (error: unknown) {
-      const reason = (error instanceof Error ? error.message : String(error)).slice(0, 500) || "unknown error";
-      await this.db.queryTenant(tenantId,
+      // Provider errors may contain request headers or connector settings.
+      // Persist only our own bounded explanations, never upstream error text.
+      const reason = error instanceof WorkspaceExportSourceError ? error.message : "source metadata unavailable";
+      const failed = await this.db.queryTenant(tenantId,
         `UPDATE workspace_exports
             SET status = 'failed', failure_reason = $1, archive = NULL, updated_at = $2
-          WHERE tenant_id = $3 AND id = $4`,
+          WHERE tenant_id = $3 AND id = $4 AND updated_at = $2::timestamptz
+          RETURNING id`,
         [reason, now.toISOString(), tenantId, record.id],
       );
+      if (failed.length === 0) return "skipped";
       await this.auditExport(tenantId, record, "workspace.exports.failed", "error", reason);
+      return "failed";
     }
   }
 
@@ -178,14 +192,12 @@ export class WorkspaceExportRunner {
         query,
         caller,
       );
-      rows.push(...response.body.data);
-      if (!response.body.page.has_more) return rows;
-      if (!response.body.page.next_cursor) {
-        throw new Error(`export feed for ${collection} claims more without a cursor`);
-      }
-      cursor = response.body.page.next_cursor;
+      const body = exportMetadataPage(response.body);
+      rows.push(...body.data);
+      if (!body.page.has_more) return rows;
+      cursor = body.page.next_cursor;
     }
-    throw new Error(`export feed for ${collection} exceeds ${MAX_PAGES_PER_COLLECTION} pages`);
+    throw new WorkspaceExportSourceError(`export feed for ${collection} exceeds ${MAX_PAGES_PER_COLLECTION} pages`);
   }
 
   /**
@@ -200,7 +212,7 @@ export class WorkspaceExportRunner {
       [tenantId, record.workspace_id, record.requested_by],
     );
     if (rows[0]?.role !== "admin") {
-      throw new Error("requester is no longer a workspace admin");
+      throw new WorkspaceExportSourceError("requester is no longer a workspace admin");
     }
     return {
       user_id: record.requested_by,
@@ -223,15 +235,21 @@ export class WorkspaceExportRunner {
       const response = kind === "sources"
         ? await this.ads.sources({ cursor, limit: 200 }, actor, undefined)
         : await this.ads.documents({ cursor, limit: 200 }, actor, undefined);
-      const body = response.body as { data: readonly unknown[]; page: { has_more: boolean; next_cursor: string | null } };
-      rows.push(...body.data);
+      const body = exportMetadataPage(response.body);
+      const fields = kind === "sources"
+        ? ["id", "scope_id", "workspace_id", "kind", "provider", "status", "last_sync_at", "document_count", "chunk_count", "created_at", "updated_at"]
+        : ["id", "source_id", "kind", "title", "status", "current_version", "created_at", "updated_at"];
+      rows.push(...body.data.map((row) => Object.fromEntries(fields.filter((field) => Object.hasOwn(row, field)).map((field) => {
+        const value = row[field];
+        if (value !== null && typeof value !== "string" && typeof value !== "boolean" && !(typeof value === "number" && Number.isFinite(value))) {
+          throw new WorkspaceExportSourceError("malformed knowledge metadata");
+        }
+        return [field, value];
+      }))));
       if (!body.page.has_more) return rows;
-      if (!body.page.next_cursor) {
-        throw new Error(`knowledge ${kind} claims more without a cursor`);
-      }
-      cursor = body.page.next_cursor;
+      cursor = body.page.next_cursor ?? undefined;
     }
-    throw new Error(`knowledge ${kind} exceeds ${MAX_PAGES_PER_COLLECTION} pages`);
+    throw new WorkspaceExportSourceError(`knowledge ${kind} exceeds ${MAX_PAGES_PER_COLLECTION} pages`);
   }
 
   private async auditExport(
@@ -258,4 +276,23 @@ export class WorkspaceExportRunner {
 
 function newTraceparent(): string {
   return `00-${randomBytes(16).toString("hex")}-${randomBytes(8).toString("hex")}-01`;
+}
+
+class WorkspaceExportSourceError extends Error {}
+
+function exportMetadataPage(value: unknown): { data: Record<string, unknown>[]; page: { has_more: boolean; next_cursor: string | null } } {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new WorkspaceExportSourceError("malformed export metadata page");
+  const body = value as Record<string, unknown>;
+  const page = body["page"] as Record<string, unknown> | null | undefined;
+  if (!Array.isArray(body["data"]) || page === null || typeof page !== "object" || Array.isArray(page)
+      || typeof page["has_more"] !== "boolean"
+      || !(page["next_cursor"] === null || (typeof page["next_cursor"] === "string" && page["next_cursor"].length > 0))
+      || (page["has_more"] && !page["next_cursor"])) throw new WorkspaceExportSourceError("malformed export metadata page");
+  const data = body["data"].map((row: unknown) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row) || typeof (row as Record<string, unknown>)["id"] !== "string") {
+      throw new WorkspaceExportSourceError("malformed export metadata row");
+    }
+    return row as Record<string, unknown>;
+  });
+  return { data, page: { has_more: page["has_more"], next_cursor: page["next_cursor"] as string | null } };
 }

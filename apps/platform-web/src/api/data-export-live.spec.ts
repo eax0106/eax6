@@ -46,7 +46,7 @@ describe("live data exports (D2, durable platform-api records)", () => {
     fetchMock.mockImplementationOnce(async () => Response.json(apiExport))
     expect((await getDataExport("ws_1", apiExport.id)).status).toBe("ready")
     fetchMock.mockImplementationOnce(async () =>
-      Response.json({ exported_at: "2026-09-30T10:05:00.000Z", workspace_id: "ws_1", workflows: [{ id: "wf_1" }], runs: [], members: [] }),
+      Response.json({ exported_at: "2026-09-30T10:05:00.000Z", workspace_id: "ws_1", workflows: [{ id: "wf_1" }], workflowVersions: [], runs: [], knowledgeSources: [], knowledgeDocuments: [], members: [] }),
     )
     const archive = await downloadDataExport("ws_1", apiExport.id)
     expect(String(fetchMock.mock.calls[1]![0])).toContain(`/api/v1/workspaces/ws_1/exports/${apiExport.id}/download`)
@@ -54,9 +54,18 @@ describe("live data exports (D2, durable platform-api records)", () => {
     expect(archive.workflows).toHaveLength(1)
   })
 
-  it("maps an unknown status to requested rather than inventing one", async () => {
+  it("refuses an unknown status instead of fabricating requested", async () => {
     fetchMock.mockImplementation(async () => Response.json([{ ...apiExport, status: "mystery" }]))
-    const [item] = await listDataExports("ws_1")
-    expect(item!.status).toBe("requested")
+    await expect(listDataExports("ws_1")).rejects.toThrow(/malformed/i)
+  })
+
+  it.each([null, {}, { data: [] }])("refuses a malformed export list: %j", async (body) => {
+    fetchMock.mockImplementation(async () => Response.json(body))
+    await expect(listDataExports("ws_1")).rejects.toThrow(/malformed/i)
+  })
+
+  it.each([null, {}, { exportedAt: "2026-09-30T10:05:00Z", workspaceId: "ws_1", workflows: [], runs: [], members: [] }])("refuses an incomplete archive: %j", async (body) => {
+    fetchMock.mockImplementation(async () => Response.json(body))
+    await expect(downloadDataExport("ws_1", apiExport.id)).rejects.toThrow(/malformed/i)
   })
 })

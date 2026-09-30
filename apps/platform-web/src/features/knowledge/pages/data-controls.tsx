@@ -31,11 +31,12 @@ function downloadFile(name: string, content: string) {
 
 export function DataControlsPage() {
   const queryClient = useQueryClient()
-  const { data: workspaces } = useQuery({
+  const workspacesQuery = useQuery({
     queryKey: queryKeys.workspace.all,
     queryFn: () => api.getWorkspaces(),
   })
-  const workspaceId = workspaces?.[0]?.id
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null)
+  const workspaceId = workspacesQuery.data?.find((workspace) => workspace.id === selectedWorkspaceId)?.id ?? workspacesQuery.data?.[0]?.id
 
   const exportsQuery = useQuery({
     queryKey: workspaceId ? queryKeys.dataExport.list(workspaceId) : ["dataExport", "list", "none"],
@@ -88,6 +89,16 @@ export function DataControlsPage() {
       />
 
       <div className="space-y-6 mt-6">
+        {workspacesQuery.data && workspacesQuery.data.length > 0 && (
+          <label className="flex items-center gap-3 text-sm">
+            Workspace
+            <select aria-label="Export workspace" className="rounded-md border p-2 bg-background"
+              value={workspaceId} disabled={exportMutation.isPending || Boolean(downloadingId)}
+              onChange={(event) => { setSelectedWorkspaceId(event.target.value); setDownloadError(null) }}>
+              {workspacesQuery.data.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
+            </select>
+          </label>
+        )}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
@@ -106,7 +117,10 @@ export function DataControlsPage() {
               </div>
             )}
             {exportsQuery.isLoading && <p>Loading exports…</p>}
-            {!exportsQuery.isLoading && exports.length === 0 && (
+            {workspacesQuery.isError && <p role="alert">Workspaces unavailable. Try again.</p>}
+            {!workspacesQuery.isLoading && !workspacesQuery.isError && workspacesQuery.data?.length === 0 && <p>No available workspace.</p>}
+            {exportsQuery.isError && <p role="alert">Exports unavailable. Try again.</p>}
+            {!exportsQuery.isLoading && !exportsQuery.isError && !workspacesQuery.isError && workspaceId && exports.length === 0 && (
               <p>No exports yet. Request one below.</p>
             )}
             {exports.map((item) => (

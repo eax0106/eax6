@@ -1,4 +1,5 @@
 import { apiGet, apiPost, mutationKey } from "./http"
+import { z } from "zod"
 
 // Data exports (D2, C74): live adapter over /api/v1/workspaces/:id/exports,
 // which platform-api answers from its durable export records. The archive
@@ -30,18 +31,34 @@ export interface DataExportArchive {
 
 type AnyRecord = Record<string, unknown>
 
-function mapExport(value: unknown): DataExport {
-  const item = value as AnyRecord
-  const status = item.status
-  return {
-    id: String(item.id),
-    workspaceId: String(item.workspace_id ?? item.workspaceId),
-    status: status === "running" || status === "ready" || status === "failed" || status === "expired" ? status : "requested",
-    failureReason: typeof item.failure_reason === "string" ? item.failure_reason : (typeof item.failureReason === "string" ? item.failureReason : null),
-    requestedAt: String(item.requested_at ?? item.requestedAt),
-    updatedAt: String(item.updated_at ?? item.updatedAt),
-    expiresAt: typeof item.expires_at === "string" ? item.expires_at : (typeof item.expiresAt === "string" ? item.expiresAt : null),
-  }
+const exportSchema = z.object({
+  id: z.string().min(1), workspaceId: z.string().min(1),
+  status: z.enum(["requested", "running", "ready", "failed", "expired"]),
+  failureReason: z.string().nullable(),
+  requestedAt: z.string().datetime({ offset: true }), updatedAt: z.string().datetime({ offset: true }),
+  expiresAt: z.string().datetime({ offset: true }).nullable(),
+})
+const archiveSchema = z.object({
+  exportedAt: z.string().datetime({ offset: true }), workspaceId: z.string().min(1),
+  workflows: z.array(z.unknown()), workflowVersions: z.array(z.unknown()), runs: z.array(z.unknown()),
+  knowledgeSources: z.array(z.unknown()), knowledgeDocuments: z.array(z.unknown()), members: z.array(z.unknown()),
+})
+
+function responseRecord(value: unknown): AnyRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("Malformed workspace export response")
+  return value as AnyRecord
+}
+
+function mapExport(value: unknown, workspaceId: string): DataExport {
+  const item = responseRecord(value)
+  const parsed = exportSchema.safeParse({
+    id: item.id, workspaceId: item.workspace_id ?? item.workspaceId, status: item.status,
+    failureReason: item.failure_reason ?? item.failureReason ?? null,
+    requestedAt: item.requested_at ?? item.requestedAt, updatedAt: item.updated_at ?? item.updatedAt,
+    expiresAt: item.expires_at ?? item.expiresAt ?? null,
+  })
+  if (!parsed.success || parsed.data.workspaceId !== workspaceId) throw new Error("Malformed workspace export response")
+  return { ...parsed.data, failureReason: parsed.data.failureReason ?? null, expiresAt: parsed.data.expiresAt ?? null }
 }
 
 function exportsPath(workspaceId: string): string {
@@ -50,29 +67,30 @@ function exportsPath(workspaceId: string): string {
 
 export async function listDataExports(workspaceId: string): Promise<DataExport[]> {
   const body = await apiGet<unknown>(exportsPath(workspaceId))
-  return (Array.isArray(body) ? body : []).map(mapExport)
+  if (!Array.isArray(body)) throw new Error("Malformed workspace export list")
+  return body.map((value) => mapExport(value, workspaceId))
 }
 
 export async function requestDataExport(workspaceId: string): Promise<DataExport> {
   return mapExport(
     await apiPost<unknown>(exportsPath(workspaceId), {}, { idempotencyKey: mutationKey("data-export-create") }),
+    workspaceId,
   )
 }
 
 export async function getDataExport(workspaceId: string, exportId: string): Promise<DataExport> {
-  return mapExport(await apiGet<unknown>(`${exportsPath(workspaceId)}/${encodeURIComponent(exportId)}`))
+  const record = mapExport(await apiGet<unknown>(`${exportsPath(workspaceId)}/${encodeURIComponent(exportId)}`), workspaceId)
+  if (record.id !== exportId) throw new Error("Malformed workspace export response")
+  return record
 }
 
 export async function downloadDataExport(workspaceId: string, exportId: string): Promise<DataExportArchive> {
-  const body = (await apiGet<unknown>(`${exportsPath(workspaceId)}/${encodeURIComponent(exportId)}/download`)) as AnyRecord
-  return {
-    exportedAt: String(body.exportedAt ?? body.exported_at),
-    workspaceId: String(body.workspaceId ?? body.workspace_id),
-    workflows: Array.isArray(body.workflows) ? body.workflows : [],
-    workflowVersions: Array.isArray(body.workflowVersions) ? body.workflowVersions : (Array.isArray(body.workflow_versions) ? body.workflow_versions : []),
-    runs: Array.isArray(body.runs) ? body.runs : [],
-    knowledgeSources: Array.isArray(body.knowledgeSources) ? body.knowledgeSources : [],
-    knowledgeDocuments: Array.isArray(body.knowledgeDocuments) ? body.knowledgeDocuments : [],
-    members: Array.isArray(body.members) ? body.members : [],
-  }
+  const body = responseRecord(await apiGet<unknown>(`${exportsPath(workspaceId)}/${encodeURIComponent(exportId)}/download`))
+  const parsed = archiveSchema.safeParse({
+    exportedAt: body.exportedAt ?? body.exported_at, workspaceId: body.workspaceId ?? body.workspace_id,
+    workflows: body.workflows, workflowVersions: body.workflowVersions ?? body.workflow_versions,
+    runs: body.runs, knowledgeSources: body.knowledgeSources, knowledgeDocuments: body.knowledgeDocuments, members: body.members,
+  })
+  if (!parsed.success || parsed.data.workspaceId !== workspaceId) throw new Error("Malformed workspace export archive")
+  return parsed.data
 }

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PlatformDb } from "../signup/platform-db";
 import { WorkspaceExportHttpError } from "./problem";
 import { WorkspaceExportService } from "./workspace-export.service";
+import { WorkspaceExportRunner } from "./workspace-export.runner";
 
 // D2 (C74): export records on real Postgres with the real migrations,
 // through a non-owner role held to row security. The audit sink is fake;
@@ -131,4 +132,49 @@ describe.skipIf(!databaseUrl)("WorkspaceExportService on PostgreSQL", () => {
     expect(missing).toBeInstanceOf(WorkspaceExportHttpError);
     expect((missing as WorkspaceExportHttpError).getStatus()).toBe(404);
   });
+
+  it("claims once across concurrent sweeps, exports safe metadata and purges expired archives", async () => {
+    const created = await service.request(actor, `ws_${wsA}`);
+    const db = new SynchronizedExportDb(pool);
+    const engine = { get: vi.fn(async () => ({ status: 200, body: {
+      data: [{ id: "metadata_1", workspace_id: `ws_${wsA}` }],
+      page: { has_more: false, next_cursor: null },
+    } })) };
+    const page = { status: 200, body: { data: [{ id: "src_1", sync_config: { token: "fixture-value" } }], page: { has_more: false, next_cursor: null } } };
+    const ads = { sources: vi.fn(async () => page), documents: vi.fn(async () => page) };
+    const runner = new WorkspaceExportRunner({ listActiveTenantIds: async () => [A] } as never, db, engine as never, ads as never, audit as never);
+    const now = new Date();
+    const results = await Promise.all([runner.run(now), runner.run(now)]);
+    expect(results.reduce((sum, result) => sum + result.exportsProcessed, 0)).toBe(1);
+    expect(results.every((result) => result.exportsFailed === 0)).toBe(true);
+    expect(engine.get).toHaveBeenCalledTimes(3);
+    const archive = await service.download(actor, `ws_${wsA}`, created.id);
+    expect(archive.knowledgeSources).toEqual([{ id: "src_1" }]);
+    expect(JSON.stringify(archive)).not.toContain("fixture-value");
+    expect((await service.get(actor, `ws_${wsA}`, created.id)).status).toBe("ready");
+
+    await runner.run(new Date(now.getTime() + 8 * 24 * 60 * 60 * 1000));
+    expect((await service.get(actor, `ws_${wsA}`, created.id)).status).toBe("expired");
+    const stored = await admin.query("SELECT archive FROM workspace_exports WHERE id = $1", [created.id.slice(4)]);
+    expect(stored.rows[0].archive).toBeNull();
+    expect(engine.get).toHaveBeenCalledTimes(3);
+    await expect(service.download(actor, `ws_${wsA}`, created.id)).rejects.toMatchObject({ status: 404 });
+  });
 });
+
+/** Forces both readers to discover the request before either can claim it. */
+class SynchronizedExportDb extends PlatformDb {
+  private readers = 0;
+  private release: () => void = () => undefined;
+  private readonly bothRead = new Promise<void>((resolve) => { this.release = resolve; });
+
+  override async queryTenant<T extends pg.QueryResultRow>(tenantId: string, sql: string, values: unknown[] = []): Promise<T[]> {
+    const rows = await super.queryTenant<T>(tenantId, sql, values);
+    if (sql.trimStart().startsWith("SELECT") && sql.includes("FROM workspace_exports") && rows.length > 0 && this.readers < 2) {
+      this.readers += 1;
+      if (this.readers === 2) this.release();
+      await this.bothRead;
+    }
+    return rows;
+  }
+}

@@ -32,6 +32,7 @@ function setup(overrides: {
       queries.push(sql);
       if (sql.includes("FROM workspace_exports") && sql.startsWith("SELECT")) return pending;
       if (sql.includes("SET status = 'running'")) return claimed ? [{ id: record.id }] : [];
+      if (sql.includes("SET status = 'ready'") || sql.includes("SET status = 'failed'")) return [{ id: record.id }];
       if (sql.includes("FROM workspace_members") && values.length === 3) {
         return requesterRole === null ? [] : [{ role: requesterRole }];
       }
@@ -78,10 +79,10 @@ describe("WorkspaceExportRunner", () => {
   it("records an engine failure as failed with its reason, never an empty archive", async () => {
     const { runner, db, audit } = setup({ engineImpl: () => { throw new Error("engine 503"); } });
     const result = await runner.run(new Date("2026-09-30T10:00:00.000Z"));
-    expect(result).toEqual({ tenants: 1, tenantsFailed: 0, exportsProcessed: 1, exportsFailed: 0 });
+    expect(result).toEqual({ tenants: 1, tenantsFailed: 0, exportsProcessed: 1, exportsFailed: 1 });
     const failed = db.queryTenant.mock.calls.find((call) => call[1].includes("SET status = 'failed'"));
     expect(failed).toBeDefined();
-    expect(String(failed![2]?.[0])).toContain("engine 503");
+    expect(String(failed![2]?.[0])).toContain("source metadata unavailable");
     expect(audit.recordEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "workspace.exports.failed", result: "error" }));
     expect(db.queryTenant.mock.calls.some((call) => call[1].includes("SET status = 'ready'"))).toBe(false);
   });
@@ -98,7 +99,7 @@ describe("WorkspaceExportRunner", () => {
   it("skips a record lost in a claim race without reading anything", async () => {
     const { runner, engine, ads } = setup({ claimed: false });
     const result = await runner.run(new Date("2026-09-30T10:00:00.000Z"));
-    expect(result.exportsProcessed).toBe(1);
+    expect(result.exportsProcessed).toBe(0);
     expect(result.exportsFailed).toBe(0);
     expect(engine.get).not.toHaveBeenCalled();
     expect(ads.sources).not.toHaveBeenCalled();
@@ -125,5 +126,67 @@ describe("WorkspaceExportRunner", () => {
       db as never, engine as never, ads as never, audit as never,
     );
     await expect(runner.run()).rejects.toThrow("store unconfigured");
+  });
+
+  it("exports scalar knowledge metadata only, never connector settings or unknown payloads", async () => {
+    const { runner, db } = setup({ adsImpl: () => ({
+      status: 200,
+      body: { data: [{ id: "src_1", kind: "drive", title: "Policies", document_count: 2,
+        sync_config: { token: "fixture-value" }, unexpected_payload: { password: "fixture-value" } }],
+        page: { has_more: false, next_cursor: null } },
+    }) });
+    await runner.run();
+    const ready = db.queryTenant.mock.calls.find((call) => call[1].includes("SET status = 'ready'"));
+    const archive = JSON.parse(String(ready![2]?.[0]));
+    expect(archive.knowledgeSources[0]).toEqual({ id: "src_1", kind: "drive", document_count: 2 });
+    expect(archive.knowledgeDocuments[0]).toEqual({ id: "src_1", kind: "drive", title: "Policies" });
+    expect(JSON.stringify(archive)).not.toContain("fixture-value");
+  });
+
+  it.each([
+    { data: [], page: {} },
+    { data: [], page: { has_more: "false", next_cursor: null } },
+    { data: [{ id: { token: "fixture-value" } }], page: { has_more: false, next_cursor: null } },
+  ])("records malformed knowledge metadata as failed, never ready: %j", async (body) => {
+    const { runner, db } = setup({ adsImpl: () => ({ status: 200, body }) });
+    expect((await runner.run()).exportsFailed).toBe(1);
+    expect(db.queryTenant.mock.calls.some((call) => call[1].includes("SET status = 'ready'"))).toBe(false);
+  });
+
+  it("rechecks staleness atomically when claiming a running export", async () => {
+    const { runner, db } = setup();
+    const now = new Date("2026-10-01T00:00:00.000Z");
+    await runner.run(now);
+    const claim = db.queryTenant.mock.calls.find((call) => call[1].includes("SET status = 'running'"))!;
+    expect(claim[1]).toContain("updated_at < $4");
+    expect(claim[2]).toContainEqual(new Date(now.getTime() - 60 * 60 * 1000));
+  });
+
+  it("clears expired archives during the scheduled pass", async () => {
+    const { runner, db } = setup({ pending: [] });
+    const now = new Date("2026-10-01T00:00:00.000Z");
+    await runner.run(now);
+    const expiry = db.queryTenant.mock.calls.find((call) => call[1].includes("SET status = 'expired'"))!;
+    expect(expiry[1]).toContain("archive = NULL");
+    expect(expiry[1]).toContain("tenant_id = $1");
+    expect(expiry[1]).toContain("expires_at <= $2");
+    expect(expiry[2]).toEqual([tenant, now.toISOString()]);
+  });
+
+  it("never stores upstream error contents in an export failure reason", async () => {
+    const { runner, db } = setup({ engineImpl: () => { throw new Error("provider token fixture-value"); } });
+    expect((await runner.run()).exportsFailed).toBe(1);
+    const failed = db.queryTenant.mock.calls.find((call) => call[1].includes("SET status = 'failed'"))!;
+    expect(failed[2]?.[0]).toBe("source metadata unavailable");
+    expect(JSON.stringify(failed[2])).not.toContain("fixture-value");
+  });
+
+  it("clears an archive rather than claiming audited readiness if the ready audit fails", async () => {
+    const { runner, db, audit } = setup();
+    audit.recordEvent.mockRejectedValueOnce(new Error("audit unavailable"));
+    expect((await runner.run()).exportsFailed).toBe(1);
+    const failed = db.queryTenant.mock.calls.find((call) => call[1].includes("SET status = 'failed'"))!;
+    expect(failed[1]).toContain("archive = NULL");
+    expect(audit.recordEvent).toHaveBeenLastCalledWith(expect.objectContaining({ action: "workspace.exports.failed" }));
   });
 });

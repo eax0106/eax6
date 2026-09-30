@@ -68,7 +68,7 @@ it("requests an export and refreshes the list", async () => {
 it("downloads a ready archive as a JSON file", async () => {
   stubFetch((url) => {
     if (url.endsWith("/api/v1/workspaces")) return workspaces
-    if (url.endsWith("/download")) return { exported_at: "x", workspace_id: "ws_1", workflows: [], runs: [], members: [] }
+    if (url.endsWith("/download")) return { exported_at: "2026-09-30T10:05:00.000Z", workspace_id: "ws_1", workflows: [], workflowVersions: [], runs: [], knowledgeSources: [], knowledgeDocuments: [], members: [] }
     return [readyExport]
   })
   const user = userEvent.setup()
@@ -82,4 +82,38 @@ it("downloads a ready archive as a JSON file", async () => {
   await waitFor(() => expect(downloads).toHaveLength(1))
   expect(downloads[0]).toContain("workspace-export-")
   click.mockRestore()
+})
+
+it("shows unavailable instead of no exports when a live list is malformed", async () => {
+  stubFetch((url) => url.endsWith("/api/v1/workspaces") ? workspaces : { malformed: true })
+  renderPage()
+  await waitFor(() => expect(screen.getByText("Exports unavailable. Try again.")).toBeDefined())
+  expect(screen.queryByText("No exports yet. Request one below.")).toBeNull()
+})
+
+it("does not download an incomplete archive", async () => {
+  stubFetch((url) => {
+    if (url.endsWith("/api/v1/workspaces")) return workspaces
+    if (url.endsWith("/download")) return { exported_at: "2026-09-30T10:05:00.000Z", workspace_id: "ws_1", workflows: [] }
+    return [readyExport]
+  })
+  const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined)
+  renderPage()
+  await waitFor(() => expect(screen.getByText("Download")).toBeDefined())
+  await userEvent.setup().click(screen.getByText("Download"))
+  await waitFor(() => expect(screen.getByText(/Download failed/)).toBeDefined())
+  expect(click).not.toHaveBeenCalled()
+  click.mockRestore()
+})
+
+it("reads exports for the selected real workspace", async () => {
+  const request = stubFetch((url) => {
+    if (url.endsWith("/api/v1/workspaces")) return [...workspaces, { id: "ws_2", name: "Second", slug: "second" }]
+    return [{ ...readyExport, workspace_id: url.includes("/workspaces/ws_2/") ? "ws_2" : "ws_1" }]
+  })
+  renderPage()
+  await waitFor(() => expect(screen.getByLabelText("Export workspace")).toBeDefined())
+  await userEvent.setup().selectOptions(screen.getByLabelText("Export workspace"), "ws_2")
+  await waitFor(() => expect(request.mock.calls.some(([url]) => String(url).includes("/workspaces/ws_2/exports"))).toBe(true))
+  await waitFor(() => expect(screen.getByText("Ready")).toBeDefined())
 })
