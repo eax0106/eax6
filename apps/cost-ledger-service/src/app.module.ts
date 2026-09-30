@@ -16,6 +16,8 @@ import { applyMargin, CostRollupService, type RollupStore } from "./rollup/cost-
 import { CostSummaryController } from "./rollup/cost-summary.controller";
 import { EstimationController } from "./estimation/estimation.controller";
 import { EstimationService } from "./estimation/estimation.service";
+import { RunEstimatesController } from "./estimation/run-estimates.controller";
+import { RUN_ESTIMATE_MARGIN, RUN_ESTIMATE_USD_TO_INR, RunEstimatesService } from "./estimation/run-estimates.service";
 import { HealthController } from "./health/health.controller";
 import { ModelOutcomesController } from "./model-outcomes/model-outcomes.controller";
 import { ModelOutcomesService } from "./model-outcomes/model-outcomes.service";
@@ -42,6 +44,7 @@ export class AppModule {
         CostGrpcController,
         HealthController,
         EstimationController,
+        RunEstimatesController,
         NodeCostsController,
         CostSummaryController,
         ModelOutcomesController,
@@ -56,6 +59,9 @@ export class AppModule {
         NodeCostsService,
         { provide: RUN_TOTAL_MARGIN, useValue: (internalCostMinor: string) => applyMargin(internalCostMinor, marginRate) },
         RunTotalService,
+        { provide: RUN_ESTIMATE_MARGIN, useValue: (internalCostMinor: string) => applyMargin(internalCostMinor, marginRate) },
+        { provide: RUN_ESTIMATE_USD_TO_INR, useValue: String(usdToInrRate) },
+        RunEstimatesService,
         ModelOutcomesService,
         RunVerdictsService,
         {

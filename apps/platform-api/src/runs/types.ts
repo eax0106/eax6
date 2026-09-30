@@ -42,3 +42,13 @@ export interface RunDetail {
   quality_gates: readonly EngineResource[];
   outcome: EngineResource;
 }
+
+/** D4: the figure shown before a run, in paise, billed price only (D24). */
+export type RunEstimate = {
+  readonly currency: "INR";
+  readonly at_most_minor: number;
+  readonly usually_minor: number | null;
+  readonly sample_runs: number;
+  readonly model_calls: number;
+  readonly unpriced_calls: number;
+};

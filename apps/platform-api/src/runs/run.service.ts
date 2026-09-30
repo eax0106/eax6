@@ -14,6 +14,7 @@ import type {
   EnginePage,
   EngineResource,
   RunDetail,
+  RunEstimate,
 } from "./types";
 import {
   parseArtifactId,
@@ -22,6 +23,7 @@ import {
   parseRetryNodeRequest,
   parseRunId,
   parseArtifactListQuery,
+  parseRunEstimateQuery,
   parseRunListQuery,
   parseTraceparent,
   serializeQuery,
@@ -45,6 +47,20 @@ export class RunService {
     const query = parseRunListQuery(input, instance);
     return this.engine.get(
       `/api/v1/runs${serializeQuery(query)}`,
+      callerContext(actor, traceparent, instance),
+    );
+  }
+
+  /** D4: what a run of the workflow would cost, shown before it starts. */
+  estimate(
+    input: unknown,
+    actor: ActorContext,
+    traceparent: string | undefined,
+  ): Promise<EngineResponse<RunEstimate>> {
+    const instance = "/api/v1/runs/estimate";
+    const query = parseRunEstimateQuery(input, instance);
+    return this.engine.get<RunEstimate>(
+      `/api/v1/runs/estimate${serializeQuery(query)}`,
       callerContext(actor, traceparent, instance),
     );
   }

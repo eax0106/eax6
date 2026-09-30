@@ -22,6 +22,7 @@ import type {
   Trigger,
   WebhookEndpoint,
   Workflow,
+  RunEstimate,
   WorkflowSafeguards,
   WorkflowVersion,
   Workspace,
@@ -264,6 +265,25 @@ interface SafeguardSet {
   customer_visible?: unknown
   contains_pii?: unknown
   approve_external_actions?: unknown
+}
+
+function minorOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
+// D4: "usually X, at most Y" before a run, billed price only.
+export async function getRunEstimate(workflowId: string): Promise<RunEstimate> {
+  const body = await apiGet<Record<string, unknown>>(
+    `/api/v1/runs/estimate?workflow_id=${encodeURIComponent(workflowId)}`,
+  )
+  const atMost = minorOrNull(body.at_most_minor)
+  if (atMost === null) throw new Error("The cost estimate is unavailable")
+  return {
+    atMostMinor: atMost,
+    usuallyMinor: minorOrNull(body.usually_minor),
+    sampleRuns: minorOrNull(body.sample_runs) ?? 0,
+    unpricedCalls: minorOrNull(body.unpriced_calls) ?? 0,
+  }
 }
 
 export async function getWorkflowSafeguards(id: string): Promise<WorkflowSafeguards> {
