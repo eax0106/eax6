@@ -9,7 +9,10 @@ const WORKSPACE = "ws_018f4d6e-bbbb-7bbb-8bbb-bbbbbbbbbbbb";
 const RUN = "run_018f4d6e-cccc-7ccc-8ccc-cccccccccccc";
 
 function setup(internal: string, marginRate: number) {
-  const query = vi.fn(async (_sql: string, _params: unknown[]) => ({ rowCount: 1, rows: [{ internal_cost_minor: internal, event_count: "3" }] }));
+  const query = vi.fn<(sql: string, params: unknown[]) => Promise<{ rowCount: number; rows: { internal_cost_minor: string; event_count: string }[] }>>(async () => ({
+    rowCount: 1,
+    rows: [{ internal_cost_minor: internal, event_count: "3" }],
+  }));
   const store = {
     withTenant: async (_tenant: string, operation: (tx: { query: typeof query }) => Promise<unknown>) => operation({ query }),
   } as unknown as CostStoreProvider;
