@@ -1,5 +1,7 @@
 import "reflect-metadata";
 
+import { createHash } from "node:crypto";
+
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { NestFactory } from "@nestjs/core";
 
@@ -52,6 +54,9 @@ async function bootstrap(): Promise<void> {
       protoPath: RUNS_CLIENT_PROTO_PATH,
     });
     const pseudonymKey = await secretsProvider.getSecret(environment.pseudonymKeyReference);
+    const deletionTokenHash = createHash("sha256")
+      .update(await secretsProvider.getSecret(environment.deletionServiceTokenReference))
+      .digest("hex");
 
     const app = await NestFactory.create<NestFastifyApplication>(
       AppModule.register(
@@ -60,6 +65,7 @@ async function bootstrap(): Promise<void> {
         environment.costMarginRate,
         environment.costUsdToInrRate,
         pseudonymKey,
+        deletionTokenHash,
       ),
       new FastifyAdapter(),
     );

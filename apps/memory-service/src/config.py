@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     auth0_m2m_audience: str = ""
     auth0_m2m_client_id: str = ""
     auth0_m2m_client_secret: str = ""
+    # SHA-256 of the shared deletion service token audit-service presents to erasure providers.
+    deletion_service_token_sha256: str = ""
     drift_failure_threshold: float = Field(default=0.2, ge=0, le=1)
     drift_window_size: int = Field(default=20, ge=2, le=100)
     # gt=0, not ge=0: DriftDetector rejects a significance_level of exactly

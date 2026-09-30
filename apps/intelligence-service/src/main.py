@@ -7,6 +7,9 @@ from .architecture_synthesizer.router import router as architecture_synthesizer_
 from .capability_registry.router import router as capability_registry_router
 from .capability_resolver.grpc_server import start_capability_server
 from .config import get_settings
+from .deletion.errors import DeletionHttpError, deletion_exception_handler
+from .deletion.router import deletion_lifespan
+from .deletion.router import router as deletion_router
 from .performance.router import performance_lifespan
 from .performance.router import router as performance_router
 from .planner.router import planner_lifespan
@@ -30,7 +33,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             async with planner_lifespan(app):
                 async with problem_understanding_lifespan(app):
                     async with selection_binding_lifespan(app):
-                        yield
+                        async with deletion_lifespan(app):
+                            yield
     finally:
         await capability_server.stop(0)
 
@@ -52,6 +56,8 @@ app.include_router(selection_binding_router)
 app.include_router(performance_router)
 app.include_router(capability_registry_router)
 app.include_router(architecture_synthesizer_router)
+app.include_router(deletion_router)
+app.add_exception_handler(DeletionHttpError, deletion_exception_handler)  # type: ignore[arg-type]
 
 
 @app.get("/health")
