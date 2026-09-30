@@ -11,8 +11,11 @@ import {
   auditGenesisHash,
   AuditEventNotFoundError,
   AuditValidationError,
+  signAuditChainCheckpoint,
   verifyAuditChain,
+  verifyAuditChainCheckpointSignature,
   type AuditActorType,
+  type AuditChainCheckpoint,
   type AuditChainVerificationResult,
   type AuditEventHandler,
   type AuditEventQuery,
@@ -52,6 +55,15 @@ const FORBIDDEN_CONTEXT_KEYS = new Set([
 const ALLOWED_CONTEXT_KEYS = new Set(["ip_class", "request_id", "scope"]);
 const MAX_CONTEXT_BYTES = 8_192;
 const MAX_TEXT_LENGTH = 512;
+const FULL_CHAIN_VERIFY_LIMIT = 2_147_483_647;
+const LOCAL_CHECKPOINT_SIGNING_SECRET =
+  "local-audit-chain-checkpoint-signing-secret-for-tests";
+const LOCAL_CHECKPOINT_SIGNING_KEY_ID = "local-audit-chain-checkpoint";
+
+export interface AuditChainCheckpointSigningConfig {
+  readonly keyId: string;
+  readonly secret: string;
+}
 
 function requiredText(value: string, field: string): string {
   const normalized = value.trim();
@@ -200,10 +212,30 @@ function validateRequest(request: RecordEventRequest): ValidatedAuditEvent {
 
 @Injectable()
 export class AuditService implements AuditEventHandler {
+  readonly #checkpointSigningSecret: string;
+  readonly #checkpointSigningKeyId: string;
+
   constructor(
     @Inject(AUDIT_STORE_PROVIDER)
     private readonly store: AuditStoreProvider,
-  ) {}
+    signingConfig?: AuditChainCheckpointSigningConfig,
+  ) {
+    const runtimeMode = process.env.RUNTIME_MODE?.trim();
+    const configuredSecret = signingConfig?.secret.trim();
+    const configuredKeyId = signingConfig?.keyId.trim();
+    if (runtimeMode === "real" && (configuredSecret === undefined || configuredSecret.length < 32)) {
+      throw new AuditValidationError(
+        "audit chain checkpoint signing key is required in real mode",
+      );
+    }
+    if (runtimeMode === "real" && (configuredKeyId === undefined || configuredKeyId.length === 0)) {
+      throw new AuditValidationError(
+        "audit chain checkpoint signing key id is required in real mode",
+      );
+    }
+    this.#checkpointSigningSecret = configuredSecret ?? LOCAL_CHECKPOINT_SIGNING_SECRET;
+    this.#checkpointSigningKeyId = configuredKeyId ?? LOCAL_CHECKPOINT_SIGNING_KEY_ID;
+  }
 
   async recordEvent(request: RecordEventRequest): Promise<RecordEventResponse> {
     const stored = await this.store.append({
@@ -245,7 +277,17 @@ export class AuditService implements AuditEventHandler {
    * one-off/disaster-recovery check, not for a periodic schedule (see
    * verifyChainIncremental). */
   async verifyChain(): Promise<AuditChainVerificationResult> {
-    return verifyAuditChain(await this.store.readGlobalChain());
+    const checkpoint = await this.verifiedCheckpoint();
+    if (checkpoint === undefined) {
+      return verifyAuditChain(await this.store.readGlobalChain());
+    }
+    return verifyAuditChain(
+      await this.store.readChainSince(
+        checkpoint.lastEntryHash,
+        FULL_CHAIN_VERIFY_LIMIT,
+      ),
+      checkpoint.lastEntryHash,
+    );
   }
 
   /**
@@ -257,7 +299,7 @@ export class AuditService implements AuditEventHandler {
    * instead of silently skipping past it.
    */
   async verifyChainIncremental(limit: number): Promise<AuditChainVerificationResult> {
-    const checkpoint = await this.store.getChainCheckpoint();
+    const checkpoint = await this.verifiedCheckpoint();
     const startingHash = checkpoint?.lastEntryHash ?? auditGenesisHash();
     const newEvents = await this.store.readChainSince(startingHash, limit);
     if (newEvents.length === 0) {
@@ -272,10 +314,37 @@ export class AuditService implements AuditEventHandler {
           lastEntryHash: lastEvent.entryHash,
           checkedEvents: (checkpoint?.checkedEvents ?? 0) + result.checkedEvents,
           verifiedAt: new Date(),
+          signature: this.signCheckpoint({
+            lastEntryHash: lastEvent.entryHash,
+            checkedEvents: (checkpoint?.checkedEvents ?? 0) + result.checkedEvents,
+            verifiedAt: new Date(),
+            signature: Buffer.alloc(0),
+            signatureKeyId: this.#checkpointSigningKeyId,
+          }),
+          signatureKeyId: this.#checkpointSigningKeyId,
         });
       }
     }
     return result;
+  }
+
+  async compactAuditEventsBeforeCheckpoint(): Promise<number> {
+    const checkpoint = await this.verifiedCheckpoint();
+    if (checkpoint === undefined) return 0;
+    return this.store.compactAuditEventsBeforeCheckpoint(checkpoint.lastEntryHash);
+  }
+
+  private async verifiedCheckpoint(): Promise<AuditChainCheckpoint | undefined> {
+    const checkpoint = await this.store.getChainCheckpoint();
+    if (checkpoint === undefined) return undefined;
+    if (!verifyAuditChainCheckpointSignature(checkpoint, this.#checkpointSigningSecret)) {
+      throw new AuditValidationError("audit chain checkpoint signature is invalid");
+    }
+    return checkpoint;
+  }
+
+  private signCheckpoint(checkpoint: AuditChainCheckpoint): Buffer {
+    return signAuditChainCheckpoint(checkpoint, this.#checkpointSigningSecret);
   }
 
   // No actor_type or tenant_id restriction is applied here -- this is a

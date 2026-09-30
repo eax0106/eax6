@@ -9,7 +9,10 @@ import {
   type AuditStoreProvider,
 } from "@alterx/shared-clients";
 
-import { AuditService } from "./audit/audit.service";
+import {
+  AuditService,
+  type AuditChainCheckpointSigningConfig,
+} from "./audit/audit.service";
 import { AuditStoreLifecycle } from "./database/store.lifecycle";
 import { HealthController } from "./health/health.controller";
 import type { ObjectStorageProvider } from "@alterx/shared-clients";
@@ -33,7 +36,11 @@ export interface AuditDeletionWiring {
 
 @Module({})
 export class AppModule {
-  static register(store: AuditStoreProvider, deletion?: AuditDeletionWiring): DynamicModule {
+  static register(
+    store: AuditStoreProvider,
+    deletion?: AuditDeletionWiring,
+    checkpointSigning?: AuditChainCheckpointSigningConfig,
+  ): DynamicModule {
     const orchestrator = deletion === undefined ? undefined : new DeletionOrchestrator(
       store,
       [new HttpDeletionProvider(deletion.adsBaseUrl, deletion.serviceToken, "ads-core"),
@@ -55,7 +62,10 @@ export class AppModule {
       providers: [
         serviceAuthGuardProvider(),
         { provide: AUDIT_STORE_PROVIDER, useValue: store },
-        AuditService,
+        {
+          provide: AuditService,
+          useFactory: () => new AuditService(store, checkpointSigning),
+        },
         { provide: AUDIT_EVENT_HANDLER, useExisting: AuditService },
         AuditStoreLifecycle,
         ...(orchestrator === undefined || deletion === undefined ? [] : [

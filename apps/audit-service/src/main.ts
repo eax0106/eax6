@@ -58,6 +58,12 @@ async function bootstrap(): Promise<void> {
       serviceTokenReference: environment.deletionServiceTokenReference,
       pseudonymKeyReference: environment.deletionPseudonymKeyReference,
     });
+    const checkpointSigningKey = await secretsProvider.getSecret(
+      environment.auditChainCheckpointSigningKeyReference,
+    );
+    if (checkpointSigningKey.length < 32) {
+      throw new Error("Audit chain checkpoint signing key resolved too short");
+    }
     const serviceTokenHash = (await import("node:crypto")).createHash("sha256").update(serviceToken).digest("hex");
     const app = await NestFactory.create<NestFastifyApplication>(
       AppModule.register(store, {
@@ -71,6 +77,9 @@ async function bootstrap(): Promise<void> {
         serviceTokenHash,
         pseudonymKey,
         objectStorage: new S3ObjectStorageProvider({ region: environment.region }),
+      }, {
+        keyId: environment.auditChainCheckpointSigningKeyId,
+        secret: checkpointSigningKey,
       }),
       new FastifyAdapter(),
     );

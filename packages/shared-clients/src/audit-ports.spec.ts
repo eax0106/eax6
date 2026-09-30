@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import {
   AUDIT_GENESIS_HASH_HEX,
   calculateAuditEntryHash,
+  signAuditChainCheckpoint,
+  verifyAuditChainCheckpointSignature,
   verifyAuditChain,
   type AuditEventToAppend,
 } from "./audit-ports";
@@ -83,12 +85,50 @@ describe("AuditStoreProvider mock", () => {
       lastEntryHash: stored.entryHash,
       checkedEvents: 1,
       verifiedAt,
+      signature: signAuditChainCheckpoint(
+        {
+          lastEntryHash: stored.entryHash,
+          checkedEvents: 1,
+          signatureKeyId: "test-key",
+        },
+        "test-checkpoint-signing-secret",
+      ),
+      signatureKeyId: "test-key",
     });
 
     const checkpoint = await provider.getChainCheckpoint();
     expect(checkpoint?.lastEntryHash).toEqual(stored.entryHash);
     expect(checkpoint?.checkedEvents).toBe(1);
     expect(checkpoint?.verifiedAt).toEqual(verifiedAt);
+    expect(checkpoint).toBeDefined();
+    if (checkpoint !== undefined) {
+      expect(
+        verifyAuditChainCheckpointSignature(
+          checkpoint,
+          "test-checkpoint-signing-secret",
+        ),
+      ).toBe(true);
+      expect(
+        verifyAuditChainCheckpointSignature(checkpoint, "forged-secret"),
+      ).toBe(false);
+    }
+  });
+
+  it("compacts only rows sealed before a checkpoint", async () => {
+    const provider = createMockAuditStoreProvider();
+    const first = await provider.append(event("system-0"));
+    const checkpoint = await provider.append(event("system-1"));
+    const afterCheckpoint = await provider.append(event("system-2"));
+
+    await expect(
+      provider.compactAuditEventsBeforeCheckpoint(checkpoint.entryHash),
+    ).resolves.toBe(1);
+
+    expect(provider.snapshot().map((row) => row.id)).toEqual([
+      checkpoint.id,
+      afterCheckpoint.id,
+    ]);
+    expect(provider.snapshot()[0]?.id).not.toBe(first.id);
   });
 
   it("returns defensive copies and supports lifecycle methods", async () => {

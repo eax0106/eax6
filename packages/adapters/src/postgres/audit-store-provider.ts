@@ -350,8 +350,10 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
         last_entry_hash: Buffer;
         checked_events: string;
         verified_at: Date;
+        signature: Buffer;
+        signature_key_id: string;
       }>(
-        `SELECT last_entry_hash, checked_events, verified_at
+        `SELECT last_entry_hash, checked_events, verified_at, signature, signature_key_id
            FROM audit_chain_checkpoints WHERE id = 'global'`,
       );
       await client.query("COMMIT");
@@ -362,6 +364,8 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
             lastEntryHash: row.last_entry_hash,
             checkedEvents: Number(row.checked_events),
             verifiedAt: row.verified_at,
+            signature: row.signature,
+            signatureKeyId: row.signature_key_id,
           };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -377,15 +381,44 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
       await client.query("BEGIN");
       await enableInternalAuditAccess(client);
       await client.query(
-        `INSERT INTO audit_chain_checkpoints (id, last_entry_hash, checked_events, verified_at)
-         VALUES ('global', $1, $2, $3)
+        `INSERT INTO audit_chain_checkpoints (
+           id, last_entry_hash, checked_events, verified_at, signature, signature_key_id
+         )
+         VALUES ('global', $1, $2, $3, $4, $5)
          ON CONFLICT (id) DO UPDATE
            SET last_entry_hash = EXCLUDED.last_entry_hash,
                checked_events = EXCLUDED.checked_events,
-               verified_at = EXCLUDED.verified_at`,
-        [checkpoint.lastEntryHash, checkpoint.checkedEvents, checkpoint.verifiedAt],
+               verified_at = EXCLUDED.verified_at,
+               signature = EXCLUDED.signature,
+               signature_key_id = EXCLUDED.signature_key_id`,
+        [
+          checkpoint.lastEntryHash,
+          checkpoint.checkedEvents,
+          checkpoint.verifiedAt,
+          checkpoint.signature,
+          checkpoint.signatureKeyId,
+        ],
       );
       await client.query("COMMIT");
+    } catch (error: unknown) {
+      await client.query("ROLLBACK").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async compactAuditEventsBeforeCheckpoint(checkpointHash: Buffer): Promise<number> {
+    const client = await this.#pool.connect();
+    try {
+      await client.query("BEGIN");
+      await enableInternalAuditAccess(client);
+      const result = await client.query<{ deleted_rows: number }>(
+        "SELECT compact_audit_events_before_checkpoint($1)::int AS deleted_rows",
+        [checkpointHash],
+      );
+      await client.query("COMMIT");
+      return result.rows[0]?.deleted_rows ?? 0;
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
       throw error;

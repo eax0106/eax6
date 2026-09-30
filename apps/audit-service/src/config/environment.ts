@@ -9,6 +9,8 @@ interface AuditEnvironmentBase {
   readonly runtimeMode: "real" | "mock";
   readonly configSource: "appconfig" | "local-file";
   readonly auditArchiveBucketParameter: string;
+  readonly auditChainCheckpointSigningKeyReference: string;
+  readonly auditChainCheckpointSigningKeyId: string;
   readonly httpPort: number;
   readonly grpcBindAddress: string;
   readonly adsDeletionBaseUrl: string;
@@ -95,6 +97,14 @@ export function loadAuditEnvironment(
     auditArchiveBucketParameter: requireValue(
       environment,
       "AUDIT_ARCHIVE_BUCKET_PARAM",
+    ),
+    auditChainCheckpointSigningKeyReference: requireValue(
+      environment,
+      "AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF",
+    ),
+    auditChainCheckpointSigningKeyId: requireValue(
+      environment,
+      "AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_ID",
     ),
     httpPort: parsePort(scopedValue(environment, "AUDIT_PORT", "PORT"), "AUDIT_PORT", DEFAULT_HTTP_PORT),
     grpcBindAddress: parseGrpcAddress(

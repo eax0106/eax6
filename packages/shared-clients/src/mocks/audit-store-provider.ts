@@ -97,13 +97,24 @@ export function createMockAuditStoreProvider(
               lastEntryHash: Buffer.from(checkpoint.lastEntryHash),
               checkedEvents: checkpoint.checkedEvents,
               verifiedAt: new Date(checkpoint.verifiedAt),
+              signature: Buffer.from(checkpoint.signature),
+              signatureKeyId: checkpoint.signatureKeyId,
             },
       setChainCheckpoint: async (next) => {
         checkpoint = {
           lastEntryHash: Buffer.from(next.lastEntryHash),
           checkedEvents: next.checkedEvents,
           verifiedAt: new Date(next.verifiedAt),
+          signature: Buffer.from(next.signature),
+          signatureKeyId: next.signatureKeyId,
         };
+      },
+      compactAuditEventsBeforeCheckpoint: async (checkpointHash) => {
+        const checkpointIndex = events.findIndex((event) =>
+          event.entryHash.equals(checkpointHash),
+        );
+        if (checkpointIndex <= 0) return 0;
+        return events.splice(0, checkpointIndex).length;
       },
       queryEvents: async (query: AuditEventQuery): Promise<AuditEventQueryResult> => {
         const filtered = events

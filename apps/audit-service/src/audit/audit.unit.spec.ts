@@ -4,6 +4,8 @@ import {
   calculateAuditEntryHash,
   canonicalAuditEvent,
   createMockAuditStoreProvider,
+  signAuditChainCheckpoint,
+  type AuditChainCheckpoint,
   type AuditEventToAppend,
   type AuditStoreProvider,
   type StoredAuditEvent,
@@ -251,7 +253,7 @@ describe("AuditService chain verification", () => {
 });
 
 describe("AuditService.verifyChainIncremental", () => {
-  it("leaves historical rows to the full-chain verifier once they are checkpointed", async () => {
+  it("trusts a signed checkpoint as the seal for already verified historical rows", async () => {
     const first = storedEvent(
       "018f47a2-7b11-7b11-8a11-1234567890b1",
       auditGenesisHash(),
@@ -272,6 +274,15 @@ describe("AuditService.verifyChainIncremental", () => {
         lastEntryHash: second.entryHash,
         checkedEvents: 2,
         verifiedAt: new Date("2026-07-24T07:00:00.000Z"),
+        signature: signAuditChainCheckpoint(
+          {
+            lastEntryHash: second.entryHash,
+            checkedEvents: 2,
+            signatureKeyId: "local-audit-chain-checkpoint",
+          },
+          "local-audit-chain-checkpoint-signing-secret-for-tests",
+        ),
+        signatureKeyId: "local-audit-chain-checkpoint",
       })),
     };
     const service = new AuditService(store);
@@ -280,10 +291,34 @@ describe("AuditService.verifyChainIncremental", () => {
       valid: true,
       checkedEvents: 0,
     });
-    await expect(service.verifyChain()).resolves.toMatchObject({
-      valid: false,
-      issue: "hash-mismatch",
+    await expect(service.verifyChain()).resolves.toEqual({
+      valid: true,
+      checkedEvents: 0,
     });
+  });
+
+  it("rejects a forged checkpoint instead of silently trusting it", async () => {
+    const first = storedEvent(
+      "018f47a2-7b11-7b11-8a11-1234567890d1",
+      auditGenesisHash(),
+    );
+    const store: AuditStoreProvider = {
+      ...createMockAuditStoreProvider(),
+      readChainSince: vi.fn(async () => []),
+      getChainCheckpoint: vi.fn(async () => ({
+        lastEntryHash: first.entryHash,
+        checkedEvents: 1,
+        verifiedAt: new Date("2026-07-24T07:00:00.000Z"),
+        signature: Buffer.alloc(32, 9),
+        signatureKeyId: "local-audit-chain-checkpoint",
+      })),
+    };
+    const service = new AuditService(store);
+
+    await expect(service.verifyChainIncremental(500)).rejects.toThrow(
+      /checkpoint signature is invalid/,
+    );
+    expect(store.readChainSince).not.toHaveBeenCalled();
   });
 
   it("returns valid/0 with no checkpoint advance when there is nothing new", async () => {
@@ -337,7 +372,7 @@ describe("AuditService.verifyChainIncremental", () => {
       auditGenesisHash(),
     );
     const corrupt = { ...first, context: { request_id: "tampered" } };
-    let checkpoint: { lastEntryHash: Buffer; checkedEvents: number; verifiedAt: Date } | undefined;
+    let checkpoint: AuditChainCheckpoint | undefined;
     const store: AuditStoreProvider = {
       ...createMockAuditStoreProvider(),
       readChainSince: vi.fn(async () => [corrupt]),

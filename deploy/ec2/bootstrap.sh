@@ -200,6 +200,7 @@ if [[ "$local_mode" != 1 ]]; then
   put_secret_if_absent "$(env_value COST_DATABASE_SECRET_REF)" "$cost_dsn"
   put_secret_if_absent "$(env_value DELETION_SERVICE_TOKEN_REF)" "$(openssl rand -hex 32)"
   put_secret_if_absent "$(env_value DELETION_PSEUDONYM_KEY_REF)" "$(openssl rand -hex 32)"
+  put_secret_if_absent "$(env_value AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF)" "$(openssl rand -hex 32)"
   put_secret_if_absent "$(env_value COST_PSEUDONYM_KEY_REF)" "$(openssl rand -hex 32)"
   signing_ref="$(env_value ACTOR_TOKEN_SIGNING_KEY_REF)"
   if ! aws ssm get-parameter --name "$signing_ref" >/dev/null 2>&1; then

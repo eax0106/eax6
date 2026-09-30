@@ -26,6 +26,7 @@ describe("audit_db migration files", () => {
       "0000_create_audit_events.sql",
       "0001_create_deletion_records.sql",
       "0002_audit_chain_checkpoint.sql",
+      "0003_signed_checkpoint_compaction.sql",
     ]);
     expect(
       readdirSync(resolve(AUDIT_MIGRATIONS_PATH, "rollback"))
@@ -35,6 +36,7 @@ describe("audit_db migration files", () => {
       "0000_drop_audit_events.sql",
       "0001_drop_deletion_records.sql",
       "0002_drop_audit_chain_checkpoint.sql",
+      "0003_drop_signed_checkpoint_compaction.sql",
     ]);
   });
 
@@ -70,6 +72,7 @@ describe("audit_db migration files", () => {
 
   it("keeps the audit-chain checkpoint's real invariants", () => {
     const sql = migrationSql.find(({ file }) => file === "0002_audit_chain_checkpoint.sql")?.sql;
+    const signedCheckpointSql = migrationSql.find(({ file }) => file === "0003_signed_checkpoint_compaction.sql")?.sql;
 
     expect(sql).toContain(
       `CONSTRAINT "audit_chain_checkpoints_hash_length_check" CHECK (octet_length("last_entry_hash") = 32)`,
@@ -77,5 +80,19 @@ describe("audit_db migration files", () => {
     expect(sql).toContain(
       `CONSTRAINT "audit_chain_checkpoints_checked_events_check" CHECK ("checked_events" >= 0)`,
     );
+    expect(signedCheckpointSql).toContain(
+      `CONSTRAINT "audit_chain_checkpoints_signature_length_check" CHECK (octet_length("signature") = 32)`,
+    );
+    expect(signedCheckpointSql).toContain(
+      `CONSTRAINT "audit_chain_checkpoints_signature_key_id_check" CHECK (length(btrim("signature_key_id")) > 0)`,
+    );
+  });
+
+  it("keeps audit compaction behind the sealed-checkpoint function", () => {
+    const sql = migrationSql.find(({ file }) => file === "0003_signed_checkpoint_compaction.sql")?.sql;
+
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION compact_audit_events_before_checkpoint");
+    expect(sql).toContain("current_setting('app.audit_retention_compaction', true) = 'on'");
+    expect(sql).toContain("WHERE entry_hash <> sealed_entry_hash");
   });
 });

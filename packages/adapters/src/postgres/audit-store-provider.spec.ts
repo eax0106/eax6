@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   AUDIT_GENESIS_HASH_HEX,
+  signAuditChainCheckpoint,
   verifyAuditChain,
   type AuditEventToAppend,
 } from "@alterx/shared-clients";
@@ -425,12 +426,22 @@ describe.sequential("PostgresAuditStoreProvider", () => {
       lastEntryHash: stored.entryHash,
       checkedEvents: 1,
       verifiedAt,
+      signature: signAuditChainCheckpoint(
+        {
+          lastEntryHash: stored.entryHash,
+          checkedEvents: 1,
+          signatureKeyId: "test-key",
+        },
+        "test-checkpoint-signing-secret",
+      ),
+      signatureKeyId: "test-key",
     });
 
     const checkpoint = await provider.getChainCheckpoint();
     expect(checkpoint?.lastEntryHash).toEqual(stored.entryHash);
     expect(checkpoint?.checkedEvents).toBe(1);
     expect(checkpoint?.verifiedAt).toEqual(verifiedAt);
+    expect(checkpoint?.signatureKeyId).toBe("test-key");
 
     // Real ON CONFLICT upsert, not a second row.
     const second = await provider.append(event(15));
@@ -438,11 +449,70 @@ describe.sequential("PostgresAuditStoreProvider", () => {
       lastEntryHash: second.entryHash,
       checkedEvents: 2,
       verifiedAt: new Date("2026-08-02T00:00:00.000Z"),
+      signature: signAuditChainCheckpoint(
+        {
+          lastEntryHash: second.entryHash,
+          checkedEvents: 2,
+          signatureKeyId: "test-key",
+        },
+        "test-checkpoint-signing-secret",
+      ),
+      signatureKeyId: "test-key",
     });
     const rowCount = await pool.query(
       "SELECT count(*)::int AS n FROM audit_chain_checkpoints",
     );
     expect(rowCount.rows[0]?.n).toBe(1);
+  });
+
+  it("compacts only events sealed before a signed checkpoint", async () => {
+    const first = await provider.append(event(20));
+    const checkpoint = await provider.append(event(21));
+    const afterCheckpoint = await provider.append(event(22));
+
+    await provider.setChainCheckpoint({
+      lastEntryHash: checkpoint.entryHash,
+      checkedEvents: 2,
+      verifiedAt: new Date("2026-08-03T00:00:00.000Z"),
+      signature: signAuditChainCheckpoint(
+        {
+          lastEntryHash: checkpoint.entryHash,
+          checkedEvents: 2,
+          signatureKeyId: "test-key",
+        },
+        "test-checkpoint-signing-secret",
+      ),
+      signatureKeyId: "test-key",
+    });
+
+    await expect(
+      provider.compactAuditEventsBeforeCheckpoint(checkpoint.entryHash),
+    ).resolves.toBeGreaterThanOrEqual(1);
+    await expect(provider.getById(first.id)).resolves.toBeUndefined();
+    await expect(provider.getById(checkpoint.id)).resolves.toMatchObject({
+      id: checkpoint.id,
+    });
+    await expect(provider.getById(afterCheckpoint.id)).resolves.toMatchObject({
+      id: afterCheckpoint.id,
+    });
+
+    await pool.query(
+      "ALTER TABLE audit_events DISABLE TRIGGER audit_events_immutable",
+    );
+    await pool.query("UPDATE audit_events SET context = $1 WHERE id = $2", [
+      { request_id: "tampered-after-checkpoint" },
+      afterCheckpoint.id,
+    ]);
+    await pool.query(
+      "ALTER TABLE audit_events ENABLE TRIGGER audit_events_immutable",
+    );
+
+    expect(
+      verifyAuditChain(
+        await provider.readChainSince(checkpoint.entryHash, 10),
+        checkpoint.entryHash,
+      ),
+    ).toMatchObject({ valid: false, issue: "hash-mismatch" });
   });
 
   it("executes rollback migration", async () => {

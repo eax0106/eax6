@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import type {
   GetEventRequest,
@@ -76,6 +76,7 @@ export interface DeletionLedgerEntry {
 
 export type AuditChainVerificationIssue =
   | "broken-link"
+  | "checkpoint-signature-mismatch"
   | "hash-mismatch"
   | "fork"
   | "orphan";
@@ -98,6 +99,8 @@ export interface AuditChainCheckpoint {
   readonly lastEntryHash: Buffer;
   readonly checkedEvents: number;
   readonly verifiedAt: Date;
+  readonly signature: Buffer;
+  readonly signatureKeyId: string;
 }
 
 export interface AuditStoreProvider extends BaseProvider<"AuditStoreProvider"> {
@@ -112,6 +115,7 @@ export interface AuditStoreProvider extends BaseProvider<"AuditStoreProvider"> {
   ): Promise<readonly StoredAuditEvent[]>;
   getChainCheckpoint(): Promise<AuditChainCheckpoint | undefined>;
   setChainCheckpoint(checkpoint: AuditChainCheckpoint): Promise<void>;
+  compactAuditEventsBeforeCheckpoint(checkpointHash: Buffer): Promise<number>;
   queryEvents(query: AuditEventQuery): Promise<AuditEventQueryResult>;
   storeDeletionCertificate(certificate: DeletionCertificateToStore): Promise<void>;
   appendDeletionLedger(entry: DeletionLedgerEntry): Promise<void>;
@@ -257,4 +261,36 @@ export function verifyAuditChain(
     return { valid: false, checkedEvents: visited.size, issue: "orphan" };
   }
   return { valid: true, checkedEvents: visited.size };
+}
+
+function auditCheckpointPayload(
+  checkpoint: Pick<AuditChainCheckpoint, "lastEntryHash" | "checkedEvents" | "signatureKeyId">,
+): Buffer {
+  return Buffer.from(
+    [
+      "alter.audit-chain-checkpoint.v1",
+      checkpoint.signatureKeyId,
+      checkpoint.lastEntryHash.toString("hex"),
+      String(checkpoint.checkedEvents),
+    ].join("\n"),
+    "utf8",
+  );
+}
+
+export function signAuditChainCheckpoint(
+  checkpoint: Pick<AuditChainCheckpoint, "lastEntryHash" | "checkedEvents" | "signatureKeyId">,
+  secret: string,
+): Buffer {
+  return createHmac("sha256", secret).update(auditCheckpointPayload(checkpoint)).digest();
+}
+
+export function verifyAuditChainCheckpointSignature(
+  checkpoint: AuditChainCheckpoint,
+  secret: string,
+): boolean {
+  const expected = signAuditChainCheckpoint(checkpoint, secret);
+  return (
+    expected.length === checkpoint.signature.length &&
+    timingSafeEqual(expected, checkpoint.signature)
+  );
 }

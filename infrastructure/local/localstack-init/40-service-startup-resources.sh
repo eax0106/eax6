@@ -11,6 +11,7 @@ set -eu
 
 AUDIT_ARCHIVE_BUCKET_PARAM="${AUDIT_ARCHIVE_BUCKET_PARAM:-/alter/local/audit/archive-bucket}"
 AUDIT_ARCHIVE_BUCKET="${AUDIT_ARCHIVE_BUCKET:-alter-local-audit-archive}"
+AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF="${AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF:-/alter/local/audit-service/system/audit-chain-checkpoint-signing-key}"
 ARTIFACTS_BUCKET_PARAM="${ARTIFACTS_BUCKET_PARAM:-/alter/local/orchestration/artifacts-bucket}"
 ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-alter-local-artifacts}"
 DELETION_SERVICE_TOKEN_REF="${DELETION_SERVICE_TOKEN_REF:-alter/local/audit-service/deletion-service-token}"
@@ -44,12 +45,14 @@ put_parameter "$ARTIFACTS_BUCKET_PARAM" "$ARTIFACTS_BUCKET"
 umask 077
 deletion_token_file="$(mktemp)"
 deletion_key_file="$(mktemp)"
+checkpoint_signing_key_file="$(mktemp)"
 cost_key_file="$(mktemp)"
 cost_dsn_file="$(mktemp)"
-trap 'rm -f "$deletion_token_file" "$deletion_key_file" "$cost_key_file" "$cost_dsn_file"' EXIT
+trap 'rm -f "$deletion_token_file" "$deletion_key_file" "$checkpoint_signing_key_file" "$cost_key_file" "$cost_dsn_file"' EXIT
 
 printf '%s' "${DELETION_SERVICE_TOKEN:-$(openssl rand -hex 32)}" > "$deletion_token_file"
 openssl rand -hex 32 > "$deletion_key_file"
+openssl rand -hex 32 > "$checkpoint_signing_key_file"
 openssl rand -hex 32 > "$cost_key_file"
 
 export COST_DATABASE_USER COST_DB_PASSWORD COST_DB_HOST COST_DB_PORT COST_DATABASE_NAME
@@ -72,6 +75,7 @@ PY
 
 put_secret "$DELETION_SERVICE_TOKEN_REF" "file://$deletion_token_file"
 put_secret "$DELETION_PSEUDONYM_KEY_REF" "file://$deletion_key_file"
+put_secret "$AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF" "file://$checkpoint_signing_key_file"
 put_secret "$COST_PSEUDONYM_KEY_REF" "file://$cost_key_file"
 put_secret "$COST_DATABASE_SECRET_REF" "file://$cost_dsn_file"
 

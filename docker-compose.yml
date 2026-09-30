@@ -134,6 +134,7 @@ services:
       COST_DATABASE_SECRET_REF: ${COST_DATABASE_SECRET_REF:-/alter/local/cost-ledger-service/database-credentials}
       COST_PSEUDONYM_KEY_REF: ${COST_PSEUDONYM_KEY_REF:-/alter/local/cost-ledger-service/pseudonym-key}
       AUDIT_ARCHIVE_BUCKET_PARAM: ${AUDIT_ARCHIVE_BUCKET_PARAM:-/alter/local/audit/archive-bucket}
+      AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF: ${AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF:-/alter/local/audit-service/system/audit-chain-checkpoint-signing-key}
       ARTIFACTS_BUCKET_PARAM: ${ARTIFACTS_BUCKET_PARAM:-/alter/local/orchestration/artifacts-bucket}
       DELETION_SERVICE_TOKEN: ${DELETION_SERVICE_TOKEN:-}
       DELETION_SERVICE_TOKEN_REF: ${DELETION_SERVICE_TOKEN_REF:-alter/local/audit-service/deletion-service-token}
@@ -144,7 +145,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "awslocal sqs get-queue-url --queue-name alter-local-cost-events >/dev/null 2>&1 && awslocal sqs get-queue-url --queue-name alter-local-events.fifo >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${DATABASE_SECRET_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${COST_DATABASE_SECRET_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${DELETION_SERVICE_TOKEN_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${DELETION_PSEUDONYM_KEY_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${COST_PSEUDONYM_KEY_REF}\" >/dev/null 2>&1 && awslocal ssm get-parameter --name \"$${AUDIT_ARCHIVE_BUCKET_PARAM}\" >/dev/null 2>&1 && awslocal ssm get-parameter --name \"$${ARTIFACTS_BUCKET_PARAM}\" >/dev/null 2>&1 && awslocal ssm get-parameter --name \"$${ACTOR_TOKEN_SIGNING_KEY_REF}\" --with-decryption >/dev/null 2>&1",
+          "awslocal sqs get-queue-url --queue-name alter-local-cost-events >/dev/null 2>&1 && awslocal sqs get-queue-url --queue-name alter-local-events.fifo >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${DATABASE_SECRET_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${COST_DATABASE_SECRET_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${DELETION_SERVICE_TOKEN_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${DELETION_PSEUDONYM_KEY_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${AUDIT_CHAIN_CHECKPOINT_SIGNING_KEY_REF}\" >/dev/null 2>&1 && awslocal secretsmanager describe-secret --secret-id \"$${COST_PSEUDONYM_KEY_REF}\" >/dev/null 2>&1 && awslocal ssm get-parameter --name \"$${AUDIT_ARCHIVE_BUCKET_PARAM}\" >/dev/null 2>&1 && awslocal ssm get-parameter --name \"$${ARTIFACTS_BUCKET_PARAM}\" >/dev/null 2>&1 && awslocal ssm get-parameter --name \"$${ACTOR_TOKEN_SIGNING_KEY_REF}\" --with-decryption >/dev/null 2>&1",
         ]
       # Ten assertions at roughly 0.7s each take about 7.4s to run, so the
       # previous 5s timeout killed the probe before it could finish and
