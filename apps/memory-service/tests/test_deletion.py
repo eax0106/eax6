@@ -4,13 +4,14 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 import sqlalchemy as sa
 from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import CursorResult, make_url
 from sqlalchemy.orm import Session, sessionmaker
 from testcontainers.community.postgres import PostgresContainer
 
@@ -154,9 +155,8 @@ def test_the_tenant_role_alone_cannot_remove_agent_drift_scores(
     _seed(admin, TENANT_B, "09") if _counts(admin, TENANT_B)["drift_scores"] == 0 else None
     with app.begin() as s:
         s.execute(sa.text("SELECT set_config('app.current_tenant_id', :t, true)"), {"t": TENANT_B})
-        removed = s.execute(
-            sa.text("DELETE FROM drift_scores WHERE tenant_id=:t"), {"t": TENANT_B}
-        ).rowcount
+        result = s.execute(sa.text("DELETE FROM drift_scores WHERE tenant_id=:t"), {"t": TENANT_B})
+        removed = cast("CursorResult[Any]", result).rowcount
     assert removed == 0
     assert _counts(admin, TENANT_B)["drift_scores"] >= 1
 
