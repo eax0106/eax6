@@ -46,7 +46,10 @@ const noScope: ActorContextType = { ...actor, permissions: [] };
 describe("RunController routes", () => {
   let app: NestFastifyApplication;
   const engine = new RunEngine();
-  const costs = { getNodeCosts: vi.fn().mockResolvedValue([]) };
+  const costs = {
+    getNodeCosts: vi.fn().mockResolvedValue([]),
+    getRunTotals: vi.fn(async (runIds: readonly string[]) => new Map(runIds.map((id) => [id, "0"]))),
+  };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -223,6 +226,7 @@ describe("RunController routes", () => {
       recovery_actions: engine.recoveryActions.data,
       quality_gates: engine.qualityGates.data,
       outcome: engine.outcome,
+      run_cost_minor: "0",
     });
     expect(costs.getNodeCosts).toHaveBeenCalledWith(
       runId,

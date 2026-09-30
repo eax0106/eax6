@@ -19,11 +19,7 @@ export {
 } from "./audit-events-client";
 export {
   CostLedgerClient,
-  type CostMode,
-  type CostSource,
   type CostSummaryQuery,
-  type EstimateCostRequest,
-  type EstimateCostResponse,
   type NodeCost,
 } from "./cost-ledger-client";
 export {

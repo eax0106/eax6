@@ -110,7 +110,7 @@ export class RunService {
     const id = parseRunId(runId, instance);
     const context = callerContext(actor, traceparent, instance);
     const encodedId = encodeURIComponent(id);
-    const [run, executions, verification, recovery, qualityGates, outcome, nodeCosts] =
+    const [run, executions, verification, recovery, qualityGates, outcome, nodeCosts, runTotals] =
       await Promise.all([
         this.engine.get<EngineResource>(`/api/v1/runs/${encodedId}`, context),
         this.allPages(
@@ -138,10 +138,12 @@ export class RunService {
           context,
         ),
         this.costLedger.getNodeCosts(id, context),
+        this.costLedger.getRunTotals([id], context, instance),
       ]);
 
+    // D24: the tenant sees what each step and the run cost it, billed price only.
     const costsByNode = new Map(
-      nodeCosts.map((cost) => [cost.nodeExecutionId, cost.internalCostMinor]),
+      nodeCosts.map((cost) => [cost.nodeExecutionId, cost.billableMinor]),
     );
 
     return {
@@ -167,6 +169,7 @@ export class RunService {
         recovery_actions: recovery,
         quality_gates: qualityGates,
         outcome: outcome.body,
+        run_cost_minor: runTotals.get(id) ?? "0",
       },
     };
   }

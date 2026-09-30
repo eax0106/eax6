@@ -4,7 +4,7 @@ import type { ProblemDetails } from "@alterx/contracts";
 
 export class CostsHttpError extends HttpException {
   constructor(
-    status: 400 | 401 | 403 | 502,
+    status: 400 | 401 | 403 | 422 | 502,
     errorCode: string,
     detail: string,
     instance: string,

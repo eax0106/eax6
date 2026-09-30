@@ -41,4 +41,6 @@ export interface RunDetail {
   recovery_actions: readonly EngineResource[];
   quality_gates: readonly EngineResource[];
   outcome: EngineResource;
+  /** D24: what the run cost the tenant so far, billed price, in minor units. */
+  run_cost_minor: string;
 }

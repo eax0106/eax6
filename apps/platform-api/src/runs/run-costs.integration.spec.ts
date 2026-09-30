@@ -50,7 +50,7 @@ describe.sequential("RunService per-node cost aggregation", () => {
       controllers: [NodeCostsController],
       providers: [
         { provide: NodeCostsService, useValue: service },
-        { provide: RunTotalService, useValue: new RunTotalService(store, (minor) => minor) },
+        { provide: RunTotalService, useValue: new RunTotalService(store, (minor) => (BigInt(minor) * 2n).toString()) },
       ],
     }).compile();
     costApp = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
@@ -97,8 +97,10 @@ describe.sequential("RunService per-node cost aggregation", () => {
     const detail = await new RunService(engineStub(), costClient).detail(RUN, actor(), undefined);
 
     expect(detail.body.node_executions).toEqual([
-      { id: NODE, node_cost_minor: "37" },
+      { id: NODE, node_cost_minor: "74" },
     ]);
+    // D24: billed (the stand-in margin doubles), never the internal 37.
+    expect(detail.body.run_cost_minor).toBe("74");
   });
 
   async function seed(tenantId: string, workspaceId: string, cost: string): Promise<void> {
