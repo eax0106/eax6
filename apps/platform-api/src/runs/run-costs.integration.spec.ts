@@ -12,6 +12,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 
 import { NodeCostsController } from "../../../cost-ledger-service/src/node-costs/node-costs.controller";
 import { NodeCostsService } from "../../../cost-ledger-service/src/node-costs/node-costs.service";
+import { RunTotalService } from "../../../cost-ledger-service/src/node-costs/run-total.service";
 import { CostLedgerClient } from "../engine/cost-ledger-client";
 import type { EngineClient } from "../engine/engine-client";
 import type { EngineAuthProvider } from "../engine/auth";
@@ -47,7 +48,10 @@ describe.sequential("RunService per-node cost aggregation", () => {
     const service = new NodeCostsService(store);
     const module = await Test.createTestingModule({
       controllers: [NodeCostsController],
-      providers: [{ provide: NodeCostsService, useValue: service }],
+      providers: [
+        { provide: NodeCostsService, useValue: service },
+        { provide: RunTotalService, useValue: new RunTotalService(store, (minor) => minor) },
+      ],
     }).compile();
     costApp = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     await costApp.listen(0, "127.0.0.1");
