@@ -36,6 +36,7 @@ const TAGS = [
   "0003_search_indexes",
   "0004_scan_unavailable",
   "0005_listing_pricing",
+  "0006_payout_ledger_erasure_guard",
 ];
 
 describe.skipIf(!databaseUrl)("marketplace migration runner", () => {
@@ -90,12 +91,12 @@ describe.skipIf(!databaseUrl)("marketplace migration runner", () => {
   it("unwinds fully and can be applied again", async () => {
     await applyMarketplaceMigrations(admin);
 
-    // Three steps first, so 0003's rollback -- the pair that did not exist
+    // Four steps first, so 0003's rollback -- the pair that did not exist
     // before this change -- is exercised on its own and its generated columns
     // checked while the tables it hangs off are still there.
     expect(
-      await applyMarketplaceMigrations(admin, { direction: "down", steps: 3 }),
-    ).toEqual(["0005_listing_pricing", "0004_scan_unavailable", "0003_search_indexes"]);
+      await applyMarketplaceMigrations(admin, { direction: "down", steps: 4 }),
+    ).toEqual(["0006_payout_ledger_erasure_guard", "0005_listing_pricing", "0004_scan_unavailable", "0003_search_indexes"]);
     const columns = await admin.query(
       `SELECT 1 FROM information_schema.columns
        WHERE table_schema = $1 AND column_name = 'search_document'`,

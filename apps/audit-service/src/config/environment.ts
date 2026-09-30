@@ -13,6 +13,7 @@ interface AuditEnvironmentBase {
   readonly grpcBindAddress: string;
   readonly adsDeletionBaseUrl: string;
   readonly orchestrationDeletionBaseUrl: string;
+  readonly platformApiDeletionBaseUrl: string;
   readonly deletionPseudonymKeyReference: string;
   readonly deletionServiceTokenReference: string;
 }
@@ -100,6 +101,7 @@ export function loadAuditEnvironment(
     ),
     adsDeletionBaseUrl: requireValue(environment, "ADS_DELETION_BASE_URL"),
     orchestrationDeletionBaseUrl: requireValue(environment, "ORCHESTRATION_DELETION_BASE_URL"),
+    platformApiDeletionBaseUrl: requireValue(environment, "PLATFORM_API_DELETION_BASE_URL"),
     deletionPseudonymKeyReference: requireValue(environment, "DELETION_PSEUDONYM_KEY_REF"),
     deletionServiceTokenReference: requireValue(environment, "DELETION_SERVICE_TOKEN_REF"),
   };

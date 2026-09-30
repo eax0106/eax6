@@ -14,6 +14,7 @@ function environment(
     AUDIT_ARCHIVE_BUCKET_PARAM: "/alter/local/audit/archive-bucket",
     ADS_DELETION_BASE_URL: "http://ads-core.internal:8000",
     ORCHESTRATION_DELETION_BASE_URL: "http://orchestration-service.internal:3000",
+    PLATFORM_API_DELETION_BASE_URL: "http://platform-api.internal:3020",
     DELETION_PSEUDONYM_KEY_REF: "/alter/local/audit-service/system/deletion-pseudonym-key",
     DELETION_SERVICE_TOKEN_REF: "/alter/local/audit-service/system/deletion-service-token",
     ...overrides,
@@ -40,6 +41,7 @@ describe("loadAuditEnvironment", () => {
       grpcBindAddress: "0.0.0.0:50068",
       adsDeletionBaseUrl: "http://ads-core.internal:8000",
       orchestrationDeletionBaseUrl: "http://orchestration-service.internal:3000",
+      platformApiDeletionBaseUrl: "http://platform-api.internal:3020",
       deletionPseudonymKeyReference: "/alter/local/audit-service/system/deletion-pseudonym-key",
       deletionServiceTokenReference: "/alter/local/audit-service/system/deletion-service-token",
     });
@@ -218,6 +220,7 @@ describe("database authentication selection", () => {
     AUDIT_ARCHIVE_BUCKET_PARAM: "/alter/staging/audit/archive-bucket",
     ADS_DELETION_BASE_URL: "http://ads-core.internal:8000",
     ORCHESTRATION_DELETION_BASE_URL: "http://orchestration-service.internal:3000",
+    PLATFORM_API_DELETION_BASE_URL: "http://platform-api.internal:3020",
     DELETION_PSEUDONYM_KEY_REF: "/alter/staging/audit-service/system/deletion-pseudonym-key",
     DELETION_SERVICE_TOKEN_REF: "/alter/staging/audit-service/system/deletion-service-token",
     DATABASE_HOST: "audit-db.internal",

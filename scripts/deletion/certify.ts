@@ -64,6 +64,10 @@ async function main(): Promise<void> {
       /export const TABLES = \[([\s\S]*?)\] as const/,
     ),
     "ads-core": providerTables("apps/ads-core/src/deletion/provider.py", /^TABLES = \(([\s\S]*?)\)/m),
+    "platform-api": providerTables(
+      "apps/platform-api/src/deletion/platform-deletion.service.ts",
+      /export const PLATFORM_TABLES = \[([\s\S]*?)\] as const/,
+    ),
   } as const;
   for (const [provider, tables] of Object.entries(providers) as [keyof typeof providers, string[]][]) {
     const { declaredOnly, providerOnly } = compareProviderTables(provider, tenantDataDeclarations, tables);
