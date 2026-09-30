@@ -13,4 +13,25 @@ cp "$repo/deploy/ec2/compose.yml" "$repo/deploy/ec2/Caddyfile" "$work/"
 (cd "$work" && docker compose -f compose.yml --env-file .env config --format json) >"$work/compose.json"
 (cd "$repo" && pnpm exec tsx --tsconfig apps/platform-api/tsconfig.app.json \
   deploy/ec2/check-production-config.ts "$work/compose.json")
+# Prove the production oracle rejects each missing engine estimation input.
+# Only generated fixture configuration is changed; no service is started.
+for key in APPCONFIG_APPLICATION_ID APPCONFIG_ENVIRONMENT_ID APPCONFIG_CONFIGURATION_PROFILE_ID COST_LEDGER_BASE_URL; do
+  node - "$work/compose.json" "$work/negative.json" "$key" <<'NODE'
+const fs = require('node:fs');
+const [source, target, key] = process.argv.slice(2);
+const config = JSON.parse(fs.readFileSync(source, 'utf8'));
+delete config.services['orchestration-service'].environment[key];
+fs.writeFileSync(target, JSON.stringify(config));
+NODE
+  if (cd "$repo" && pnpm exec tsx --tsconfig apps/platform-api/tsconfig.app.json \
+      deploy/ec2/check-production-config.ts "$work/negative.json") >"$work/negative.log" 2>&1; then
+    echo "FAIL missing engine $key was accepted"
+    exit 1
+  fi
+  grep -Fq 'FAIL orchestration-service pre-run estimation: Pre-run cost estimates need' "$work/negative.log" || {
+    echo "FAIL missing engine $key did not reach the estimation assertion"
+    exit 1
+  }
+done
+echo "estimation-negative-controls-ok"
 echo "production-boot-ok"

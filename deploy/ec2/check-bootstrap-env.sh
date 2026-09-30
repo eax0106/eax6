@@ -45,6 +45,10 @@ grep -qE '^[A-Za-z_][A-Za-z0-9_]*=<' "$env_file" && fail "placeholder left: $(gr
 [[ "$(value TEMPORAL_API_KEY)" == stubbed-secret-value ]] || fail "Temporal key not resolved from its secret"
 [[ "$(value ENGINE_DB_PORT)" =~ ^[0-9]+$ ]] || fail "ENGINE_DB_PORT not a number: $(value ENGINE_DB_PORT)"
 [[ -n "$(value MODEL_GATEWAY_APPCONFIG_APPLICATION_ID)" ]] || fail "scoped AppConfig identifiers missing"
+for key in MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID; do
+  [[ -n "$(value "$key")" ]] || fail "$key missing"
+done
+[[ "$(value COST_LEDGER_BASE_URL)" == "http://127.0.0.1:$(value COST_PORT)" ]] || fail "cost-ledger HTTP address does not match its port"
 [[ "$(stat -c %a "$env_file" 2>/dev/null || stat -f %Lp "$env_file")" == 600 ]] || fail ".env is not 0600"
 # Task 6.1c: the services never connect as the platform_db superuser.
 roles_file="$work/deploy/ec2/.db-roles.env"
