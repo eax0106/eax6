@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NodeCostsController } from "./node-costs.controller";
 import { NodeCostsService, NodeCostValidationError } from "./node-costs.service";
+import { RunTotalService } from "./run-total.service";
 
 const TENANT = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
 const WORKSPACE = "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890a2";
@@ -68,7 +69,10 @@ describe("NodeCostsController", () => {
 async function createApp(nodeCosts: Pick<NodeCostsService, "getForRun">): Promise<INestApplication> {
   const module = await Test.createTestingModule({
     controllers: [NodeCostsController],
-    providers: [{ provide: NodeCostsService, useValue: nodeCosts }],
+    providers: [
+      { provide: NodeCostsService, useValue: nodeCosts },
+      { provide: RunTotalService, useValue: {} },
+    ],
   }).compile();
   const app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
   await app.init();

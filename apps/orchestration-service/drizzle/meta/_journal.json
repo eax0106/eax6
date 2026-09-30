@@ -288,6 +288,13 @@
       "when": 1786990410000,
       "tag": "0040_create_side_effects",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786994010000,
+      "tag": "0041_create_budgets",
+      "breakpoints": true
     }
   ]
 }

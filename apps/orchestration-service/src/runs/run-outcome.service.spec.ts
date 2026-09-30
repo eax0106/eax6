@@ -116,6 +116,22 @@ function baseDb(overrides: Partial<FakeDb> = {}): FakeDb {
   };
 }
 
+describe("RunOutcomeService budget settlement (D3)", () => {
+  it("settles the run's budgets after recording the outcome, with the run's own workspace", async () => {
+    const settle = vi.fn(async () => undefined);
+    const service = new RunOutcomeService(fakeStore(baseDb()), undefined, { settle });
+    await service.recordOutcome(TENANT_ID, RUN_ID, "completed");
+    expect(settle).toHaveBeenCalledWith({ tenantId: BARE_TENANT_ID, workspaceId: WORKSPACE_ID, runId: RUN_ID });
+  });
+
+  it("a settlement failure never fails the run's finalization", async () => {
+    const db = baseDb();
+    const service = new RunOutcomeService(fakeStore(db), undefined, { settle: async () => { throw new Error("ledger down"); } });
+    await expect(service.recordOutcome(TENANT_ID, RUN_ID, "failed")).resolves.toBeUndefined();
+    expect(db.inserted).toMatchObject({ runId: RUN_ID });
+  });
+});
+
 describe("RunOutcomeService.recordOutcome", () => {
   it("rejects a tenant_id without the ten_ prefix", async () => {
     const service = new RunOutcomeService(fakeStore(baseDb()));

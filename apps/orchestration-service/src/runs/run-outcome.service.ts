@@ -4,6 +4,8 @@ import { Logger } from "@nestjs/common";
 
 import { RunIdSchema, TenantIdSchema } from "@alterx/contracts";
 
+import type { RunBudgetSettlement } from "../budgets/run-budget-gate";
+
 /**
  * The VACR/VADR metric ledger writer (HEAL-8). Every run that reaches a
  * real terminal state gets exactly one row here -- there are 3 independent
@@ -161,6 +163,7 @@ export class RunOutcomeService {
   constructor(
     private readonly store: RunOutcomeTenantStore,
     private readonly verdictSink?: RunVerdictSink,
+    private readonly budgetSettlement?: RunBudgetSettlement,
   ) {}
 
   /**
@@ -218,10 +221,30 @@ export class RunOutcomeService {
          FROM run_outcomes WHERE tenant_id = $1 AND run_id = $2`,
         [tenantId, runId],
       );
-      return stored.rows[0];
+      return { outcome: stored.rows[0], workspaceId: run.workspace_id };
     });
-    if (recorded !== undefined) {
-      await this.#sendVerdictBestEffort(tenantIdInput, runId, recorded);
+    if (recorded.outcome !== undefined) {
+      await this.#sendVerdictBestEffort(tenantIdInput, runId, recorded.outcome);
+    }
+    await this.#settleBudgetsBestEffort(tenantId, recorded.workspaceId, runId);
+  }
+
+  /**
+   * D3: the run is over, so the worst case it reserved against its budgets
+   * becomes what it really cost. Settling is idempotent, so a replayed
+   * finalize is harmless, and a failure here must never fail the run: the
+   * reservation would simply stay until a later settle.
+   */
+  async #settleBudgetsBestEffort(tenantId: string, workspaceId: string, runId: string): Promise<void> {
+    if (this.budgetSettlement === undefined) return;
+    try {
+      await this.budgetSettlement.settle({ tenantId, workspaceId, runId });
+    } catch (error: unknown) {
+      this.#logger.error({
+        message: "run budgets could not be settled",
+        runId,
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

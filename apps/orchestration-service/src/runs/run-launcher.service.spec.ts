@@ -1,3 +1,4 @@
+import { BudgetExceededError } from "../budgets/budget.service";
 import { describe, expect, it, vi } from "vitest";
 import type { CompiledDag } from "@alterx/contracts";
 
@@ -60,8 +61,8 @@ function fakeStore(handlers: {
   };
 
   const query = vi.fn(async (statement: string) => {
-    if (statement.includes("SELECT id FROM workflows")) {
-      return { rowCount: handlers.workflowExists === false ? 0 : 1, rows: [{ id: WORKFLOW }] };
+    if (statement.includes("SELECT id, workspace_id FROM workflows")) {
+      return { rowCount: handlers.workflowExists === false ? 0 : 1, rows: [{ id: WORKFLOW, workspace_id: "018f47a5-7b2c-7d10-8f11-000000000001" }] };
     }
     if (statement.includes("id, status, compiled_dag FROM workflow_versions")) {
       return handlers.explicitVersion === undefined
@@ -228,6 +229,24 @@ describe("RunLauncherService.createRun", () => {
       expect.objectContaining({ workflowId: RUN, workflowType: "executorWorkflow" }),
     );
     expect(result.status).toBe("running");
+  });
+
+  it("reserves against budgets inside the run's transaction, and a refused run never starts", async () => {
+    const { store } = fakeStore({
+      workflowExists: true,
+      promotedVersion: { id: WORKFLOW_VERSION, compiled_dag: compiledDag() },
+    });
+    const durable = { startWorkflow: vi.fn(), terminateWorkflow: vi.fn() };
+    const reserve = vi.fn().mockRejectedValue(new BudgetExceededError("bud_1", "workspace", "100", "100", "10"));
+    const launcher = new RunLauncherService(store, durable as never, undefined, undefined, undefined, { reserve } as never);
+
+    await expect(launcher.createRun(TENANT, WORKFLOW)).rejects.toBeInstanceOf(BudgetExceededError);
+
+    expect(reserve).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ workflowId: WORKFLOW, workspaceId: "018f47a5-7b2c-7d10-8f11-000000000001" }),
+    );
+    expect(durable.startWorkflow).not.toHaveBeenCalled();
   });
 
   it("persists a requested deadline and gives Temporal matching execution timeout", async () => {
