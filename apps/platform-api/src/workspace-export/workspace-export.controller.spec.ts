@@ -21,6 +21,7 @@ const base: ActorContextType = {
   session_id: "session-a",
   roles: ["admin"],
   permissions: ["workflows:read", "runs:read", "knowledge:read"],
+  workspaceRoles: [{ workspaceId: workspace, role: "admin" }],
 };
 
 const readyExport = {
@@ -98,8 +99,8 @@ describe("WorkspaceExport routes (D2, admin only)", () => {
   });
 
   it("refuses editors and viewers on every route", async () => {
-    const editor = { ...base, roles: ["editor"] };
-    const viewer = { ...base, roles: ["viewer"] };
+    const editor = { ...base, roles: ["editor"], workspaceRoles: [{ workspaceId: workspace, role: "editor" }] };
+    const viewer = { ...base, roles: ["viewer"], workspaceRoles: [{ workspaceId: workspace, role: "viewer" }] };
     for (const actor of [editor, viewer]) {
       const post = await app.inject({ method: "POST", url: `/api/v1/workspaces/ws_${workspace}/exports`, headers: headers(actor), payload: {} });
       expect(post.statusCode).toBe(403);
