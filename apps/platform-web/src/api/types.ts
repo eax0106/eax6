@@ -1307,3 +1307,14 @@ export interface RepositoryPullRequest {
   htmlUrl: string
   updatedAt: string
 }
+
+/** D4: what a run of a workflow costs the tenant, in paise, shown before it runs. */
+export interface RunCostEstimate {
+  /** The worst case; what a run reserves against its budgets. */
+  atMostMinor: number
+  /** The average of the last five verified runs; null until five exist. */
+  usuallyMinor: number | null
+  sampleRuns: number
+  /** Model calls with no price on record: the worst case is too low by their share. */
+  unpricedCalls: number
+}

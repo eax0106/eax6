@@ -26,6 +26,7 @@ import type {
   EnginePage,
   EngineResource,
   RunDetail,
+  EngineRunEstimate,
 } from "./types";
 
 const readRoles = ["admin", "editor", "operator", "approver", "viewer"] as const;
@@ -71,6 +72,25 @@ export class RunController {
       await this.runs.list(
         query,
         requireActor(actor, "/api/v1/runs"),
+        traceparent,
+      ),
+      reply,
+    );
+  }
+
+  @Get("estimate")
+  @RequireWorkspaceRole(...readRoles)
+  @RequirePermission("runs:read")
+  async estimate(
+    @Query() query: unknown,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<EngineRunEstimate> {
+    return project(
+      await this.runs.estimate(
+        query,
+        requireActor(actor, "/api/v1/runs/estimate"),
         traceparent,
       ),
       reply,

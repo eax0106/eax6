@@ -16,6 +16,7 @@ import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply } from "fastify";
 
 import { BudgetExceededError } from "../budgets/budget.service";
+import { RunEstimateService } from "../budgets/run-estimate.service";
 import {
   RunLauncherService,
   RunNotFoundError,
@@ -52,6 +53,11 @@ interface RunsQuery {
   readonly status?: string;
   readonly cursor?: string;
   readonly limit?: string;
+}
+
+interface RunEstimateQuery {
+  readonly workflow_id?: string;
+  readonly workflow_version_id?: string;
 }
 
 function requiredTenantId(request: SessionGatewayRequest): string {
@@ -101,7 +107,26 @@ export class RunsController {
   constructor(
     private readonly launcher: RunLauncherService,
     private readonly outcomes: RunOutcomeService,
+    private readonly estimates: RunEstimateService,
   ) {}
+
+  /** D4: what a run of this workflow would cost, shown before it starts. */
+  @Get("estimate")
+  async estimate(@Req() request: SessionGatewayRequest, @Query() query: RunEstimateQuery) {
+    const tenantId = requiredTenantId(request);
+    const workspaceId = request.actorContext?.workspace_id;
+    if (workspaceId === null || workspaceId === undefined) {
+      throw new HttpException(internalProblem(request.url, "Missing authenticated workspace context"), 500);
+    }
+    if (typeof query.workflow_id !== "string" || query.workflow_id.trim().length === 0) {
+      throw badRequest(request.url, "workflow_id is required");
+    }
+    try {
+      return await this.estimates.estimate(tenantId, workspaceId, query.workflow_id, query.workflow_version_id);
+    } catch (error: unknown) {
+      throw mapRunError(error, request.url);
+    }
+  }
 
   @Post()
   @HttpCode(201)
