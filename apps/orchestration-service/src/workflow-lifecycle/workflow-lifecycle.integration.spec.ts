@@ -174,6 +174,20 @@ describe.sequential("WorkflowLifecycleService Postgres integration", () => {
     });
   }
 
+  async function deployMarks() {
+    return store.withTenant(TENANT_A, async (tx) => {
+      const result = await tx.query<{ id: string; kind: string | null; stamp: Date | null }>(
+        "SELECT id, last_deploy_kind AS kind, last_deployed_at AS stamp FROM workflow_versions WHERE tenant_id=$1 AND workflow_id=$2 ORDER BY version", [TENANT_A, WORKFLOW_A],
+      );
+      return result.rows;
+    });
+  }
+
+  const databaseClock = async () => store.withTenant(TENANT_A, async (tx) => {
+    const result = await tx.query<{ now: Date }>("SELECT clock_timestamp() AS now");
+    return result.rows[0]!.now.getTime();
+  });
+
   it("promotes atomically and marks routine supersession retired", async () => {
     await seedWorkflow(TENANT_A, WORKSPACE_A, WORKFLOW_A, [
       { id: VERSION_1, status: "promoted" },
@@ -201,6 +215,11 @@ describe.sequential("WorkflowLifecycleService Postgres integration", () => {
       { id: VERSION_1, status: "retired", traffic_percent: null },
       { id: VERSION_2, status: "promoted", traffic_percent: null },
     ]);
+    const marks = await deployMarks();
+    expect(marks[0]).toEqual({ id: VERSION_1, kind: null, stamp: null });
+    expect(marks[1]?.kind).toBe("promoted");
+    expect(marks[1]?.stamp?.getTime()).toBeGreaterThanOrEqual(startedAt);
+    expect(marks[1]?.stamp?.getTime()).toBeLessThanOrEqual(await databaseClock());
   });
 
   it("persists canary traffic while leaving the stable version promoted", async () => {
@@ -251,6 +270,12 @@ describe.sequential("WorkflowLifecycleService Postgres integration", () => {
       { id: VERSION_2, status: "promoted" },
     ]);
 
+    const previousStamp = "2026-09-29T10:00:00.000Z";
+    await store.withTenant(TENANT_A, async (tx) => {
+      await tx.query("UPDATE workflow_versions SET last_deployed_at=$1,last_deploy_kind='promoted' WHERE tenant_id=$2 AND id=$3", [previousStamp, TENANT_A, VERSION_2]);
+    });
+    const beforeRollback = await databaseClock();
+
     await expect(
       service.rollbackVersion({
         tenant_id: TENANT_A_REQUEST,
@@ -265,6 +290,11 @@ describe.sequential("WorkflowLifecycleService Postgres integration", () => {
       { id: VERSION_1, status: "promoted", traffic_percent: null },
       { id: VERSION_2, status: "rolled_back", traffic_percent: null },
     ]);
+    const marks = await deployMarks();
+    expect(marks[0]?.kind).toBe("restored");
+    expect(marks[0]?.stamp?.getTime()).toBeGreaterThanOrEqual(beforeRollback);
+    expect(marks[0]?.stamp?.getTime()).toBeLessThanOrEqual(await databaseClock());
+    expect(marks[1]).toEqual({ id: VERSION_2, kind: "promoted", stamp: new Date(previousStamp) });
   });
 
   it("rejects illegal retired promotion and canary rollback target transitions", async () => {
