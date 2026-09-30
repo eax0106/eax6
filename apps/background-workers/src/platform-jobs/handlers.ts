@@ -134,6 +134,31 @@ function createRetentionSweepHandler(
 }
 
 /**
+ * Workspace export sweep (D2, C74): calls platform-api's internal
+ * export trigger, which builds every requested archive. Thin relay like
+ * the engine-event trigger above, authenticated with the same Platform
+ * Jobs shared secret the trigger checks.
+ */
+function createWorkspaceExportSweepHandler(
+  baseUrl: string,
+  serviceToken: string,
+  fetchImpl: typeof fetch,
+): PlatformJobHandler {
+  return async (): Promise<JsonValue> => {
+    const response = await fetchImpl(`${baseUrl}/internal/workspace-exports/process-pending`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${serviceToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(
+        `workspace export sweep failed: HTTP ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as JsonValue;
+  };
+}
+
+/**
  * Real, scoped to the 4 confirmed "launch-floor" golden sets
  * (apps/eval-service/src/db/launch_golden_sets.py) -- the redteam/chaos/
  * recovery sets serve a different real purpose (security/resilience
@@ -402,6 +427,16 @@ export function createPlatformJobHandlers(
     handlers.set(
       "platform.engine-event-notifications",
       createEngineEventNotificationsHandler(
+        dependencies.platformApiInternalBaseUrl,
+        dependencies.notificationDigestServiceToken,
+        fetchImpl,
+      ),
+    );
+  }
+  if (dependencies?.platformApiInternalBaseUrl && dependencies.notificationDigestServiceToken) {
+    handlers.set(
+      "platform.workspace-export-sweep",
+      createWorkspaceExportSweepHandler(
         dependencies.platformApiInternalBaseUrl,
         dependencies.notificationDigestServiceToken,
         fetchImpl,

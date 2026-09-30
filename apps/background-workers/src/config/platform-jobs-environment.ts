@@ -32,6 +32,7 @@ export interface PlatformJobsEnvironment {
   readonly auditChainVerifyServiceTokenRef: string;
   readonly auditChainVerifyIntervalMs: number;
   readonly auditChainFullVerifyIntervalMs: number;
+  readonly workspaceExportSweepIntervalMs: number;
 }
 
 export class PlatformJobsConfigurationError extends Error {
@@ -55,6 +56,7 @@ const DEFAULT_DRIFT_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
 const DEFAULT_DRIFT_SWEEP_MINIMUM_OBSERVATIONS = 40; // 2 * memory-service's default window size
 const DEFAULT_AUDIT_CHAIN_VERIFY_INTERVAL_MS = 15 * 60 * 1000; // every 15 minutes
 const DEFAULT_AUDIT_CHAIN_FULL_VERIFY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // weekly
+const DEFAULT_WORKSPACE_EXPORT_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // every 15 minutes
 
 function parseIntervalMs(
   environment: NodeJS.ProcessEnv,
@@ -172,6 +174,11 @@ export function loadPlatformJobsEnvironment(
       environment,
       "AUDIT_CHAIN_FULL_VERIFY_INTERVAL_MS",
       DEFAULT_AUDIT_CHAIN_FULL_VERIFY_INTERVAL_MS,
+    ),
+    workspaceExportSweepIntervalMs: parseIntervalMs(
+      environment,
+      "WORKSPACE_EXPORT_SWEEP_INTERVAL_MS",
+      DEFAULT_WORKSPACE_EXPORT_SWEEP_INTERVAL_MS,
     ),
   };
 }

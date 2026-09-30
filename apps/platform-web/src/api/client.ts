@@ -28,6 +28,7 @@ import type {
   RepositoryPullRequest,
 } from "./types"
 import * as live from "./live"
+import * as liveDataExport from "./live-data-export"
 import { 
   mockWorkflows, mockRuns, mockDashboardSummary, 
   mockWorkspaces, mockMembers, mockProfile, mockSessions, delay,
@@ -1067,9 +1068,31 @@ class ApiClient {
     return mockMemoryConfig
   }
 
-  async requestDataExport(): Promise<{ status: string }> {
+  async requestDataExport(workspaceId?: string): Promise<{ status: string; id?: string }> {
+    if (isLiveApi && workspaceId) {
+      const created = await liveDataExport.requestDataExport(workspaceId)
+      return { status: created.status, id: created.id }
+    }
     await delay(MOCK_DELAY * 2)
     return { status: "ready" } // Mock direct readiness
+  }
+
+  async listDataExports(workspaceId: string): Promise<liveDataExport.DataExport[]> {
+    if (isLiveApi) return liveDataExport.listDataExports(workspaceId)
+    await delay(MOCK_DELAY)
+    return []
+  }
+
+  async getDataExport(workspaceId: string, exportId: string): Promise<liveDataExport.DataExport> {
+    if (isLiveApi) return liveDataExport.getDataExport(workspaceId, exportId)
+    await delay(MOCK_DELAY)
+    return { id: exportId, workspaceId, status: "ready", failureReason: null, requestedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), expiresAt: null }
+  }
+
+  async downloadDataExport(workspaceId: string, exportId: string): Promise<liveDataExport.DataExportArchive> {
+    if (isLiveApi) return liveDataExport.downloadDataExport(workspaceId, exportId)
+    await delay(MOCK_DELAY)
+    return { exportedAt: new Date().toISOString(), workspaceId, workflows: [], workflowVersions: [], runs: [], knowledgeSources: [], knowledgeDocuments: [], members: [] }
   }
   
   async deleteWorkspaceData(_scope: string): Promise<void> {
