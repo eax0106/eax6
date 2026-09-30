@@ -10,6 +10,7 @@ const baseEnvironment = {
   ALTER_SERVICE_NAME: "cost-ledger-service",
   DATABASE_SECRET_REF: "secret://cost-ledger/local",
   COST_PSEUDONYM_KEY_REF: "secret://cost-ledger/pseudonym",
+  DELETION_SERVICE_TOKEN_REF: "secret://audit/deletion-token",
 };
 
 describe("loadCostLedgerEnvironment", () => {
@@ -42,6 +43,7 @@ describe("database authentication selection", () => {
     ALTER_SERVICE_NAME: "cost-ledger-service",
     ALTER_REGION: "ap-south-1",
     COST_PSEUDONYM_KEY_REF: "secret://cost-ledger/pseudonym",
+    DELETION_SERVICE_TOKEN_REF: "secret://audit/deletion-token",
     DATABASE_HOST: "cost-db.internal",
     DATABASE_PORT: "5432",
     DATABASE_NAME: "cost_db",

@@ -22,6 +22,8 @@ import { ModelOutcomesService } from "./model-outcomes/model-outcomes.service";
 import { RunVerdictsService } from "./run-verdicts/run-verdicts.service";
 import { NodeCostsController } from "./node-costs/node-costs.controller";
 import { NodeCostsService } from "./node-costs/node-costs.service";
+import { COST_DELETION_TOKEN_HASH, CostDeletionController } from "./deletion/cost-deletion.controller";
+import { CostDeletionService, type CostDeletionStore } from "./deletion/cost-deletion.service";
 
 @Module({})
 export class AppModule {
@@ -31,6 +33,7 @@ export class AppModule {
     marginRate: number,
     usdToInrRate: number,
     pseudonymKey: string,
+    deletionTokenHash: string,
   ): DynamicModule {
     return {
       module: AppModule,
@@ -41,10 +44,13 @@ export class AppModule {
         NodeCostsController,
         CostSummaryController,
         ModelOutcomesController,
+        CostDeletionController,
       ],
       providers: [
         serviceAuthGuardProvider(),
         { provide: COST_STORE_PROVIDER, useValue: store },
+        { provide: COST_DELETION_TOKEN_HASH, useValue: deletionTokenHash },
+        { provide: CostDeletionService, useValue: new CostDeletionService(store as unknown as CostDeletionStore) },
         EstimationService,
         NodeCostsService,
         ModelOutcomesService,
