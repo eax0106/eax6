@@ -1,0 +1,17 @@
+{
+  "event_classes": ["workflow", "project", "deployment", "approval", "budget", "system"],
+  "locales": {
+    "": {
+      "event": { "Subject": "Alter: {{title}}", "Text": "{{title}}\n\n{{body}}\n\nSeverity: {{severity}}\nOpen Alter, then follow this path: {{deep_link}}\n\nEmail preferences can be changed in Alter's notification settings." },
+      "digest": { "Subject": "Alter: {{event_count}} notifications", "Text": "Your Alter notification digest\nPeriod: {{period_start}} to {{period_end}}\nNotifications: {{event_count}}\n\n{{events_text}}\n\nOpen Alter to follow the paths above. Email preferences can be changed in notification settings." }
+    },
+    "en": {
+      "event": { "Subject": "Alter: {{title}}", "Text": "{{title}}\n\n{{body}}\n\nSeverity: {{severity}}\nOpen Alter, then follow this path: {{deep_link}}\n\nEmail preferences can be changed in Alter's notification settings." },
+      "digest": { "Subject": "Alter: {{event_count}} notifications", "Text": "Your Alter notification digest\nPeriod: {{period_start}} to {{period_end}}\nNotifications: {{event_count}}\n\n{{events_text}}\n\nOpen Alter to follow the paths above. Email preferences can be changed in notification settings." }
+    },
+    "hi": {
+      "event": { "Subject": "Alter: {{title}}", "Text": "{{title}}\n\n{{body}}\n\nगंभीरता: {{severity}}\nAlter खोलें, फिर इस पथ पर जाएँ: {{deep_link}}\n\nईमेल प्राथमिकताएँ Alter की सूचना सेटिंग में बदली जा सकती हैं।" },
+      "digest": { "Subject": "Alter: {{event_count}} सूचनाएँ", "Text": "आपकी Alter सूचना सूची\nअवधि: {{period_start}} से {{period_end}}\nसूचनाएँ: {{event_count}}\n\n{{events_text}}\n\nऊपर दिए पथों पर जाने के लिए Alter खोलें। ईमेल प्राथमिकताएँ सूचना सेटिंग में बदलें।" }
+    }
+  }
+}

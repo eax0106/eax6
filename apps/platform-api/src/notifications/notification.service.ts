@@ -157,6 +157,7 @@ export class NotificationService {
           period_end: window.periodEnd.toISOString(),
           event_count: String(candidates.length),
           events: JSON.stringify(candidates.map(digestEvent)),
+          events_text: candidates.map((event) => [event.title, event.body, event.deep_link ?? ""].filter(Boolean).join("\n")).join("\n\n"),
         },
       );
       await this.repository.markDigestSent(window.tenantId, digestId);

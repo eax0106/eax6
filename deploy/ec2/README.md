@@ -95,6 +95,36 @@ certificate, Auth0 and Temporal Cloud. Those need the accounts above.
 
 ## Operating
 
+### Notification email templates
+
+The six notification classes and digest each have stored SES v2 templates in
+`notification-email-templates.json`: default English plus the supported `en`
+and `hi` locale suffixes (21 templates). Event title/body remain exactly what
+the notification producer supplied; only the surrounding instructions are
+localized. Templates are text-only, so notification content is not interpreted
+as HTML ([SES template behavior](https://docs.aws.amazon.com/ses/latest/dg/send-personalized-email-advanced.html)). Workflow paths are displayed for navigation inside Alter; the owner
+has not chosen a public domain yet.
+
+Preview locally without credentials or AWS calls:
+
+```bash
+node deploy/ec2/register-notification-email-templates.mjs --dry-run
+```
+
+Once the owner has supplied the verified SES account, register in the same AWS
+region as `SES_REGION`, using the operator's normal AWS credential chain:
+
+```bash
+AWS_REGION=ap-south-1 node deploy/ec2/register-notification-email-templates.mjs --apply
+```
+
+The explicit apply updates existing templates or creates missing ones; lookup
+errors other than template-not-found stop registration. It never sends email.
+Live sending waits for SES domain verification/sandbox exit. Platform tests
+exercise the real notification payloads through the mock email adapter and
+check every supported template. No account or production registration is
+performed during local verification.
+
 | Task | Command (on the host, in `/opt/alter/deploy/ec2`) |
 |---|---|
 | Status | `docker compose ps` |
