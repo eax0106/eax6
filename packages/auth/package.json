@@ -7,8 +7,8 @@
   "dependencies": {
     "@alterx/contracts": "workspace:*",
     "@grpc/grpc-js": "1.14.4",
-    "@nestjs/common": "11.2.4",
-    "@nestjs/microservices": "11.2.4"
+    "@nestjs/common": "11.2.7",
+    "@nestjs/microservices": "11.2.7"
   },
   "devDependencies": {
     "@alterx/adapters": "workspace:*",
