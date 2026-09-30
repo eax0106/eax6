@@ -15,7 +15,7 @@
     "dev:mock-auth0": "node scripts/local-mock-auth0/server.js"
   },
   "devDependencies": {
-    "@nestjs/testing": "11.2.4",
+    "@nestjs/testing": "11.2.7",
     "@nx/eslint": "23.1.1",
     "@nx/js": "23.1.1",
     "@nx/nest": "23.1.1",
@@ -48,6 +48,7 @@
       "find-my-way@<=9.6.0": "^9.7.0",
       "qs@<6.16.0": "^6.16.0",
       "fastify@<5.12.1": "^5.12.1",
+      "axios@<1.20.0": "^1.20.0",
     "smol-toml@<=1.7.0": "^1.7.1"
     }
   }
