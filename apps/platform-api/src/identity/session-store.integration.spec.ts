@@ -72,9 +72,19 @@ describe("PostgreSQL identity tenant isolation", () => {
 
   afterEach(async () => {
     await restrictedPool.end();
-    await adminClient.query(`DELETE FROM user_sessions WHERE user_id = $1`, [userId]);
-    await adminClient.query(`DELETE FROM users WHERE id = $1`, [userId]);
-    await adminClient.query(`DELETE FROM tenants WHERE id IN ($1, $2)`, [tenantA, tenantB]);
+    // Migration-owner cleanup is restricted to this test's random fixture IDs.
+    // The ordinary application guard remains enabled outside this transaction.
+    await adminClient.query("BEGIN");
+    try {
+      await adminClient.query("SET LOCAL session_replication_role = replica");
+      await adminClient.query(`DELETE FROM user_sessions WHERE user_id = $1`, [userId]);
+      await adminClient.query(`DELETE FROM users WHERE id = $1`, [userId]);
+      await adminClient.query(`DELETE FROM tenants WHERE id IN ($1, $2)`, [tenantA, tenantB]);
+      await adminClient.query("COMMIT");
+    } catch (error) {
+      await adminClient.query("ROLLBACK");
+      throw error;
+    }
     await adminClient.query(`DROP OWNED BY "${roleName}"`);
     await adminClient.query(`DROP ROLE IF EXISTS "${roleName}"`);
     await adminClient.end();

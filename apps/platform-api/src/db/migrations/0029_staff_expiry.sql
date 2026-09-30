@@ -54,14 +54,14 @@ $role$;
 --> statement-breakpoint
 -- Captured before tenant membership erasure, not inferred from user age.
 -- Existing manifests without this anchor retain their user-action rows.
-ALTER TABLE tenant_erasure_manifests ADD COLUMN retained_user_ids uuid[] NOT NULL DEFAULT '{}';
+ALTER TABLE tenant_erasure_manifests ADD COLUMN IF NOT EXISTS retained_user_ids uuid[] NOT NULL DEFAULT '{}';
 --> statement-breakpoint
 -- Prove no surviving membership by visiting each tenant under its own RLS
 -- context. The existing erasure discovery function returns tenant IDs only.
 DO $fn$
 BEGIN
   EXECUTE format($def$
-    CREATE FUNCTION staff_user_expiry_allowed(p_user uuid) RETURNS boolean
+    CREATE OR REPLACE FUNCTION staff_user_expiry_allowed(p_user uuid) RETURNS boolean
     LANGUAGE plpgsql SET search_path = %I, pg_temp AS $body$
     DECLARE
       anchor text := current_setting('app.current_tenant_id', true);
