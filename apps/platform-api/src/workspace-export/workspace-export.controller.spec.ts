@@ -12,7 +12,7 @@ import { WorkspaceExportHttpError } from "./problem";
 import { WorkspaceExportService } from "./workspace-export.service";
 
 const tenant = "00000000-0000-7000-8000-000000000001";
-const workspace = "00000000-0000-7000-8000-0000000000a1";
+const workspace = "00000000-0000-7000-8000-00000000e4e1";
 
 const base: ActorContextType = {
   user_id: "usr_admin",
@@ -50,17 +50,6 @@ describe("WorkspaceExport routes (D2, admin only)", () => {
       controllers: [WorkspaceExportController],
       providers: [
         { provide: WorkspaceExportService, useValue: service },
-        // The tenant resolver reads the workspace's owning tenant from the
-        // database; echoing the actor's tenant keeps this unit spec
-        // independent of seeded rows (the mismatch denial itself belongs to
-        // rbac.guard.spec, and cross-workspace isolation is proven against
-        // real Postgres in workspace-export.integration.spec.ts).
-        {
-          provide: resourceTenantResolverToken,
-          useValue: {
-            resolveTenantId: async (request: RbacRequest) => request.actorContext?.tenant_id,
-          },
-        },
         {
           provide: PgIdempotencyStore,
           useValue: {
@@ -68,7 +57,14 @@ describe("WorkspaceExport routes (D2, admin only)", () => {
           },
         },
       ],
-    }).compile();
+    })
+      // Override the provider inside RbacModule, not a duplicate root provider:
+      // its guard otherwise still resolves against seeded local database rows.
+      // Real tenant/workspace isolation is covered by the PostgreSQL proof;
+      // this unit exercises role and permission decisions with an explicit edge stub.
+      .overrideProvider(resourceTenantResolverToken)
+      .useValue({ resolveTenantId: async (request: RbacRequest) => request.actorContext?.tenant_id })
+      .compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     app.getHttpAdapter().getInstance().addHook("preHandler", (request: FastifyRequest, _reply: unknown, done: () => void) => {
       const value = request.headers["x-test-actor"];

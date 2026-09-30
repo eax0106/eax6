@@ -127,7 +127,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     const profile = randomUUID();
     await q(`INSERT INTO billing_profiles (tenant_id, id, provider_id, status) VALUES ($1, $2, 'razorpay', 'active')`, [A, profile]);
     await q(`UPDATE tenants SET billing_profile_id = $2 WHERE id = $1`, [A, profile]);
-    await q(`INSERT INTO billing_events (tenant_id, provider_id, provider_event_id, type, payload) VALUES ($1, 'razorpay', 'evt_1', 'invoice.paid', '{"card":"4111"}')`, [A]);
+    await q(`INSERT INTO billing_events (tenant_id, provider_id, provider_event_id, type, payload) VALUES ($1, 'razorpay', 'evt_1', 'invoice.paid', '{"card":"4111111111111111"}')`, [A]);
     // append-only
     await q(`INSERT INTO action_item_annotations (id, tenant_id, item_type, item_id, note, created_by) VALUES ('ain_1', $1, 'approval', 'apr_1', 'private note', 'u')`, [A]);
     // marketplace: what the law keeps
@@ -263,6 +263,8 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
   });
 
   it("copies to the legal-hold store only the minimum the law keeps, with no tenant reference", async () => {
+    expect((await admin.query("SELECT payload FROM billing_events WHERE tenant_id = $1", [A])).rows)
+      .toEqual([{ payload: { card: "4111111111111111" } }]);
     await service.deleteSubjectData(ten(A), MANIFEST);
     const held = (await admin.query<{ kind: string; source_table: string; source_id: string; minimal: Record<string, unknown>; tenant_pseudonym: string; retain_until: Date; held_at: Date }>("SELECT * FROM legal_hold_records ORDER BY source_table")).rows;
 
@@ -276,7 +278,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(new Set(held.map((row) => row.tenant_pseudonym))).toEqual(new Set([pseudonymOf(ten(A))]));
     const kyc = held.find((row) => row.source_table === "kyc_submissions")!;
     expect(kyc.minimal).toEqual({ id: "kyc_1", publisher_id: "pub_1", status: "approved", submitted_at: expect.anything(), reviewed_at: null });
-    expect(JSON.stringify(held)).not.toMatch(/ABCDE1234F|4111|private note/);
+    expect(JSON.stringify(held)).not.toMatch(/ABCDE1234F|4111111111111111|private note/);
     const years = (row: (typeof held)[number]) => (row.retain_until.getTime() - row.held_at.getTime()) / (365.25 * 24 * 3600 * 1000);
     expect(Math.round(years(held.find((row) => row.source_table === "orders")!))).toBe(8);
     expect(Math.round(years(held.find((row) => row.source_table === "billing_events")!))).toBe(6);
