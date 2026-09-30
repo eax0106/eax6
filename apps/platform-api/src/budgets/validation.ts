@@ -1,52 +1,35 @@
 import { z } from "zod";
+import { WorkflowIdSchema } from "@alterx/contracts";
 import { BudgetHttpError } from "./problem";
 import type { CreateBudgetInput, UpdateBudgetInput } from "./types";
 
-const thresholds = z
-  .array(z.object({ percent: z.number().int().min(1).max(100), action: z.enum(["notify", "warn", "block"]) }).strict())
-  .max(10)
-  .refine((items) => new Set(items.map((item) => `${item.percent}:${item.action}`)).size === items.length, "Thresholds must be distinct");
-const name = z.string().trim().min(1).max(120);
-// Up to 10 crore rupees or 10 million dollars, in minor units.
+// Up to 10 crore rupees, in paise.
 const amountMinor = z.number().int().positive().max(10_000_000_000);
+const workflowId = WorkflowIdSchema;
+const mode = z.enum(["hard", "warn"]);
 
-const createSchema = z
-  .object({
-    name,
-    amount_minor: amountMinor,
-    currency: z.enum(["INR", "USD"]),
-    period: z.literal("monthly").default("monthly"),
-    thresholds: thresholds.default([]),
-    enabled: z.boolean().default(true),
-  })
-  .strict();
+// D3: a per-run cap and a workflow budget belong to a workflow; the workspace
+// budget is monthly. The engine checks the same shape again.
+const createSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("workspace"), amount_minor: amountMinor, mode: mode.default("hard") }).strict(),
+  z
+    .object({ kind: z.literal("workflow"), workflow_id: workflowId, period: z.enum(["daily", "monthly"]), amount_minor: amountMinor, mode: mode.default("hard") })
+    .strict(),
+  z.object({ kind: z.literal("run_cap"), workflow_id: workflowId, amount_minor: amountMinor, mode: mode.default("hard") }).strict(),
+]);
 
 const updateSchema = z
-  .object({ name, amount_minor: amountMinor, thresholds, enabled: z.boolean() })
+  .object({ amount_minor: amountMinor, mode, enabled: z.boolean() })
   .partial()
   .strict()
   .refine((value) => Object.keys(value).length > 0, "At least one field is required");
 
 export function parseCreateBudget(input: unknown, instance: string): CreateBudgetInput {
-  const value = parse(createSchema, input, instance);
-  return {
-    name: value.name,
-    amountMinor: value.amount_minor,
-    currency: value.currency,
-    period: value.period,
-    thresholds: value.thresholds,
-    enabled: value.enabled,
-  };
+  return parse(createSchema, input, instance);
 }
 
 export function parseUpdateBudget(input: unknown, instance: string): UpdateBudgetInput {
-  const value = parse(updateSchema, input, instance);
-  return {
-    ...(value.name !== undefined ? { name: value.name } : {}),
-    ...(value.amount_minor !== undefined ? { amountMinor: value.amount_minor } : {}),
-    ...(value.thresholds !== undefined ? { thresholds: value.thresholds } : {}),
-    ...(value.enabled !== undefined ? { enabled: value.enabled } : {}),
-  };
+  return parse(updateSchema, input, instance);
 }
 
 export function parseBudgetId(value: string, instance: string): string {

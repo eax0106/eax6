@@ -4,7 +4,7 @@ import { HttpException } from "@nestjs/common";
 
 export class BudgetHttpError extends HttpException {
   constructor(
-    status: 400 | 401 | 403 | 404,
+    status: 400 | 401 | 403 | 404 | 428,
     errorCode: string,
     detail: string,
     instance: string,

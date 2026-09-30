@@ -117,7 +117,6 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     await q(`INSERT INTO credential_refs (tenant_id, id, name, connector, scope, last4) VALUES ($1, '00000000-0000-7000-8000-0000000c0001', 'k', 'github', 'workspace', '1234'), ($2, '00000000-0000-7000-8000-0000000c0002', 'k', 'github', 'workspace', '1234')`, [A, B]);
     await q(`INSERT INTO env_vars (tenant_id, id, project_id, environment, key, last4) VALUES ($1, '00000000-0000-7000-8000-0000000e0001', 'prj_1', 'production', 'K', '1234')`, [A]);
     await q(`INSERT INTO oauth_connections (tenant_id, id, workspace_id, connector, external_account_id, scopes) VALUES ($1, '00000000-0000-7000-8000-000000050001', $2, 'github', 'x', 'repo')`, [A, wsA]);
-    await q(`INSERT INTO budgets (tenant_id, workspace_id, id, name, amount_minor, currency, period, created_by) VALUES ($1, $2, 'bud_00000000-0000-7000-8000-000000000001', 'b', 100, 'INR', 'monthly', 'u')`, [A, wsA]);
     await q(`INSERT INTO onboarding_states (id, tenant_id, workspace_id, steps, status) VALUES ($1, $2, $3, '{}', 'in_progress')`, [randomUUID(), A, wsA]);
     await q(`INSERT INTO entitlements (id, tenant_id, plan) VALUES ($1, $2, 'free')`, [randomUUID(), A]);
     // circular: tenants.billing_profile_id <-> billing_profiles.tenant_id
@@ -162,7 +161,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(result.deletedRows).toBeGreaterThan(0);
     expect(result.deletedObjects).toBe(3); // credential, env var, connection: tenant A's own secrets
     expect(verified).toMatchObject({ deleted: true, remaining: [] });
-    for (const table of ["workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "budgets", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
+    for (const table of ["workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
       expect(await count(table), table).toBe(0);
     }
     // tenant B is untouched

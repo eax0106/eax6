@@ -61,6 +61,20 @@ export class RunBudgetGate implements RunBudgetSettlement {
   }
 
   async settle(input: { readonly tenantId: string; readonly workspaceId: string; readonly runId: string }): Promise<void> {
+    await this.settleOne(input);
+    // A settle that failed at an earlier run's end left that run's reservation
+    // held; it is retried here, when the next run of the tenant ends.
+    const unsettled = await this.budgets.unsettledEndedRuns(input.tenantId, input.runId, UNSETTLED_RETRY_LIMIT);
+    for (const run of unsettled) {
+      try {
+        await this.settleOne({ tenantId: input.tenantId, workspaceId: run.workspace_id, runId: run.run_id });
+      } catch {
+        // Still unsettled: the next run's end tries again.
+      }
+    }
+  }
+
+  private async settleOne(input: { readonly tenantId: string; readonly workspaceId: string; readonly runId: string }): Promise<void> {
     // The engine keeps bare uuids in its tables; the Cost Ledger speaks prefixed ids.
     const actualMinor = await this.reader.billableMinor({
       tenantId: withPrefix("ten_", input.tenantId),
@@ -70,6 +84,9 @@ export class RunBudgetGate implements RunBudgetSettlement {
     await this.budgets.settle(input.tenantId, input.runId, actualMinor);
   }
 }
+
+/** How many earlier unsettled runs one run's end retries. */
+const UNSETTLED_RETRY_LIMIT = 20;
 
 function withPrefix(prefix: string, id: string): string {
   return id.startsWith(prefix) ? id : `${prefix}${id}`;

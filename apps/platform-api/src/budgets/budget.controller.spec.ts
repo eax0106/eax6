@@ -1,14 +1,13 @@
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
+import { APP_FILTER } from "@nestjs/core";
 import { Test } from "@nestjs/testing";
 import type { FastifyRequest } from "fastify";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { CostsService } from "../costs/costs.service";
+import { EngineClient, EngineExceptionFilter } from "../engine";
 import { PgIdempotencyStore, type IdempotencyExecution, type StoredHttpResponse } from "../idempotency";
 import { RbacModule, type ActorContextType, type RbacRequest } from "../rbac";
 import { BudgetController } from "./budget.controller";
-import { BudgetRepository } from "./budget.repository";
 import { BudgetService } from "./budget.service";
-import type { BudgetRecord } from "./types";
 
 const base: ActorContextType = {
   user_id: "usr_1",
@@ -21,24 +20,33 @@ const base: ActorContextType = {
 const admin: ActorContextType = { ...base, roles: ["admin"], permissions: ["billing:read", "budgets:write"] };
 const editor: ActorContextType = { ...base, roles: ["editor"], permissions: ["billing:read"] };
 const budgetId = "bud_018f4d6e-2b4a-7a3e-8c1a-0123456789ab";
+const workflowId = "wf_018f4d6e-2b4a-7a3e-8c1a-0123456789ac";
+const engineBudget = {
+  id: budgetId,
+  workspace_id: `ws_${base.workspace_id}`,
+  workflow_id: null,
+  kind: "workspace",
+  period: "monthly",
+  currency: "INR",
+  amount_minor: 50_000,
+  mode: "hard",
+  enabled: true,
+  spent_minor: 12_345,
+  reserved_minor: 0,
+  created_by: "usr_1",
+  created_at: "2026-09-01T00:00:00.000Z",
+  updated_at: "2026-09-01T00:00:00.000Z",
+};
 
-function record(overrides: Partial<BudgetRecord> = {}): BudgetRecord {
-  return {
-    tenantId: base.tenant_id, workspaceId: base.workspace_id!, id: budgetId, name: "Monthly", amountMinor: 50_000,
-    currency: "INR", period: "monthly", thresholds: [{ percent: 80, action: "warn" }], enabled: true,
-    createdBy: "usr_1", createdAt: "2026-09-01T00:00:00.000Z", updatedAt: "2026-09-01T00:00:00.000Z", ...overrides,
-  };
-}
-
-describe("Budget routes (task B2.9b)", () => {
+// D3: budgets live in the engine; these routes relay to it through the caller's identity.
+describe("Budget routes (D3, relayed to the engine)", () => {
   let app: NestFastifyApplication;
-  const repository = {
-    list: vi.fn(async () => [record()]),
-    insert: vi.fn(async (input: BudgetRecord) => ({ ...input, createdAt: "x", updatedAt: "x" })),
-    update: vi.fn(async () => record({ enabled: false })),
-    remove: vi.fn(async () => true),
+  const engine = {
+    get: vi.fn(async () => ({ status: 200, body: { data: [engineBudget] } })),
+    post: vi.fn(async () => ({ status: 201, body: engineBudget })),
+    patch: vi.fn(async () => ({ status: 200, body: { ...engineBudget, enabled: false } })),
+    delete: vi.fn(async () => ({ status: 204, body: undefined })),
   };
-  const costs = { summary: vi.fn() };
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -46,9 +54,8 @@ describe("Budget routes (task B2.9b)", () => {
       controllers: [BudgetController],
       providers: [
         BudgetService,
-        { provide: BudgetRepository, useValue: repository },
-        { provide: CostsService, useValue: costs },
-        // Pass-through: this spec is about the budget routes, not replay.
+        { provide: EngineClient, useValue: engine },
+        { provide: APP_FILTER, useClass: EngineExceptionFilter },
         {
           provide: PgIdempotencyStore,
           useValue: {
@@ -67,63 +74,82 @@ describe("Budget routes (task B2.9b)", () => {
     await app.getHttpAdapter().getInstance().ready();
   });
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    costs.summary.mockResolvedValue({ currency: "INR", totals: { billableMinor: "12345" } });
-  });
+  beforeEach(() => vi.clearAllMocks());
   afterAll(async () => app.close());
 
-  const call = (method: "GET" | "POST" | "PATCH" | "DELETE", url: string, actor: ActorContextType, payload?: unknown) =>
-    app.inject({ method, url, headers: { "x-test-actor": JSON.stringify(actor), "idempotency-key": "k1" }, ...(payload === undefined ? {} : { payload: payload as object }) });
-
-  it("lists the workspace's budgets with this month's billable spend for any member", async () => {
-    const response = await call("GET", "/api/v1/budgets", base)
-    expect(response.statusCode).toBe(200)
-    expect(response.json()).toEqual([expect.objectContaining({ id: budgetId, amountMinor: 50_000, currentSpendMinor: 12345 })])
-    expect(repository.list).toHaveBeenCalledWith(base.tenant_id, base.workspace_id)
-    const [query] = costs.summary.mock.calls[0]!
-    expect(query.startAt).toMatch(/-01T00:00:00.000Z$/)
+  it("lists the engine's budgets for any workspace reader with billing:read", async () => {
+    const response = await call("GET", "/api/v1/budgets", base);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual([engineBudget]);
+    expect(engine.get).toHaveBeenCalledWith("/api/v1/budgets", expect.objectContaining({ tenantId: base.tenant_id, workspaceId: base.workspace_id }));
   });
 
-  it("leaves spend unknown when the ledger is down or counts another currency, instead of failing", async () => {
-    costs.summary.mockRejectedValueOnce(new Error("ledger down"))
-    expect((await call("GET", "/api/v1/budgets", base)).json()[0].currentSpendMinor).toBeNull()
-    costs.summary.mockResolvedValueOnce({ currency: "USD", totals: { billableMinor: "99" } })
-    expect((await call("GET", "/api/v1/budgets", base)).json()[0].currentSpendMinor).toBeNull()
-  });
-
-  it("lets only workspace admins create, change or delete a budget", async () => {
-    const body = { name: "Team", amount_minor: 100_00, currency: "INR", thresholds: [{ percent: 100, action: "block" }] }
-    expect((await call("POST", "/api/v1/budgets", editor, body)).statusCode).toBe(403)
-    expect((await call("PATCH", `/api/v1/budgets/${budgetId}`, base, { enabled: false })).statusCode).toBe(403)
-    expect((await call("DELETE", `/api/v1/budgets/${budgetId}`, editor)).statusCode).toBe(403)
-    expect(repository.insert).not.toHaveBeenCalled()
-
-    const created = await call("POST", "/api/v1/budgets", admin, body)
-    expect(created.statusCode).toBe(201)
-    expect(repository.insert).toHaveBeenCalledWith(expect.objectContaining({
-      tenantId: admin.tenant_id, workspaceId: admin.workspace_id, name: "Team", amountMinor: 10_000, period: "monthly", enabled: true, createdBy: "usr_1",
-    }))
-    expect(created.json().id).toMatch(/^bud_[0-9a-f-]{36}$/)
-    expect((await call("PATCH", `/api/v1/budgets/${budgetId}`, admin, { enabled: false })).statusCode).toBe(200)
-    expect((await call("DELETE", `/api/v1/budgets/${budgetId}`, admin)).statusCode).toBe(204)
-  });
-
-  it("refuses bad input and answers 404 for another workspace's budget", async () => {
+  it("creates each kind through the engine, admin with budgets:write only", async () => {
     for (const body of [
-      { name: "", amount_minor: 1, currency: "INR" },
-      { name: "x", amount_minor: 0, currency: "INR" },
-      { name: "x", amount_minor: 1, currency: "EUR" },
-      { name: "x", amount_minor: 1, currency: "INR", thresholds: [{ percent: 101, action: "warn" }] },
-      { name: "x", amount_minor: 1, currency: "INR", tenant_id: "other" },
+      { kind: "workspace", amount_minor: 100 },
+      { kind: "workflow", workflow_id: workflowId, period: "daily", amount_minor: 100, mode: "warn" },
+      { kind: "run_cap", workflow_id: workflowId, amount_minor: 100 },
     ]) {
-      expect((await call("POST", "/api/v1/budgets", admin, body)).statusCode).toBe(400)
+      const response = await call("POST", "/api/v1/budgets", admin, body, { "idempotency-key": `create-${body.kind}` });
+      expect(response.statusCode).toBe(201);
     }
-    expect((await call("PATCH", `/api/v1/budgets/${budgetId}`, admin, {})).statusCode).toBe(400)
-    expect((await call("PATCH", "/api/v1/budgets/not-an-id", admin, { enabled: true })).statusCode).toBe(400)
-    repository.update.mockResolvedValueOnce(undefined as never)
-    expect((await call("PATCH", `/api/v1/budgets/${budgetId}`, admin, { enabled: true })).statusCode).toBe(404)
-    repository.remove.mockResolvedValueOnce(false)
-    expect((await call("DELETE", `/api/v1/budgets/${budgetId}`, admin)).statusCode).toBe(404)
+    expect(engine.post).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/budgets",
+      { kind: "workflow", workflow_id: workflowId, period: "daily", amount_minor: 100, mode: "warn" },
+      expect.objectContaining({ workspaceId: base.workspace_id }),
+      { idempotencyKey: "create-workflow" },
+    );
+    expect(engine.post).toHaveBeenNthCalledWith(1, "/api/v1/budgets", { kind: "workspace", amount_minor: 100, mode: "hard" }, expect.anything(), expect.anything());
+
+    expect((await call("POST", "/api/v1/budgets", editor, { kind: "workspace", amount_minor: 100 }, { "idempotency-key": "e" })).statusCode).toBe(403);
   });
+
+  it.each([
+    [{ kind: "workspace", amount_minor: 0 }],
+    [{ kind: "workflow", workflow_id: workflowId, amount_minor: 100 }],
+    [{ kind: "run_cap", amount_minor: 100 }],
+    [{ kind: "workspace", amount_minor: 100, name: "old shape" }],
+    [{ kind: "workspace", amount_minor: 100, mode: "block" }],
+  ])("refuses a malformed budget before reaching the engine (%#)", async (body) => {
+    const response = await call("POST", "/api/v1/budgets", admin, body, { "idempotency-key": `bad-${JSON.stringify(body)}` });
+    expect(response.statusCode).toBe(400);
+    expect(engine.post).not.toHaveBeenCalled();
+  });
+
+  it("changes a budget only with If-Match, which it passes to the engine", async () => {
+    const missing = await call("PATCH", `/api/v1/budgets/${budgetId}`, admin, { enabled: false });
+    expect(missing.statusCode).toBe(428);
+    expect(engine.patch).not.toHaveBeenCalled();
+
+    const response = await call("PATCH", `/api/v1/budgets/${budgetId}`, admin, { enabled: false }, { "if-match": engineBudget.updated_at });
+    expect(response.statusCode).toBe(200);
+    expect(engine.patch).toHaveBeenCalledWith(
+      `/api/v1/budgets/${budgetId}`,
+      { enabled: false },
+      expect.anything(),
+      expect.objectContaining({ ifMatch: engineBudget.updated_at }),
+    );
+  });
+
+  it("deletes through the engine and refuses a bad id", async () => {
+    expect((await call("DELETE", `/api/v1/budgets/${budgetId}`, admin)).statusCode).toBe(204);
+    expect(engine.delete).toHaveBeenCalledWith(`/api/v1/budgets/${budgetId}`, expect.anything(), expect.anything());
+    expect((await call("DELETE", "/api/v1/budgets/not-a-budget", admin)).statusCode).toBe(400);
+  });
+
+  function call(
+    method: "GET" | "POST" | "PATCH" | "DELETE",
+    url: string,
+    actor: ActorContextType,
+    body?: unknown,
+    headers: Record<string, string> = {},
+  ) {
+    return app.getHttpAdapter().getInstance().inject({
+      method,
+      url,
+      headers: { "x-test-actor": JSON.stringify(actor), ...(body ? { "content-type": "application/json" } : {}), ...headers },
+      ...(body ? { payload: JSON.stringify(body) } : {}),
+    });
+  }
 });
