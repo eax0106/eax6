@@ -187,8 +187,14 @@ export class PlatformDeletionService implements DeletionProvider {
   }
 
   async applyRetentionPolicy(): Promise<RetentionSweepResult> {
-    // The sweep that destroys legal-hold rows and expired tombstones lands with the retention sweeper.
-    return { store: STORE, deletedRows: 0, deletedObjects: 0, sweptAt: new Date().toISOString() };
+    const result = await this.store.withoutTenant(async (tx) => {
+      const clock = await tx.query<{ swept_at: string }>("SELECT transaction_timestamp()::text AS swept_at");
+      const sweptAt = clock.rows[0]?.swept_at;
+      if (!sweptAt) throw new Error("retention sweep database clock unavailable");
+      const removed = await tx.query("DELETE FROM legal_hold_records WHERE retain_until <= $1::timestamptz", [sweptAt]);
+      return { deletedRows: removed.rowCount, sweptAt: new Date(sweptAt).toISOString() };
+    });
+    return { store: STORE, ...result, deletedObjects: 0 };
   }
 
   async replayDeletionLedger(sinceTimestamp: string): Promise<ReplayResult> {

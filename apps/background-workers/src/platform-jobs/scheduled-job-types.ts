@@ -32,6 +32,7 @@ export const CONNECTOR_HEALTH_SWEEP_JOB_TYPE = "platform.connector-health-sweep"
 // as the digest.
 export const ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE = "platform.engine-event-notifications";
 export const RETENTION_SWEEP_JOB_TYPE = "platform.retention-sweep";
+export const PLATFORM_DB_RETENTION_SWEEP_JOB_TYPE = "platform.platform-db-retention-sweep";
 // P5-2: orchestration-service's own DeletionService.applyRetentionPolicy()
 // has always had a real, authenticated endpoint (/internal/deletion/retention)
 // and zero scheduled caller -- the same Pattern 3 shape this file's own
@@ -50,6 +51,7 @@ export const SCHEDULED_PLATFORM_JOB_TYPES = [
   CONNECTOR_HEALTH_SWEEP_JOB_TYPE,
   ENGINE_EVENT_NOTIFICATIONS_JOB_TYPE,
   RETENTION_SWEEP_JOB_TYPE,
+  PLATFORM_DB_RETENTION_SWEEP_JOB_TYPE,
   ORCHESTRATION_RETENTION_SWEEP_JOB_TYPE,
   BENCHMARK_SWEEP_JOB_TYPE,
   DRIFT_SWEEP_JOB_TYPE,

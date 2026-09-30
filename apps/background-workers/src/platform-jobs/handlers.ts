@@ -362,6 +362,7 @@ export interface PlatformJobHandlerDependencies {
   readonly connectorHealthSweepServiceToken?: string;
   readonly adsCoreInternalBaseUrl?: string;
   readonly retentionSweepServiceToken?: string;
+  readonly platformRetentionSweepServiceToken?: string;
   readonly orchestrationServiceInternalBaseUrl?: string;
   readonly orchestrationRetentionSweepServiceToken?: string;
   readonly evalFacadeServiceToken?: string;
@@ -382,6 +383,11 @@ export function createPlatformJobHandlers(
     ["platform.health-ping", healthPingHandler],
   ]);
   const fetchImpl = dependencies?.fetchImpl ?? fetch;
+  if (dependencies?.platformApiInternalBaseUrl && dependencies.platformRetentionSweepServiceToken) {
+    handlers.set("platform.platform-db-retention-sweep", createRetentionSweepHandler(
+      dependencies.platformApiInternalBaseUrl, dependencies.platformRetentionSweepServiceToken, fetchImpl,
+    ));
+  }
   if (dependencies?.platformApiInternalBaseUrl && dependencies.notificationDigestServiceToken) {
     handlers.set(
       "platform.notification-digest",
