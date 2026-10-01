@@ -41,6 +41,10 @@ function response(row: ClarificationRow): Record<string, unknown> {
     // ENGINE-FIX-P5-1b: additive -- owning workspace for platform-api's
     // workspace-bound RBAC resolver.
     workspace_id: row.workspace_id ?? null,
+    run_id: row.run_id ?? null,
+    node_execution_id: row.node_execution_id ?? null,
+    description: row.question,
+    answer: row.answer ?? null,
   };
 }
 
@@ -89,6 +93,21 @@ export class ClarificationsController {
           body.assignee_user_id,
         ),
       );
+    } catch (error: unknown) {
+      throw mapError(error, request.url);
+    }
+  }
+}
+
+@Controller("api/v1/runs")
+export class RecoveryClarificationController {
+  constructor(private readonly clarifications: ClarificationsService) {}
+
+  @Post(":runId/clarifications/:clarificationId/answer")
+  async answer(@Req() request: SessionGatewayRequest, @Param("runId") runId: string,
+    @Param("clarificationId") clarificationId: string, @Body() body: { readonly note?: unknown }) {
+    try {
+      return response(await this.clarifications.answerRecovery(requiredTenantId(request), runId, clarificationId, body?.note));
     } catch (error: unknown) {
       throw mapError(error, request.url);
     }

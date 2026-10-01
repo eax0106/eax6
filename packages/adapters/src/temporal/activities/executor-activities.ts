@@ -1,6 +1,6 @@
 import { ApplicationFailure } from "@temporalio/client";
 import type { BlackboardHandlerClient } from "../../grpc/blackboard-client";
-import { SAFETY_VIOLATION_PREFIX } from "../../grpc/nodeexec-grpc-transport";
+import { RECOVERY_CLARIFICATION_PREFIX, SAFETY_VIOLATION_PREFIX } from "../../grpc/nodeexec-grpc-transport";
 import type { NodeExecutionHandler } from "../../grpc/nodeexec-client";
 
 export interface ExecuteNodeActivityInput {
@@ -76,12 +76,12 @@ export interface ExecutorActivities {
 /** The failure type a safety halt carries from the activity to the workflow. */
 export const SAFETY_VIOLATION_FAILURE_TYPE = "SafetyViolation";
 
-function safetyViolationDetail(error: unknown): string | undefined {
+function markedFailureDetail(error: unknown, prefix: string): string | undefined {
   if (typeof error !== "object" || error === null) return undefined;
   const record = error as { readonly details?: unknown; readonly message?: unknown };
   for (const text of [record.details, record.message]) {
     if (typeof text !== "string") continue;
-    const at = text.indexOf(SAFETY_VIOLATION_PREFIX);
+    const at = text.indexOf(prefix);
     if (at !== -1) return text.slice(at);
   }
   return undefined;
@@ -135,9 +135,13 @@ export function createExecutorActivities(
         // Design log §4: a safety violation is never retried -- not by this
         // activity's retry policy, not by Recovery. It reaches the workflow
         // as its own non-retryable type, and the workflow halts.
-        const detail = safetyViolationDetail(error);
+        const detail = markedFailureDetail(error, SAFETY_VIOLATION_PREFIX);
         if (detail !== undefined) {
           throw ApplicationFailure.nonRetryable(detail, SAFETY_VIOLATION_FAILURE_TYPE);
+        }
+        const clarification = markedFailureDetail(error, RECOVERY_CLARIFICATION_PREFIX);
+        if (clarification !== undefined) {
+          throw ApplicationFailure.nonRetryable(clarification, "RecoveryClarification");
         }
         throw error;
       }
