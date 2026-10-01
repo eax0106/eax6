@@ -442,6 +442,42 @@ describe("WorkflowController routes", () => {
     expect(engine.put).toHaveBeenCalledTimes(2);
   });
 
+  it("relays approval policy settings for approval roles with ETags and idempotency", async () => {
+    const path = `/api/v1/workflows/${workflowId}/approval-policies`;
+    const approver = { ...actor, roles: ["approver"], permissions: ["human-actions:read", "approvals:decide"] };
+    const read = await request("GET", path, { actor: approver });
+    expect(read.statusCode).toBe(200);
+    expect(read.json()).toMatchObject({ can_edit: true });
+    const reader = await request("GET", path, { actor: { ...viewer, permissions: ["human-actions:read"] } });
+    expect(reader.statusCode).toBe(200);
+    expect(reader.json()).toMatchObject({ can_edit: false });
+    expect(engine.get).toHaveBeenCalledWith(path, expect.objectContaining({ userId: approver.user_id, workspaceId, permissions: approver.permissions }));
+    for (const role of ["admin", "operator", "approver"]) {
+      const writer = { ...approver, roles: [role] };
+      const payload = { mode: "auto", confirm_consequence: "this will send emails without asking", skip_on_timeout: true, timeout_seconds: 120 };
+      const headers = { "idempotency-key": `policy-${role}`, "if-match": '"step-etag"' };
+      const options = { actor: writer, headers, payload };
+      expect((await request("PUT", `${path}/approve.send`, options)).statusCode).toBe(200);
+      expect((await request("PUT", `${path}/approve.send`, options)).statusCode).toBe(200);
+      expect(engine.put).toHaveBeenCalledWith(`${path}/approve.send`, payload, expect.objectContaining({ userId: writer.user_id, tenantId, workspaceId, roles: [role], permissions: writer.permissions }), { idempotencyKey: `policy-${role}`, ifMatch: '"step-etag"' });
+    }
+    expect(engine.put).toHaveBeenCalledTimes(3);
+  });
+
+  it("refuses policy writes without approval rights, preconditions or valid input before forwarding", async () => {
+    const path = `/api/v1/workflows/${workflowId}/approval-policies/approve.send`;
+    const approver = { ...actor, roles: ["approver"], permissions: ["approvals:decide"] };
+    const headers = { "idempotency-key": "policy", "if-match": '"step-etag"' };
+    for (const forbidden of [actor, viewer, { ...approver, permissions: [] }]) {
+      expect((await request("PUT", path, { actor: forbidden, headers, payload: { mode: "ask" } })).statusCode).toBe(403);
+    }
+    expect((await request("PUT", path, { actor: approver, headers: { "idempotency-key": "missing-etag" }, payload: { mode: "ask" } })).statusCode).toBe(428);
+    for (const payload of [{ mode: "unknown" }, { mode: "ask", skip_on_timeout: true }, { mode: "ask", set_by: "someone" }]) {
+      expect((await request("PUT", path, { actor: approver, headers, payload })).statusCode).toBe(400);
+    }
+    expect(engine.put).not.toHaveBeenCalled();
+  });
+
   function request(
     method: "GET" | "POST" | "PATCH" | "PUT",
     url: string,

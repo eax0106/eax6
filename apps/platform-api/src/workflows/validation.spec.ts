@@ -2,6 +2,7 @@ import type { CompiledDag } from "@alterx/contracts";
 import { describe, expect, it } from "vitest";
 import {
   createWorkflowSchema,
+  approvalPolicySchema,
   parseTraceparent,
   parseVersionQuery,
   parseWorkflowId,
@@ -14,6 +15,13 @@ const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc";
 const instance = `/api/v1/workflows/${workflowId}`;
 
 describe("workflow validation", () => {
+  it("validates approval modes and timeout controls strictly", () => {
+    expect(parseWorkflowInput(approvalPolicySchema, { mode: "ask" }, instance)).toEqual({ mode: "ask", skip_on_timeout: false, timeout_seconds: null });
+    for (const input of [{ mode: "yes" }, { mode: "ask", skip_on_timeout: true }, { mode: "ask", timeout_seconds: 59 }, { mode: "ask", timeout_seconds: 2_592_001 }, { mode: "ask", timeout_seconds: 60.5 }, { mode: "auto", confirm_consequence: 42 }, { mode: "ask", set_by: "someone" }]) {
+      expect(() => parseWorkflowInput(approvalPolicySchema, input, instance)).toThrow();
+    }
+  });
+
   it("accepts typed workflow inputs", () => {
     expect(
       parseWorkflowInput(createWorkflowSchema, { goal: "  Ship flow  " }, instance),
