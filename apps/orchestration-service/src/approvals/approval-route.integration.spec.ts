@@ -16,6 +16,7 @@ import {
   RedisRespSetClient,
   SessionGatewayGuard,
 } from "@alterx/auth";
+import { createMockAuditEventHandler } from "@alterx/shared-clients";
 import type { NodeType } from "@alterx/contracts";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { RedisContainer, type StartedRedisContainer } from "@testcontainers/redis";
@@ -28,6 +29,8 @@ import { NodeHandlerRegistry } from "../registry/node-handler-registry";
 import { NodeexecService } from "../registry/nodeexec.service";
 import { NodeExecutionLedgerService } from "../runs/node-execution-ledger.service";
 import { RunStreamEventService } from "../runs/run-stream-event.service";
+import { ApprovalPoliciesController } from "./approval-policies.controller";
+import { ApprovalPolicyService } from "./approval-policy.service";
 import { ApprovalsController } from "./approvals.controller";
 import { ApprovalsService } from "./approvals.service";
 
@@ -48,6 +51,7 @@ const TENANT_A = "018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
 const TENANT_B = "018f4d6e-2b4a-7a3e-8c1a-1234567890b1";
 const WORKSPACE = "018f4d6e-2b4a-7a3e-8c1a-1234567890a2";
 const APPROVER = "018f4d6e-2b4a-7a3e-8c1a-1234567890a5";
+const WORKFLOW = "wf_018f4d6e-2b4a-7a3e-8c1a-1234567890a6";
 const TASK_QUEUE = "approval-route";
 
 const sent = new Set<string>();
@@ -116,6 +120,8 @@ describe.sequential("approval route, end to end", () => {
       await tx.query(`GRANT CONNECT ON DATABASE orchestration_db TO ${role}`);
       await tx.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
       await tx.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role}`);
+      await tx.query("INSERT INTO workflows (id, tenant_id, workspace_id, name) VALUES ($1, $2, $3, 'fixture')", [WORKFLOW, TENANT_A, WORKSPACE]);
+      await tx.query("INSERT INTO workflow_versions (id, tenant_id, workflow_id, version, compiled_dag, dag_schema_version) VALUES ($1, $2, $3, 1, $4, 'v1')", [`wfv_${WORKFLOW.slice(3)}`, TENANT_A, WORKFLOW, JSON.stringify(compiledDag)]);
     });
     store = new PostgresOrchestrationStoreProvider({ authentication: "static", connectionString: `postgresql://${role}:${password}@${postgres.getHost()}:${postgres.getPort()}/${postgres.getDatabase()}`, migrationsFolder });
 
@@ -149,9 +155,10 @@ describe.sequential("approval route, end to end", () => {
       store,
     );
     const module = await Test.createTestingModule({
-      controllers: [ApprovalsController],
+      controllers: [ApprovalsController, ApprovalPoliciesController],
       providers: [
         { provide: ApprovalsService, useValue: approvals },
+        { provide: ApprovalPolicyService, useValue: new ApprovalPolicyService(store, createMockAuditEventHandler()) },
         { provide: APP_GUARD, useValue: guard },
       ],
     }).compile();
@@ -189,6 +196,10 @@ describe.sequential("approval route, end to end", () => {
   }
 
   function decide(approvalId: string, action: "approve" | "reject", tenant = TENANT_A, note?: string) {
+    return authorized(`/api/v1/approvals/${approvalId}/actions/${action}`, "POST", tenant, note === undefined ? {} : { note });
+  }
+
+  function authorized(path: string, method: string, tenant = TENANT_A, body?: unknown, ifMatch?: string, permissions = ["approvals:decide"]) {
     const now = Math.floor(Date.now() / 1_000);
     const machine = jwt({ iss: "https://auth.test/", aud: "alter-engine", iat: now, exp: now + 60 });
     const actor = jwt({
@@ -196,7 +207,7 @@ describe.sequential("approval route, end to end", () => {
       tenant_id: `ten_${tenant}`,
       workspace_id: `ws_${WORKSPACE}`,
       roles: ["admin"],
-      permissions: ["approvals:decide"],
+      permissions,
       session_id: "session",
       auth_time: now,
       jti: randomBytes(12).toString("hex"),
@@ -205,10 +216,10 @@ describe.sequential("approval route, end to end", () => {
       iat: now,
       exp: now + 300,
     });
-    return fetch(`${baseUrl}/api/v1/approvals/${approvalId}/actions/${action}`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${machine}`, "x-alter-actor-token": actor, "content-type": "application/json" },
-      body: JSON.stringify(note === undefined ? {} : { note }),
+    return fetch(`${baseUrl}${path}`, {
+      method,
+      headers: { authorization: `Bearer ${machine}`, "x-alter-actor-token": actor, "content-type": "application/json", ...(ifMatch === undefined ? {} : { "if-match": ifMatch }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     });
   }
 
@@ -254,6 +265,26 @@ describe.sequential("approval route, end to end", () => {
     await expect(result).rejects.toThrow();
     expect(sent.has(runId)).toBe(false);
   }, 120_000);
+
+  it("serves approval settings through real token guards, requiring current preconditions and the caller's scope", async () => {
+    const path = `/api/v1/workflows/${WORKFLOW}/approval-policies`;
+    const read = await authorized(path, "GET");
+    expect(read.status).toBe(200);
+    const { data } = await read.json() as { data: { node_key: string; etag: string; mode: string }[] };
+    expect(data).toHaveLength(1);
+    expect(data[0]!.mode).toBe("ask");
+    const stepPath = `${path}/${data[0]!.node_key}`;
+    const body = { mode: "ask", timeout_seconds: 120 };
+    expect((await authorized(stepPath, "PUT", TENANT_A, body)).status).toBe(428);
+    expect((await authorized(stepPath, "PUT", TENANT_A, body, data[0]!.etag, [])).status).toBe(403);
+    expect((await authorized(stepPath, "PUT", TENANT_B, body, data[0]!.etag)).status).toBe(404);
+    const saved = await authorized(stepPath, "PUT", TENANT_A, body, data[0]!.etag);
+    expect(saved.status).toBe(200);
+    const result = await saved.json() as { etag: string; set_by: string };
+    expect(result.etag).not.toBe(data[0]!.etag);
+    expect(result.set_by).toBe(`usr_${APPROVER}`);
+    expect((await authorized(stepPath, "PUT", TENANT_A, body, data[0]!.etag)).status).toBe(412);
+  });
 
   function jwt(claims: Record<string, unknown>): string {
     const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
