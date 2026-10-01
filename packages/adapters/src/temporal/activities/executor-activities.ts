@@ -23,6 +23,8 @@ export interface ExecuteNodeActivityResult {
   readonly pending?: boolean;
   /** Milliseconds from now until the approval expires; only set when pending. */
   readonly expiresInMs?: number;
+  /** D5: on expiry the run continues past this approval (flagged) instead of failing. */
+  readonly skipOnTimeout?: boolean;
 }
 
 export interface FinalizeRunActivityInput {
@@ -83,6 +85,15 @@ function safetyViolationDetail(error: unknown): string | undefined {
     if (at !== -1) return text.slice(at);
   }
   return undefined;
+}
+
+function readSkipOnTimeout(outputJson: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(outputJson);
+    return typeof parsed === "object" && parsed !== null && (parsed as Record<string, unknown>)["skip_on_timeout"] === true;
+  } catch {
+    return false;
+  }
 }
 
 export function createExecutorActivities(
@@ -154,6 +165,7 @@ export function createExecutorActivities(
         metadataJson: response.metadata_json,
         pending: true,
         expiresInMs,
+        ...(readSkipOnTimeout(response.output_json) ? { skipOnTimeout: true } : {}),
       };
     },
 

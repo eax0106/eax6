@@ -100,7 +100,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     expect(DELETE_ORDER).toHaveLength(new Set(DELETE_ORDER).size);
   });
 
-  it("deletes all 35 tenant tables while preserving a second tenant", async () => {
+  it("deletes all 36 tenant tables while preserving a second tenant", async () => {
     await seedAll(adminStore, TENANT_A, "a");
     await seedAll(adminStore, TENANT_B, "b");
 
@@ -109,12 +109,12 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     // previously missing from both TABLES and DELETE_ORDER, which let
     // verifyDeletion certify erasure complete while their rows survived;
     // C8 added side_effects; D3 added budgets, budget_usage and budget_reservations;
-    // D2 added workspace_holds and workspace_run_retention.
-    expect(before).toHaveLength(35);
+    // D2 added workspace_holds and workspace_run_retention; D5 approval_step_policies.
+    expect(before).toHaveLength(36);
     expect(before.every((location) => location.rowCount === 1)).toBe(true);
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
-      deletedRows: 35,
+      deletedRows: 36,
       deletedObjects: 2,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
@@ -265,6 +265,7 @@ async function seedAll(
     // D2: a workspace held pending deletion.
     await tx.query("INSERT INTO workspace_holds(tenant_id,workspace_id,held_by) VALUES ($1,$1,'usr_fixture')", [tenant]);
     await tx.query("INSERT INTO workspace_run_retention(tenant_id,workspace_id,retention_days,updated_by) VALUES ($1,$1,30,'usr_fixture')", [tenant]);
+    await tx.query("INSERT INTO approval_step_policies(tenant_id,workspace_id,workflow_id,node_key,set_by) VALUES ($1,$1,$2,'approve','usr_fixture')", [tenant, workflow]);
     await tx.query("INSERT INTO run_stream_events(id,tenant_id,run_id,seq,event,payload) VALUES ($1,$2,$3,1,'node.completed','{}')", [`sse_${suffix}`, tenant, run]);
     await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,node_execution_id,gate_type,verdict) VALUES ($1,$2,$3,$4,'quality','pass')", [`vrf_${suffix}`, tenant, run, node]);
     await tx.query("INSERT INTO recovery_actions(id,tenant_id,run_id,node_execution_id,failure_class) VALUES ($1,$2,$3,$4,'fixture')", [`rcv_${suffix}`, tenant, run, node]);
@@ -272,7 +273,7 @@ async function seedAll(
     await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$2,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations
-    // 0019+). Seeded here so "deletes all 35 tenant tables" actually proves
+    // 0019+). Seeded here so "deletes all 36 tenant tables" actually proves
     // coverage instead of just proving the original 19 still work.
     const project = `prj_${suffix}`;
     const webhookEndpoint = `whe_${suffix}`;
