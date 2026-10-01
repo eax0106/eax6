@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { ApprovalIdSchema, TenantIdSchema } from "@alterx/contracts";
 
+import { appliedPolicy, countDecision } from "./approval-policy.service";
+
 interface OrchestrationTransactionLike {
   query<TRow extends Record<string, unknown> = Record<string, unknown>>(
     statement: string,
@@ -51,6 +53,9 @@ export interface ApprovalRow extends Record<string, unknown> {
   readonly decided_by: string | null;
   readonly decision_note: string | null;
   readonly expiry_at: string;
+  // D5: the mode used for this approval and who set it (null: the default).
+  readonly mode?: string;
+  readonly policy_set_by?: string | null;
 }
 
 export interface ApprovalPage {
@@ -85,7 +90,7 @@ function normalizeLimit(limit: number | undefined): number {
 
 const APPROVAL_SELECT_COLUMNS = `id, run_id, node_execution_id, requested_action, status, workspace_id,
        requested_at::text, decided_at::text, decided_by::text, decision_note,
-       expiry_at::text`;
+       expiry_at::text, mode, policy_set_by`;
 
 export interface CreatePendingApprovalRequest {
   readonly tenantId: string;
@@ -93,6 +98,14 @@ export interface CreatePendingApprovalRequest {
   readonly nodeExecutionId: string;
   readonly requestedAction: Record<string, unknown>;
   readonly expirySeconds: number;
+}
+
+export interface CreatedApproval {
+  readonly id: string;
+  readonly expiryAt: string;
+  readonly mode: "ask" | "auto";
+  readonly policySetBy: string | null;
+  readonly skipOnTimeout: boolean;
 }
 
 export interface ApprovalDecisionSignaler {
@@ -116,9 +129,14 @@ export class ApprovalsService {
     private readonly durable: ApprovalDecisionSignaler,
   ) {}
 
+  /**
+   * D5: applies the step's mode. "Always go ahead" records the approval as
+   * approved by policy at once, so the node does not wait; "Ask me first"
+   * stays pending, using the step's own window when it skips on timeout.
+   */
   async createPending(
     request: CreatePendingApprovalRequest,
-  ): Promise<{ readonly id: string; readonly expiryAt: string }> {
+  ): Promise<CreatedApproval> {
     const tenantId = bareTenantUuid(request.tenantId);
     if (!Number.isFinite(request.expirySeconds) || request.expirySeconds <= 0) {
       throw new ApprovalValidationError("expirySeconds must be a positive number");
@@ -126,11 +144,17 @@ export class ApprovalsService {
     const id = newApprovalId();
 
     return this.store.withTenant(tenantId, async (tx) => {
+      const policy = await appliedPolicy(tx, tenantId, request.runId, request.nodeExecutionId);
+      const auto = policy.mode === "auto";
+      const expirySeconds = !auto && policy.timeoutSeconds !== null ? policy.timeoutSeconds : request.expirySeconds;
       const result = await tx.query<{ readonly expiry_at: string }>(
         `INSERT INTO approvals
-           (id, tenant_id, workspace_id, run_id, node_execution_id, requested_action, status, expiry_at)
-         SELECT $1, $2, workspace_id, $3, $4, $5::jsonb, 'pending',
-                clock_timestamp() + make_interval(secs => $6)
+           (id, tenant_id, workspace_id, run_id, node_execution_id, requested_action, status, expiry_at,
+            mode, policy_set_by, decided_at, decision_note)
+         SELECT $1, $2, workspace_id, $3, $4, $5::jsonb, $7,
+                clock_timestamp() + make_interval(secs => $6), $8, $9,
+                CASE WHEN $8 = 'auto' THEN clock_timestamp() END,
+                CASE WHEN $8 = 'auto' THEN 'approved by policy' END
          FROM runs
          WHERE tenant_id = $2 AND id = $3
          RETURNING expiry_at::text`,
@@ -140,7 +164,10 @@ export class ApprovalsService {
           request.runId,
           request.nodeExecutionId,
           JSON.stringify(request.requestedAction),
-          request.expirySeconds,
+          expirySeconds,
+          auto ? "approved" : "pending",
+          policy.mode,
+          policy.setBy,
         ],
       );
       const row = result.rows[0];
@@ -149,7 +176,33 @@ export class ApprovalsService {
           `run ${request.runId} was not found for this tenant`,
         );
       }
-      return { id, expiryAt: row.expiry_at };
+      return {
+        id,
+        expiryAt: row.expiry_at,
+        mode: policy.mode,
+        policySetBy: policy.setBy,
+        skipOnTimeout: !auto && policy.skipOnTimeout,
+      };
+    });
+  }
+
+  /**
+   * D5 skip-on-timeout: the run went past an unanswered approval. The
+   * approval is marked skipped and the run flagged, so it is visible later.
+   */
+  async markSkipped(tenantIdInput: string, runId: string, nodeExecutionId: string): Promise<void> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    await this.store.withTenant(tenantId, async (tx) => {
+      await tx.query(
+        `UPDATE approvals SET status = 'skipped'
+          WHERE tenant_id = $1 AND run_id = $2 AND node_execution_id = $3 AND status IN ('pending', 'expired')`,
+        [tenantId, runId, nodeExecutionId],
+      );
+      await tx.query(
+        `UPDATE runs SET flags = array_append(flags, 'approval_skipped')
+          WHERE tenant_id = $1 AND id = $2 AND NOT ('approval_skipped' = ANY (flags))`,
+        [tenantId, runId],
+      );
     });
   }
 
@@ -279,6 +332,8 @@ export class ApprovalsService {
           `approval ${approvalId} was decided concurrently by another request`,
         );
       }
+      // D5: a person's decision extends or ends the promotion streak.
+      await countDecision(tx, tenantId, approvalId, decision);
       return row;
     });
   }

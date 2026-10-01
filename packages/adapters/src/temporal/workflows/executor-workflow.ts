@@ -235,6 +235,7 @@ async function executeNodeWithRecovery(
         nodeExecId,
         result.expiresInMs ?? 0,
         approvalDecisions,
+        result.skipOnTimeout === true,
       );
     }
     return JSON.parse(result.outputJson) as Record<string, unknown>;
@@ -394,12 +395,28 @@ async function awaitApprovalDecision(
   nodeExecutionId: string,
   expiresInMs: number,
   approvalDecisions: Map<string, ApprovalDecisionSignal>,
+  skipOnTimeout = false,
 ): Promise<Record<string, unknown>> {
   const decided = await condition(
     () => approvalDecisions.has(nodeExecutionId),
     Math.max(expiresInMs, 0),
   );
   const decision = decided ? approvalDecisions.get(nodeExecutionId) : undefined;
+
+  if (decision === undefined && skipOnTimeout) {
+    // D5 skip-on-timeout: the step was not answered in its window, so the run
+    // continues past it. The approval is marked skipped and the run flagged.
+    const skipped = { approved: false, note: null, expired: true, skipped: true };
+    await recordApprovalDecision({
+      tenantId: input.tenantId,
+      runId: input.runId,
+      nodeExecutionId,
+      nodeKey,
+      decision: "approved",
+      outputJson: JSON.stringify(skipped),
+    });
+    return skipped;
+  }
 
   if (decision === undefined) {
     await recordApprovalDecision({

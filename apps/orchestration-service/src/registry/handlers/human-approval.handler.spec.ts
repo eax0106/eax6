@@ -41,6 +41,7 @@ describe("HumanApprovalHandler", () => {
         approval_id: "apr_018f4d6e-2b4a-7a3e-8c1a-1234567890ab",
         status: "pending",
         expiry_at: "2026-07-30T00:00:00.000Z",
+        mode: "ask",
       },
       metadata: { execution_status: "pending_approval" },
     });

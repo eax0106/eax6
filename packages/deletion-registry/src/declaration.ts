@@ -105,6 +105,7 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "orchestration_db", schema: "public", table: "budgets", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workspace_holds", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workspace_run_retention", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
+  { database: "orchestration_db", schema: "public", table: "approval_step_policies", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "approvals", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "artifacts", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "blackboard_checkpoints", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },

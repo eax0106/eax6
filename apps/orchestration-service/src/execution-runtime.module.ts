@@ -63,6 +63,8 @@ import { RunObservabilityController } from "./runs/run-observability.controller"
 import { RunObservabilityService } from "./runs/run-observability.service";
 import { loadRunLauncherEnvironment } from "./config/run-launcher-environment";
 import { ApprovalsController } from "./approvals/approvals.controller";
+import { ApprovalPoliciesController } from "./approvals/approval-policies.controller";
+import { ApprovalPolicyService } from "./approvals/approval-policy.service";
 import { ApprovalsService } from "./approvals/approvals.service";
 import { EscalationsController } from "./escalations/escalations.controller";
 import { EscalationsService } from "./escalations/escalations.service";
@@ -211,6 +213,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     BudgetsController,
     RunLearningController,
     ApprovalsController,
+    ApprovalPoliciesController,
     EscalationsController,
     NodeTypeController,
   ],
@@ -316,7 +319,13 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
           approvalRequester: {
             requestApproval: async (request) => {
               const created = await approvalsService.createPending(request);
-              return { approvalId: created.id, expiryAt: created.expiryAt };
+              return {
+                approvalId: created.id,
+                expiryAt: created.expiryAt,
+                mode: created.mode,
+                policySetBy: created.policySetBy,
+                skipOnTimeout: created.skipOnTimeout,
+              };
             },
           },
           verificationGateReader: new PostgresVerificationGateReader(store),
@@ -379,6 +388,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
           selectionBindingFailClosed,
           runFinalizationMemoryWriter,
           new PostgresRunAcceptanceCheck(store, verifyGate, ledger),
+          approvalsService,
         );
       },
       inject: [ArtifactsService],
@@ -450,6 +460,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: RUN_LEARNING_AUDIT,
       useFactory: () => runLearningAuditClient(process.env),
+    },
+    {
+      provide: ApprovalPolicyService,
+      useFactory: () => new ApprovalPolicyService(orchestrationStore(sessionGatewayEnvironment(process.env))),
     },
     {
       provide: ApprovalsService,
