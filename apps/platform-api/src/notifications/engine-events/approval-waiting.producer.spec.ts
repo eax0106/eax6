@@ -37,13 +37,13 @@ describe("ApprovalWaitingProducer", () => {
     expect(get).toHaveBeenCalledWith("/api/v1/approvals?status=pending&limit=50", caller);
   });
 
-  it("tells workspace admins and approvers once per pending approval, linking to it", async () => {
+  it("tells workspace admins, operators and approvers once per pending approval, linking to it", async () => {
     const { notifyWorkspaceRolesOnce, producer } = setup([page([approval("apr_1")])]);
 
     await expect(producer.produce({ tenantId, caller, now: NOW })).resolves.toBe(1);
 
     expect(notifyWorkspaceRolesOnce).toHaveBeenCalledWith(
-      ["admin", "approver"],
+      ["admin", "operator", "approver"],
       "approval.requested:apr_1",
       expect.objectContaining({
         tenantId,
