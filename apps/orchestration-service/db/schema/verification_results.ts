@@ -40,7 +40,7 @@ export const verificationResults = pgTable(
   (table) => [
     check(
       "verification_results_gate_type_check",
-      sql`${table.gateType} IN ('quality', 'hallucination', 'safety', 'build', 'render', 'placeholder', 'security', 'acceptance')`,
+      sql`${table.gateType} IN ('quality', 'hallucination', 'safety', 'build', 'render', 'placeholder', 'security', 'acceptance', 'mechanical')`,
     ),
     check(
       "verification_results_verdict_check",

@@ -125,6 +125,32 @@ exercise the real notification payloads through the mock email adapter and
 check every supported template. No account or production registration is
 performed during local verification.
 
+SES read-back (D14) uses the Terraform configuration set and default EventBridge
+bus. Bootstrap reads `/alter/<env>/ses/delivery-kit`, writes the set name into the
+services' environment, and binds the rule to `https://<domain>/v1/webhooks/ses`.
+The host-generated webhook key travels on stdin to the AWS CLI and is stored in
+EventBridge's managed connection; it never enters Terraform state. Re-running
+bootstrap updates the existing connection and target. Only emails tagged by the
+workflow tool match this rule; notification emails are excluded.
+
+Early events and database failures return retryable HTTP errors. EventBridge
+retries for up to 24 hours, then sends exhausted events to the environment's
+`ses-delivery-dlq` (14-day retention). Monitor this queue and replay its event
+detail to the same endpoint after repairing deployment or storage. Delivery is
+recorded once; a bounce remains a failure even if a later Delivery arrives.
+Platform jobs read retained failure pages with the D1 caller and dedupe each
+notice by side-effect id, so a bounce on an old run is still reported.
+
+Local checks make no AWS calls:
+
+```bash
+python3 deploy/ec2/check-ses-delivery.py
+```
+
+Terraform validation and bootstrap fixture checks also run locally. Actual SES
+delivery requires the verified sending account, applied EC2 kit and public TLS
+domain; local tests do not claim a cloud deployment.
+
 | Task | Command (on the host, in `/opt/alter/deploy/ec2`) |
 |---|---|
 | Status | `docker compose ps` |

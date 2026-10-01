@@ -4,7 +4,7 @@
 # settings an operator supplies, then deploy/ec2/bootstrap.sh (see
 # deploy/ec2/README.md).
 set -euo pipefail
-dnf install -y docker git jq
+dnf install -y docker git jq python3 awscli2
 systemctl enable --now docker
 mkdir -p /usr/local/lib/docker/cli-plugins
 curl -fsSL "https://github.com/docker/compose/releases/download/v2.39.4/docker-compose-linux-x86_64" \
@@ -13,3 +13,4 @@ chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 git clone "${repository_url}" /opt/alter
 git -C /opt/alter checkout "${repository_ref}"
 echo "ALTER_ENV=${alter_env}" > /opt/alter/deploy/ec2/host.env
+echo "AWS_REGION=${aws_region}" >> /opt/alter/deploy/ec2/host.env

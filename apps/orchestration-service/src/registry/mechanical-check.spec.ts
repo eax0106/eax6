@@ -24,11 +24,14 @@ describe("mechanicalCheck", () => {
   it("records a click as unconfirmable, never as confirmed", () => {
     expect(mechanicalCheck("browser.click", {})).toEqual({
       unconfirmable: true,
-      reason: "the browser returns no state after a click to confirm against",
+      reason: "browser.click returned no confirmation",
     });
   });
 
   it("does not apply to reads", () => {
+    expect(mechanicalCheck("browser.click", { confirmation: { status: "confirmed", basis: "matched" } })).toEqual({ confirmed: true, basis: "matched" });
+    expect(mechanicalCheck("browser.click", { confirmation: { status: "failed", reason: "missing text" } })).toEqual({ confirmed: false, reason: "missing text" });
+    expect(mechanicalCheck("browser.click", { confirmation: { status: "unconfirmed", reason: "unknown" } })).toEqual({ unconfirmable: true, reason: "unknown" });
     expect(mechanicalCheck("database.select", { rowCount: 0, rows: [] })).toBeUndefined();
     expect(mechanicalCheck("search.web", {})).toBeUndefined();
   });

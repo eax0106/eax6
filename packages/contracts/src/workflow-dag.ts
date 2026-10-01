@@ -78,6 +78,16 @@ export const ToolCallCompiledConfigSchema = z
     tool_name: NonEmptyStringSchema.optional(),
     arguments: z.record(z.string(), z.unknown()).optional(),
     credential_ref: ToolCredentialReferenceSchema.optional(),
+    expected_page_state: z
+      .object({
+        text: NonEmptyStringSchema.optional(),
+        selector: NonEmptyStringSchema.optional(),
+      })
+      .strict()
+      .refine((value) => value.text !== undefined || value.selector !== undefined, {
+        message: "expected_page_state needs text or selector",
+      })
+      .optional(),
   })
   .passthrough();
 
