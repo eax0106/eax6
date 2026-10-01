@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from src.db.ids import PLATFORM_TENANT_ID
 
 from .models import DeletionResult, RetentionSweepResult, SubjectDataLocation, VerificationResult
+from .workspace_scope import plan_workspace_scope
 
 STORE = "intelligence-service"
 # scripts/deletion/certify.ts parses this exact block against the deletion registry.
@@ -80,6 +81,57 @@ class IntelligenceDeletionProvider:
             store=STORE, manifestId=manifest_id, deleted=not remaining, remaining=remaining
         )
 
+    # D2: one workspace's erasure at the end of its undo window. Rows of the
+    # platform sentinel tenant never match: the tenant id is part of every
+    # predicate and the sentinel has no erasure.
+    def locate_workspace_data(
+        self, tenant_id: str, workspace_id: str
+    ) -> tuple[SubjectDataLocation, ...]:
+        params = {"tenant": _tenant_uuid(tenant_id), "workspace": _workspace_uuid(workspace_id)}
+        with self._sessions.begin() as session:
+            _set_tenant(session, params["tenant"])
+            scope = _workspace_scope(session)
+            return tuple(
+                SubjectDataLocation(
+                    store=STORE,
+                    table=table,
+                    rowCount=int(
+                        session.scalar(
+                            text(f"SELECT count(*) FROM {table} WHERE {scope[table]}"), params
+                        )
+                        or 0
+                    ),
+                )
+                for table in TABLES
+            )
+
+    def delete_workspace_data(
+        self, tenant_id: str, workspace_id: str, manifest_id: str
+    ) -> DeletionResult:
+        params = {"tenant": _tenant_uuid(tenant_id), "workspace": _workspace_uuid(workspace_id)}
+        _require_manifest(manifest_id)
+        deleted = 0
+        with self._sessions.begin() as session:
+            _set_tenant(session, params["tenant"])
+            scope = _workspace_scope(session)
+            for table in _DELETE_ORDER:
+                deleted += _rowcount(
+                    session.execute(text(f"DELETE FROM {table} WHERE {scope[table]}"), params)
+                )
+        return DeletionResult(
+            store=STORE, manifestId=manifest_id, deletedRows=deleted, deletedObjects=0
+        )
+
+    def verify_workspace_deletion(
+        self, tenant_id: str, workspace_id: str, manifest_id: str
+    ) -> VerificationResult:
+        _require_manifest(manifest_id)
+        located = self.locate_workspace_data(tenant_id, workspace_id)
+        remaining = tuple(item for item in located if item.rowCount > 0)
+        return VerificationResult(
+            store=STORE, manifestId=manifest_id, deleted=not remaining, remaining=remaining
+        )
+
     def apply_retention_policy(self) -> RetentionSweepResult:
         return RetentionSweepResult(
             store=STORE, deletedRows=0, deletedObjects=0, sweptAt=datetime.now(UTC).isoformat()
@@ -117,6 +169,26 @@ def _tenant_uuid(tenant_id: str) -> str:
     if raw == PLATFORM_TENANT_ID:
         raise ValueError("the platform tenant has no erasure")
     return raw
+
+
+def _workspace_uuid(workspace_id: str) -> str:
+    if not workspace_id.startswith("ws_"):
+        raise ValueError("workspaceId must be a ws_ prefixed UUIDv7")
+    raw = workspace_id.removeprefix("ws_")
+    try:
+        parsed = uuid.UUID(raw)
+    except ValueError as error:
+        raise ValueError("workspaceId must be a ws_ prefixed UUIDv7") from error
+    if parsed.version != 7:
+        raise ValueError("workspaceId must be a ws_ prefixed UUIDv7")
+    return raw
+
+
+def _workspace_scope(session: Session) -> dict[str, str]:
+    plan = plan_workspace_scope(session, TABLES, _TENANT_COLUMN)
+    if plan.unscoped:
+        raise RuntimeError(f"Workspace erasure cannot scope tables: {', '.join(plan.unscoped)}")
+    return plan.scoped
 
 
 def _require_manifest(manifest_id: str) -> None:

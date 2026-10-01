@@ -162,6 +162,46 @@ def test_erases_one_tenant_completely_and_leaves_the_other_and_the_platform_whol
     assert provider.delete_subject_data(f"ten_{TENANT_A}", MANIFEST).deletedRows == 0
 
 
+TENANT_WS = "018f4d6e-2b4a-7a3e-8c1a-1234567890c1"
+WORKSPACE_ERASED = "018f4d6e-2b4a-7a3e-8c1a-1234567890c2"
+WORKSPACE_KEPT = "018f4d6e-2b4a-7a3e-8c1a-1234567890c3"
+
+
+def test_erases_one_workspace_scoped_from_the_live_schema(
+    databases: tuple[sessionmaker[Session], sessionmaker[Session]],
+) -> None:
+    """D2: one workspace's agents and workspace-scoped registry entries go."""
+    app, admin = databases
+    provider = IntelligenceDeletionProvider(app, admin)
+    _seed(admin, TENANT_WS, WORKSPACE_ERASED, "11")
+    with admin.begin() as session:
+        session.execute(sa.text("DELETE FROM capability_registry_versions WHERE owner_tenant_id=:t"), {"t": TENANT_WS})
+    _seed(admin, TENANT_WS, WORKSPACE_KEPT, "12")
+    with admin.begin() as session:
+        session.execute(
+            sa.text(
+                "INSERT INTO capability_registry_versions (capability_id, version, owner_tenant_id, scope, "
+                "workspace_id, kind, supported_capabilities, constraints, availability, provenance, status) "
+                "VALUES ('cap-ws', 1, :t, 'workspace', :w, 'agent', '[]', '{}', '{}', '{}', 'active')"
+            ),
+            {"t": TENANT_WS, "w": WORKSPACE_ERASED},
+        )
+    tenant, erased, kept = f"ten_{TENANT_WS}", f"ws_{WORKSPACE_ERASED}", f"ws_{WORKSPACE_KEPT}"
+
+    located = {item.table: item.rowCount for item in provider.locate_workspace_data(tenant, erased)}
+    assert located == {table: 1 for table in TABLES}
+
+    assert provider.delete_workspace_data(tenant, erased, MANIFEST).deletedRows == 5
+    assert provider.verify_workspace_deletion(tenant, erased, MANIFEST).deleted is True
+    kept_rows = {item.table: item.rowCount for item in provider.locate_workspace_data(tenant, kept)}
+    assert kept_rows == {**{table: 1 for table in TABLES}, "capability_registry_versions": 0}
+    # The tenant-scoped registry entry (no workspace) is not workspace data.
+    assert _counts(admin, TENANT_WS)["capability_registry_versions"] == 1
+    with pytest.raises(ValueError):
+        provider.locate_workspace_data(tenant, "ws_nope")
+    provider.delete_subject_data(tenant, MANIFEST)
+
+
 def test_lists_real_tenants_only(
     databases: tuple[sessionmaker[Session], sessionmaker[Session]],
 ) -> None:
