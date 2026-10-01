@@ -5,6 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  fastify: 5.12.5
   js-yaml@>=3.0.0 <3.15.2: ^3.15.2
   js-yaml@>=4.0.0 <4.3.2: ^4.3.2
   postcss@<8.5.23: ^8.5.23
@@ -40,7 +41,7 @@ importers:
         version: 23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(nx@23.1.1(@swc/core@1.15.46))
       '@nx/nest':
         specifier: 23.1.1
-        version: 23.1.1(@babel/traverse@7.29.7)(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)(@nx/jest@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(babel-plugin-macros@3.1.0)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3))(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(chokidar@4.0.3)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.1)(nx@23.1.1(@swc/core@1.15.46))(reflect-metadata@0.2.2)(rxjs@7.8.2)(typescript@5.9.3)
+        version: 23.1.1(@babel/traverse@7.29.7)(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)(@nx/jest@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(babel-plugin-macros@3.1.0)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3))(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(chokidar@4.0.3)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.5)(nx@23.1.1(@swc/core@1.15.46))(reflect-metadata@0.2.2)(rxjs@7.8.2)(typescript@5.9.3)
       '@nx/vite':
         specifier: 23.1.1
         version: 23.1.1(@babel/traverse@7.29.7)(@nx/eslint@23.1.1(@babel/traverse@7.29.7)(@nx/jest@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(babel-plugin-macros@3.1.0)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3))(@swc/core@1.15.46)(@zkochan/js-yaml@0.0.7)(eslint@9.39.5(jiti@2.7.0))(nx@23.1.1(@swc/core@1.15.46)))(@swc/core@1.15.46)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3)(vite@8.2.1(@types/node@22.20.1)(esbuild@0.28.1)(jiti@2.7.0)(less@4.5.1)(sass-embedded@1.100.0)(sass@1.101.3)(terser@5.49.0)(tsx@4.23.1)(yaml@2.9.0))(vitest@4.1.11)
@@ -96,8 +97,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -133,8 +134,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -169,8 +170,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -209,8 +210,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -261,8 +262,8 @@ importers:
         specifier: 5.6.2
         version: 5.6.2
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -325,8 +326,8 @@ importers:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(pg@8.22.0)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       pg:
         specifier: ^8.16.3
         version: 8.22.0
@@ -516,8 +517,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -549,8 +550,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -582,8 +583,8 @@ importers:
         specifier: 11.2.7
         version: 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
       reflect-metadata:
         specifier: 0.2.2
         version: 0.2.2
@@ -749,8 +750,8 @@ importers:
         specifier: 4.1.11
         version: 4.1.11(vitest@4.1.11)
       fastify:
-        specifier: 5.12.1
-        version: 5.12.1
+        specifier: 5.12.5
+        version: 5.12.5
 
   packages/auth:
     dependencies:
@@ -6126,8 +6127,8 @@ packages:
   fastify-plugin@6.0.0:
     resolution: {integrity: sha512-fZOty7z3O7vOliF6d8bHE3wiEh1KcNnKEQensSgTk9C1DvN6nRLS++XVd86v33Hw/8u9Un8A1zDrQ8ujcQDHEg==}
 
-  fastify@5.12.1:
-    resolution: {integrity: sha512-FWi+tQvwxR/PeRX7Z2mhfEF5ozJ3jn9asiiclzKXNSzJRHAYcU924aIOKAdHFJ+YIKieh3cqr1IwCOvTr41B3Q==}
+  fastify@5.12.5:
+    resolution: {integrity: sha512-OB2k1dlxs5/NAABqeKV2FUHkSD2BbENsCak8yULVcymn3fHIPDVa9TI3SDnJSWYSllZmSYuZXy2gTnsT+Sut1A==}
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
@@ -11016,7 +11017,7 @@ snapshots:
       '@nestjs/common': 11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2)
       '@nestjs/core': 11.2.7(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/microservices@11.2.7)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       fast-querystring: 1.1.2
-      fastify: 5.12.1
+      fastify: 5.12.5
       find-my-way: 9.7.0
       light-my-request: 6.6.0
       path-to-regexp: 8.4.2
@@ -11150,13 +11151,13 @@ snapshots:
       - nx
       - supports-color
 
-  '@nx/nest@23.1.1(@babel/traverse@7.29.7)(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)(@nx/jest@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(babel-plugin-macros@3.1.0)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3))(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(chokidar@4.0.3)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.1)(nx@23.1.1(@swc/core@1.15.46))(reflect-metadata@0.2.2)(rxjs@7.8.2)(typescript@5.9.3)':
+  '@nx/nest@23.1.1(@babel/traverse@7.29.7)(@nestjs/common@11.2.7(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.2.7)(@nx/jest@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(babel-plugin-macros@3.1.0)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3))(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(chokidar@4.0.3)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.5)(nx@23.1.1(@swc/core@1.15.46))(reflect-metadata@0.2.2)(rxjs@7.8.2)(typescript@5.9.3)':
     dependencies:
       '@nestjs/schematics': 11.1.0(chokidar@4.0.3)(typescript@5.9.3)
       '@nx/devkit': 23.1.1(nx@23.1.1(@swc/core@1.15.46))
       '@nx/eslint': 23.1.1(@babel/traverse@7.29.7)(@nx/jest@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(babel-plugin-macros@3.1.0)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3))(@swc/core@1.15.46)(@zkochan/js-yaml@0.0.7)(eslint@9.39.5(jiti@2.7.0))(nx@23.1.1(@swc/core@1.15.46))
       '@nx/js': 23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(nx@23.1.1(@swc/core@1.15.46))
-      '@nx/node': 23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.1)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3)
+      '@nx/node': 23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.5)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3)
       semver: 7.8.5
       tslib: 2.8.1
     optionalDependencies:
@@ -11189,7 +11190,7 @@ snapshots:
       - typescript
       - verdaccio
 
-  '@nx/node@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.1)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3)':
+  '@nx/node@23.1.1(@babel/traverse@7.29.7)(@swc/core@1.15.46)(@types/node@22.20.1)(@zkochan/js-yaml@0.0.7)(babel-plugin-macros@3.1.0)(eslint@9.39.5(jiti@2.7.0))(express@4.22.2)(fastify@5.12.5)(nx@23.1.1(@swc/core@1.15.46))(typescript@5.9.3)':
     dependencies:
       '@nx/devkit': 23.1.1(nx@23.1.1(@swc/core@1.15.46))
       '@nx/docker': 23.1.1(nx@23.1.1(@swc/core@1.15.46))
@@ -11202,7 +11203,7 @@ snapshots:
       tslib: 2.8.1
     optionalDependencies:
       express: 4.22.2
-      fastify: 5.12.1
+      fastify: 5.12.5
     transitivePeerDependencies:
       - '@babel/traverse'
       - '@swc-node/register'
@@ -14678,7 +14679,7 @@ snapshots:
 
   fastify-plugin@6.0.0: {}
 
-  fastify@5.12.1:
+  fastify@5.12.5:
     dependencies:
       '@fastify/ajv-compiler': 4.0.5
       '@fastify/error': 4.2.0
