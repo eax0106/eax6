@@ -140,6 +140,49 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
   });
 
+  it("erases one workspace from the live schema and leaves the tenant's other workspace (D2)", async () => {
+    const other = "018f4d6e-2b4a-7a3e-8c1a-1234567890e9";
+    await seedAll(adminStore, TENANT_A, "x");
+    await adminStore.withTenant(TENANT_A, async (tx) => {
+      const tables = await tx.query<{ table_name: string }>(
+        "SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'workspace_id' AND table_name = ANY($1::text[])",
+        [[...TABLES]],
+      );
+      for (const { table_name } of tables.rows) {
+        await tx.query(`UPDATE ${table_name} SET workspace_id = $2 WHERE tenant_id = $1`, [TENANT_A, other]);
+      }
+    });
+    await seedAll(adminStore, TENANT_A, "w");
+
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_w/v1`, "erased");
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_x/v1`, "kept");
+    const located = await service.locateWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`);
+    expect(located).toHaveLength(TABLES.length);
+    expect(located.every((location) => location.rowCount === 1)).toBe(true);
+
+    await expect(service.deleteWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deletedRows: TABLES.length, deletedObjects: 1 });
+    await expect(secrets.listSecretReferences(`alter/webhook-endpoints/ten_${TENANT_A}/`)).resolves.toEqual([`alter/webhook-endpoints/ten_${TENANT_A}/whe_x/v1`]);
+    await expect(service.verifyWorkspaceDeletion(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
+    const survivors = await service.locateWorkspaceData(`ten_${TENANT_A}`, `ws_${other}`);
+    expect(survivors.every((location) => location.rowCount === 1)).toBe(true);
+    await expect(service.locateSubjectData(`ten_${TENANT_A}`)).resolves.toSatisfy(
+      (locations: readonly { rowCount: number }[]) => locations.every((location) => location.rowCount === 1),
+    );
+
+    // A signing secret whose endpoint is gone fails the workspace's verification.
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_w/v2`, "orphan");
+    await expect(service.verifyWorkspaceDeletion(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
+      deleted: false,
+      remaining: [expect.objectContaining({ table: "secrets:alter/webhook-endpoints", rowCount: 1 })],
+    });
+
+    await service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST);
+  });
+
+  it("refuses a malformed workspace id", async () => {
+    await expect(service.locateWorkspaceData(`ten_${TENANT_A}`, "ws_nope")).rejects.toThrow("workspaceId");
+  });
+
   it("fails verification while any tenant row survives", async () => {
     await adminStore.withTenant(TENANT_A, async (tx) => {
       await tx.query(
@@ -184,6 +227,9 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
   });
 });
 
+// A hex character per fixture suffix, for ids that must be UUID-shaped.
+const SUFFIX_HEX: Record<string, string> = { a: "a", b: "b", x: "c", w: "d" };
+
 async function seedAll(
   store: PostgresOrchestrationStoreProvider,
   tenant: string,
@@ -212,7 +258,7 @@ async function seedAll(
     await tx.query("INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,'fixture','Merge','succeeded')", [node, tenant, run]);
     await tx.query("INSERT INTO side_effects(id,tenant_id,run_id,dag_node_id,node_execution_id,tool_name,status) VALUES ($1,$2,$3,'fixture',$4,'email.send','completed')", [`sfx_${suffix}`, tenant, run, node]);
     // D3: a budget, what it has spent, and the run's reservation against it.
-    const budget = `bud_018f4d6e-2b4a-7a3e-8c1a-1234567890${suffix === "a" ? "a9" : "b9"}`;
+    const budget = `bud_018f4d6e-2b4a-7a3e-8c1a-1234567890${SUFFIX_HEX[suffix]}9`;
     await tx.query("INSERT INTO budgets(id,tenant_id,workspace_id,workflow_id,kind,period,amount_minor,created_by) VALUES ($1,$2,$2,$3,'workflow','daily',100,'usr_fixture')", [budget, tenant, workflow]);
     await tx.query("INSERT INTO budget_usage(tenant_id,budget_id,period_key,reserved_minor) VALUES ($1,$2,'2026-09-30',10)", [tenant, budget]);
     await tx.query("INSERT INTO budget_reservations(tenant_id,run_id,budget_id,period_key,reserved_minor) VALUES ($1,$2,$3,'2026-09-30',10)", [tenant, run, budget]);
@@ -223,7 +269,7 @@ async function seedAll(
     await tx.query("INSERT INTO run_stream_events(id,tenant_id,run_id,seq,event,payload) VALUES ($1,$2,$3,1,'node.completed','{}')", [`sse_${suffix}`, tenant, run]);
     await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,node_execution_id,gate_type,verdict) VALUES ($1,$2,$3,$4,'quality','pass')", [`vrf_${suffix}`, tenant, run, node]);
     await tx.query("INSERT INTO recovery_actions(id,tenant_id,run_id,node_execution_id,failure_class) VALUES ($1,$2,$3,$4,'fixture')", [`rcv_${suffix}`, tenant, run, node]);
-    await tx.query("INSERT INTO run_outcomes(id,tenant_id,workspace_id,run_id,mode,eligible,verdict,human_rescue,critical_external_error,decided_at) VALUES ($1,$2,$2,$3,'workflow',true,'completed_verified',false,false,now())", [`018f4d6e-2b4a-7a3e-8c1a-1234567890${suffix === "a" ? "a8" : "b8"}`, tenant, run]);
+    await tx.query("INSERT INTO run_outcomes(id,tenant_id,workspace_id,run_id,mode,eligible,verdict,human_rescue,critical_external_error,decided_at) VALUES ($1,$2,$2,$3,'workflow',true,'completed_verified',false,false,now())", [`018f4d6e-2b4a-7a3e-8c1a-1234567890${SUFFIX_HEX[suffix]}8`, tenant, run]);
     await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$2,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations

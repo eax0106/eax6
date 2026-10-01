@@ -10,8 +10,21 @@ from sqlalchemy.orm import Session, sessionmaker
 from src.db.ids import validate_prefixed_id
 
 from .models import DeletionResult, RetentionSweepResult, SubjectDataLocation, VerificationResult
+from .workspace_scope import plan_workspace_scope
 
 STORE = "ads-core"
+# Children first, so their parents still exist for the scope predicates.
+WORKSPACE_DELETE_ORDER = (
+    "retrieval_audit",
+    "chunks",
+    "memory_namespace",
+    "records",
+    "document_versions",
+    "ingestion_jobs",
+    "documents",
+    "sources",
+    "scopes",
+)
 TABLES = (
     "scopes",
     "sources",
@@ -114,6 +127,76 @@ class AdsDeletionProvider:
             store=STORE, manifestId=manifest_id, deleted=not remaining, remaining=remaining
         )
 
+    # D2: one workspace's erasure at the end of its undo window, through the
+    # same audit-service orchestration as a tenant's: located object refs are
+    # purged by the orchestrator before the rows, then verified absent.
+    def locate_workspace_data(
+        self, tenant_id: str, workspace_id: str
+    ) -> tuple[SubjectDataLocation, ...]:
+        tenant_uuid, workspace_uuid = _tenant_uuid(tenant_id), _workspace_uuid(workspace_id)
+        params = {"tenant": tenant_uuid, "workspace": workspace_uuid}
+        with self._sessions.begin() as session:
+            _set_tenant(session, tenant_uuid)
+            scope = _workspace_scope(session)
+            refs = _workspace_object_references(session, scope, params)
+            locations = []
+            for table in TABLES:
+                count = int(
+                    session.scalar(
+                        text(f"SELECT count(*) FROM {table} WHERE {scope[table]}"), params
+                    )
+                    or 0
+                )
+                locations.append(
+                    SubjectDataLocation(
+                        store=STORE,
+                        table=table,
+                        rowCount=count,
+                        objectReferences=refs if table == "document_versions" else (),
+                    )
+                )
+            return tuple(locations)
+
+    def delete_workspace_data(
+        self, tenant_id: str, workspace_id: str, manifest_id: str
+    ) -> DeletionResult:
+        tenant_uuid, workspace_uuid = _tenant_uuid(tenant_id), _workspace_uuid(workspace_id)
+        _require_manifest(manifest_id)
+        params = {"tenant": tenant_uuid, "workspace": workspace_uuid}
+        with self._sessions.begin() as session:
+            _set_tenant(session, tenant_uuid)
+            scope = _workspace_scope(session)
+            references = _workspace_object_references(session, scope, params)
+        for reference in references:
+            self._objects.delete_object(reference)
+        deleted = 0
+        with self._sessions.begin() as session:
+            _set_tenant(session, tenant_uuid)
+            scope = _workspace_scope(session)
+            for table in WORKSPACE_DELETE_ORDER:
+                deleted += _rowcount(
+                    session.execute(text(f"DELETE FROM {table} WHERE {scope[table]}"), params)
+                )
+        return DeletionResult(
+            store=STORE,
+            manifestId=manifest_id,
+            deletedRows=deleted,
+            deletedObjects=len(references),
+        )
+
+    def verify_workspace_deletion(
+        self, tenant_id: str, workspace_id: str, manifest_id: str
+    ) -> VerificationResult:
+        _require_manifest(manifest_id)
+        remaining = tuple(
+            item
+            for item in self.locate_workspace_data(tenant_id, workspace_id)
+            if item.rowCount > 0
+        )
+        return VerificationResult(
+            store=STORE, manifestId=manifest_id, deleted=not remaining, remaining=remaining
+        )
+
     def apply_retention_policy(self) -> RetentionSweepResult:
         if self._system_sessions is None:
             raise RuntimeError("system deletion database connection is required for retention")
@@ -210,6 +293,35 @@ class AdsDeletionProvider:
 def _tenant_uuid(tenant_id: str) -> str:
     validate_prefixed_id("ten", tenant_id)
     return tenant_id.removeprefix("ten_")
+
+
+def _workspace_uuid(workspace_id: str) -> str:
+    validate_prefixed_id("ws", workspace_id)
+    return workspace_id.removeprefix("ws_")
+
+
+def _workspace_scope(session: Session) -> dict[str, str]:
+    plan = plan_workspace_scope(session, TABLES)
+    if plan.unscoped:
+        raise RuntimeError(f"Workspace erasure cannot scope tables: {', '.join(plan.unscoped)}")
+    return plan.scoped
+
+
+def _workspace_object_references(
+    session: Session, scope: dict[str, str], params: dict[str, str]
+) -> tuple[str, ...]:
+    rows = session.execute(
+        text(
+            "SELECT content_ref,normalized_ref FROM document_versions "
+            f"WHERE {scope['document_versions']}"
+        ),
+        params,
+    ).all()
+    return tuple(
+        sorted(
+            {ref for row in rows for ref in row if isinstance(ref, str) and ref.startswith("s3://")}
+        )
+    )
 
 
 def _require_manifest(manifest_id: str) -> None:

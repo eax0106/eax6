@@ -40,3 +40,14 @@ export interface DeletionProvider {
   applyRetentionPolicy(): Promise<RetentionSweepResult>;
   replayDeletionLedger(sinceTimestamp: string): Promise<ReplayResult>;
 }
+
+/**
+ * D2 workspace erasure at the end of a deleted workspace's undo window: the
+ * same locate, delete, verify path as a tenant's erasure, narrowed to one
+ * workspace of a still-active tenant. Ids are prefixed (ten_, ws_).
+ */
+export interface WorkspaceDeletionProvider {
+  locateWorkspaceData(tenantId: string, workspaceId: string): Promise<readonly SubjectDataLocation[]>;
+  deleteWorkspaceData(tenantId: string, workspaceId: string, manifestId: string): Promise<DeletionResult>;
+  verifyWorkspaceDeletion(tenantId: string, workspaceId: string, manifestId: string): Promise<VerificationResult>;
+}

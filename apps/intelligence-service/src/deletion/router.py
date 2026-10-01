@@ -21,6 +21,8 @@ from .models import (
     SubjectDataLocation,
     VerificationResult,
     VerifyRequest,
+    WorkspaceDeleteRequest,
+    WorkspaceRequest,
 )
 from .provider import IntelligenceDeletionProvider
 
@@ -112,6 +114,48 @@ async def verify(
     _authorize(authorization)
     return await _run(
         "/internal/deletion/verify", provider.verify_deletion, request.tenantId, request.manifestId
+    )
+
+
+# D2: one workspace's erasure at the end of its undo window.
+@router.post("/workspace/locate", response_model=tuple[SubjectDataLocation, ...])
+async def locate_workspace(
+    request: WorkspaceRequest, provider: ProviderDep, authorization: Auth = None
+) -> tuple[SubjectDataLocation, ...]:
+    _authorize(authorization)
+    return await _run(
+        "/internal/deletion/workspace/locate",
+        provider.locate_workspace_data,
+        request.tenantId,
+        request.workspaceId,
+    )
+
+
+@router.post("/workspace/delete", response_model=DeletionResult)
+async def delete_workspace(
+    request: WorkspaceDeleteRequest, provider: ProviderDep, authorization: Auth = None
+) -> DeletionResult:
+    _authorize(authorization)
+    return await _run(
+        "/internal/deletion/workspace/delete",
+        provider.delete_workspace_data,
+        request.tenantId,
+        request.workspaceId,
+        request.manifestId,
+    )
+
+
+@router.post("/workspace/verify", response_model=VerificationResult)
+async def verify_workspace(
+    request: WorkspaceDeleteRequest, provider: ProviderDep, authorization: Auth = None
+) -> VerificationResult:
+    _authorize(authorization)
+    return await _run(
+        "/internal/deletion/workspace/verify",
+        provider.verify_workspace_deletion,
+        request.tenantId,
+        request.workspaceId,
+        request.manifestId,
     )
 
 

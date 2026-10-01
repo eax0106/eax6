@@ -47,6 +47,15 @@ class DeleteRequest(StrictModel):
     manifestId: str
 
 
+class WorkspaceRequest(StrictModel):
+    tenantId: str
+    workspaceId: str
+
+
+class WorkspaceDeleteRequest(WorkspaceRequest):
+    manifestId: str
+
+
 class VerifyRequest(DeleteRequest):
     pass
 

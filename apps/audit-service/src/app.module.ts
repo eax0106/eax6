@@ -14,7 +14,7 @@ import { AuditStoreLifecycle } from "./database/store.lifecycle";
 import { HealthController } from "./health/health.controller";
 import type { ObjectStorageProvider } from "@alterx/shared-clients";
 import { DELETION_SERVICE_TOKEN_HASH, DeletionController } from "./deletion/deletion.controller";
-import { DeletionOrchestrator } from "./deletion/deletion-orchestrator";
+import { DeletionOrchestrator, WORKSPACE_ERASURE_STORES } from "./deletion/deletion-orchestrator";
 import { HttpDeletionProvider } from "./deletion/http-deletion-provider";
 import { AUDIT_QUERY_SERVICE_TOKEN_HASH, AuditQueryController } from "./audit/audit-query.controller";
 
@@ -36,17 +36,22 @@ export interface AuditDeletionWiring {
 @Module({})
 export class AppModule {
   static register(store: AuditStoreProvider, deletion?: AuditDeletionWiring): DynamicModule {
+    const providers = deletion === undefined ? [] : [
+      new HttpDeletionProvider(deletion.adsBaseUrl, deletion.serviceToken, "ads-core"),
+      new HttpDeletionProvider(deletion.orchestrationBaseUrl, deletion.serviceToken, "orchestration-service"),
+      new HttpDeletionProvider(deletion.platformApiBaseUrl, deletion.serviceToken, "platform-api"),
+      new HttpDeletionProvider(deletion.costBaseUrl, deletion.serviceToken, "cost-ledger-service"),
+      new HttpDeletionProvider(deletion.intelligenceBaseUrl, deletion.serviceToken, "intelligence-service"),
+      new HttpDeletionProvider(deletion.memoryBaseUrl, deletion.serviceToken, "memory-service"),
+    ];
+    const workspaceStores: readonly string[] = WORKSPACE_ERASURE_STORES;
     const orchestrator = deletion === undefined ? undefined : new DeletionOrchestrator(
       store,
-      [new HttpDeletionProvider(deletion.adsBaseUrl, deletion.serviceToken, "ads-core"),
-       new HttpDeletionProvider(deletion.orchestrationBaseUrl, deletion.serviceToken, "orchestration-service"),
-       new HttpDeletionProvider(deletion.platformApiBaseUrl, deletion.serviceToken, "platform-api"),
-       new HttpDeletionProvider(deletion.costBaseUrl, deletion.serviceToken, "cost-ledger-service"),
-       new HttpDeletionProvider(deletion.intelligenceBaseUrl, deletion.serviceToken, "intelligence-service"),
-       new HttpDeletionProvider(deletion.memoryBaseUrl, deletion.serviceToken, "memory-service")],
+      providers,
       deletion.objectStorage,
       deletion.pseudonymKey,
       () => new AuditService(store, deletion.chainSigningKey).sealChain(),
+      providers.filter((provider) => workspaceStores.includes(provider.store)),
     );
     return {
       module: AppModule,

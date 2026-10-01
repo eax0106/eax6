@@ -11,6 +11,7 @@ import { ActorContextGuard } from "../rbac/actor-context.guard";
 import type { ActorContext, RbacRequest } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
 import { WorkspaceDeletionService } from "./workspace-deletion.service";
+import { WorkspaceErasureRunner } from "./workspace-erasure.runner";
 import { WorkspacesService } from "./workspaces.service";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
@@ -187,6 +188,43 @@ describe.skipIf(!databaseUrl)("workspace pending deletion, PostgreSQL", () => {
       `release /api/v1/workspace-holds/ws_${workspaceId}`,
     ]);
     await expect(status()).resolves.toMatchObject({ status: "active", due: null });
+  });
+
+  it("the sweep erases only workspaces past their window, through audit-service, and retries failures (D2)", async () => {
+    const notDue = randomUUID();
+    const failing = randomUUID();
+    await admin.query(
+      "INSERT INTO workspaces (id, tenant_id, name, status) VALUES ($1, $3, 'Later', 'active'), ($2, $3, 'Flaky', 'active')",
+      [notDue, failing, tenantId],
+    );
+    for (const [id, name] of [[workspaceId, "Marketing"], [notDue, "Later"], [failing, "Flaky"]] as const) {
+      await deletion.requestDeletion(actor, id, name);
+    }
+    await admin.query(
+      "UPDATE workspaces SET deletion_due_at = now() - interval '1 minute' WHERE id = ANY($1::uuid[])",
+      [[workspaceId, failing]],
+    );
+    const erased: string[] = [];
+    const erasure = {
+      executeWorkspaceErasure: vi.fn(async (_tenant: string, workspace: string) => {
+        if (workspace === `ws_${failing}`) throw new Error("verification failed");
+        erased.push(workspace);
+        // platform-api's own share of the erasure removes the row.
+        await admin.query("DELETE FROM workspaces WHERE id = $1", [workspace.slice(3)]);
+        return { manifestId: "del_fixture", completed: true };
+      }),
+    };
+    audit.recordEvent.mockClear();
+    const runner = new WorkspaceErasureRunner({ listActiveTenantIds: async () => [tenantId] }, db, erasure, audit as unknown as AuditEventHandler);
+
+    await expect(runner.run()).resolves.toEqual({ tenants: 1, tenantsFailed: 0, workspacesErased: 1, workspacesFailed: 1 });
+    expect(erasure.executeWorkspaceErasure).toHaveBeenCalledWith(`ten_${tenantId}`, `ws_${workspaceId}`);
+    expect(erasure.executeWorkspaceErasure).not.toHaveBeenCalledWith(`ten_${tenantId}`, `ws_${notDue}`);
+    expect(erased).toEqual([`ws_${workspaceId}`]);
+    expect(audit.recordEvent).toHaveBeenCalledTimes(1);
+    expect(audit.recordEvent).toHaveBeenCalledWith(expect.objectContaining({ action: "workspace.deletion.erase", target_ref: workspaceId, actor_type: "system" }));
+    const left = await admin.query<{ id: string; status: string }>("SELECT id::text, status FROM workspaces WHERE tenant_id = $1 ORDER BY name", [tenantId]);
+    expect(left.rows).toEqual([{ id: failing, status: "pending_deletion" }, { id: notDue, status: "pending_deletion" }]);
   });
 
   it("grants no workspace role in a workspace pending deletion", async () => {

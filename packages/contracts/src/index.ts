@@ -317,6 +317,7 @@ export type {
   RetentionSweepResult,
   SubjectDataLocation,
   VerificationResult,
+  WorkspaceDeletionProvider,
 } from "./deletion";
 export {
   FailureClassSchema,

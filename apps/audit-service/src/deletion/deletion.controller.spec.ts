@@ -15,6 +15,7 @@ import { DeletionOrchestrator } from "./deletion-orchestrator";
 const TOKEN = "audit-internal-deletion-token";
 const execute = vi.fn();
 const replayDeletionLedger = vi.fn();
+const executeWorkspace = vi.fn();
 
 describe("DeletionController RFC 9457 internal surface", () => {
   let app: NestFastifyApplication;
@@ -25,7 +26,7 @@ describe("DeletionController RFC 9457 internal surface", () => {
       providers: [
         {
           provide: DeletionOrchestrator,
-          useValue: { execute, replayDeletionLedger },
+          useValue: { execute, replayDeletionLedger, executeWorkspace },
         },
         {
           provide: DELETION_SERVICE_TOKEN_HASH,
@@ -41,6 +42,7 @@ describe("DeletionController RFC 9457 internal surface", () => {
   beforeEach(() => {
     execute.mockReset();
     replayDeletionLedger.mockReset();
+    executeWorkspace.mockReset();
   });
 
   afterAll(async () => {
@@ -55,6 +57,22 @@ describe("DeletionController RFC 9457 internal surface", () => {
     expect(problem).toMatchObject({ status: 401, error_code: "DELETION_AUTHENTICATION_FAILED" });
     expect(JSON.stringify(problem)).not.toContain("sensitive-subject");
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("erases one workspace only for valid ten_ and ws_ ids, authenticated (D2)", async () => {
+    const tenantId = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
+    const workspaceId = "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890c1";
+    expect((await request("/internal/deletion/workspace/execute", { tenantId, workspaceId })).statusCode).toBe(401);
+    for (const body of [{ tenantId, workspaceId: "ws_nope" }, { tenantId: "nope", workspaceId }, {}]) {
+      expect((await request("/internal/deletion/workspace/execute", body, `Bearer ${TOKEN}`)).statusCode).toBe(400);
+    }
+    expect(executeWorkspace).not.toHaveBeenCalled();
+    executeWorkspace.mockResolvedValue({ manifestId: "del_fixture", completed: true });
+    const response = await request("/internal/deletion/workspace/execute", { tenantId, workspaceId }, `Bearer ${TOKEN}`);
+    expect(response.statusCode).toBe(201);
+    expect(executeWorkspace).toHaveBeenCalledWith(tenantId, workspaceId);
+    executeWorkspace.mockRejectedValue(new Error("Provider deletion verification failed"));
+    expect((await request("/internal/deletion/workspace/execute", { tenantId, workspaceId }, `Bearer ${TOKEN}`)).statusCode).toBe(500);
   });
 
   it("returns an authenticated successful execution", async () => {

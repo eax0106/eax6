@@ -373,6 +373,42 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     });
   });
 
+  it("erases one workspace from the live schema, leaving the tenant and its other workspace (D2)", async () => {
+    const wsA2 = "00000000-0000-7000-8000-00000000a102";
+    await admin.query(`INSERT INTO workspaces (id, tenant_id, name, status) VALUES ($1, $2, 'A2', 'active')`, [wsA2, A]);
+    await admin.query(`INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES ($1, $2, $3, $4, 'editor')`, [randomUUID(), A, wsA2, u1]);
+    const wsId = `ws_${wsA}`;
+
+    const located = await service.locateWorkspaceData(ten(A), wsId);
+    const rowsOf = (table: string) => located.find((location) => location.table === table)?.rowCount;
+    expect(rowsOf("workspaces")).toBe(1);
+    expect(rowsOf("workspace_members")).toBe(2);
+    expect(rowsOf("oauth_connections")).toBe(1);
+    expect(rowsOf("notification_reads")).toBe(1);
+    // Tenant-wide and legal-hold tables are never part of a workspace.
+    for (const table of ["tenant_members", "billing_events", "billing_profiles", "entitlements", "orders", "credential_refs"]) {
+      expect(rowsOf(table)).toBeUndefined();
+    }
+
+    await expect(service.deleteWorkspaceData(ten(A), wsId, MANIFEST)).resolves.toMatchObject({ deletedObjects: 1 });
+    await expect(service.verifyWorkspaceDeletion(ten(A), wsId, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
+    expect(await count("workspaces", "id", wsA)).toBe(0);
+    expect(await count("workspaces", "id", wsA2)).toBe(1);
+    expect(Number((await one<{ n: string }>("SELECT count(*)::text AS n FROM workspace_members WHERE workspace_id = $1", [wsA2])).n)).toBe(1);
+    expect(await count("tenant_members")).toBe(2);
+    expect(await count("billing_events")).toBe(1);
+    expect(await count("tenants", "id")).toBe(1);
+    expect([...secrets.values.keys()].sort()).toEqual([
+      `/alter/credentials/${A}/00000000-0000-7000-8000-0000000c0001`,
+      `/alter/credentials/${B}/00000000-0000-7000-8000-0000000c0002`,
+      `/alter/env-vars/${A}/00000000-0000-7000-8000-0000000e0001`,
+    ]);
+    expect(await count("workspaces", "tenant_id", B)).toBe(1);
+
+    // A second run finds nothing and still verifies.
+    await expect(service.deleteWorkspaceData(ten(A), wsId, MANIFEST)).resolves.toMatchObject({ deletedRows: 0, deletedObjects: 0 });
+  });
+
   it("lists every tenant, tombstones included, for the ledger replay", async () => {
     await service.deleteSubjectData(ten(A), MANIFEST);
     expect(await service.listSubjectIds()).toEqual([ten(A), ten(B)]);

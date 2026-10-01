@@ -11,7 +11,7 @@ import {
   Post,
   UseFilters,
 } from "@nestjs/common";
-import { ProblemDetailsSchema, type ProblemDetails } from "@alterx/contracts";
+import { ProblemDetailsSchema, TenantIdSchema, WorkspaceIdSchema, type ProblemDetails } from "@alterx/contracts";
 import { createUuidV7 } from "../audit/audit-id";
 import { DeletionOrchestrator } from "./deletion-orchestrator";
 
@@ -53,6 +53,25 @@ export class DeletionController {
     } catch (error: unknown) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(problem("/internal/deletion/execute", 500), 500);
+    }
+  }
+  // D2: erase one workspace at the end of its undo window.
+  @Post("workspace/execute")
+  async executeWorkspace(
+    @Body() body: { tenantId?: unknown; workspaceId?: unknown },
+    @Headers("authorization") auth?: string,
+  ) {
+    this.authorize(auth);
+    const tenantId = TenantIdSchema.safeParse(body?.tenantId);
+    const workspaceId = WorkspaceIdSchema.safeParse(body?.workspaceId);
+    if (!tenantId.success || !workspaceId.success) {
+      throw new HttpException(problem("/internal/deletion/workspace/execute", 400), 400);
+    }
+    try {
+      return await this.orchestrator.executeWorkspace(tenantId.data, workspaceId.data);
+    } catch (error: unknown) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(problem("/internal/deletion/workspace/execute", 500), 500);
     }
   }
   @Post("replay")

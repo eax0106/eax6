@@ -78,7 +78,9 @@ def deletion_database() -> Generator[
         admin.dispose()
 
 
-def _seed_all(sessions: sessionmaker[Session], tenant: str, suffix: str) -> str:
+def _seed_all(
+    sessions: sessionmaker[Session], tenant: str, suffix: str, workspace: str | None = None
+) -> str:
     scope = f"scp_{suffix}"
     source = f"src_{suffix}"
     document = f"doc_{suffix}"
@@ -92,7 +94,7 @@ def _seed_all(sessions: sessionmaker[Session], tenant: str, suffix: str) -> str:
         )
         session.execute(
             sa.text("INSERT INTO scopes(id,tenant_id,workspace_id) VALUES (:id,:t,:w)"),
-            {"id": scope, "t": tenant, "w": tenant},
+            {"id": scope, "t": tenant, "w": workspace or tenant},
         )
         session.execute(
             sa.text("INSERT INTO sources(id,tenant_id,scope_id,kind) VALUES (:id,:t,:s,'upload')"),
@@ -196,6 +198,45 @@ def test_hard_delete_all_nine_tables_objects_and_tenant_isolation(
     assert all(item.rowCount == 1 for item in provider.locate_subject_data(f"ten_{TENANT_B}"))
 
 
+TENANT_WORKSPACES = "018f4d6e-2b4a-7a3e-8c1a-1234567890f1"
+WORKSPACE_ERASED = "018f4d6e-2b4a-7a3e-8c1a-1234567890f2"
+WORKSPACE_KEPT = "018f4d6e-2b4a-7a3e-8c1a-1234567890f3"
+
+
+def test_workspace_erasure_scoped_from_the_live_schema(
+    deletion_database: tuple[sessionmaker[Session], sessionmaker[Session]],
+) -> None:
+    """D2: one workspace's rows and objects go; the tenant's other workspace stays."""
+    tenant_sessions, system_sessions = deletion_database
+    objects = MemoryObjects()
+    ref_erased = _seed_all(tenant_sessions, TENANT_WORKSPACES, "ws-erase", WORKSPACE_ERASED)
+    ref_kept = _seed_all(tenant_sessions, TENANT_WORKSPACES, "ws-keep", WORKSPACE_KEPT)
+    objects.references.update({ref_erased, ref_kept})
+    provider = AdsDeletionProvider(tenant_sessions, objects, system_sessions)
+    tenant, erased, kept = (
+        f"ten_{TENANT_WORKSPACES}",
+        f"ws_{WORKSPACE_ERASED}",
+        f"ws_{WORKSPACE_KEPT}",
+    )
+
+    located = provider.locate_workspace_data(tenant, erased)
+    assert len(located) == 9
+    assert all(item.rowCount == 1 for item in located)
+    assert {ref for item in located for ref in item.objectReferences} == {ref_erased}
+
+    result = provider.delete_workspace_data(tenant, erased, MANIFEST)
+    assert result.deletedRows == 9
+    assert result.deletedObjects == 1
+    assert provider.verify_workspace_deletion(tenant, erased, MANIFEST).deleted is True
+    assert objects.object_exists(ref_erased) is False
+    assert objects.object_exists(ref_kept) is True
+    assert all(item.rowCount == 1 for item in provider.locate_workspace_data(tenant, kept))
+    assert all(item.rowCount == 1 for item in provider.locate_subject_data(tenant))
+    with pytest.raises(ValueError):
+        provider.locate_workspace_data(tenant, "ws_nope")
+    provider.delete_subject_data(tenant, MANIFEST)
+
+
 def test_verify_fails_closed_when_rows_survive(
     deletion_database: tuple[sessionmaker[Session], sessionmaker[Session]],
 ) -> None:
@@ -260,8 +301,7 @@ def test_source_retention_config_changes_actual_deletion_behaviour(
         )
         session.execute(
             sa.text(
-                "UPDATE documents SET updated_at=now()-interval '100 days' "
-                "WHERE id='doc_srcret'"
+                "UPDATE documents SET updated_at=now()-interval '100 days' WHERE id='doc_srcret'"
             )
         )
     provider = AdsDeletionProvider(tenant_sessions, objects, system_sessions)

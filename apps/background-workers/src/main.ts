@@ -46,6 +46,7 @@ import {
   AUDIT_SKELETON_RETENTION_JOB_TYPE,
   AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
   WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
+  WORKSPACE_ERASURE_SWEEP_JOB_TYPE,
 } from "./platform-jobs/scheduled-job-types";
 
 const { parsePort, scopedValue } = createEnvironmentValidators(
@@ -333,6 +334,15 @@ async function bootstrap(): Promise<void> {
   );
   workspaceExportSweepRunner.start();
 
+  // D2 (C82): deleted workspaces are erased once their undo window ends.
+  const workspaceErasureSweepRunner = new IntervalJobSchedulerRunner(
+    digestDurableExecution,
+    WORKSPACE_ERASURE_SWEEP_JOB_TYPE,
+    "workspace-erasure-sweep",
+    platformJobsConfig.workspaceErasureSweepIntervalMs,
+  );
+  workspaceErasureSweepRunner.start();
+
   app.enableShutdownHooks();
   app.getHttpAdapter().getInstance().addHook("onClose", () => {
     worker.shutdown();
@@ -351,6 +361,7 @@ async function bootstrap(): Promise<void> {
     void auditSkeletonRetentionRunner.stop();
     void auditChainFullVerifyRunner.stop();
     void workspaceExportSweepRunner.stop();
+    void workspaceErasureSweepRunner.stop();
   });
 
   await app.listen(

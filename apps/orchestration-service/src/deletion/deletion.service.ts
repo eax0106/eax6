@@ -5,8 +5,10 @@ import type {
   RetentionSweepResult,
   SubjectDataLocation,
   VerificationResult,
+  WorkspaceDeletionProvider,
 } from "@alterx/contracts";
-import { TenantIdSchema } from "@alterx/contracts";
+import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
+import { planWorkspaceScope } from "@alterx/adapters";
 import type { ErasableSecretsProvider } from "@alterx/shared-clients";
 
 import { tenantSecretPrefix } from "../trigger-bindings/ids";
@@ -76,7 +78,7 @@ export const DELETE_ORDER = [
   "workflow_template_variable_values", "workflow_versions", "workflows",
 ] as const;
 
-export class OrchestrationDeletionService implements DeletionProvider {
+export class OrchestrationDeletionService implements DeletionProvider, WorkspaceDeletionProvider {
   constructor(
     private readonly store: DeletionTenantStore,
     private readonly systemStore: DeletionTenantStore = store,
@@ -172,6 +174,77 @@ export class OrchestrationDeletionService implements DeletionProvider {
     return { store: STORE, deletedRows, deletedObjects: 0, sweptAt: new Date().toISOString() };
   }
 
+  /**
+   * D2: one workspace's rows, scoped from the live schema (planWorkspaceScope).
+   * Every engine table is workspace data, so a table the plan cannot scope is
+   * an error rather than silently skipped.
+   */
+  async locateWorkspaceData(tenantId: string, workspaceId: string): Promise<readonly SubjectDataLocation[]> {
+    const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
+    return this.store.withTenant(tenant, async (tx) => {
+      const scope = await workspacePredicates(tx);
+      const locations: SubjectDataLocation[] = [];
+      for (const table of TABLES) {
+        const result = await tx.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM ${table} WHERE ${scope.get(table)!}`, [tenant, workspace],
+        );
+        locations.push({ store: STORE, table, rowCount: Number(result.rows[0]?.count ?? 0), objectReferences: [] });
+      }
+      return locations;
+    });
+  }
+
+  async deleteWorkspaceData(tenantId: string, workspaceId: string, manifestId: string): Promise<DeletionResult> {
+    const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
+    requireManifest(manifestId);
+    // The workspace's webhook signing secrets go before its rows, as in the
+    // tenant's erasure: a failure leaves the endpoints for a retry to find.
+    let deletedObjects = 0;
+    if (this.secrets !== undefined) {
+      const endpoints = await this.store.withTenant(tenant, async (tx) => {
+        const scope = await workspacePredicates(tx);
+        return (await tx.query<{ id: string }>(
+          `SELECT id FROM webhook_endpoints WHERE ${scope.get("webhook_endpoints")!}`, [tenant, workspace],
+        )).rows.map((row) => row.id);
+      });
+      for (const endpoint of endpoints) {
+        for (const reference of await this.secrets.listSecretReferences(`${tenantSecretPrefix(`ten_${tenant}`)}${endpoint}/`)) {
+          await this.secrets.deleteSecret(reference);
+          deletedObjects += 1;
+        }
+      }
+    }
+    const deletedRows = await this.store.withTenant(tenant, async (tx) => {
+      const scope = await workspacePredicates(tx);
+      let deleted = 0;
+      // Children first, while their parents still exist for the predicates.
+      for (const table of DELETE_ORDER) {
+        deleted += (await tx.query(`DELETE FROM ${table} WHERE ${scope.get(table)!}`, [tenant, workspace])).rowCount;
+      }
+      return deleted;
+    });
+    return { store: STORE, manifestId, deletedRows, deletedObjects };
+  }
+
+  async verifyWorkspaceDeletion(tenantId: string, workspaceId: string, manifestId: string): Promise<VerificationResult> {
+    const remaining = (await this.locateWorkspaceData(tenantId, workspaceId)).filter((item) => item.rowCount > 0);
+    if (this.secrets !== undefined) {
+      // No signing secret may outlive its endpoint: with the workspace's
+      // endpoints gone, any of its secrets left is an orphan.
+      const tenant = bareTenant(tenantId);
+      const prefix = tenantSecretPrefix(`ten_${tenant}`);
+      const references = await this.secrets.listSecretReferences(prefix);
+      const endpoints = new Set(await this.store.withTenant(tenant, async (tx) =>
+        (await tx.query<{ id: string }>("SELECT id FROM webhook_endpoints WHERE tenant_id = $1", [tenant])).rows.map((row) => row.id),
+      ));
+      const orphans = references.filter((reference) => !endpoints.has(reference.slice(prefix.length).split("/")[0] ?? ""));
+      if (orphans.length > 0) {
+        remaining.push({ store: STORE, table: WEBHOOK_SECRETS_LOCATION, rowCount: orphans.length, objectReferences: [] });
+      }
+    }
+    return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
+  }
+
   async replayDeletionLedger(sinceTimestamp: string): Promise<ReplayResult> {
     void sinceTimestamp;
     throw new Error("Deletion-ledger replay is coordinated by audit-service");
@@ -198,6 +271,20 @@ export class OrchestrationDeletionService implements DeletionProvider {
       return result.rows.map((row) => `ten_${row.tenant_id}`);
     });
   }
+}
+
+async function workspacePredicates(tx: TransactionLike): Promise<ReadonlyMap<string, string>> {
+  const plan = await planWorkspaceScope(tx, TABLES);
+  if (plan.unscoped.length > 0) {
+    throw new Error(`Workspace erasure cannot scope tables: ${plan.unscoped.join(", ")}`);
+  }
+  return plan.scoped;
+}
+
+function workspaceSubject(tenantId: string, workspaceId: string): { tenant: string; workspace: string } {
+  const parsed = WorkspaceIdSchema.safeParse(workspaceId);
+  if (!parsed.success) throw new Error("workspaceId must be a ws_ prefixed UUIDv7");
+  return { tenant: bareTenant(tenantId), workspace: parsed.data.slice(3) };
 }
 
 function bareTenant(value: string): string {

@@ -21,7 +21,7 @@ import {
 } from "./deletion.controller";
 import { AuditService } from "../audit/audit.service";
 import { DeletionOrchestrator } from "./deletion-orchestrator";
-import type { InternalDeletionStoreClient } from "./http-deletion-provider";
+import type { InternalDeletionStoreClient, InternalWorkspaceDeletionStoreClient } from "./http-deletion-provider";
 
 const TENANT = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
 const OTHER_TENANT = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890b1";
@@ -220,5 +220,75 @@ describe("DeletionOrchestrator", () => {
     warn.mockRestore();
     error.mockRestore();
     expect(DELETION_SERVICE_TOKEN_HASH.description).toBe("DELETION_SERVICE_TOKEN_HASH");
+  });
+});
+
+describe("DeletionOrchestrator workspace erasure (D2)", () => {
+  const WORKSPACE = "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890c1";
+  const WORKSPACE_REF = "s3://ads-private/redacted/workspace";
+
+  function workspaceStore(store: string, options: { failVerification?: boolean } = {}) {
+    const rows = new Map([[WORKSPACE, 3]]);
+    const refs = new Map([[WORKSPACE, [WORKSPACE_REF] as readonly string[]]]);
+    const calls: string[] = [];
+    return {
+      calls,
+      client: {
+        store,
+        locateWorkspaceData: vi.fn(async (_tenant: string, workspace: string) => {
+          calls.push(`locate ${store}`);
+          return [{ store, table: "fixture", rowCount: rows.get(workspace) ?? 0, objectReferences: store === "ads-core" ? refs.get(workspace) ?? [] : [] }];
+        }),
+        deleteWorkspaceData: vi.fn(async (_tenant: string, workspace: string, manifestId: string) => {
+          calls.push(`delete ${store}`);
+          const deletedRows = rows.get(workspace) ?? 0;
+          rows.set(workspace, 0);
+          return { store, manifestId, deletedRows, deletedObjects: 0 };
+        }),
+        verifyWorkspaceDeletion: vi.fn(async (_tenant: string, workspace: string, manifestId: string) => {
+          const rowCount = options.failVerification ? 1 : rows.get(workspace) ?? 0;
+          return { store, manifestId, deleted: rowCount === 0, remaining: rowCount === 0 ? [] : [{ store, table: "fixture", rowCount, objectReferences: [] }] };
+        }),
+      } as unknown as InternalWorkspaceDeletionStoreClient,
+    };
+  }
+
+  it("purges objects, then rows, then verifies, across the workspace stores only, and certifies without minimising", async () => {
+    const minimise = vi.fn();
+    const certificate = vi.fn(async () => undefined);
+    const auditStore = { ...createMockAuditStoreProvider(), minimiseTenantEvents: minimise, storeDeletionCertificate: certificate };
+    const objects = createMockObjectStorageProvider();
+    await objects.putObject(WORKSPACE_REF, Buffer.from("x"), "text/plain");
+    const tenantOnly = new MemoryDeletionClient("cost-ledger-service");
+    const ads = workspaceStore("ads-core");
+    const engine = workspaceStore("orchestration-service");
+    const seal = vi.fn();
+    const orchestrator = new DeletionOrchestrator(auditStore, [tenantOnly], objects, HMAC_KEY, seal, [ads.client, engine.client]);
+
+    await expect(orchestrator.executeWorkspace(TENANT, WORKSPACE)).resolves.toMatchObject({ completed: true });
+    expect(ads.calls).toEqual(["locate ads-core", "delete ads-core"]);
+    expect(engine.calls).toEqual(["locate orchestration-service", "delete orchestration-service"]);
+    await expect(objects.objectExists(WORKSPACE_REF)).resolves.toBe(false);
+    expect(tenantOnly.rows.get(TENANT)).toBe(2);
+    expect(minimise).not.toHaveBeenCalled();
+    expect(seal).not.toHaveBeenCalled();
+    expect(certificate).toHaveBeenCalledWith(expect.objectContaining({
+      completedAt: expect.any(Date),
+      manifest: expect.objectContaining({ status: "completed", scope: "workspace", workspace_id: WORKSPACE }),
+    }));
+  });
+
+  it("fails and records an incomplete certificate when a store still holds workspace rows", async () => {
+    const certificate = vi.fn(async () => undefined);
+    const auditStore = { ...createMockAuditStoreProvider(), storeDeletionCertificate: certificate };
+    const orchestrator = new DeletionOrchestrator(
+      auditStore, [], createMockObjectStorageProvider(), HMAC_KEY, vi.fn(),
+      [workspaceStore("platform-api", { failVerification: true }).client],
+    );
+    await expect(orchestrator.executeWorkspace(TENANT, WORKSPACE)).rejects.toThrow("Provider deletion verification failed");
+    expect(certificate).toHaveBeenCalledWith(expect.objectContaining({
+      completedAt: null,
+      manifest: expect.objectContaining({ status: "incomplete", failed_stage: "verify", scope: "workspace" }),
+    }));
   });
 });

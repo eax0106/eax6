@@ -58,6 +58,7 @@ describe("system caller (D1)", () => {
     const triggerControllers = [
       "notifications/engine-events/engine-event-scheduler.controller.ts",
       "workspace-export/workspace-export-trigger.controller.ts",
+      "workspaces/workspace-erasure-trigger.controller.ts",
     ];
     const importsRunner = (source: string) => /from\s+["'][^"']*\.(runner|producer)["']/.test(source);
     expect(importsRunner('import { X } from "./engine-event-notification.runner";')).toBe(true);

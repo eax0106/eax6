@@ -116,3 +116,34 @@ function page() {
     next_cursor: null,
   };
 }
+
+describe("AuditEventsClient.executeWorkspaceErasure (D2)", () => {
+  const secrets = () => ({ getSecret: vi.fn().mockResolvedValue("private-service-token") }) as unknown as SecretsProvider;
+  const tenant = "ten_018f47a5-7b2c-7d10-8f11-123456789abc";
+  const workspace = "ws_018f47a5-7b2c-7d10-8f11-123456789abd";
+
+  it("posts the ids to audit-service with the service token and returns a completed manifest", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, { manifestId: "del_fixture", completed: true }));
+    await expect(new AuditEventsClient(config, secrets(), fetchImpl).executeWorkspaceErasure(tenant, workspace))
+      .resolves.toEqual({ manifestId: "del_fixture", completed: true });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      "https://audit.test/internal/deletion/workspace/execute",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ tenantId: tenant, workspaceId: workspace }),
+        headers: expect.objectContaining({ Authorization: "Bearer private-service-token" }),
+      }),
+    );
+  });
+
+  it.each([
+    ["the network fails", () => vi.fn().mockRejectedValue(new Error("down"))],
+    ["audit-service refuses", () => vi.fn().mockResolvedValue(jsonResponse(500, {}))],
+    ["the erasure is not completed", () => vi.fn().mockResolvedValue(jsonResponse(201, { manifestId: "del_fixture", completed: false }))],
+    ["the body has no manifest", () => vi.fn().mockResolvedValue(jsonResponse(201, { completed: true }))],
+    ["the body is not JSON", () => vi.fn().mockResolvedValue(new Response("not json", { status: 201 }))],
+  ])("fails closed (502) when %s", async (_case, fetchImpl) => {
+    await expect(new AuditEventsClient(config, secrets(), fetchImpl()).executeWorkspaceErasure(tenant, workspace))
+      .rejects.toMatchObject({ problem: { status: 502 } });
+  });
+});

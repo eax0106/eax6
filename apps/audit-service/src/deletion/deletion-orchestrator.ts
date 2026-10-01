@@ -11,7 +11,7 @@ import type {
   JsonValue,
   ObjectStorageProvider,
 } from "@alterx/shared-clients";
-import type { InternalDeletionStoreClient } from "./http-deletion-provider";
+import type { InternalDeletionStoreClient, InternalWorkspaceDeletionStoreClient } from "./http-deletion-provider";
 import { createUuidV7 } from "../audit/audit-id";
 
 export interface DeletionExecutionResult {
@@ -20,6 +20,14 @@ export interface DeletionExecutionResult {
 }
 
 export const AUDIT_ERASURE_TABLES = ["audit_events"] as const;
+
+/**
+ * The stores that hold per-workspace data (D2 workspace erasure). The cost
+ * ledger is left out on purpose: its records are billing records, kept with
+ * the tenant under the legal hold. Memory policies and audit events are
+ * tenant-level.
+ */
+export const WORKSPACE_ERASURE_STORES = ["ads-core", "orchestration-service", "platform-api", "intelligence-service"] as const;
 
 interface DeletionProgress {
   readonly manifestId: string;
@@ -38,6 +46,7 @@ export class DeletionOrchestrator {
     private readonly objects: ObjectStorageProvider,
     private readonly pseudonymKey: string,
     private readonly sealAuditChain?: () => Promise<AuditChainCheckpoint | undefined>,
+    private readonly workspaceProviders: readonly InternalWorkspaceDeletionStoreClient[] = [],
   ) {
     if (pseudonymKey.length < 32) throw new Error("Deletion pseudonym key must contain at least 32 characters");
   }
@@ -71,6 +80,40 @@ export class DeletionOrchestrator {
     }
   }
 
+  /**
+   * D2: erase one workspace of a tenant that stays, at the end of the
+   * workspace's undo window. The same locate, object purge, provider purge
+   * and verify sequence as a tenant's erasure, narrowed to the workspace; the
+   * tenant's audit trail stays whole (no minimisation, no ledger entry), and
+   * the certificate records the outcome either way.
+   */
+  async executeWorkspace(tenantId: string, workspaceId: string): Promise<DeletionExecutionResult> {
+    const manifestId = `del_${createUuidV7()}`;
+    const requestedAt = new Date();
+    const progress = newProgress(manifestId);
+    let completed = false;
+    try {
+      await this.purgeAndVerifyStores(
+        progress,
+        this.workspaceProviders.map((provider) => ({
+          store: provider.store,
+          locate: () => provider.locateWorkspaceData(tenantId, workspaceId),
+          purge: (manifest: string) => provider.deleteWorkspaceData(tenantId, workspaceId, manifest),
+          verify: (manifest: string) => provider.verifyWorkspaceDeletion(tenantId, workspaceId, manifest),
+        })),
+      );
+      progress.stage = "complete";
+      completed = true;
+      return { manifestId, completed: true };
+    } finally {
+      await this.auditStore.storeDeletionCertificate({
+        id: createUuidV7(), tenantPseudonym: this.pseudonym(tenantId),
+        manifest: { ...progressManifest(progress, completed), scope: "workspace", workspace_id: workspaceId },
+        requestedAt, completedAt: completed ? new Date() : null, verifiedBy: "audit-service/deletion-orchestrator",
+      });
+    }
+  }
+
   async replayDeletionLedger(sinceTimestamp: string): Promise<ReplayResult> {
     const since = new Date(sinceTimestamp);
     if (Number.isNaN(since.getTime())) throw new Error("sinceTimestamp must be ISO 8601");
@@ -97,12 +140,10 @@ export class DeletionOrchestrator {
     return `tnp_${createHmac("sha256", this.pseudonymKey).update(tenantId).digest("hex")}`;
   }
 
-  private async purgeAndVerify(tenantId: string, progress: DeletionProgress) {
-    for (const provider of this.providers) {
-      progress.located.push({
-        store: provider.store,
-        locations: await provider.locateSubjectData(tenantId),
-      });
+  /** Locate, purge objects, purge rows, verify rows and objects: shared by tenant and workspace erasure. */
+  private async purgeAndVerifyStores(progress: DeletionProgress, stores: readonly ScopedStore[]): Promise<void> {
+    for (const store of stores) {
+      progress.located.push({ store: store.store, locations: await store.locate() });
     }
     progress.stage = "object_purge";
     const objectReferences = uniqueObjectReferences(progress.located.flatMap((item) => item.locations));
@@ -111,12 +152,12 @@ export class DeletionOrchestrator {
       progress.deletedObjectReferences += 1;
     }
     progress.stage = "provider_purge";
-    for (const provider of this.providers) {
-      progress.deleted.push(await provider.deleteSubjectData(tenantId, progress.manifestId));
+    for (const store of stores) {
+      progress.deleted.push(await store.purge(progress.manifestId));
     }
     progress.stage = "verify";
-    for (const provider of this.providers) {
-      progress.verified.push(await provider.verifyDeletion(tenantId, progress.manifestId));
+    for (const store of stores) {
+      progress.verified.push(await store.verify(progress.manifestId));
     }
     for (const reference of objectReferences) {
       if (await this.objects.objectExists(reference)) {
@@ -127,6 +168,18 @@ export class DeletionOrchestrator {
     if (progress.verified.some((result) => !result.deleted)) {
       throw new Error("Provider deletion verification failed");
     }
+  }
+
+  private async purgeAndVerify(tenantId: string, progress: DeletionProgress) {
+    await this.purgeAndVerifyStores(
+      progress,
+      this.providers.map((provider) => ({
+        store: provider.store,
+        locate: () => provider.locateSubjectData(tenantId),
+        purge: (manifest: string) => provider.deleteSubjectData(tenantId, manifest),
+        verify: (manifest: string) => provider.verifyDeletion(tenantId, manifest),
+      })),
+    );
     // D2: with every provider verified, this tenant's own audit events
     // shrink to skeletons (pseudonym kept, content gone) stamped now. The
     // 90-day sweep destroys them; the ledger certificate below names only
@@ -142,6 +195,13 @@ export class DeletionOrchestrator {
     progress.stage = "complete";
     return progress;
   }
+}
+
+interface ScopedStore {
+  readonly store: string;
+  locate(): Promise<readonly SubjectDataLocation[]>;
+  purge(manifestId: string): Promise<DeletionResult>;
+  verify(manifestId: string): Promise<VerificationResult>;
 }
 
 function uniqueObjectReferences(locations: readonly SubjectDataLocation[]): readonly string[] {

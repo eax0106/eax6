@@ -8,6 +8,7 @@ export const PLATFORM_DELETION_TOKEN_HASH = Symbol("PLATFORM_DELETION_TOKEN_HASH
 
 interface DeleteBody {
   readonly tenantId?: string;
+  readonly workspaceId?: string;
   readonly manifestId?: string;
 }
 
@@ -49,6 +50,42 @@ export class PlatformDeletionController {
     );
   }
 
+  // D2: one workspace's erasure at the end of its undo window.
+  @Public()
+  @Post("workspace/locate")
+  async locateWorkspace(@Body() body: DeleteBody, @Headers("authorization") auth?: string) {
+    await this.authorize(auth);
+    return this.run("workspace/locate", () =>
+      this.service.locateWorkspaceData(required(body?.tenantId, "tenantId"), required(body?.workspaceId, "workspaceId")),
+    );
+  }
+
+  @Public()
+  @Post("workspace/delete")
+  async deleteWorkspace(@Body() body: DeleteBody, @Headers("authorization") auth?: string) {
+    await this.authorize(auth);
+    return this.run("workspace/delete", () =>
+      this.service.deleteWorkspaceData(
+        required(body?.tenantId, "tenantId"),
+        required(body?.workspaceId, "workspaceId"),
+        required(body?.manifestId, "manifestId"),
+      ),
+    );
+  }
+
+  @Public()
+  @Post("workspace/verify")
+  async verifyWorkspace(@Body() body: DeleteBody, @Headers("authorization") auth?: string) {
+    await this.authorize(auth);
+    return this.run("workspace/verify", () =>
+      this.service.verifyWorkspaceDeletion(
+        required(body?.tenantId, "tenantId"),
+        required(body?.workspaceId, "workspaceId"),
+        required(body?.manifestId, "manifestId"),
+      ),
+    );
+  }
+
   @Public()
   @Post("retention")
   async retention(@Headers("authorization") auth?: string) {
@@ -67,7 +104,7 @@ export class PlatformDeletionController {
     try {
       return await action();
     } catch (error: unknown) {
-      if (error instanceof MissingField || (error instanceof Error && /must be (a )?(ten_|del_)/.test(error.message))) {
+      if (error instanceof MissingField || (error instanceof Error && /must be (a )?(ten_|del_|ws_)|workspaceId must be/.test(error.message))) {
         throw new HttpException(problem(operation, 400, "DELETION_VALIDATION_FAILED", (error as Error).message), 400);
       }
       throw new HttpException(problem(operation, 500, "DELETION_INTERNAL_ERROR", "Deletion request could not be completed"), 500);

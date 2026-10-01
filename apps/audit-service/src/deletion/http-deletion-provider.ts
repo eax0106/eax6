@@ -5,6 +5,7 @@ import type {
   RetentionSweepResult,
   SubjectDataLocation,
   VerificationResult,
+  WorkspaceDeletionProvider,
 } from "@alterx/contracts";
 
 /** Internal-only client contract. Raw subject IDs are never part of the public provider port. */
@@ -13,7 +14,10 @@ export interface InternalDeletionStoreClient extends DeletionProvider {
   listSubjectIds(): Promise<readonly string[]>;
 }
 
-export class HttpDeletionProvider implements InternalDeletionStoreClient {
+/** A store that also holds per-workspace data (D2 workspace erasure). */
+export type InternalWorkspaceDeletionStoreClient = InternalDeletionStoreClient & WorkspaceDeletionProvider;
+
+export class HttpDeletionProvider implements InternalWorkspaceDeletionStoreClient {
   constructor(
     private readonly baseUrl: string,
     private readonly token: string,
@@ -38,6 +42,15 @@ export class HttpDeletionProvider implements InternalDeletionStoreClient {
   }
   listSubjectIds() {
     return this.request<readonly string[]>("/internal/deletion/subjects");
+  }
+  locateWorkspaceData(tenantId: string, workspaceId: string) {
+    return this.request<readonly SubjectDataLocation[]>("/internal/deletion/workspace/locate", { tenantId, workspaceId });
+  }
+  deleteWorkspaceData(tenantId: string, workspaceId: string, manifestId: string) {
+    return this.request<DeletionResult>("/internal/deletion/workspace/delete", { tenantId, workspaceId, manifestId });
+  }
+  verifyWorkspaceDeletion(tenantId: string, workspaceId: string, manifestId: string) {
+    return this.request<VerificationResult>("/internal/deletion/workspace/verify", { tenantId, workspaceId, manifestId });
   }
 
   private async request<T>(path: string, body?: object): Promise<T> {

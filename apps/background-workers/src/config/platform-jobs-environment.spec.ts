@@ -62,6 +62,7 @@ describe("loadPlatformJobsEnvironment", () => {
       auditChainVerifyIntervalMs: 15 * 60 * 1000,
       auditChainFullVerifyIntervalMs: 7 * 24 * 60 * 60 * 1000,
       workspaceExportSweepIntervalMs: 15 * 60 * 1000,
+      workspaceErasureSweepIntervalMs: 60 * 60 * 1000,
     });
   });
 
