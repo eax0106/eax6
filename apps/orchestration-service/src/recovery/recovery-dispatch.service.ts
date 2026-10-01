@@ -12,6 +12,7 @@ import type { JsonValue } from "@alterx/shared-clients";
 import type { ApprovalsService } from "../approvals/approvals.service";
 import type { BlackboardService } from "../blackboard/blackboard.service";
 import type { EscalationsService } from "../escalations/escalations.service";
+import type { ClarificationsService } from "../clarifications/clarifications.service";
 import { SynthesisHandler } from "../registry/handlers/synthesis.handler";
 import type { VerificationGateReader } from "../registry/verification-gate-reader";
 import type { RecoveryStrategy } from "./recovery-strategy-table";
@@ -151,12 +152,20 @@ export class RecoveryDispatchService {
     // Optional for the same reason RecoveryPolicyService's is: a caller or
     // test that never dispatches "repair" needs no escalation queue.
     private readonly escalations?: EscalationsService,
+    private readonly clarifications?: ClarificationsService,
   ) {}
 
   async dispatch(
     strategy: RecoveryStrategy,
     context: DispatchContext,
   ): Promise<DispatchResult> {
+    // D13 applies even when an older persisted policy selected retry or swap.
+    if (context.failureClass === "target_missing" || context.failureClass === "ambiguous_outcome") {
+      if (!this.clarifications) throw new Error("Recovery clarification queue is not configured");
+      const row = await this.clarifications.createRecovery({ tenantId: `ten_${context.tenantId}`,
+        runId: context.runId, nodeExecutionId: context.nodeExecutionId, recoveryActionId: context.recoveryActionId });
+      return { outcome: "escalated", detail: `clarification ${row.id} created; the run waits for an answer` };
+    }
     switch (strategy) {
       case "escalate_model":
         return this.#escalateModel(context);
