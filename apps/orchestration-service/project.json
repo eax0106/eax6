@@ -61,7 +61,7 @@
         }
       ],
       "options": {
-        "command": "vitest run apps/orchestration-service/src/*.spec.ts apps/orchestration-service/src/**/*.spec.ts"
+        "command": "vitest run apps/orchestration-service/src/*.spec.ts apps/orchestration-service/src/**/*.spec.ts apps/orchestration-service/src/registry/handlers/toolcall.integration.spec.ts"
       }
     }
   },
