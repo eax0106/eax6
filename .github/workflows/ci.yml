@@ -218,6 +218,9 @@ jobs:
           timeout 120 pnpm exec vitest run packages/tenancy/src/index.spec.ts
           rm .env.local
 
+      - name: nx root env regression check
+        run: node scripts/check-nx-env-local.mjs --keep
+
       - name: architecture gates
         # Task C1. The eleven AST gates from alterengine--5, each held to
         # scripts/gates/baseline.json: a new violation fails, and so does a
@@ -292,3 +295,8 @@ jobs:
 
       - name: test platform api rbac integration
         run: pnpm exec vitest run tests/integration/rbac/rbac.integration.spec.ts
+
+      - name: clean nx env fixture
+        if: always()
+        run: |
+          node -e 'require("node:fs").rmSync(".env.local", { force: true })'
