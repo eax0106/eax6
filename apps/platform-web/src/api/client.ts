@@ -1,5 +1,6 @@
 
 import { usageService, budgetsService, costEstimatesService } from "./services/usage"
+import { runRetentionService } from "./services/run-retention"
 import { billingService } from "./services/billing"
 import { marketplaceService } from "./services/marketplace"
 import { sellerService } from "./services/seller"
@@ -1384,6 +1385,7 @@ const apiClient = new ApiClient();
 export const api = Object.assign(apiClient, {
   usage: usageService,
   budgets: budgetsService,
+  runRetention: runRetentionService,
   costEstimates: costEstimatesService,
   billing: billingService,
   marketplace: marketplaceService,
