@@ -50,7 +50,7 @@ describe("One human action", () => {
     vi.mocked(apiGet).mockResolvedValue({ source_type: "clarification", item })
     expect(await getHumanAction(item.id)).toMatchObject({ type: "clarification", runId: item.run_id, description: item.description })
     vi.mocked(apiPost).mockResolvedValue({ ...item, status: "answered", answer: "Checked external system" })
-    expect(await answerHumanAction(item.id, { comment: "Checked external system" })).toMatchObject({ type: "clarification", status: "answered", runId: item.run_id })
+    expect(await answerHumanAction(item.id, { comment: "Checked external system" })).toMatchObject({ type: "clarification", status: "resolved", runId: item.run_id })
     expect(apiPost).toHaveBeenCalledWith("/api/v1/runs/run_recovery/clarifications/clr_recovery/answer", { note: "Checked external system" })
   })
 
