@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { MetaCloudApiWhatsappProvider } from "@alterx/adapters";
 import type { JsonValue, SecretsProvider } from "@alterx/shared-clients";
 import { EngineClient, type EngineCallerContext } from "../../engine";
@@ -68,8 +68,14 @@ export class WhatsappService {
     languageCode: string | undefined,
     context: EngineCallerContext,
   ) {
+    const account = await this.account(accountId, context);
+    if (typeof to !== "string" || !/^\+?[1-9][0-9]{6,14}$/.test(to) ||
+        typeof templateName !== "string" || !/^[a-z0-9_]+$/.test(templateName) ||
+        (languageCode !== undefined && (typeof languageCode !== "string" || !/^[A-Za-z_]+$/.test(languageCode)))) {
+      throw new BadRequestException("Enter an international recipient, template name and language code");
+    }
     return this.provider.sendTemplateMessage(
-      await this.account(accountId, context), to, templateName, languageCode,
+      account, to.replace(/^\+/, ""), templateName, languageCode,
     );
   }
 

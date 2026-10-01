@@ -1,30 +1,25 @@
-# Gates: D13 recovery clarification routes (C95)
+# Gates: WhatsApp test-send form (C98)
 
-OWNS: apps/orchestration-service/src/recovery/**, apps/orchestration-service/src/registry/**, apps/orchestration-service/src/clarifications/**, apps/orchestration-service/src/execution-runtime.module.ts, apps/orchestration-service/db/schema/clarifications.ts, apps/orchestration-service/drizzle/**, apps/orchestration-service/src/database/**, apps/orchestration-service/src/deletion/**, apps/platform-web/src/api/**, packages/adapters/src/grpc/nodeexec-grpc-transport*, packages/adapters/src/temporal/activities/executor-activities*, docs/work-queue.md
+OWNS: apps/platform-web/src/api/**, apps/platform-web/src/features/connections/pages/whatsapp-channel*, apps/platform-api/src/channels/whatsapp/**, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Missing targets produce a redirect/recreate question. Ambiguous side effects require clarification without retry or swap, including promoted policies and repeated recovery. Existing tenant-scoped clarification and D1 notice routes carry the request.
+Scope: Existing accounts can send a test template to an explicitly entered recipient through the existing guarded route. The form uses approved templates and their language, keeps one request key across retries, shows actual provider acceptance or errors, and handles accounts without a creation date.
 
-- [x] G1: Recovery dispatch persists real tenant-scoped clarifications with the correct questions and never retries ambiguous side effects
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/recovery/recovery-clarification.integration.spec.ts apps/orchestration-service/src/recovery/recovery-dispatch.service.spec.ts -t 'Postgres|HTTP|RecoveryDispatch' && echo recovery-clarification-passed
-  EXPECT: recovery-clarification-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b0f94b0f36247f172dfc55c4ef55b857bc6d4c9389395f7cf4296711e1b9e98c; exit=0; EXPECT=matched; output-sha256=701d242cbdcf1fe221044a4f48878644ac9ca6a370f5d775c93b4d4757a23ee7; output-bytes=665; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+- [x] G1: Rendered live UI and HTTP adapter prove recipient/template selection, confirmation, provider response, failed retries and permission controls
+  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/api/live-whatsapp.spec.ts apps/platform-web/src/features/connections/pages/whatsapp-channel.spec.tsx && echo whatsapp-test-send-surface-passed
+  EXPECT: whatsapp-test-send-surface-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5c6633fd370dcbeeab464d6a19cc0936d6a17aeef6ce9309eba730ada3f16abc; exit=0; EXPECT=matched; output-sha256=9157a93669b2a924be4570a7a4bcea977ff6b4f1f6457421e6a193e9aa607cd1; output-bytes=276; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Actual tool and node producers emit missing-target and ambiguous-outcome observations, and policy routing stays clarification only
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/registry/nodeexec.service.spec.ts apps/orchestration-service/src/recovery/failure-classifier.spec.ts apps/orchestration-service/src/recovery/recovery-strategy-table.spec.ts packages/adapters/src/grpc/nodeexec-grpc-transport.spec.ts packages/adapters/src/temporal/activities/executor-activities.spec.ts && echo recovery-producers-passed
-  EXPECT: recovery-producers-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=e479e61c4a543d50ec30fb3925773ec7ffbb7d8fb9302d21109881493d15dc73; exit=0; EXPECT=matched; output-sha256=72911532ad4a1e8abb00f4bcfaba701a4c66d0fae34bfe11fb877ad334090b4c; output-bytes=2228; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+- [x] G2: Guarded platform HTTP with real PostgreSQL idempotency and the real Meta provider proves validation, caller scope, language and one accepted send per request
+  CHECK: node .unlazy/verify-platform.mjs
+  EXPECT: whatsapp-test-send-platform-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=8fb140193bcbce5c288e8040ccb077d20806ae8f5bcbcfeb8ca68e2998a18a7b; exit=0; EXPECT=matched; output-sha256=7ab1f65527019e3216ba1e1589a4ff7414757f128fa024c95d2e5d3d0969b4ac; output-bytes=213; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Real Temporal executor parks for clarification and resumes or terminates without replaying uncertain side effects
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/recovery/recovery-clarification.integration.spec.ts -t Temporal && echo recovery-executor-passed
-  EXPECT: recovery-executor-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=7de6882700d9b20af2c6c38afd60db3c81c63b2776152eada381220e5f38e7c2; exit=0; EXPECT=matched; output-sha256=0c9375235e0ab4c2ef73d51b8927cd1e6979eda75667fc2d1d6abf72df5d6bc8; output-bytes=14518; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Original-code and mutation controls fail the behavior checks and restore sources
+- [x] G3: Original-code and mutation controls fail their corresponding assertions and restore every source
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: recovery-clarification-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1dd6961e3fb5ede88c4cfe95679ddfce1cd5287faa6996da972e90b0ba9ba266; exit=0; EXPECT=matched; output-sha256=e1425edcc980d991f3c7c375895613f7b9b5acb653f2a292389964c5c9fc57b5; output-bytes=620; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-test-send-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a14fc89a34eaf1122940b179214a176ee2c2619aacf9b3a35c3270a8f02f4996; exit=0; EXPECT=matched; output-sha256=14868745ffedaaa388b44acf6a66b0e15896d96584b53ba367fd8b19ddf22e2b; output-bytes=264; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Builds, typecheck, lint, full affected suites, architecture and zero new AST entries pass
+- [x] G4: Affected builds, typechecks, lint, full web and platform coverage, architecture, RBAC and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: recovery-clarification-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b5dc47c3f7c6d9efd82e00770981a78e065e83499578487376c836fe07ddff7f; exit=0; EXPECT=matched; output-sha256=697f2e67cf4eccc6fa6c6e4c46e05c6611c687dd5279cdc1aa447a8445e837a0; output-bytes=483; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-test-send-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=c931887db21ed46600b64a6b9f25da2a185ec651eb7b67a6c8a8bdbcb023912f; exit=0; EXPECT=matched; output-sha256=f6fff9e6f472fff547895d50e9af54fce9afc57f7616b2ab5c68797c69caf62c; output-bytes=303; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
