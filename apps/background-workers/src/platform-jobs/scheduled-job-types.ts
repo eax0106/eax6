@@ -50,6 +50,8 @@ export const AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE = "platform.audit-chain-full-verif
 // asynchronously; this sweep drives the platform-api trigger that processes
 // the pending records.
 export const WORKSPACE_EXPORT_SWEEP_JOB_TYPE = "platform.workspace-export-sweep";
+// D2 (C82): deleted workspaces are erased once their undo window ends.
+export const WORKSPACE_ERASURE_SWEEP_JOB_TYPE = "platform.workspace-erasure-sweep";
 
 export const SCHEDULED_PLATFORM_JOB_TYPES = [
   "platform.notification-digest",
@@ -64,6 +66,7 @@ export const SCHEDULED_PLATFORM_JOB_TYPES = [
   AUDIT_SKELETON_RETENTION_JOB_TYPE,
   AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
   WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
+  WORKSPACE_ERASURE_SWEEP_JOB_TYPE,
 ] as const;
 
 export type ScheduledPlatformJobType =

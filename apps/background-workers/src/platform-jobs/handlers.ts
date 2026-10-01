@@ -160,6 +160,30 @@ function createWorkspaceExportSweepHandler(
 }
 
 /**
+ * Workspace erasure sweep (D2, C82): calls platform-api's internal trigger,
+ * which erases every deleted workspace whose undo window has ended through
+ * audit-service's deletion orchestrator. Same credential as the export sweep.
+ */
+function createWorkspaceErasureSweepHandler(
+  baseUrl: string,
+  serviceToken: string,
+  fetchImpl: typeof fetch,
+): PlatformJobHandler {
+  return async (): Promise<JsonValue> => {
+    const response = await fetchImpl(`${baseUrl}/internal/workspace-deletions/process-due`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${serviceToken}` },
+    });
+    if (!response.ok) {
+      throw new Error(
+        `workspace erasure sweep failed: HTTP ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as JsonValue;
+  };
+}
+
+/**
  * Real, scoped to the 4 confirmed "launch-floor" golden sets
  * (apps/eval-service/src/db/launch_golden_sets.py) -- the redteam/chaos/
  * recovery sets serve a different real purpose (security/resilience
@@ -438,6 +462,16 @@ export function createPlatformJobHandlers(
     handlers.set(
       "platform.workspace-export-sweep",
       createWorkspaceExportSweepHandler(
+        dependencies.platformApiInternalBaseUrl,
+        dependencies.notificationDigestServiceToken,
+        fetchImpl,
+      ),
+    );
+  }
+  if (dependencies?.platformApiInternalBaseUrl && dependencies.notificationDigestServiceToken) {
+    handlers.set(
+      "platform.workspace-erasure-sweep",
+      createWorkspaceErasureSweepHandler(
         dependencies.platformApiInternalBaseUrl,
         dependencies.notificationDigestServiceToken,
         fetchImpl,

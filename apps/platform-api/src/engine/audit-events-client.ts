@@ -123,6 +123,37 @@ export class AuditEventsClient {
     }
   }
 
+  /**
+   * D2: asks audit-service to erase one workspace through its deletion
+   * orchestrator. Resolves only when every store verified the erasure.
+   */
+  async executeWorkspaceErasure(tenantId: string, workspaceId: string): Promise<{ manifestId: string; completed: boolean }> {
+    const instance = "/internal/deletion/workspace/execute";
+    const token = await this.serviceToken(instance);
+    let response: Response;
+    try {
+      response = await this.fetchImpl(`${this.config.auditServiceBaseUrl.replace(/\/+$/, "")}${instance}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json, application/problem+json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tenantId, workspaceId }),
+      });
+    } catch {
+      throw new EngineProblemError(upstreamProblem(502, instance, "UPSTREAM_SERVICE_ERROR"));
+    }
+    if (!response.ok) {
+      throw new EngineProblemError(upstreamProblem(502, instance, "UPSTREAM_SERVICE_ERROR"));
+    }
+    const body = (await response.json().catch(() => undefined)) as { manifestId?: unknown; completed?: unknown } | undefined;
+    if (typeof body?.manifestId !== "string" || body.completed !== true) {
+      throw new EngineProblemError(upstreamProblem(502, instance, "UPSTREAM_SERVICE_ERROR"));
+    }
+    return { manifestId: body.manifestId, completed: true };
+  }
+
   private async serviceToken(instance: string): Promise<string> {
     try {
       const token = await this.secrets.getSecret(

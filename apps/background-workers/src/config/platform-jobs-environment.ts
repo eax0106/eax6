@@ -33,6 +33,7 @@ export interface PlatformJobsEnvironment {
   readonly auditChainVerifyIntervalMs: number;
   readonly auditChainFullVerifyIntervalMs: number;
   readonly workspaceExportSweepIntervalMs: number;
+  readonly workspaceErasureSweepIntervalMs: number;
 }
 
 export class PlatformJobsConfigurationError extends Error {
@@ -57,6 +58,7 @@ const DEFAULT_DRIFT_SWEEP_MINIMUM_OBSERVATIONS = 40; // 2 * memory-service's def
 const DEFAULT_AUDIT_CHAIN_VERIFY_INTERVAL_MS = 15 * 60 * 1000; // every 15 minutes
 const DEFAULT_AUDIT_CHAIN_FULL_VERIFY_INTERVAL_MS = 7 * 24 * 60 * 60 * 1000; // weekly
 const DEFAULT_WORKSPACE_EXPORT_SWEEP_INTERVAL_MS = 15 * 60 * 1000; // every 15 minutes
+const DEFAULT_WORKSPACE_ERASURE_SWEEP_INTERVAL_MS = 60 * 60 * 1000; // hourly
 
 function parseIntervalMs(
   environment: NodeJS.ProcessEnv,
@@ -179,6 +181,11 @@ export function loadPlatformJobsEnvironment(
       environment,
       "WORKSPACE_EXPORT_SWEEP_INTERVAL_MS",
       DEFAULT_WORKSPACE_EXPORT_SWEEP_INTERVAL_MS,
+    ),
+    workspaceErasureSweepIntervalMs: parseIntervalMs(
+      environment,
+      "WORKSPACE_ERASURE_SWEEP_INTERVAL_MS",
+      DEFAULT_WORKSPACE_ERASURE_SWEEP_INTERVAL_MS,
     ),
   };
 }
