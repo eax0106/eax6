@@ -57,7 +57,12 @@ export function secretReference(
   endpointId: string,
   version: number,
 ): string {
-  return `alter/webhook-endpoints/${tenantId}/${endpointId}/v${version}`;
+  return `${tenantSecretPrefix(tenantId)}${endpointId}/v${version}`;
+}
+
+/** Prefix of every webhook signing secret a tenant owns, for its erasure. */
+export function tenantSecretPrefix(tenantId: string): string {
+  return `alter/webhook-endpoints/${tenantId}/`;
 }
 
 /** Kept so callers that only need an opaque correlation id have one. */

@@ -2,6 +2,7 @@ import {
   CreateSecretCommand,
   DeleteSecretCommand,
   GetSecretValueCommand,
+  ListSecretsCommand,
   PutSecretValueCommand,
 } from "@aws-sdk/client-secrets-manager";
 import { describe, expect, it, vi } from "vitest";
@@ -101,5 +102,32 @@ describe("AwsSecretsManagerProvider", () => {
       "non-empty",
     );
     expect(send).toHaveBeenCalledOnce();
+  });
+
+  it("deletes idempotently: a missing secret counts as deleted, other failures surface", async () => {
+    const notFound = Object.assign(new Error("gone"), { name: "ResourceNotFoundException" });
+    const denied = Object.assign(new Error("denied"), { name: "AccessDeniedException" });
+    const send = vi.fn().mockRejectedValueOnce(notFound).mockRejectedValueOnce(denied);
+    const provider = new AwsSecretsManagerProvider({ region: "ap-south-1" }, { send } as unknown as SecretsManagerCommandClient);
+
+    await expect(provider.deleteSecret("alter/webhook-endpoints/ten_x/whe_1/v1")).resolves.toBeUndefined();
+    await expect(provider.deleteSecret("alter/webhook-endpoints/ten_x/whe_1/v2")).rejects.toThrow("denied");
+    expect(send.mock.calls[0]![0]).toBeInstanceOf(DeleteSecretCommand);
+  });
+
+  it("lists every page of names under a prefix and drops loose name-filter matches", async () => {
+    const send = vi.fn(async (command: ListSecretsCommand) => {
+      expect(command.input.Filters).toEqual([{ Key: "name", Values: ["alter/webhook-endpoints/ten_a/"] }]);
+      return command.input.NextToken === undefined
+        ? { SecretList: [{ Name: "alter/webhook-endpoints/ten_a/whe_2/v1" }, { Name: "other/alter/webhook-endpoints/ten_a/x" }], NextToken: "page-2" }
+        : { SecretList: [{ Name: "alter/webhook-endpoints/ten_a/whe_1/v1" }, {}] };
+    });
+    const provider = new AwsSecretsManagerProvider({ region: "ap-south-1" }, { send } as unknown as SecretsManagerCommandClient);
+
+    await expect(provider.listSecretReferences("alter/webhook-endpoints/ten_a/")).resolves.toEqual([
+      "alter/webhook-endpoints/ten_a/whe_1/v1",
+      "alter/webhook-endpoints/ten_a/whe_2/v1",
+    ]);
+    expect(send).toHaveBeenCalledTimes(2);
   });
 });

@@ -2,6 +2,7 @@ import {
   CreateSecretCommand,
   DeleteSecretCommand,
   GetSecretValueCommand,
+  ListSecretsCommand,
   PutSecretValueCommand,
   SecretsManagerClient,
 } from "@aws-sdk/client-secrets-manager";
@@ -10,7 +11,7 @@ import type { ProviderCapabilities } from "@alterx/contracts";
 import type {
   ProviderHealth,
   ProviderMetadata,
-  MutableSecretsProvider,
+  ErasableSecretsProvider,
 } from "@alterx/shared-clients";
 
 export interface AwsSecretsManagerConfig {
@@ -22,7 +23,7 @@ export interface SecretsManagerCommandClient {
     readonly SecretString?: string;
     readonly SecretBinary?: Uint8Array;
   }>;
-  send(command: CreateSecretCommand | PutSecretValueCommand | DeleteSecretCommand): Promise<unknown>;
+  send(command: CreateSecretCommand | PutSecretValueCommand | DeleteSecretCommand | ListSecretsCommand): Promise<unknown>;
   destroy?(): void;
 }
 
@@ -53,7 +54,7 @@ const AWS_SECRETS_METADATA: ProviderMetadata<"SecretsProvider"> = {
   },
 };
 
-export class AwsSecretsManagerProvider implements MutableSecretsProvider {
+export class AwsSecretsManagerProvider implements ErasableSecretsProvider {
   readonly metadata = AWS_SECRETS_METADATA;
   readonly capabilities = AWS_SECRETS_CAPABILITIES;
 
@@ -101,14 +102,45 @@ export class AwsSecretsManagerProvider implements MutableSecretsProvider {
     }
   }
 
+  /** Idempotent: a reference that no longer exists counts as deleted. */
   async deleteSecret(referenceId: string): Promise<void> {
     validateReference(referenceId);
-    await this.#client.send(
-      new DeleteSecretCommand({
-        SecretId: referenceId,
-        ForceDeleteWithoutRecovery: true,
-      }),
-    );
+    try {
+      await this.#client.send(
+        new DeleteSecretCommand({
+          SecretId: referenceId,
+          ForceDeleteWithoutRecovery: true,
+        }),
+      );
+    } catch (error) {
+      if (!isErrorNamed(error, "ResourceNotFoundException")) {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Every secret name starting with `prefix`. The name filter matches more
+   * loosely than a prefix, so results are filtered again here.
+   */
+  async listSecretReferences(prefix: string): Promise<readonly string[]> {
+    validateReference(prefix);
+    const names: string[] = [];
+    let nextToken: string | undefined;
+    do {
+      const page = (await this.#client.send(
+        new ListSecretsCommand({
+          Filters: [{ Key: "name", Values: [prefix] }],
+          MaxResults: 100,
+          ...(nextToken === undefined ? {} : { NextToken: nextToken }),
+        }),
+      )) as { readonly SecretList?: readonly { readonly Name?: string }[]; readonly NextToken?: string };
+      for (const secret of page.SecretList ?? []) {
+        if (secret.Name !== undefined && secret.Name.startsWith(prefix)) names.push(secret.Name);
+      }
+      nextToken = page.NextToken;
+    } while (nextToken !== undefined);
+    return names.sort();
   }
 
   async healthCheck(): Promise<ProviderHealth> {
@@ -132,9 +164,9 @@ function validateReference(referenceId: string): void {
 }
 
 function isResourceExists(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    Reflect.get(error, "name") === "ResourceExistsException"
-  );
+  return isErrorNamed(error, "ResourceExistsException");
+}
+
+function isErrorNamed(error: unknown, name: string): boolean {
+  return typeof error === "object" && error !== null && Reflect.get(error, "name") === name;
 }
