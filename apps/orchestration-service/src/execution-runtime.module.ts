@@ -47,6 +47,8 @@ import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.const
 import { RUN_LEARNING_AUDIT, RunLearningController } from "./runs/run-learning.controller";
 import { runLearningAuditClient } from "./runs/run-learning-audit";
 import { RecoveryFeedController } from "./runs/recovery-feed.controller";
+import { WorkspaceHoldsController } from "./workspace-holds/workspace-holds.controller";
+import { WorkspaceHoldsService } from "./workspace-holds/workspace-holds.service";
 import { DeploymentChangesController } from "./deployment-feed/deployment-changes.controller";
 import { DeploymentChangesService } from "./deployment-feed/deployment-changes.service";
 import { EngineWorkspaceExportController } from "./workspace-export/workspace-export.controller";
@@ -199,6 +201,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     RunsController,
     RunObservabilityController,
     RecoveryFeedController,
+    WorkspaceHoldsController,
     DeploymentChangesController,
     EngineWorkspaceExportController,
     AgentWorkflowsController,
@@ -209,6 +212,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     NodeTypeController,
   ],
   providers: [
+    {
+      provide: WorkspaceHoldsService,
+      useFactory: () => new WorkspaceHoldsService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+    },
     {
       provide: EngineWorkspaceExportService,
       useFactory: () => new EngineWorkspaceExportService(orchestrationStore(sessionGatewayEnvironment(process.env))),
