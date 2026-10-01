@@ -10,6 +10,7 @@ import {
   RunStateConflictError,
   RunValidationError,
   WorkflowNotFoundError,
+  WorkspacePendingDeletionError,
   type OrchestrationTenantStore,
 } from "./run-launcher.service";
 import { ProjectRunProvisioningService } from "./project-run-provisioning.service";
@@ -48,6 +49,7 @@ function fakeStore(handlers: {
   promotedVersion?: { readonly id: string; readonly compiled_dag: unknown } | undefined;
   explicitVersion?: { readonly id: string; readonly status: string; readonly compiled_dag: unknown } | undefined;
   runRow?: Record<string, unknown>;
+  held?: boolean;
 }): { store: OrchestrationTenantStore; tx: FakeTx } {
   const runRow = handlers.runRow ?? {
     id: RUN,
@@ -74,6 +76,12 @@ function fakeStore(handlers: {
         ? { rowCount: 0, rows: [] }
         : { rowCount: 1, rows: [handlers.promotedVersion] };
     }
+    if (statement.includes("FROM workspace_holds")) {
+      return { rowCount: 1, rows: [{ held: handlers.held === true }] };
+    }
+    if (statement.includes("UPDATE runs SET status = 'cancelled'")) {
+      return { rowCount: 1, rows: [{ ...runRow, status: "cancelled" }] };
+    }
     if (statement.includes("INSERT INTO runs")) {
       return { rowCount: 1, rows: [runRow] };
     }
@@ -96,7 +104,7 @@ function fakeStore(handlers: {
   return { store, tx };
 }
 
-function projectRunHarness(options: { readonly reused?: boolean } = {}) {
+function projectRunHarness(options: { readonly reused?: boolean; readonly held?: boolean } = {}) {
   const runs = new Map<string, Record<string, unknown>>();
   const provision = vi.fn(async () => ({
     session_id: SESSION,
@@ -107,6 +115,9 @@ function projectRunHarness(options: { readonly reused?: boolean } = {}) {
   const query = vi.fn(async (statement: string, values: readonly unknown[] = []) => {
     if (statement.includes("SELECT workspace_id FROM projects")) {
       return { rowCount: 1, rows: [{ workspace_id: BARE_TENANT }] };
+    }
+    if (statement.includes("FROM workspace_holds")) {
+      return { rowCount: 1, rows: [{ held: options.held === true }] };
     }
     if (statement.includes("INSERT INTO runs")) {
       const [id, tenantId, workspaceId, projectId, cycleId, templateId] = values as [
@@ -212,6 +223,20 @@ function projectRunHarness(options: { readonly reused?: boolean } = {}) {
 }
 
 describe("RunLauncherService.createRun", () => {
+  it("refuses a run in a workspace pending deletion (D2) and starts nothing", async () => {
+    const { store, tx } = fakeStore({
+      workflowExists: true,
+      promotedVersion: { id: WORKFLOW_VERSION, compiled_dag: compiledDag() },
+      held: true,
+    });
+    const durable = { startWorkflow: vi.fn(), terminateWorkflow: vi.fn() };
+    const launcher = new RunLauncherService(store, durable as never);
+
+    await expect(launcher.createRun(TENANT, WORKFLOW)).rejects.toBeInstanceOf(WorkspacePendingDeletionError);
+    expect(tx.query.mock.calls.some(([sql]) => String(sql).includes("INSERT INTO runs"))).toBe(false);
+    expect(durable.startWorkflow).not.toHaveBeenCalled();
+  });
+
   it("resolves the promoted version, inserts the run, starts the workflow, and marks it running", async () => {
     const { store } = fakeStore({
       workflowExists: true,
@@ -358,6 +383,24 @@ describe("RunLauncherService.listRuns", () => {
 });
 
 describe("RunLauncherService.createProjectRun", () => {
+  it("refuses a project build in a workspace pending deletion (D2) before provisioning", async () => {
+    const { store, runs, provision, lifecycle } = projectRunHarness({ held: true });
+    const durable = { startWorkflow: vi.fn(), terminateWorkflow: vi.fn() };
+    const launcher = new RunLauncherService(store, durable as never, undefined, lifecycle);
+
+    await expect(launcher.createProjectRun(TENANT, {
+      projectId: PROJECT,
+      cycle_id: "cycle_1",
+      template_id: "base",
+      environment_refs: {},
+      scaffold: [],
+      compiledDag: compiledDag(),
+    })).rejects.toBeInstanceOf(WorkspacePendingDeletionError);
+    expect(runs.size).toBe(0);
+    expect(provision).not.toHaveBeenCalled();
+    expect(durable.startWorkflow).not.toHaveBeenCalled();
+  });
+
   it("provisions through the handler, durably persists that real session, and a fresh launcher retrieves it after restart", async () => {
     const { store, provision, lifecycle } = projectRunHarness();
     const durable = {
@@ -637,6 +680,22 @@ describe("RunLauncherService.dispatchNextQueuedRun", () => {
       discard: vi.fn(),
     };
   }
+
+  it("cancels a queued run in a workspace pending deletion (D2) instead of starting it", async () => {
+    const runRow = {
+      id: RUN, workflow_id: WORKFLOW, workflow_version_id: WORKFLOW_VERSION,
+      parent_kind: "workflow", status: "pending", started_at: null, ended_at: null,
+      created_at: "2026-07-28T00:00:00.000Z", workspace_id: BARE_TENANT,
+    };
+    const { store } = fakeStore({ runRow, held: true });
+    const durable = { startWorkflow: vi.fn(), terminateWorkflow: vi.fn() };
+    const queue = fakeQueue("lease-held");
+    const launcher = new RunLauncherService(store, durable as never, undefined, undefined, queue as never);
+
+    await expect(launcher.dispatchNextQueuedRun(BARE_TENANT)).resolves.toMatchObject({ status: "cancelled" });
+    expect(durable.startWorkflow).not.toHaveBeenCalled();
+    expect(queue.acknowledge).toHaveBeenCalledWith(BARE_TENANT, RUN, "lease-held");
+  });
 
   it("acknowledges the queue entry when the run's startup failure is made terminal", async () => {
     // ENGINE-FIX-P3-1: the catch used to acknowledge unconditionally. This

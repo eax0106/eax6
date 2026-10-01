@@ -15,6 +15,7 @@ import type {
 import type { RunBudgetGate } from "../budgets/run-budget-gate";
 import type { RunOutcomeService } from "./run-outcome.service";
 import { DurableRunQueue } from "./durable-run-queue.service";
+import { isWorkspaceHeld } from "../workspace-holds/workspace-holds.service";
 import {
   ProjectRunProvisioningError,
   type ProjectRunProvisioningInput,
@@ -72,6 +73,14 @@ export class RunStateConflictError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "RunStateConflictError";
+  }
+}
+
+/** D2: the workspace is pending deletion, so no run may start in it. */
+export class WorkspacePendingDeletionError extends RunStateConflictError {
+  constructor() {
+    super("Workspace is pending deletion; no run can start until it is restored");
+    this.name = "WorkspacePendingDeletionError";
   }
 }
 
@@ -305,6 +314,9 @@ export class RunLauncherService {
         throw new WorkflowNotFoundError(workflowId);
       }
 
+      if (await isWorkspaceHeld(tx, tenantId, workflow.rows[0]!.workspace_id)) {
+        throw new WorkspacePendingDeletionError();
+      }
       const version = await this.resolveVersion(tx, tenantId, workflowId, workflowVersionId);
       const runId = newRunId();
 
@@ -367,6 +379,9 @@ export class RunLauncherService {
       );
       if (project.rowCount === 0) {
         throw new ProjectRunProjectNotFoundError(input.projectId);
+      }
+      if (await isWorkspaceHeld(tx, tenantId, project.rows[0]!.workspace_id)) {
+        throw new WorkspacePendingDeletionError();
       }
       const runId = newRunId();
       const inserted = await tx.query<RunRow>(
@@ -785,6 +800,13 @@ export class RunLauncherService {
         await this.queue.acknowledge(tenantId, claimed.runId, claimed.leaseToken);
         return row;
       }
+      // D2: a queued run in a workspace pending deletion never starts; it is
+      // cancelled and its queue entry acknowledged.
+      const cancelled = await this.#cancelIfWorkspaceHeld(tenantId, row);
+      if (cancelled !== undefined) {
+        await this.queue.acknowledge(tenantId, claimed.runId, claimed.leaseToken);
+        return cancelled;
+      }
       const started = await this.startClaimedAndTransition(
         tenantId,
         row,
@@ -814,6 +836,19 @@ export class RunLauncherService {
       // the lease expire naturally so a sweeper can reclaim and retry it.
       throw error;
     }
+  }
+
+  async #cancelIfWorkspaceHeld(tenantId: string, row: RunRow): Promise<RunRow | undefined> {
+    return this.store.withTenant(tenantId, async (tx) => {
+      if (row.workspace_id === undefined || !(await isWorkspaceHeld(tx, tenantId, row.workspace_id))) return undefined;
+      const updated = await tx.query<RunRow>(
+        `UPDATE runs SET status = 'cancelled', ended_at = clock_timestamp()
+         WHERE tenant_id = $1 AND id = $2 AND status = 'pending'
+         RETURNING ${RUN_SELECT_COLUMNS}`,
+        [tenantId, row.id],
+      );
+      return updated.rows[0] ?? row;
+    });
   }
 
   /**

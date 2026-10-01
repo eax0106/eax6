@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
 import type { SessionGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
+
+import { WorkspacePendingDeletionError } from "../runs/run-launcher.service";
 import {
   ProjectNotFoundError,
   ProjectReadService,
@@ -175,6 +177,9 @@ function mapProjectError(error: unknown, requestUrl: string | undefined): HttpEx
     return new HttpException(badRequestProblem(requestUrl, error.message), 400);
   }
   if (error instanceof ProjectStateConflictError) {
+    return new HttpException(conflictProblem(requestUrl, error.message), 409);
+  }
+  if (error instanceof WorkspacePendingDeletionError) {
     return new HttpException(conflictProblem(requestUrl, error.message), 409);
   }
   if (error instanceof HttpException) {

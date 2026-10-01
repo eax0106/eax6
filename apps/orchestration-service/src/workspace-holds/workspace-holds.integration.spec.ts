@@ -3,8 +3,9 @@ import { resolve } from "node:path";
 
 import { PostgresOrchestrationStoreProvider } from "@alterx/adapters";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { RunLauncherService, WorkspacePendingDeletionError } from "../runs/run-launcher.service";
 import type { OrchestrationTenantStore } from "../runs/run-observability.service";
 import { WorkspaceHoldsService, WorkspaceHoldValidationError } from "./workspace-holds.service";
 
@@ -46,6 +47,22 @@ describe.sequential("WorkspaceHoldsService", () => {
     await holds.release(`ten_${TENANT}`, WS);
     await holds.release(`ten_${TENANT}`, WS);
     expect(await holds.isHeld(`ten_${TENANT}`, WS)).toBe(false);
+  });
+
+  it("the engine refuses run creation in a held workspace on real Postgres", async () => {
+    const workflow = "wf_018f4d6e-2b4a-7a3e-8c1a-1234567890f3";
+    await store.withTenant(TENANT, (tx) =>
+      tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'held')", [workflow, TENANT, WS.slice(3)]),
+    );
+    await holds.hold(`ten_${TENANT}`, WS, "usr_1");
+    const durable = { startWorkflow: vi.fn(), terminateWorkflow: vi.fn() };
+    const launcher = new RunLauncherService(store as unknown as OrchestrationTenantStore, durable as never);
+
+    await expect(launcher.createRun(`ten_${TENANT}`, workflow)).rejects.toBeInstanceOf(WorkspacePendingDeletionError);
+    const runs = await store.withTenant(TENANT, (tx) => tx.query<{ n: number }>("SELECT count(*)::int AS n FROM runs"));
+    expect(runs.rows[0]?.n).toBe(0);
+    expect(durable.startWorkflow).not.toHaveBeenCalled();
+    await holds.release(`ten_${TENANT}`, WS);
   });
 
   it("refuses malformed ids before touching the database", async () => {
