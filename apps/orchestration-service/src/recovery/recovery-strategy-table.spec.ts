@@ -20,6 +20,8 @@ const ALL_FAILURE_CLASSES: readonly FailureClass[] = [
   "rate_limit",
   "safety_violation",
   "agent_creation_failure",
+  "target_missing",
+  "ambiguous_outcome",
   "unknown",
 ];
 
@@ -168,3 +170,12 @@ describe("selectRecoveryStrategy", () => {
     });
   });
 });
+
+ it.each(["target_missing", "ambiguous_outcome"] as const)("keeps %s on the human route for every attempt and policy", failureClass => {
+   for (const attempt of [1, 2, 10]) {
+     expect(selectRecoveryStrategy(failureClass, attempt).strategy).toBe("ask_user");
+     for (const strategy of ["retry", "swap_agent", "replan", "backoff"] as const) {
+       expect(selectRecoveryStrategy(failureClass, attempt, { policyId: "pol_override", policyVersion: "2", rules: { [failureClass]: strategy } }).strategy).toBe("ask_user");
+     }
+   }
+ });

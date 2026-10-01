@@ -1,8 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
-import { Body, Controller, Headers, HttpException, Inject, Post } from "@nestjs/common";
-import { Public } from "@alterx/auth";
+import { Body, Controller, Get, Headers, HttpException, Inject, Post, Query, Req } from "@nestjs/common";
+import { Public, type SessionGatewayRequest } from "@alterx/auth";
 import { SES_DELIVERY_ENVIRONMENT, type SesDeliveryEnvironment } from "../config/ses-delivery-environment";
-import { parseSesDeliveryEvent, SesDeliveryEventsService } from "./ses-delivery-events.service";
+import { EmailReadbackPendingError, parseSesDeliveryEvent, SesDeliveryEventsService } from "./ses-delivery-events.service";
 
 @Controller("v1/webhooks/ses")
 export class SesDeliveryEventsController {
@@ -19,11 +19,34 @@ export class SesDeliveryEventsController {
     if (expected === undefined || secret === undefined || !sameSecret(secret, expected)) {
       throw new HttpException({ status: 401, error_code: "SES_WEBHOOK_UNAUTHORIZED", detail: "SES webhook secret is invalid" }, 401);
     }
-    try {
-      return await this.service.handle(parseSesDeliveryEvent(body));
-    } catch (error: unknown) {
-      throw new HttpException({ status: 400, error_code: "SES_WEBHOOK_INVALID", detail: error instanceof Error ? error.message : String(error) }, 400);
+    let event: ReturnType<typeof parseSesDeliveryEvent>;
+    try { event = parseSesDeliveryEvent(body); } catch {
+      throw new HttpException({ status: 400, error_code: "SES_WEBHOOK_INVALID", detail: "Invalid SES delivery event" }, 400);
     }
+    try { return await this.service.handle(event); } catch (error: unknown) {
+      if (error instanceof EmailReadbackPendingError) {
+        throw new HttpException({ status: 503, error_code: "SES_READBACK_PENDING", detail: "Retry after accepted email is recorded" }, 503);
+      }
+      throw error;
+    }
+  }
+}
+
+@Controller("api/v1/email-delivery-failures")
+export class EmailDeliveryFailuresController {
+  constructor(private readonly service: SesDeliveryEventsService) {}
+
+  @Get()
+  async list(@Req() request: SessionGatewayRequest, @Query("cursor") cursor?: string) {
+    if (cursor !== undefined && cursor.length > 250) throw new HttpException("Invalid cursor", 400);
+    return this.service.failures(this.systemTenant(request), cursor);
+  }
+
+  private systemTenant(request: SessionGatewayRequest): string {
+    if (request.actorContext?.actor_type !== "system") {
+      throw new HttpException({ status: 403, error_code: "EMAIL_DELIVERY_SYSTEM_ONLY", detail: "This feed is for platform background jobs" }, 403);
+    }
+    return request.actorContext.tenant_id;
   }
 }
 

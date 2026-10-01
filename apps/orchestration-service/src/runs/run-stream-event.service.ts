@@ -42,9 +42,20 @@ export class RunStreamEventService {
     if (!RunIdSchema.safeParse(runId).success) throw new Error("invalid run id");
     const tenantId = bareTenant(tenantIdInput);
     return this.store.withTenant(tenantId, async (tx) => {
-      await tx.query("SELECT pg_advisory_xact_lock(hashtext($1))", [runId]);
-      return appendLocked(tx, tenantId, runId, event);
+      return this.appendWithinTransaction(tx, tenantId, runId, event);
     });
+  }
+
+  /** Keeps the state change and its stream event in the caller's transaction. */
+  async appendWithinTransaction(
+    tx: OrchestrationTransactionLike,
+    tenantId: string,
+    runId: string,
+    event: Omit<SseEnvelope, "seq" | "run_id" | "ts">,
+  ): Promise<SseEnvelope> {
+    if (!RunIdSchema.safeParse(runId).success) throw new Error("invalid run id");
+    await tx.query("SELECT pg_advisory_xact_lock(hashtext($1))", [runId]);
+    return appendLocked(tx, tenantId, runId, event);
   }
 
   /** Emits the run's initial live status once, before its first node event. */

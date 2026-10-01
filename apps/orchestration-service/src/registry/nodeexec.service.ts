@@ -304,6 +304,14 @@ export class NodeexecService {
             : undefined;
         if (mechanical !== undefined) {
           metadata = { ...metadata, mechanical_check: mechanical };
+          const verdict = "unconfirmable" in mechanical ? "warn" : mechanical.confirmed ? "pass" : "fail";
+          await this.ledger.recordVerificationResult({
+            id: createVerificationResultId(), tenantId: request.tenant_id, runId: request.run_id,
+            nodeExecutionId: request.node_execution_id, gateType: "mechanical", verdict,
+            score: verdict === "pass" ? 1 : 0, threshold: 1, reviewerModel: "deterministic",
+            detailsJson: JSON.stringify({ message: "unconfirmable" in mechanical
+              ? `Unconfirmed: ${mechanical.reason}` : mechanical.confirmed ? mechanical.basis : mechanical.reason }),
+          });
           if ("confirmed" in mechanical && !mechanical.confirmed) {
             throw new MechanicalCheckFailedError(mechanical.reason);
           }

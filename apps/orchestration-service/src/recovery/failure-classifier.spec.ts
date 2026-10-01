@@ -150,3 +150,13 @@ describe("codes the handlers actually emit (#149)", () => {
     ).toMatchObject({ failureClass: "unknown" });
   });
 });
+
+ it.each(["TARGET_MISSING", "TARGET_NOT_FOUND", "RESOURCE_NOT_FOUND"])("classifies explicit %s as a missing target", code => {
+   expect(classifyNodeFailure({ nodeType: "ToolCall", attempt: 1, error: { code, retryable: true } }, BASE_OBSERVATION).failureClass).toBe("target_missing");
+ });
+ it("preserves ambiguous outcomes even when the provider also times out", () => {
+   expect(classifyNodeFailure({ nodeType: "ToolCall", attempt: 1, error: { code: "TIMEOUT_AMBIGUOUS_OUTCOME", retryable: true } }, BASE_OBSERVATION).failureClass).toBe("ambiguous_outcome");
+ });
+ it("does not reinterpret safety signals as missing or ambiguous outcomes", () => {
+   expect(classifyNodeFailure({ nodeType: "ToolCall", attempt: 1, error: { code: "SAFETY_TARGET_MISSING" } }, BASE_OBSERVATION).failureClass).toBe("safety_violation");
+ });

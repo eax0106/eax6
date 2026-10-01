@@ -26,11 +26,11 @@ import { SesEmailProvider, type SecretResolver } from "./ses-email-provider";
 // instead) -- so this stays portable across services with no
 // platform-api-specific dependency, and neither service duplicates the
 // other's secret-resolution mechanism.
-export function resolveEmailProvider(resolveSecret: SecretResolver): EmailProvider {
-  const provider = process.env.EMAIL_PROVIDER ?? "mock";
+export function resolveEmailProvider(resolveSecret: SecretResolver, environment = process.env): EmailProvider {
+  const provider = environment.EMAIL_PROVIDER ?? "mock";
   if (provider === "ses") {
-    const fromAddress = process.env.SES_FROM_ADDRESS;
-    const credentialsSecretRef = process.env.SES_CREDENTIALS_SECRET_REF;
+    const fromAddress = environment.SES_FROM_ADDRESS;
+    const credentialsSecretRef = environment.SES_CREDENTIALS_SECRET_REF;
     if (!fromAddress || !credentialsSecretRef) {
       throw new Error(
         "SES_FROM_ADDRESS and SES_CREDENTIALS_SECRET_REF are required when EMAIL_PROVIDER=ses",
@@ -38,16 +38,16 @@ export function resolveEmailProvider(resolveSecret: SecretResolver): EmailProvid
     }
     return new SesEmailProvider(
       {
-        region: process.env.AWS_REGION ?? "ap-south-1",
+        region: environment.AWS_REGION ?? "ap-south-1",
         fromAddress,
         credentialsSecretRef,
-        ...(process.env.SES_CONFIGURATION_SET_NAME ? { configurationSetName: process.env.SES_CONFIGURATION_SET_NAME } : {}),
+        ...(environment.SES_CONFIGURATION_SET_NAME ? { configurationSetName: environment.SES_CONFIGURATION_SET_NAME } : {}),
       },
       resolveSecret,
     );
   }
 
-  if (process.env.NODE_ENV === "production") {
+  if (environment.NODE_ENV === "production") {
     throw new Error("EMAIL_PROVIDER=mock is not allowed when NODE_ENV=production");
   }
   return new MockEmailProvider();

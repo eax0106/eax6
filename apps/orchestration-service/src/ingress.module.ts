@@ -38,9 +38,8 @@ import {
   sessionGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 import { RunLauncherModule } from "./run-launcher.module";
-import { SesDeliveryEventsController } from "./webhooks/ses-delivery-events.controller";
+import { EmailDeliveryFailuresController, SesDeliveryEventsController } from "./webhooks/ses-delivery-events.controller";
 import { SesDeliveryEventsService } from "./webhooks/ses-delivery-events.service";
-import { NodeExecutionLedgerService } from "./runs/node-execution-ledger.service";
 import { RunStreamEventService } from "./runs/run-stream-event.service";
 import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/ses-delivery-environment";
 
@@ -56,6 +55,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
     WhatsappAccountsController,
     EventController,
     SesDeliveryEventsController,
+    EmailDeliveryFailuresController,
   ],
   providers: [
     {
@@ -63,7 +63,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
       useFactory: () => {
         const store = orchestrationStore(sessionGatewayEnvironment(process.env));
         return new SesDeliveryEventsService(
-          new NodeExecutionLedgerService(store),
+          store,
           new RunStreamEventService(store),
         );
       },

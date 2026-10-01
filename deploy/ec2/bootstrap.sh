@@ -88,6 +88,11 @@ grep -q '^AUDIT_RETENTION_DB_PASSWORD=' .audit-retention.env || printf 'AUDIT_RE
 . ./.audit-retention.env
 sha256() { printf %s "$1" | openssl dgst -sha256 -r | cut -d' ' -f1; }
 
+if [[ "$local_mode" != 1 ]]; then
+  SES_DELIVERY_KIT_JSON="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/ses/delivery-kit" --query Parameter.Value --output text)"
+  SES_CONFIGURATION_SET_NAME="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["configurationSet"])' <<<"$SES_DELIVERY_KIT_JSON")"
+fi
+
 # --- 2. environment file ------------------------------------------------------
 log "writing .env for ALTER_ENV=$ALTER_ENV"
 shared_refs='^(TAVILY_API_KEY_SECRET_REF|BROWSERBASE_API_KEY_REF|E2B_API_KEY_REF|PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF)='
@@ -276,6 +281,11 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$here/web:/out" \
 # --- 7. services ------------------------------------------------------------------
 log "starting services"
 compose up -d
+if [[ "$local_mode" != 1 ]]; then
+  log "configuring SES delivery route"
+  SES_DELIVERY_KIT_JSON="$SES_DELIVERY_KIT_JSON" SES_EVENT_WEBHOOK_SECRET="$SES_EVENT_WEBHOOK_SECRET" \
+    python3 "$here/provision-ses-delivery.py"
+fi
 log "waiting for every /health"
 failed=0
 for pair in \

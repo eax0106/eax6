@@ -10,7 +10,7 @@
  *   calls that a target resource mismatch, which a person must redirect.
  * - email.send: the provider's message id. That proves the provider
  *   accepted the message, not that it was delivered; delivery needs the
- *   provider's event stream, which is not wired.
+ *   provider's event stream; later Delivery/Bounce updates the side-effect.
  * - browser.click: a declared expected page state is checked against the
  *   post-click snapshot; without one the action stays unconfirmed.
  */
@@ -42,6 +42,10 @@ export function mechanicalCheck(
   }
   if (toolName === "browser.click") {
     const confirmation = output["confirmation"];
+    if (confirmation !== null && typeof confirmation === "object" &&
+        (confirmation as Record<string, unknown>)["status"] === "failed") {
+      return { confirmed: false, reason: String((confirmation as Record<string, unknown>)["reason"] ?? "expected page state did not match") };
+    }
     if (
       confirmation !== null &&
       typeof confirmation === "object" &&

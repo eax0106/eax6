@@ -23,6 +23,22 @@ const actor: ActorContext = {
 };
 
 describe("WorkflowService", () => {
+  it("relays approval policies with the caller and exact precondition", async () => {
+    const engine = engineStub();
+    const service = new WorkflowService(engine.value);
+    await service.approvalPolicies(workflowId, actor, traceparent);
+    expect(engine.get).toHaveBeenCalledWith(`/api/v1/workflows/${workflowId}/approval-policies`, expectedContext());
+    const input = { mode: "auto" as const, skip_on_timeout: true, timeout_seconds: 120, confirm_consequence: "this will send emails without asking" };
+    await service.setApprovalPolicy(workflowId, "approval.send", input, actor, traceparent, "policy-key", '"step-etag"');
+    expect(engine.put).toHaveBeenCalledWith(`/api/v1/workflows/${workflowId}/approval-policies/approval.send`, input, expectedContext(), { idempotencyKey: "policy-key", ifMatch: '"step-etag"' });
+    expect(() => service.approvalPolicies("invalid", actor, traceparent)).toThrow(WorkflowHttpError);
+    expect(() => service.setApprovalPolicy(workflowId, "../outside", input, actor, traceparent, "key", '"etag"')).toThrow(WorkflowHttpError);
+    const unscoped = { ...actor };
+    delete unscoped.workspace_id;
+    expect(() => service.approvalPolicies(workflowId, unscoped, traceparent)).toThrow(WorkflowHttpError);
+    expect(engine.put).toHaveBeenCalledTimes(1);
+  });
+
   it("creates workflow through typed Engine client with caller context", async () => {
     const engine = engineStub();
     const service = new WorkflowService(engine.value);

@@ -321,35 +321,9 @@ export class NodeExecutionLedgerService {
       await tx.query(
         `UPDATE side_effects
             SET status = 'completed', tool_audit_id = $3, provider_message_id = $4, completed_at = clock_timestamp()
-          WHERE tenant_id = $1 AND id = $2`,
+          WHERE tenant_id = $1 AND id = $2 AND status = 'attempted'`,
         [tenantId, id, toolAuditId ?? null, providerMessageId ?? null],
       );
-    });
-  }
-
-  async markEmailDeliveryFailed(
-    tenantIdInput: string,
-    providerMessageId: string,
-    reason: string,
-  ): Promise<{ readonly runId: string } | undefined> {
-    const tenantId = bareTenantUuid(tenantIdInput);
-    return this.store.withTenant(tenantId, async (tx) => {
-      const result = await tx.query<{ readonly run_id: string }>(
-        `UPDATE side_effects
-            SET status = 'delivery_failed', delivery_failure_reason = $3, completed_at = COALESCE(completed_at, clock_timestamp())
-          WHERE tenant_id = $1 AND provider_message_id = $2 AND tool_name = 'email.send'
-            AND status <> 'delivery_failed'
-          RETURNING run_id`,
-        [tenantId, providerMessageId, reason],
-      );
-      const runId = result.rows[0]?.run_id;
-      if (runId === undefined) return undefined;
-      await tx.query(
-        `UPDATE runs SET status = 'failed', ended_at = COALESCE(ended_at, clock_timestamp())
-          WHERE tenant_id = $1 AND id = $2 AND status NOT IN ('failed', 'cancelled')`,
-        [tenantId, runId],
-      );
-      return { runId };
     });
   }
 
