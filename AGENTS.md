@@ -26,9 +26,12 @@ checked the code: several were not.
 
 ## Who decides
 
-- The **repository owner** owns architecture and product decisions and decides
-  every merge of an agent's pull request. Do not merge unless they have told you
-  to, for that pull request.
+- The **repository owner** owns architecture and product decisions. The owner
+  has granted standing authorization to commit, push, open and update pull
+  requests, resolve conflicts, rerun CI, and squash-merge when CI is green on
+  the exact head commit. Do not ask again for permission for these PR actions.
+  This authorization does not waive the rules below or authorize unrelated
+  outward-facing actions.
 - A decision the owner has already made stays made. Do not reopen one; if new
   evidence bears on it, report the evidence and let the owner decide.
 - A question that is a product choice (what the product should do), not an
@@ -206,8 +209,13 @@ Several agents work on this repository at the same time.
   `git worktree add ../alter-x-4-<topic> -b <branch> origin/main`. Never switch
   branches in a checkout you did not create: another agent's uncommitted work or
   next commit lands on whatever is checked out.
-- **Take one task at a time**, as named in the handoff note, and do not start one
-  another agent holds.
+- **Keep independent roadmap tasks moving in parallel** in separate worktrees.
+  Start the next ready task while an earlier PR runs CI; do not wait for its
+  merge unless the next task depends on it. Do not start work another agent holds.
+- **Continue until the authorized roadmap is complete or the owner explicitly
+  asks you to stop.** Carry implementation, verification, PRs and merge follow-up
+  through to completion; a pending PR is not a reason to stop building. Keep the
+  handoff note current so progress survives a session continuation.
 - **Avoid editing a file another open pull request edits.** If you must, say so
   in your PR so the owner can order the merges.
 - **Before you stop, update the handoff note**: what you merged or opened, what
