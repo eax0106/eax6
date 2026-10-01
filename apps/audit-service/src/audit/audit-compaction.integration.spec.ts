@@ -3,10 +3,10 @@ import { Test } from "@nestjs/testing";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { resolve } from "node:path";
 import { PostgresAuditStoreProvider } from "@alterx/adapters";
+import { connectPostgresTestClient, createPostgresTestPool, type PostgresTestClient, type PostgresTestPool } from "@alterx/adapters/testing";
 import { auditGenesisHash, type AuditEventToAppend } from "@alterx/shared-clients";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import pg from "pg";
 import { AuditService } from "./audit.service";
 import { AUDIT_QUERY_SERVICE_TOKEN_HASH, AuditQueryController } from "./audit-query.controller";
 import { createPlatformJobHandlers } from "../../../background-workers/src/platform-jobs/handlers";
@@ -23,9 +23,9 @@ function event(tenantId = A, occurredAt = new Date()): AuditEventToAppend {
 
 describe.sequential("Audit closed-prefix compaction (Y2)", () => {
   let container: StartedPostgreSqlContainer;
-  let admin: pg.Client;
-  let ordinary: pg.Pool;
-  let retention: pg.Pool;
+  let admin: PostgresTestClient;
+  let ordinary: PostgresTestPool;
+  let retention: PostgresTestPool;
   let store: PostgresAuditStoreProvider;
   let service: AuditService;
   let app: NestFastifyApplication;
@@ -33,17 +33,16 @@ describe.sequential("Audit closed-prefix compaction (Y2)", () => {
     container = await new PostgreSqlContainer("postgres:16-alpine")
       .withDatabase("audit_db").withUsername("audit_fixture_admin")
       .withPassword("disposable-fixture-only").start();
-    admin = new pg.Client({ connectionString: container.getConnectionUri() });
-    await admin.connect();
+    admin = await connectPostgresTestClient(container.getConnectionUri());
     await admin.query("CREATE ROLE audit_service LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'fixture-app-only'");
     await admin.query("CREATE ROLE audit_retention LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'fixture-retention-only'");
     await admin.query("ALTER DATABASE audit_db OWNER TO audit_service");
     await admin.query("GRANT CREATE, USAGE ON SCHEMA public TO audit_service");
     const url = new URL(container.getConnectionUri());
     url.username = "audit_service"; url.password = "fixture-app-only";
-    ordinary = new pg.Pool({ connectionString: url.toString() });
+    ordinary = createPostgresTestPool(url.toString());
     url.username = "audit_retention"; url.password = "fixture-retention-only";
-    retention = new pg.Pool({ connectionString: url.toString() });
+    retention = createPostgresTestPool(url.toString());
     store = new PostgresAuditStoreProvider({ authentication: "static",
       connectionString: container.getConnectionUri(),
       migrationsFolder: resolve(process.cwd(), "apps/audit-service/drizzle") },

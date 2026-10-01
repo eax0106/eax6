@@ -11,8 +11,8 @@ import {
 } from "@alterx/adapters";
 import { ProblemDetailsSchema } from "@alterx/contracts";
 import { createMockObjectStorageProvider } from "@alterx/shared-clients";
+import { connectPostgresTestClient } from "@alterx/adapters/testing";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -73,8 +73,7 @@ describe.sequential("KNOW-16 full right-to-delete flow", () => {
       migrationsFolder: migrations,
     });
     await orchestrationStore.migrate();
-    const auditAdmin = new pg.Client({ connectionString: auditDatabase.getConnectionUri() });
-    await auditAdmin.connect();
+    const auditAdmin = await connectPostgresTestClient(auditDatabase.getConnectionUri());
     try {
       await auditAdmin.query("CREATE ROLE audit_service LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'fixture-app-only'");
       await auditAdmin.query("CREATE ROLE audit_retention LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'fixture-retention-only'");
