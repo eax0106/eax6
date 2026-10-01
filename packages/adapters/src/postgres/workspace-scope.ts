@@ -6,7 +6,7 @@
  * joins the workspace's erasure the day its migration adds the column or the
  * foreign key.
  *
- * Every predicate binds $1 = tenant id (uuid) and $2 = workspace id (uuid).
+ * Every predicate binds $1 = tenant id and $2 = workspace id (bare uuids, compared as text).
  */
 
 /** Minimal client shape: a pg client, a pool, or a tenant transaction. */
@@ -40,7 +40,7 @@ interface ForeignKey {
 const IDENTIFIER = /^[a-z_][a-z0-9_]*$/;
 
 /**
- * Builds the workspace predicate of each table in `tables` (public schema).
+ * Builds the workspace predicate of each table in `tables` (the current schema).
  * A table with `tenant_id` and `workspace_id` is scoped directly; otherwise
  * the first foreign key (by constraint name) to an already-scoped table in
  * `tables` scopes it through its parent. Tables are resolved to a fixed point,
@@ -54,7 +54,7 @@ export async function planWorkspaceScope(
   for (const table of tables) requireIdentifier(table);
   const columns = await client.query<{ table_name: string; column_name: string }>(
     `SELECT table_name, column_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = ANY($1::text[])`,
+      WHERE table_schema = current_schema() AND table_name = ANY($1::text[])`,
     [tables],
   );
   const columnsOf = new Map<string, Set<string>>();
@@ -70,7 +70,7 @@ export async function planWorkspaceScope(
        FROM pg_constraint c
        JOIN pg_class child ON child.oid = c.conrelid
        JOIN pg_class parent ON parent.oid = c.confrelid
-       JOIN pg_namespace n ON n.oid = child.relnamespace AND n.nspname = 'public'
+       JOIN pg_namespace n ON n.oid = child.relnamespace AND n.nspname = current_schema()
        CROSS JOIN LATERAL unnest(c.conkey, c.confkey) WITH ORDINALITY AS k(child_attnum, parent_attnum, ord)
        JOIN pg_attribute ca ON ca.attrelid = c.conrelid AND ca.attnum = k.child_attnum
        JOIN pg_attribute pa ON pa.attrelid = c.confrelid AND pa.attnum = k.parent_attnum
@@ -91,9 +91,9 @@ export async function planWorkspaceScope(
     const own = columnsOf.get(table) ?? new Set<string>();
     if (root !== undefined && table === root.table) {
       requireIdentifier(root.keyColumn);
-      predicates.set(table, `tenant_id = $1::uuid AND ${root.keyColumn}::text = $2::text`);
+      predicates.set(table, `tenant_id::text = $1::text AND ${root.keyColumn}::text = $2::text`);
     } else if (own.has("tenant_id") && own.has("workspace_id")) {
-      predicates.set(table, "tenant_id = $1::uuid AND workspace_id::text = $2::text");
+      predicates.set(table, "tenant_id::text = $1::text AND workspace_id::text = $2::text");
     }
   }
   let changed = true;

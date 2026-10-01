@@ -6,8 +6,10 @@ import type {
   RetentionSweepResult,
   SubjectDataLocation,
   VerificationResult,
+  WorkspaceDeletionProvider,
 } from "@alterx/contracts";
-import { TenantIdSchema } from "@alterx/contracts";
+import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
+import { planWorkspaceScope } from "@alterx/adapters";
 import type { MutableSecretsProvider } from "@alterx/shared-clients";
 import {
   LEGAL_HOLD_MONTHS,
@@ -70,7 +72,13 @@ export const PLATFORM_DELETE_ORDER = [
 
 const skeleton: ReadonlySet<string> = new Set(SKELETON_TABLES);
 
-export class PlatformDeletionService implements DeletionProvider {
+// D2 workspace erasure: legal-hold sources stay with the tenant (billing and
+// seller records are tenant-level and erased, with their held minimum, only
+// when the tenant is), so they are never scoped to a workspace.
+const legalHold: ReadonlySet<string> = new Set(LEGAL_HOLD_SOURCES.map((source) => source.table));
+const WORKSPACE_TABLES = PLATFORM_DELETE_ORDER.filter((table) => !legalHold.has(table));
+
+export class PlatformDeletionService implements DeletionProvider, WorkspaceDeletionProvider {
   constructor(
     private readonly store: ErasureStore,
     private readonly secrets: MutableSecretsProvider,
@@ -189,6 +197,58 @@ export class PlatformDeletionService implements DeletionProvider {
     return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
   }
 
+  /**
+   * D2: one workspace's rows, scoped from the live schema with the workspaces
+   * row as root. Tenant-wide tables (members, billing, sessions) have no path
+   * to a workspace and are left alone.
+   */
+  async locateWorkspaceData(tenantId: string, workspaceId: string): Promise<readonly SubjectDataLocation[]> {
+    const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
+    return this.store.withTenant(tenant, async (tx) => {
+      const scope = await workspaceScope(tx);
+      const locations: SubjectDataLocation[] = [];
+      for (const [table, predicate] of scope) {
+        const result = await tx.query<{ count: string }>(`SELECT count(*)::text AS count FROM "${table}" WHERE ${predicate}`, [tenant, workspace]);
+        locations.push({ store: STORE, table, rowCount: Number(result.rows[0]?.count ?? 0), objectReferences: [] });
+      }
+      return locations;
+    });
+  }
+
+  /**
+   * Secrets first, then rows. A secret that fails to delete aborts before any
+   * row goes, so a retry finds the same rows and references; once the rows are
+   * gone, so are their secrets, which is what verification relies on.
+   */
+  async deleteWorkspaceData(tenantId: string, workspaceId: string, manifestId: string): Promise<DeletionResult> {
+    const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
+    requireManifest(manifestId);
+    const references = await this.store.withTenant(tenant, async (tx) =>
+      collectWorkspaceSecretReferences(tx, tenant, workspace, await workspaceScope(tx)),
+    );
+    let deletedSecrets = 0;
+    for (const reference of references) {
+      if (await this.deleteSecret(reference)) deletedSecrets += 1;
+    }
+    const rows = await this.store.withTenant(tenant, async (tx) => {
+      const scope = await workspaceScope(tx);
+      let deleted = 0;
+      for (const table of WORKSPACE_TABLES) {
+        const predicate = scope.get(table);
+        if (predicate === undefined) continue;
+        deleted += (await tx.query(`DELETE FROM "${table}" WHERE ${predicate}`, [tenant, workspace])).rowCount;
+      }
+      return deleted;
+    });
+    return { store: STORE, manifestId, deletedRows: rows, deletedObjects: deletedSecrets };
+  }
+
+  async verifyWorkspaceDeletion(tenantId: string, workspaceId: string, manifestId: string): Promise<VerificationResult> {
+    requireManifest(manifestId);
+    const remaining = (await this.locateWorkspaceData(tenantId, workspaceId)).filter((item) => item.rowCount > 0);
+    return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
+  }
+
   async applyRetentionPolicy(): Promise<RetentionSweepResult> {
     const retentionStore = this.retentionStore;
     if (!retentionStore) throw new Error("Dedicated retention connection required");
@@ -258,6 +318,35 @@ async function collectSecretReferences(tx: ErasureTransaction, tenant: string): 
     references.push(`/alter/integrations/${tenant}/${row.workspace_id}/${row.id}`);
   }
   return references;
+}
+
+async function workspaceScope(tx: ErasureTransaction): Promise<ReadonlyMap<string, string>> {
+  return (await planWorkspaceScope(tx, WORKSPACE_TABLES, { table: "workspaces", keyColumn: "id" })).scoped;
+}
+
+/** The workspace's secrets, by the same tenant-scoped paths as the tenant's erasure, for scoped rows only. */
+async function collectWorkspaceSecretReferences(
+  tx: ErasureTransaction,
+  tenant: string,
+  workspace: string,
+  scope: ReadonlyMap<string, string>,
+): Promise<string[]> {
+  const references: string[] = [];
+  const ids = async (table: string) => {
+    const predicate = scope.get(table);
+    if (predicate === undefined) return [];
+    return (await tx.query<{ id: string }>(`SELECT id::text FROM "${table}" WHERE ${predicate}`, [tenant, workspace])).rows.map((row) => row.id);
+  };
+  for (const id of await ids("credential_refs")) references.push(`/alter/credentials/${tenant}/${id}`);
+  for (const id of await ids("env_vars")) references.push(`/alter/env-vars/${tenant}/${id}`);
+  for (const id of await ids("oauth_connections")) references.push(`/alter/integrations/${tenant}/${workspace}/${id}`);
+  return references;
+}
+
+function workspaceSubject(tenantId: string, workspaceId: string): { tenant: string; workspace: string } {
+  const parsed = WorkspaceIdSchema.safeParse(workspaceId);
+  if (!parsed.success) throw new Error("workspaceId must be a ws_ prefixed UUIDv7");
+  return { tenant: bareTenant(tenantId), workspace: parsed.data.slice(3) };
 }
 
 /** Copy the minimum fields the law says to keep, once per source row, before anything is destroyed. */
