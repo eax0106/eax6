@@ -28,6 +28,7 @@ import { BillingModule } from "./billing";
 import { EnvVarModule } from "./env-vars";
 import { RepositoryModule } from "./repositories";
 import { BudgetModule } from "./budgets";
+import { RunRetentionModule } from "./run-retention/run-retention.module";
 import { WorkspaceExportModule } from "./workspace-export";
 import { CostsModule } from "./costs/costs.module";
 import { WhatsappModule } from "./channels/whatsapp/whatsapp.module";
@@ -85,6 +86,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     EnvVarModule,
     RepositoryModule,
     BudgetModule,
+    RunRetentionModule,
     WorkspaceExportModule,
     WhatsappModule,
     MarketplaceModule,

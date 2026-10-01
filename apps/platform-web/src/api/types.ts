@@ -21,6 +21,14 @@ export interface PendingDeletionWorkspace {
   deletionDueAt: string
 }
 
+/** D2: how long the workspace keeps finished runs (7 to 365 days). */
+export interface RunRetention {
+  retentionDays: number
+  isDefault: boolean
+  updatedAt: string | null
+  etag: string
+}
+
 export type TenantRole = "owner" | "admin" | "billing" | "member"
 
 export interface TenantDataResidency {
