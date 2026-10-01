@@ -146,6 +146,12 @@ export {
 } from "./postgres/orchestration-store-provider";
 export { StaticConnectionError, staticPoolConfig } from "./postgres/static-connection";
 export {
+  planWorkspaceScope,
+  type ScopeQueryable,
+  type WorkspaceScopePlan,
+  type WorkspaceScopeRoot,
+} from "./postgres/workspace-scope";
+export {
   PostgresCostStoreProvider,
   POSTGRES_COST_FEATURE_DECISION,
   type CostQueryResult,

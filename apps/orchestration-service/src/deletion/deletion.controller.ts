@@ -18,6 +18,7 @@ import { ProblemDetailsSchema, type ProblemDetails } from "@alterx/contracts";
 import { OrchestrationDeletionService } from "./deletion.service";
 
 interface DeleteBody { readonly tenantId: string; readonly manifestId: string }
+interface WorkspaceBody { readonly tenantId: string; readonly workspaceId: string; readonly manifestId?: string }
 export const ORCHESTRATION_DELETION_TOKEN_HASH = Symbol("ORCHESTRATION_DELETION_TOKEN_HASH");
 
 @Catch(HttpException)
@@ -58,7 +59,7 @@ export class DeletionController {
     } catch (error: unknown) {
       if (error instanceof HttpException) throw error;
       const message = error instanceof Error ? error.message : "";
-      const status = message.includes("tenantId") || message.includes("manifestId") ? 400 : 500;
+      const status = message.includes("tenantId") || message.includes("workspaceId") || message.includes("manifestId") ? 400 : 500;
       throw new HttpException(problem(instance, status), status);
     }
   }
@@ -74,6 +75,19 @@ export class DeletionController {
   @Post("verify")
   verify(@Body() body: DeleteBody, @Headers("authorization") auth?: string) {
     this.authorize(auth); return this.handle("/internal/deletion/verify", () => this.service.verifyDeletion(body.tenantId, body.manifestId));
+  }
+  // D2: one workspace's erasure at the end of its undo window.
+  @Post("workspace/locate")
+  locateWorkspace(@Body() body: WorkspaceBody, @Headers("authorization") auth?: string) {
+    this.authorize(auth); return this.handle("/internal/deletion/workspace/locate", () => this.service.locateWorkspaceData(body.tenantId, body.workspaceId));
+  }
+  @Post("workspace/delete")
+  deleteWorkspace(@Body() body: WorkspaceBody, @Headers("authorization") auth?: string) {
+    this.authorize(auth); return this.handle("/internal/deletion/workspace/delete", () => this.service.deleteWorkspaceData(body.tenantId, body.workspaceId, body.manifestId ?? ""));
+  }
+  @Post("workspace/verify")
+  verifyWorkspace(@Body() body: WorkspaceBody, @Headers("authorization") auth?: string) {
+    this.authorize(auth); return this.handle("/internal/deletion/workspace/verify", () => this.service.verifyWorkspaceDeletion(body.tenantId, body.workspaceId, body.manifestId ?? ""));
   }
   @Post("retention")
   retention(@Headers("authorization") auth?: string) {

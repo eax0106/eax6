@@ -5,8 +5,10 @@ import type {
   RetentionSweepResult,
   SubjectDataLocation,
   VerificationResult,
+  WorkspaceDeletionProvider,
 } from "@alterx/contracts";
-import { TenantIdSchema } from "@alterx/contracts";
+import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
+import { planWorkspaceScope } from "@alterx/adapters";
 
 import { sweepRunHistory } from "../run-retention/run-retention.service";
 
@@ -70,7 +72,7 @@ export const DELETE_ORDER = [
   "workflow_template_variable_values", "workflow_versions", "workflows",
 ] as const;
 
-export class OrchestrationDeletionService implements DeletionProvider {
+export class OrchestrationDeletionService implements DeletionProvider, WorkspaceDeletionProvider {
   constructor(
     private readonly store: DeletionTenantStore,
     private readonly systemStore: DeletionTenantStore = store,
@@ -146,6 +148,46 @@ export class OrchestrationDeletionService implements DeletionProvider {
     return { store: STORE, deletedRows, deletedObjects: 0, sweptAt: new Date().toISOString() };
   }
 
+  /**
+   * D2: one workspace's rows, scoped from the live schema (planWorkspaceScope).
+   * Every engine table is workspace data, so a table the plan cannot scope is
+   * an error rather than silently skipped.
+   */
+  async locateWorkspaceData(tenantId: string, workspaceId: string): Promise<readonly SubjectDataLocation[]> {
+    const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
+    return this.store.withTenant(tenant, async (tx) => {
+      const scope = await workspacePredicates(tx);
+      const locations: SubjectDataLocation[] = [];
+      for (const table of TABLES) {
+        const result = await tx.query<{ count: string }>(
+          `SELECT count(*)::text AS count FROM ${table} WHERE ${scope.get(table)!}`, [tenant, workspace],
+        );
+        locations.push({ store: STORE, table, rowCount: Number(result.rows[0]?.count ?? 0), objectReferences: [] });
+      }
+      return locations;
+    });
+  }
+
+  async deleteWorkspaceData(tenantId: string, workspaceId: string, manifestId: string): Promise<DeletionResult> {
+    const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
+    requireManifest(manifestId);
+    const deletedRows = await this.store.withTenant(tenant, async (tx) => {
+      const scope = await workspacePredicates(tx);
+      let deleted = 0;
+      // Children first, while their parents still exist for the predicates.
+      for (const table of DELETE_ORDER) {
+        deleted += (await tx.query(`DELETE FROM ${table} WHERE ${scope.get(table)!}`, [tenant, workspace])).rowCount;
+      }
+      return deleted;
+    });
+    return { store: STORE, manifestId, deletedRows, deletedObjects: 0 };
+  }
+
+  async verifyWorkspaceDeletion(tenantId: string, workspaceId: string, manifestId: string): Promise<VerificationResult> {
+    const remaining = (await this.locateWorkspaceData(tenantId, workspaceId)).filter((item) => item.rowCount > 0);
+    return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
+  }
+
   async replayDeletionLedger(sinceTimestamp: string): Promise<ReplayResult> {
     void sinceTimestamp;
     throw new Error("Deletion-ledger replay is coordinated by audit-service");
@@ -172,6 +214,20 @@ export class OrchestrationDeletionService implements DeletionProvider {
       return result.rows.map((row) => `ten_${row.tenant_id}`);
     });
   }
+}
+
+async function workspacePredicates(tx: TransactionLike): Promise<ReadonlyMap<string, string>> {
+  const plan = await planWorkspaceScope(tx, TABLES);
+  if (plan.unscoped.length > 0) {
+    throw new Error(`Workspace erasure cannot scope tables: ${plan.unscoped.join(", ")}`);
+  }
+  return plan.scoped;
+}
+
+function workspaceSubject(tenantId: string, workspaceId: string): { tenant: string; workspace: string } {
+  const parsed = WorkspaceIdSchema.safeParse(workspaceId);
+  if (!parsed.success) throw new Error("workspaceId must be a ws_ prefixed UUIDv7");
+  return { tenant: bareTenant(tenantId), workspace: parsed.data.slice(3) };
 }
 
 function bareTenant(value: string): string {
