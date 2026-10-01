@@ -451,6 +451,9 @@ describe("WorkflowController routes", () => {
     const reader = await request("GET", path, { actor: { ...viewer, permissions: ["human-actions:read"] } });
     expect(reader.statusCode).toBe(200);
     expect(reader.json()).toMatchObject({ can_edit: false });
+    const deniedRole = await request("GET", path, { actor: { ...viewer, permissions: ["human-actions:read", "approvals:decide"] } });
+    expect(deniedRole.statusCode).toBe(200);
+    expect(deniedRole.json()).toMatchObject({ can_edit: false });
     expect(engine.get).toHaveBeenCalledWith(path, expect.objectContaining({ userId: approver.user_id, workspaceId, permissions: approver.permissions }));
     for (const role of ["admin", "operator", "approver"]) {
       const writer = { ...approver, roles: [role] };

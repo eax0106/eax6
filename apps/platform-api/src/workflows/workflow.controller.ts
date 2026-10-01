@@ -43,6 +43,7 @@ import { WorkflowService } from "./workflow.service";
 
 const readRoles = ["admin", "editor", "operator", "approver", "viewer"] as const;
 const writeRoles = ["admin", "editor"] as const;
+const approvalRoles = ["admin", "operator", "approver"] as const;
 const operateRoles = ["admin", "editor", "operator"] as const;
 
 @Controller("/api/v1/workflows")
@@ -104,11 +105,14 @@ export class WorkflowController {
   ): Promise<WorkflowActionResult> {
     const caller = requireActor(actor, `/api/v1/workflows/${workflowId}/approval-policies`);
     const response = await this.workflows.approvalPolicies(workflowId, caller, traceparent);
-    return { ...project(response, reply), can_edit: caller.permissions.includes("approvals:decide") };
+    const roles = caller.workspaceRoles === undefined ? caller.roles : caller.workspaceRoles
+      .filter(binding => binding.workspaceId === caller.workspace_id).map(binding => binding.role);
+    return { ...project(response, reply), can_edit: caller.permissions.includes("approvals:decide") &&
+      roles.some(role => approvalRoles.some(allowed => allowed === role)) };
   }
 
   @Put(":workflowId/approval-policies/:nodeKey")
-  @RequireWorkspaceRole("admin", "operator", "approver")
+  @RequireWorkspaceRole(...approvalRoles)
   @RequirePermission("approvals:decide")
   @Idempotent()
   @UseFilters(ConcurrencyExceptionFilter)
