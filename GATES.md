@@ -24,6 +24,7 @@ Scope: Missing targets produce a redirect/recreate question. Ambiguous side effe
   EXPECT: recovery-clarification-negative-controls-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=1dd6961e3fb5ede88c4cfe95679ddfce1cd5287faa6996da972e90b0ba9ba266; exit=0; EXPECT=matched; output-sha256=e1425edcc980d991f3c7c375895613f7b9b5acb653f2a292389964c5c9fc57b5; output-bytes=620; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
 
-- [ ] G5: Builds, typecheck, lint, full affected suites, architecture and zero new AST entries pass
+- [x] G5: Builds, typecheck, lint, full affected suites, architecture and zero new AST entries pass
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: recovery-clarification-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b5dc47c3f7c6d9efd82e00770981a78e065e83499578487376c836fe07ddff7f; exit=0; EXPECT=matched; output-sha256=697f2e67cf4eccc6fa6c6e4c46e05c6611c687dd5279cdc1aa447a8445e837a0; output-bytes=483; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
