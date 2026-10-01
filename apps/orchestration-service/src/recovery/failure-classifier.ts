@@ -33,6 +33,16 @@ export function classifyNodeFailure(
     .filter((value): value is string => value !== undefined)
     .join(" ");
 
+  // Explicit uncertain side effects must not become retryable timeouts.
+  const safetySignal = codes.some(code => /SAFETY|POLICY_VIOLATION|HALLUCINATION/.test(code)) ||
+    observation.safety_severity === "high" || observation.safety_severity === "critical";
+  if (!safetySignal) {
+    const ambiguous = codes.find(code => /AMBIGUOUS_OUTCOME/.test(code));
+    if (ambiguous !== undefined) return { failureClass: "ambiguous_outcome", confidenceCeiling: 0.98, evidence: [`error_code=${ambiguous}`] };
+    const missing = codes.find(code => /TARGET_MISSING|TARGET_NOT_FOUND|RESOURCE_NOT_FOUND/.test(code));
+    if (missing !== undefined) return { failureClass: "target_missing", confidenceCeiling: 0.98, evidence: [`error_code=${missing}`] };
+  }
+
   for (const code of codes) {
     if (/PERMISSION_DENIED|FORBIDDEN|CREDENTIAL.*DENIED/.test(code)) {
       add(scores, evidence, "tool_permission_denial", 100, `error_code=${code}`);
