@@ -24,7 +24,7 @@ describe("mechanicalCheck", () => {
   it("records a click as unconfirmable, never as confirmed", () => {
     expect(mechanicalCheck("browser.click", {})).toEqual({
       unconfirmable: true,
-      reason: "the browser returns no state after a click to confirm against",
+      reason: "browser.click returned no confirmation",
     });
   });
 

@@ -459,7 +459,13 @@ export class NodeexecService {
       return;
     }
     const auditId = result.metadata?.["audit_id"];
-    await this.ledger.completeSideEffect(tenantId, id, typeof auditId === "string" ? auditId : undefined);
+    const messageId = result.output["messageId"];
+    await this.ledger.completeSideEffect(
+      tenantId,
+      id,
+      typeof auditId === "string" ? auditId : undefined,
+      typeof messageId === "string" ? messageId : undefined,
+    );
   }
 
   /**

@@ -621,7 +621,26 @@ describe("ToolGatewayService", () => {
             { browser_session_id: sessionId, selector: "#go" },
           ),
         ),
-      ).resolves.toMatchObject({ output_json: "{}" });
+      ).resolves.toMatchObject({
+        output_json: JSON.stringify({
+          snapshot: { text: "mock:body", url: "https://example.com/page" },
+          confirmation: { status: "unconfirmed", reason: "No expected page state was declared for this click" },
+        }),
+      });
+
+      await expect(
+        service.invokeTool(
+          browserInvokeRequest(
+            { tool_name: "browser.click" },
+            { browser_session_id: sessionId, selector: "#go", expected_page_state: { selector: "main" } },
+          ),
+        ),
+      ).resolves.toMatchObject({
+        output_json: JSON.stringify({
+          snapshot: { text: "mock:main", url: "https://example.com/page" },
+          confirmation: { status: "confirmed", basis: "post-click snapshot matched expected page state" },
+        }),
+      });
 
       const extracted = await service.invokeTool(
         browserInvokeRequest(

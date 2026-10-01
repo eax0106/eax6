@@ -41,6 +41,7 @@ export function resolveEmailProvider(resolveSecret: SecretResolver): EmailProvid
         region: process.env.AWS_REGION ?? "ap-south-1",
         fromAddress,
         credentialsSecretRef,
+        ...(process.env.SES_CONFIGURATION_SET_NAME ? { configurationSetName: process.env.SES_CONFIGURATION_SET_NAME } : {}),
       },
       resolveSecret,
     );

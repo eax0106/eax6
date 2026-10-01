@@ -77,7 +77,7 @@ fi
 # the tokens platform-api presents to orchestration's eval facade and
 # deployment admin routes.
 touch .session.env
-for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN; do
+for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN SES_EVENT_WEBHOOK_SECRET; do
   grep -q "^$key=" .session.env || printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" >>.session.env
 done
 # shellcheck disable=SC1091
@@ -148,6 +148,7 @@ expand() {
     # tool-gateway resolves SES_CREDENTIALS_SECRET_REF in Secrets Manager;
     # platform-api reads SES_CREDENTIALS_JSON instead (compose.yml override).
     printf 'EMAIL_PROVIDER=ses\nSES_FROM_ADDRESS=%s\nSES_CREDENTIALS_SECRET_REF=%s\n' "$SES_FROM_ADDRESS" "$SES_CREDENTIALS_SECRET_REF"
+    printf 'SES_CONFIGURATION_SET_NAME=%s\nSES_EVENT_WEBHOOK_SECRET=%s\n' "${SES_CONFIGURATION_SET_NAME:-alterx-delivery}" "$SES_EVENT_WEBHOOK_SECRET"
     printf 'SES_CREDENTIALS_JSON=%s\n' "$(secret "$SES_CREDENTIALS_SECRET_REF")"
     media_bucket="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/orchestration/artifacts-bucket" --query Parameter.Value --output text)"
     printf 'MEDIA_OBJECT_STORAGE_PROVIDER=s3\nIMAGE_GEN_PROVIDER=titan\nTEXT_TO_SPEECH_PROVIDER=polly\nSPEECH_TO_TEXT_PROVIDER=transcribe\nMEDIA_BUCKET_NAME=%s\n' "$media_bucket"

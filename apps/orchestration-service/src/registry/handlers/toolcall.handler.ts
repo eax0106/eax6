@@ -166,7 +166,15 @@ function validateExecution(
 
   let inputJson: string;
   try {
-    inputJson = JSON.stringify(resolved);
+    const input =
+      config.data.tool_name === "browser.click" && config.data.expected_page_state !== undefined
+        ? isPlainObject(resolved)
+          ? { ...resolved, expected_page_state: config.data.expected_page_state }
+          : resolved
+        : resolved;
+    inputJson = JSON.stringify(
+      input,
+    );
   } catch {
     return {
       field: "config.arguments",

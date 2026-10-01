@@ -11,8 +11,8 @@
  * - email.send: the provider's message id. That proves the provider
  *   accepted the message, not that it was delivered; delivery needs the
  *   provider's event stream, which is not wired.
- * - browser.click: the browser returns nothing to check, so the action is
- *   recorded as unconfirmed rather than passed.
+ * - browser.click: a declared expected page state is checked against the
+ *   post-click snapshot; without one the action stays unconfirmed.
  */
 export type MechanicalCheck =
   | { readonly confirmed: true; readonly basis: string }
@@ -41,7 +41,24 @@ export function mechanicalCheck(
       : { confirmed: false, reason: "email.send returned no provider message id" };
   }
   if (toolName === "browser.click") {
-    return { unconfirmable: true, reason: "the browser returns no state after a click to confirm against" };
+    const confirmation = output["confirmation"];
+    if (
+      confirmation !== null &&
+      typeof confirmation === "object" &&
+      (confirmation as Record<string, unknown>)["status"] === "confirmed"
+    ) {
+      return {
+        confirmed: true,
+        basis: String((confirmation as Record<string, unknown>)["basis"] ?? "expected page state matched"),
+      };
+    }
+    return {
+      unconfirmable: true,
+      reason:
+        confirmation !== null && typeof confirmation === "object"
+          ? String((confirmation as Record<string, unknown>)["reason"] ?? "expected page state was not confirmed")
+          : "browser.click returned no confirmation",
+    };
   }
   return undefined;
 }

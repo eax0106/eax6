@@ -367,7 +367,25 @@ export class ToolGatewayService implements ToolgwHandler {
               input.browserSessionId,
               input.selector,
             );
-            output = {};
+            {
+              const snapshot = await this.browserProvider.extract(
+                scope,
+                input.browserSessionId,
+                input.expectedPageState?.selector,
+              );
+              const expected = input.expectedPageState;
+              const textMatched = expected?.text === undefined || snapshot.text.includes(expected.text);
+              const selectorMatched = expected?.selector === undefined || snapshot.text.length > 0;
+              output = {
+                snapshot,
+                confirmation:
+                  expected === undefined
+                    ? { status: "unconfirmed", reason: "No expected page state was declared for this click" }
+                    : textMatched && selectorMatched
+                      ? { status: "confirmed", basis: "post-click snapshot matched expected page state" }
+                      : { status: "unconfirmed", reason: "post-click snapshot did not match expected page state" },
+              };
+            }
             break;
           case "extract":
             output = await this.browserProvider.extract(
@@ -419,7 +437,10 @@ export class ToolGatewayService implements ToolgwHandler {
           input.to,
           input.subject,
           input.body,
-          input.html === undefined ? undefined : { html: input.html },
+          {
+            ...(input.html === undefined ? {} : { html: input.html }),
+            tenantId: request.tenant_id,
+          },
         );
         const json = JSON.stringify(result);
         if (Buffer.byteLength(json, "utf8") > MAX_TOOL_OUTPUT_BYTES) {
@@ -1014,6 +1035,7 @@ type BrowserToolInput =
       readonly sessionId: string;
       readonly browserSessionId: string;
       readonly selector: string;
+      readonly expectedPageState?: { readonly text?: string; readonly selector?: string };
     }
   | {
       readonly op: "extract";
@@ -1062,6 +1084,20 @@ function parseBrowserToolInput(
     }
     return value;
   };
+  const optionalExpectedPageState = (): { readonly text?: string; readonly selector?: string } | undefined => {
+    const value = record["expected_page_state"];
+    if (value === undefined) return undefined;
+    if (value === null || typeof value !== "object" || Array.isArray(value)) {
+      throw new ToolGatewayValidationError("browser.click expected_page_state must be an object");
+    }
+    const state = value as Record<string, unknown>;
+    const text = state.text === undefined ? undefined : optionalStringValue(state.text, "expected_page_state.text");
+    const selector = state.selector === undefined ? undefined : optionalStringValue(state.selector, "expected_page_state.selector");
+    if (text === undefined && selector === undefined) {
+      throw new ToolGatewayValidationError("browser.click expected_page_state needs text or selector");
+    }
+    return { ...(text === undefined ? {} : { text }), ...(selector === undefined ? {} : { selector }) };
+  };
   const sessionId = requireString("session_id");
   switch (toolName) {
     case "browser.session.create":
@@ -1073,13 +1109,16 @@ function parseBrowserToolInput(
         browserSessionId: requireString("browser_session_id"),
         url: requireString("url"),
       };
-    case "browser.click":
+    case "browser.click": {
+      const expectedPageState = optionalExpectedPageState();
       return {
         op: "click",
         sessionId,
         browserSessionId: requireString("browser_session_id"),
         selector: requireString("selector"),
+        ...(expectedPageState === undefined ? {} : { expectedPageState }),
       };
+    }
     case "browser.extract": {
       const selector = optionalString("selector");
       return {
@@ -1100,6 +1139,13 @@ function parseBrowserToolInput(
         `Browser tool name "${toolName}" does not name a supported operation`,
       );
   }
+}
+
+function optionalStringValue(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ToolGatewayValidationError(`${field}, if present, must be a non-empty string`);
+  }
+  return value;
 }
 
 // ENGINE-RESTRUCTURE-P4-1b: recognizes the reserved deterministic
