@@ -132,7 +132,9 @@ describe("ActorContextGuard", () => {
     // workspace_members is the second queryTenant call; the flat workspace_id
     // is taken from its first row, so the ordering must be deterministic.
     const workspaceQuery = queryTenant.mock.calls[1]?.[1] as string;
-    expect(workspaceQuery).toContain("ORDER BY created_at ASC, workspace_id ASC");
+    expect(workspaceQuery).toContain("ORDER BY m.created_at ASC, m.workspace_id ASC");
+    // D2: roles in a workspace pending deletion are not granted.
+    expect(workspaceQuery).toContain("w.status <> 'pending_deletion'");
     // Earliest-created workspace wins regardless of physical row order.
     expect(request.actorContext?.workspace_id).toBe(
       "ws_00000000-0000-7000-8000-000000000101",

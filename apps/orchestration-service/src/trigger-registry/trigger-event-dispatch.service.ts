@@ -1,3 +1,4 @@
+import { isWorkspaceHeld } from "../workspace-holds/workspace-holds.service";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -126,6 +127,10 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
         throw new TriggerEventValidationError(
           "trigger does not belong to the carried workspace",
         );
+      }
+      // D2: a workspace pending deletion starts no run until it is restored.
+      if (await isWorkspaceHeld(tx, tenantId, row.workspace_id)) {
+        return { kind: "noop" as const, reason: "workspace-held" as const };
       }
 
       const parsedDag = CompiledDagSchema.safeParse(row.compiled_dag);

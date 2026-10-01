@@ -174,6 +174,15 @@ describe("TriggerEventDispatchService", () => {
     expect(launcher.startAndTransition).not.toHaveBeenCalled();
   });
 
+  it("returns a terminal no-op for a workspace pending deletion (D2 hold) without inserting rows", async () => {
+    const { store, launcher, service } = setup(undefined);
+    store.lookups[1] = { held: true } as unknown as DispatchLookupRow;
+    const response = await service.createRun(request());
+    expect(response).toEqual({ run_id: "", event_inserted: false });
+    expect(store.rows).toHaveLength(0);
+    expect(launcher.startAndTransition).not.toHaveBeenCalled();
+  });
+
   it("returns a terminal no-op when the active version is unbound", async () => {
     const { store, service } = setup(undefined);
     store.lookups[0] = { ...store.lookups[0]!, wfv_id: null };

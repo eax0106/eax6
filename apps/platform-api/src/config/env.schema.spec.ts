@@ -48,6 +48,7 @@ describe("platformApiEnvSchema", () => {
       IDENTITY_PROVIDER: "mock",
       EMAIL_PROVIDER: "mock",
       REDIS_ENDPOINT_PARAM: "/alter/dev/platform-api/redis-endpoint",
+      WORKSPACE_DELETION_WINDOW_DAYS: 7,
       SIGNING_KEY_PROVIDER: "secrets",
       ALTER_CONFIG_SOURCE: "local-file",
       MARKETPLACE_OBJECT_STORAGE_PROVIDER: "mock",
@@ -152,6 +153,15 @@ describe("platformApiEnvSchema", () => {
       APPCONFIG_CONFIGURATION_PROFILE_ID: "engine-local",
     });
     expect(env.APPCONFIG_APP_ID).toBe("alterx-engine-long");
+  });
+
+  it("reads the workspace deletion window in whole days, 1 to 30, default 7 (D2)", () => {
+    const base = { DATABASE_URL: "postgres://localhost/platform_db", MARKETPLACE_DATABASE_URL: "postgres://localhost/marketplace_db", MARKETPLACE_SEARCH_CURSOR_SECRET: cursorSecret, SIGNING_KEY_PROVIDER: "mock" };
+    expect(validatePlatformApiEnv(base).WORKSPACE_DELETION_WINDOW_DAYS).toBe(7);
+    expect(validatePlatformApiEnv({ ...base, WORKSPACE_DELETION_WINDOW_DAYS: "14" }).WORKSPACE_DELETION_WINDOW_DAYS).toBe(14);
+    for (const invalid of ["0", "31", "1.5", "seven"]) {
+      expect(() => validatePlatformApiEnv({ ...base, WORKSPACE_DELETION_WINDOW_DAYS: invalid })).toThrow("Invalid platform-api environment");
+    }
   });
 
   it("selects marketplace object storage explicitly", () => {

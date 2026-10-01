@@ -239,6 +239,13 @@
       "when": 1790067600000,
       "tag": "0029_staff_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1790071200000,
+      "tag": "0030_workspace_pending_deletion",
+      "breakpoints": true
     }
   ]
 }

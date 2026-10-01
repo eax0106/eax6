@@ -2,6 +2,7 @@ export const queryKeys = {
   workspace: {
     all: ["workspaces"] as const,
     current: ["workspace", "current"] as const,
+    pendingDeletion: ["workspaces", "pending-deletion"] as const,
   },
   workflows: {
     all: ["workflows"] as const,

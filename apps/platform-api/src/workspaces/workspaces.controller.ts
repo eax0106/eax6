@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Header,
   Headers,
   Param,
@@ -14,9 +16,11 @@ import {
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import { ConcurrencyExceptionFilter, EtagResponseInterceptor } from "../concurrency";
+import { EngineExceptionFilter } from "../engine";
 import { ActorContext, RequireTenantRole } from "../rbac/decorators";
 import type { ActorContext as Actor } from "../rbac/types";
 import { PlatformHttpError } from "../signup/problem";
+import { WorkspaceDeletionService } from "./workspace-deletion.service";
 import { WorkspaceSafeguardsService } from "./workspace-safeguards.service";
 import { WorkspacesService, workspaceEtag } from "./workspaces.service";
 
@@ -26,11 +30,19 @@ export class WorkspacesController {
   constructor(
     private readonly workspaces: WorkspacesService,
     private readonly safeguards: WorkspaceSafeguardsService,
+    private readonly deletion: WorkspaceDeletionService,
   ) {}
 
   @Get()
   list(@ActorContext() actor?: Actor) {
     return this.workspaces.list(requireActor(actor));
+  }
+
+  // D2: workspaces waiting out their deletion window, for the restore entry.
+  @Get("pending-deletion")
+  @RequireTenantRole("admin")
+  listPendingDeletion(@ActorContext() actor?: Actor) {
+    return this.workspaces.listPendingDeletion(requireActor(actor));
   }
 
   @Post()
@@ -66,6 +78,28 @@ export class WorkspacesController {
       ifMatch,
     );
     reply.header("ETag", workspaceEtag(workspace)).send(workspace);
+  }
+
+  // D2: typed-name confirmation, then pending deletion with an undo window.
+  @Delete(":workspaceId")
+  @RequireTenantRole("admin")
+  @UseFilters(EngineExceptionFilter)
+  @Header("Cache-Control", "no-store")
+  requestDeletion(
+    @ActorContext() actor: Actor | undefined,
+    @Param("workspaceId") workspaceId: string,
+    @Body() body: { confirm_name?: unknown } | undefined,
+  ) {
+    return this.deletion.requestDeletion(requireActor(actor), workspaceId, body?.confirm_name);
+  }
+
+  @Post(":workspaceId/actions/restore")
+  @RequireTenantRole("admin")
+  @HttpCode(200)
+  @UseFilters(EngineExceptionFilter)
+  @Header("Cache-Control", "no-store")
+  restore(@ActorContext() actor: Actor | undefined, @Param("workspaceId") workspaceId: string) {
+    return this.deletion.restore(requireActor(actor), workspaceId);
   }
 
   @Get(":workspaceId/safeguards")

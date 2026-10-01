@@ -40,7 +40,7 @@ import {
 } from "./mock/data"
 import { 
   type Workflow, type WorkflowSafeguards, type WorkflowVersion, type RunCostEstimate, type Run, type DashboardSummary, 
-  type Workspace, type Member, type WorkspaceRole, type TenantDataResidency,
+  type Workspace, type PendingDeletionWorkspace, type Member, type WorkspaceRole, type TenantDataResidency,
   type TenantDataResidencySettings,
   type Profile, type Session,
   type Project, type ProjectBrief, type ProjectClarification, type NodeTypeDefinition,
@@ -52,6 +52,7 @@ import {
 } from "./types"
 
 const MOCK_DELAY = 600
+const mockPendingDeletion: { workspace: Workspace; deletionDueAt: string }[] = []
 
 class ApiClient {
   async getDashboardSummary(): Promise<DashboardSummary> {
@@ -173,12 +174,35 @@ class ApiClient {
     return { ...ws, ...data }
   }
 
-  async deleteWorkspace(id: string): Promise<void> {
+  async deleteWorkspace(id: string, confirmName: string): Promise<{ deletionDueAt: string }> {
+    if (isLiveApi) return live.deleteWorkspace(id, confirmName)
     await delay(MOCK_DELAY)
     const idx = mockWorkspaces.findIndex(w => w.id === id)
     if (idx === -1) throw new Error("Workspace not found")
-    // Mock: remove from array
-    mockWorkspaces.splice(idx, 1)
+    if (mockWorkspaces[idx]!.name !== confirmName) throw new Error("Workspace name does not match")
+    const [removed] = mockWorkspaces.splice(idx, 1)
+    const deletionDueAt = new Date(Date.now() + 7 * 86_400_000).toISOString()
+    mockPendingDeletion.push({ workspace: removed!, deletionDueAt })
+    return { deletionDueAt }
+  }
+
+  async getPendingDeletionWorkspaces(): Promise<PendingDeletionWorkspace[]> {
+    if (isLiveApi) return live.getPendingDeletionWorkspaces()
+    await delay(MOCK_DELAY)
+    return mockPendingDeletion.map(({ workspace, deletionDueAt }) => ({
+      id: workspace.id,
+      name: workspace.name,
+      deletionDueAt,
+    }))
+  }
+
+  async restoreWorkspace(id: string): Promise<void> {
+    if (isLiveApi) return live.restoreWorkspace(id)
+    await delay(MOCK_DELAY)
+    const idx = mockPendingDeletion.findIndex(p => p.workspace.id === id)
+    if (idx === -1) throw new Error("Workspace not found")
+    const [restored] = mockPendingDeletion.splice(idx, 1)
+    mockWorkspaces.push(restored!.workspace)
   }
 
   // Members

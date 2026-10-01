@@ -26,6 +26,7 @@ import type {
   WorkflowSafeguards,
   WorkflowVersion,
   Workspace,
+  PendingDeletionWorkspace,
   WorkspaceRole,
   TenantDataResidency,
   TenantDataResidencySettings,
@@ -164,6 +165,34 @@ export async function updateWorkspace(id: string, data: Partial<Workspace>): Pro
     { ifMatch: etagFromWorkspace(current) },
   )
   return mapWorkspace(body)
+}
+
+// D2: deleting takes the workspace name typed exactly; the workspace becomes
+// pending deletion and can be restored until its window ends.
+export async function deleteWorkspace(id: string, confirmName: string): Promise<{ deletionDueAt: string }> {
+  const body = await apiDelete<AnyRecord>(`/api/v1/workspaces/${encodeURIComponent(id)}`, {
+    body: { confirm_name: confirmName },
+    idempotencyKey: mutationKey("workspace-delete"),
+  })
+  return { deletionDueAt: asDate(body?.deletionDueAt ?? body?.deletion_due_at) }
+}
+
+export async function getPendingDeletionWorkspaces(): Promise<PendingDeletionWorkspace[]> {
+  const body = await apiGet<unknown>("/api/v1/workspaces/pending-deletion")
+  return asArray(body, "workspaces").map((value) => {
+    const item = value as AnyRecord
+    return {
+      id: asString(item.id),
+      name: String(item.name ?? "Workspace"),
+      deletionDueAt: asDate(item.deletionDueAt ?? item.deletion_due_at),
+    }
+  })
+}
+
+export async function restoreWorkspace(id: string): Promise<void> {
+  await apiPost<unknown>(`/api/v1/workspaces/${encodeURIComponent(id)}/actions/restore`, {}, {
+    idempotencyKey: mutationKey("workspace-restore"),
+  })
 }
 
 export async function getMembers(): Promise<Member[]> {
