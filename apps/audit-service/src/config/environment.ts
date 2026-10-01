@@ -19,6 +19,8 @@ interface AuditEnvironmentBase {
   readonly memoryDeletionBaseUrl: string;
   readonly deletionPseudonymKeyReference: string;
   readonly deletionServiceTokenReference: string;
+  readonly chainSigningKeyReference: string;
+  readonly retentionDatabaseSecretReference: string;
 }
 
 export interface AuditIamEnvironment extends AuditEnvironmentBase {
@@ -110,6 +112,8 @@ export function loadAuditEnvironment(
     memoryDeletionBaseUrl: requireValue(environment, "MEMORY_DELETION_BASE_URL"),
     deletionPseudonymKeyReference: requireValue(environment, "DELETION_PSEUDONYM_KEY_REF"),
     deletionServiceTokenReference: requireValue(environment, "DELETION_SERVICE_TOKEN_REF"),
+    chainSigningKeyReference: requireValue(environment, "AUDIT_CHAIN_SIGNING_KEY_REF"),
+    retentionDatabaseSecretReference: requireValue(environment, "AUDIT_RETENTION_DATABASE_SECRET_REF"),
   };
 
   if (resolveDatabaseAuthentication(environment, alterEnvironment) === "static") {

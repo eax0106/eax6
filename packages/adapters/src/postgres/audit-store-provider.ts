@@ -28,6 +28,7 @@ import {
 
 interface PostgresAuditStoreBaseConfig {
   readonly migrationsFolder: string;
+  readonly retentionConnectionString?: string;
 }
 
 export interface PostgresAuditStoreStaticConfig
@@ -56,6 +57,7 @@ interface IamAuthTokenProvider {
 
 interface PostgresAuditStoreDependencies {
   readonly pool?: Pool;
+  readonly retentionPool?: Pool;
   readonly iamAuthTokenProvider?: IamAuthTokenProvider;
   readonly poolFactory?: (config: PoolConfig) => Pool;
 }
@@ -75,6 +77,8 @@ interface DatabaseAuditRow extends QueryResultRow {
   readonly occurred_at: Date;
   readonly prev_hash: Buffer;
   readonly entry_hash: Buffer;
+  readonly erased_at: Date | null;
+  readonly chain_position: string;
 }
 
 const POSTGRES_AUDIT_CAPABILITIES: ProviderCapabilities = {
@@ -164,6 +168,8 @@ function toStoredAuditEvent(row: DatabaseAuditRow): StoredAuditEvent {
     occurredAt: row.occurred_at,
     prevHash: row.prev_hash,
     entryHash: row.entry_hash,
+    erasedAt: row.erased_at ?? null,
+    chainPosition: Number(row.chain_position),
   };
 }
 
@@ -176,6 +182,7 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
   readonly capabilities = POSTGRES_AUDIT_CAPABILITIES;
 
   readonly #pool: Pool;
+  readonly #retentionPool: Pool | undefined;
   readonly #migrationsFolder: string;
 
   constructor(
@@ -189,15 +196,29 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
         createPoolConfig(config, dependencies.iamAuthTokenProvider),
       );
     this.#migrationsFolder = config.migrationsFolder;
+    if (config.retentionConnectionString !== undefined && new URL(config.retentionConnectionString).username !== "audit_retention") {
+      throw new Error("Audit retention connection must use audit_retention");
+    }
+    this.#retentionPool = dependencies.retentionPool ?? (config.retentionConnectionString === undefined
+      ? undefined : new Pool(staticPoolConfig(config.retentionConnectionString)));
   }
 
   async migrate(): Promise<void> {
+    if (this.#retentionPool !== undefined) {
+      const role = await this.#retentionPool.query<{ username: string; rolsuper: boolean; rolbypassrls: boolean; rolcreaterole: boolean }>(
+        "SELECT session_user AS username, rolsuper, rolbypassrls, rolcreaterole FROM pg_roles WHERE rolname = session_user",
+      );
+      const configured = role.rows[0];
+      if (configured?.username !== "audit_retention" || configured.rolsuper || configured.rolbypassrls || configured.rolcreaterole) {
+        throw new Error("Audit retention connection must use its restricted login");
+      }
+    }
     await migrate(drizzle(this.#pool), {
       migrationsFolder: this.#migrationsFolder,
     });
   }
 
-  async append(event: AuditEventToAppend): Promise<StoredAuditEvent> {
+  async append(event: AuditEventToAppend, seal?: AuditChainCheckpoint): Promise<StoredAuditEvent> {
     const client = await this.#pool.connect();
     try {
       await client.query("BEGIN");
@@ -206,20 +227,28 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
         "SELECT pg_advisory_xact_lock(hashtextextended('alter.audit.global-chain.v1', 0))",
       );
 
-      const tipResult = await client.query<{ entry_hash: Buffer }>(`
-        SELECT current_event.entry_hash
-        FROM audit_events AS current_event
-        LEFT JOIN audit_events AS next_event
-          ON next_event.prev_hash = current_event.entry_hash
-        WHERE next_event.id IS NULL
-        LIMIT 2
+      const tipResult = await client.query<{ entry_hash: Buffer; chain_position: string }>(`
+        SELECT current_event.entry_hash, current_event.chain_position FROM audit_events AS current_event
+        ORDER BY current_event.chain_position DESC LIMIT 1
       `);
       if (tipResult.rowCount !== 0 && tipResult.rowCount !== 1) {
         throw new Error("Audit chain has multiple tips");
       }
 
-      const prevHash = tipResult.rows[0]?.entry_hash ?? auditGenesisHash();
-      const pendingEvent = { ...event, prevHash };
+      const tip = tipResult.rows[0];
+      const checkpointResult = await client.query<{ last_entry_hash: Buffer; last_position: string; signature: Buffer }>(
+        "SELECT last_entry_hash, last_position, signature FROM audit_chain_checkpoints WHERE id = 'global' AND signature IS NOT NULL",
+      );
+      const currentSeal = checkpointResult.rows[0];
+      if (currentSeal !== undefined && (tip === undefined || Number(tip.chain_position) < Number(currentSeal.last_position)) &&
+          (seal?.signature === undefined || seal.lastPosition !== Number(currentSeal.last_position) ||
+           !seal.lastEntryHash.equals(currentSeal.last_entry_hash) || !seal.signature.equals(currentSeal.signature))) {
+        throw new Error("Audit checkpoint changed; retry append with a validated seal");
+      }
+      const prevHash = seal?.signature !== undefined && seal.lastPosition !== undefined &&
+        (tip === undefined || Number(tip.chain_position) < seal.lastPosition)
+        ? seal.lastEntryHash : tip?.entry_hash ?? auditGenesisHash();
+      const pendingEvent = { ...event, prevHash, erasedAt: null as Date | null };
       const entryHash = calculateAuditEntryHash(pendingEvent);
       const inserted = await client.query<DatabaseAuditRow>(
         `
@@ -314,22 +343,26 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
   async readChainSince(
     afterEntryHash: Buffer,
     limit: number,
+    afterPosition?: number,
   ): Promise<readonly StoredAuditEvent[]> {
     const client = await this.#pool.connect();
     try {
       await client.query("BEGIN READ ONLY");
       await enableInternalAuditAccess(client);
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) throw new Error("Audit verification limit invalid");
+      let position = afterPosition ?? 0;
+      if (afterPosition !== undefined && (!Number.isSafeInteger(afterPosition) || afterPosition < 0)) {
+        throw new Error("Audit checkpoint position invalid");
+      }
+      if (afterPosition === undefined && !afterEntryHash.equals(auditGenesisHash())) {
+        const anchor = await client.query<{ chain_position: string }>(
+          "SELECT chain_position FROM audit_events WHERE entry_hash = $1", [afterEntryHash]);
+        if (anchor.rows[0] === undefined) throw new Error("Audit checkpoint anchor missing");
+        position = Number(anchor.rows[0].chain_position);
+      }
       const result = await client.query<DatabaseAuditRow>(
-        `WITH RECURSIVE chain AS (
-           SELECT *, 1 AS depth FROM audit_events WHERE prev_hash = $1
-           UNION ALL
-           SELECT ae.*, chain.depth + 1
-           FROM audit_events ae
-           JOIN chain ON ae.prev_hash = chain.entry_hash
-           WHERE chain.depth < $2
-         )
-         SELECT * FROM chain ORDER BY depth`,
-        [afterEntryHash, limit],
+        "SELECT * FROM audit_events WHERE chain_position > $1 ORDER BY chain_position LIMIT $2",
+        [position, limit],
       );
       await client.query("COMMIT");
       return result.rows.map(toStoredAuditEvent);
@@ -350,8 +383,10 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
         last_entry_hash: Buffer;
         checked_events: string;
         verified_at: Date;
+        signature: Buffer | null;
+        last_position: string | null;
       }>(
-        `SELECT last_entry_hash, checked_events, verified_at
+        `SELECT last_entry_hash, checked_events, verified_at, signature, last_position
            FROM audit_chain_checkpoints WHERE id = 'global'`,
       );
       await client.query("COMMIT");
@@ -360,8 +395,10 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
         ? undefined
         : {
             lastEntryHash: row.last_entry_hash,
+            ...(row.last_position === null ? {} : { lastPosition: Number(row.last_position) }),
             checkedEvents: Number(row.checked_events),
             verifiedAt: row.verified_at,
+            ...(row.signature === null ? {} : { signature: row.signature }),
           };
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -376,15 +413,21 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
     try {
       await client.query("BEGIN");
       await enableInternalAuditAccess(client);
-      await client.query(
-        `INSERT INTO audit_chain_checkpoints (id, last_entry_hash, checked_events, verified_at)
-         VALUES ('global', $1, $2, $3)
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended('alter.audit.global-chain.v1', 0))");
+      const saved = await client.query(
+        `INSERT INTO audit_chain_checkpoints (id, last_entry_hash, checked_events, verified_at, signature, last_position)
+         VALUES ('global', $1, $2, $3, $4, $5)
          ON CONFLICT (id) DO UPDATE
            SET last_entry_hash = EXCLUDED.last_entry_hash,
                checked_events = EXCLUDED.checked_events,
-               verified_at = EXCLUDED.verified_at`,
-        [checkpoint.lastEntryHash, checkpoint.checkedEvents, checkpoint.verifiedAt],
+               verified_at = EXCLUDED.verified_at,
+               signature = EXCLUDED.signature,
+               last_position = EXCLUDED.last_position
+         WHERE audit_chain_checkpoints.signature IS NULL OR
+           (EXCLUDED.signature IS NOT NULL AND EXCLUDED.last_position >= audit_chain_checkpoints.last_position)`,
+        [checkpoint.lastEntryHash, checkpoint.checkedEvents, checkpoint.verifiedAt, checkpoint.signature ?? null, checkpoint.lastPosition ?? null],
       );
+      if (saved.rowCount !== 1) throw new Error("Audit checkpoint advancement became stale");
       await client.query("COMMIT");
     } catch (error: unknown) {
       await client.query("ROLLBACK").catch(() => undefined);
@@ -392,6 +435,24 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
     } finally {
       client.release();
     }
+  }
+
+  /** Dedicated session only; database clock stamps erasure, never caller time. */
+  async minimiseTenantEvents(tenantId: string, pseudonym: string, _erasedAt: Date, seal?: AuditChainCheckpoint): Promise<number> {
+    if (seal?.signature === undefined || seal.lastPosition === undefined) throw new Error("Signed audit prefix required");
+    const bare = tenantId.startsWith("ten_") ? tenantId.slice(4) : tenantId;
+    return this.retentionMutation("SELECT minimise_audit_tenant($1, $2, $3, $4) AS n", [bare, pseudonym, seal.lastPosition, seal.lastEntryHash]);
+  }
+
+  async expireSkeletons(cutoff: Date, anchorHash: Buffer, anchorPosition?: number): Promise<number> {
+    if (anchorPosition === undefined) throw new Error("Signed audit prefix required");
+    return this.retentionMutation("SELECT expire_audit_skeletons($1, $2, $3) AS n", [cutoff, anchorHash, anchorPosition]);
+  }
+
+  private async retentionMutation(sql: string, parameters: readonly unknown[]): Promise<number> {
+    if (this.#retentionPool === undefined) throw new Error("Dedicated audit retention connection is required");
+    const result = await this.#retentionPool.query<{ n: number }>(sql, [...parameters]);
+    return result.rows[0]?.n ?? 0;
   }
 
   async queryEvents(query: AuditEventQuery): Promise<AuditEventQueryResult> {
@@ -547,6 +608,7 @@ export class PostgresAuditStoreProvider implements AuditStoreProvider {
   }
 
   async close(): Promise<void> {
+    await this.#retentionPool?.end();
     await this.#pool.end();
   }
 }

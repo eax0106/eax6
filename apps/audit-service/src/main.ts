@@ -28,8 +28,11 @@ async function bootstrap(): Promise<void> {
     // Resolve the configured bucket parameter during startup; deletion paths
     // currently receive object references from the ledger rather than build keys.
     await parameterStore.getParameter(environment.auditArchiveBucketParameter);
+    secretsProvider = new AwsSecretsManagerProvider({ region: environment.region });
+    const retentionConnectionString = await resolveDatabaseConnectionString(
+      secretsProvider, environment.retentionDatabaseSecretReference,
+    );
     if (environment.databaseAuthentication === "iam") {
-      secretsProvider = new AwsSecretsManagerProvider({ region: environment.region });
       store = new PostgresAuditStoreProvider({
         authentication: "iam",
         host: environment.databaseHost,
@@ -38,11 +41,9 @@ async function bootstrap(): Promise<void> {
         user: environment.databaseUser,
         region: environment.region,
         migrationsFolder: AUDIT_MIGRATIONS_PATH,
+        retentionConnectionString,
       });
     } else {
-      secretsProvider = new AwsSecretsManagerProvider({
-        region: environment.region,
-      });
       const connectionString = await resolveDatabaseConnectionString(
         secretsProvider,
         environment.databaseSecretReference,
@@ -50,13 +51,15 @@ async function bootstrap(): Promise<void> {
       store = new PostgresAuditStoreProvider({
         authentication: "static",
         connectionString,
+        retentionConnectionString,
         migrationsFolder: AUDIT_MIGRATIONS_PATH,
       });
     }
     await store.migrate();
-    const { serviceToken, pseudonymKey } = await resolveDeletionSecrets(secretsProvider, {
+    const { serviceToken, pseudonymKey, chainSigningKey } = await resolveDeletionSecrets(secretsProvider, {
       serviceTokenReference: environment.deletionServiceTokenReference,
       pseudonymKeyReference: environment.deletionPseudonymKeyReference,
+      chainSigningKeyReference: environment.chainSigningKeyReference,
     });
     const serviceTokenHash = (await import("node:crypto")).createHash("sha256").update(serviceToken).digest("hex");
     const app = await NestFactory.create<NestFastifyApplication>(
@@ -70,6 +73,7 @@ async function bootstrap(): Promise<void> {
         serviceToken,
         serviceTokenHash,
         pseudonymKey,
+        chainSigningKey,
         objectStorage: new S3ObjectStorageProvider({ region: environment.region }),
       }),
       new FastifyAdapter(),

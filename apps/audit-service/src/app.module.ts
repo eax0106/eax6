@@ -9,7 +9,7 @@ import {
   type AuditStoreProvider,
 } from "@alterx/shared-clients";
 
-import { AuditService } from "./audit/audit.service";
+import { AuditService, AUDIT_CHAIN_SIGNING_KEY } from "./audit/audit.service";
 import { AuditStoreLifecycle } from "./database/store.lifecycle";
 import { HealthController } from "./health/health.controller";
 import type { ObjectStorageProvider } from "@alterx/shared-clients";
@@ -28,6 +28,8 @@ export interface AuditDeletionWiring {
   readonly serviceToken: string;
   readonly serviceTokenHash: string;
   readonly pseudonymKey: string;
+  /** Audit chain signing key for compaction seals (Y2). */
+  readonly chainSigningKey: string;
   readonly objectStorage: ObjectStorageProvider;
 }
 
@@ -44,6 +46,7 @@ export class AppModule {
        new HttpDeletionProvider(deletion.memoryBaseUrl, deletion.serviceToken, "memory-service")],
       deletion.objectStorage,
       deletion.pseudonymKey,
+      () => new AuditService(store, deletion.chainSigningKey).sealChain(),
     );
     return {
       module: AppModule,
@@ -60,6 +63,7 @@ export class AppModule {
         AuditStoreLifecycle,
         ...(orchestrator === undefined || deletion === undefined ? [] : [
           { provide: DeletionOrchestrator, useValue: orchestrator },
+          { provide: AUDIT_CHAIN_SIGNING_KEY, useValue: deletion.chainSigningKey },
           { provide: DELETION_SERVICE_TOKEN_HASH, useValue: deletion.serviceTokenHash },
           // Reuses the same internal service token as deletion -- both are
           // the identical trust boundary (trusted platform-api caller),

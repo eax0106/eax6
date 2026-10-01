@@ -140,10 +140,12 @@ export class AuditQueryController {
     }
   }
 
-  // Weekly defense in depth for the incremental verifier above. A checkpoint
-  // makes the frequent path cheap, but it also puts already-checkpointed
-  // history outside that path's view. This endpoint deliberately walks from
-  // genesis so later tampering with old rows cannot remain permanently hidden.
+  // Weekly defense in depth for the incremental verifier above: it walks
+  // everything the latest checkpoint does not seal, without the per-call
+  // bound, so a long-unverified stretch still gets fully checked. Sealed
+  // history is vouched by the checkpoint signature (Y2), not re-walked:
+  // compaction destroys sealed rows, so a genesis walk would break on the
+  // first of them by design.
   @Post("verify-chain/full")
   @HttpCode(200)
   async verifyFullChain(@Headers("authorization") auth?: string) {
@@ -152,6 +154,22 @@ export class AuditQueryController {
       return await this.audit.verifyChain();
     } catch {
       throw new HttpException(problem("/internal/audit-events/verify-chain/full", 500), 500);
+    }
+  }
+
+  // D2 skeleton compaction sweep (90-day window). Advances the signed
+  // checkpoint to the head of the valid chain, then destroys sealed
+  // skeletons past the window. Fails closed (500) without a signing key,
+  // on an invalid segment, or on a forged checkpoint -- an unsealed sweep
+  // deletes nothing.
+  @Post("skeletons/sweep")
+  @HttpCode(200)
+  async sweepSkeletons(@Headers("authorization") auth?: string) {
+    this.authorize(auth);
+    try {
+      return await this.audit.compactSkeletons();
+    } catch {
+      throw new HttpException(problem("/internal/audit-events/skeletons/sweep", 500), 500);
     }
   }
 

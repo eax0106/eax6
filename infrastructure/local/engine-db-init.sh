@@ -6,6 +6,7 @@ set -eu
 # roles share one credential unless you set them explicitly. Passing each one
 # through docker-compose.yml makes that visible rather than silent.
 : "${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}"
+: "${AUDIT_RETENTION_DB_PASSWORD:?AUDIT_RETENTION_DB_PASSWORD is required}"
 : "${ORCHESTRATION_DB_PASSWORD:=$AUDIT_DB_PASSWORD}"
 : "${INTELLIGENCE_DB_PASSWORD:=$AUDIT_DB_PASSWORD}"
 : "${COST_DB_PASSWORD:=$AUDIT_DB_PASSWORD}"
@@ -19,6 +20,7 @@ psql \
   --username "$POSTGRES_USER" \
   --dbname postgres \
   --set=audit_db_password="$AUDIT_DB_PASSWORD" \
+  --set=audit_retention_db_password="$AUDIT_RETENTION_DB_PASSWORD" \
   --set=orchestration_db_password="$ORCHESTRATION_DB_PASSWORD" \
   --set=intelligence_db_password="$INTELLIGENCE_DB_PASSWORD" \
   --set=cost_db_password="$COST_DB_PASSWORD" \
@@ -44,6 +46,11 @@ WHERE NOT EXISTS (
 ALTER DATABASE audit_db OWNER TO audit_service;
 REVOKE CONNECT, TEMPORARY ON DATABASE audit_db FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE audit_db TO audit_service;
+
+SELECT format('CREATE ROLE audit_retention LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD %L', :'audit_retention_db_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'audit_retention') \gexec
+ALTER ROLE audit_retention WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD :'audit_retention_db_password';
+GRANT CONNECT ON DATABASE audit_db TO audit_retention;
 
 SELECT format(
   'CREATE ROLE orchestration_service LOGIN PASSWORD %L',
