@@ -20,6 +20,8 @@ describe("recovery classification contracts", () => {
       "safety_violation",
       "credential_missing",
       "agent_creation_failure",
+      "target_missing",
+      "ambiguous_outcome",
       "unknown",
     ]);
   });

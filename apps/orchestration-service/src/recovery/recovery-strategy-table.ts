@@ -158,6 +158,7 @@ function assertNever(value: never): never {
  *
  * `policy` is optional and, when present, real: a rule found for this
  * failure_class in `policy.rules` overrides the hardcoded default below,
+ * except D13 missing/ambiguous outcomes, which always require a person.
  * and the returned `policyId`/`policyVersion` reflect that real promoted
  * policy row, not the fallback constants. No rule for this failure_class
  * (or no `policy` at all -- e.g. the caller never reached memory-service,
@@ -172,6 +173,10 @@ export function selectRecoveryStrategy(
   nodeAttempt: number,
   policy?: ActivePolicy,
 ): StrategyDecision {
+  // D13: these outcomes require a person, regardless of a promoted policy.
+  if (failureClass === "target_missing" || failureClass === "ambiguous_outcome") {
+    return { strategy: "ask_user", policyId: POLICY_ID, policyVersion: POLICY_VERSION };
+  }
   if (policy !== undefined) {
     const rule = policy.rules[failureClass];
     if (rule !== undefined) {
@@ -210,6 +215,8 @@ function decide(failureClass: FailureClass, nodeAttempt: number): RecoveryStrate
       // no-match situation. Repeat failure means no real agent exists for
       // this requirement -- a human must intervene, not another retry.
       return nodeAttempt <= 1 ? "swap_agent" : "ask_user";
+    case "target_missing":
+    case "ambiguous_outcome":
     case "unknown":
       return "ask_user";
     default:
