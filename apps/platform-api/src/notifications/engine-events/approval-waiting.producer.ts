@@ -13,7 +13,7 @@ const PAGE_SIZE = 50;
 const MAX_PAGES = 4;
 
 /**
- * Approval waiting (D5 delivery, D1): tells each workspace admin and approver
+ * Approval waiting (D5 delivery, D1): tells each workspace admin, operator and approver
  * once per pending approval. Reads every pending approval on each pass and
  * lets the dedupe key drop the ones already told, so an approval that stays
  * pending is not announced again and one raised while a pass was down is
@@ -56,7 +56,7 @@ export class ApprovalWaitingProducer implements EngineEventProducer {
       return 0;
     }
     try {
-      return await this.notifications.notifyWorkspaceRolesOnce(["admin", "approver"], `approval.requested:${approvalId}`, {
+      return await this.notifications.notifyWorkspaceRolesOnce(["admin", "operator", "approver"], `approval.requested:${approvalId}`, {
         tenantId,
         workspaceId,
         eventClass: "approval",
