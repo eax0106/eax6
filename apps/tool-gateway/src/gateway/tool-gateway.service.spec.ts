@@ -621,7 +621,25 @@ describe("ToolGatewayService", () => {
             { browser_session_id: sessionId, selector: "#go" },
           ),
         ),
-      ).resolves.toMatchObject({ output_json: "{}" });
+      ).resolves.toMatchObject({
+        output_json: JSON.stringify({
+          confirmation: { status: "unconfirmed", reason: "No expected page state was declared for this click" },
+        }),
+      });
+
+      await expect(
+        service.invokeTool(
+          browserInvokeRequest(
+            { tool_name: "browser.click" },
+            { browser_session_id: sessionId, selector: "#go", expected_page_state: { selector: "main" } },
+          ),
+        ),
+      ).resolves.toMatchObject({
+        output_json: JSON.stringify({
+          snapshot: { text: "mock:main", url: "https://example.com/page" },
+          confirmation: { status: "confirmed", basis: "post-click snapshot matched expected page state" },
+        }),
+      });
 
       const extracted = await service.invokeTool(
         browserInvokeRequest(
@@ -642,6 +660,38 @@ describe("ToolGatewayService", () => {
           ),
         ),
       ).resolves.toMatchObject({ output_json: "{}" });
+    });
+
+    it("reads only declared expectations, accepts empty matching selectors, and bills the extra read", async () => {
+      const browserProvider = mockBrowserProvider();
+      const extract = vi.spyOn(browserProvider, "extract").mockResolvedValue({ text: "", url: "https://example.com" });
+      const publish = vi.fn<QueueProvider["publish"]>(async () => undefined);
+      const service = buildService({ browserProvider, costQueue: createMockQueueProvider({ publish }) });
+      const { sessionId } = JSON.parse((await service.invokeTool(browserInvokeRequest())).output_json);
+      publish.mockClear();
+      const click = async (expected_page_state?: Record<string, unknown>) => JSON.parse((await service.invokeTool(browserInvokeRequest(
+        { tool_name: "browser.click" }, { browser_session_id: sessionId, selector: "#go", ...(expected_page_state ? { expected_page_state } : {}) },
+      ))).output_json);
+      expect(await click()).toMatchObject({ confirmation: { status: "unconfirmed" } });
+      expect(extract).not.toHaveBeenCalled();
+      expect(publish).toHaveBeenCalledTimes(1);
+      publish.mockClear();
+      expect(await click({ selector: "#done" })).toMatchObject({ confirmation: { status: "confirmed" } });
+      expect(extract).toHaveBeenLastCalledWith(expect.any(Object), sessionId, "#done");
+      expect(publish.mock.calls.map(call => JSON.parse((call[1] as { usage_json: string }).usage_json).resource_type).sort()).toEqual([
+        "tool_gateway.browser.click", "tool_gateway.browser.extract",
+      ]);
+      extract.mockResolvedValueOnce({ text: "Saved", url: "https://example.com" });
+      expect(await click({ text: "Saved" })).toMatchObject({ confirmation: { status: "confirmed" } });
+      expect(await click({ text: "Saved" })).toMatchObject({ confirmation: { status: "failed" } });
+      const action = vi.spyOn(browserProvider, "click");
+      extract.mockRejectedValueOnce(new Error("snapshot unavailable"));
+      expect(await click({ selector: "#missing" })).toMatchObject({ confirmation: { status: "unconfirmed", reason: expect.stringContaining("could not be read") } });
+      expect(action).toHaveBeenCalledTimes(1);
+      await expect(click({})).rejects.toBeInstanceOf(ToolGatewayValidationError);
+      await expect(click({ text: "   " })).rejects.toBeInstanceOf(ToolGatewayValidationError);
+      await expect(click({ selector: "#done", typo: true })).rejects.toBeInstanceOf(ToolGatewayValidationError);
+      expect(action).toHaveBeenCalledTimes(1);
     });
 
     it("requires the exact tenant browser grant for every browser operation", async () => {

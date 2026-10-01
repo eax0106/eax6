@@ -64,6 +64,7 @@ describe("orchestration migration files", () => {
       "0044_create_workspace_holds.sql",
       "0045_create_workspace_run_retention.sql",
       "0046_create_approval_step_policies.sql",
+      "0047_add_email_delivery_readback.sql",
       "0048_add_recovery_clarifications.sql",
     ]);
     expect(
@@ -118,6 +119,7 @@ describe("orchestration migration files", () => {
       "0044_drop_workspace_holds.sql",
       "0045_drop_workspace_run_retention.sql",
       "0046_drop_approval_step_policies.sql",
+      "0047_remove_email_delivery_readback.sql",
       "0048_remove_recovery_clarifications.sql",
     ]);
   });

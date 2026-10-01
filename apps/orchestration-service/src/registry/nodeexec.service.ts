@@ -313,6 +313,14 @@ export class NodeexecService {
             : undefined;
         if (mechanical !== undefined) {
           metadata = { ...metadata, mechanical_check: mechanical };
+          const verdict = "unconfirmable" in mechanical ? "warn" : mechanical.confirmed ? "pass" : "fail";
+          await this.ledger.recordVerificationResult({
+            id: createVerificationResultId(), tenantId: request.tenant_id, runId: request.run_id,
+            nodeExecutionId: request.node_execution_id, gateType: "mechanical", verdict,
+            score: verdict === "pass" ? 1 : 0, threshold: 1, reviewerModel: "deterministic",
+            detailsJson: JSON.stringify({ message: "unconfirmable" in mechanical
+              ? `Unconfirmed: ${mechanical.reason}` : mechanical.confirmed ? mechanical.basis : mechanical.reason }),
+          });
           if ("confirmed" in mechanical && !mechanical.confirmed) {
             const missingTarget = ["database.insert", "database.update", "database.delete"].includes(String(executionConfig["tool_name"])) &&
               result.output["rowCount"] === 0;
@@ -475,7 +483,13 @@ export class NodeexecService {
       return;
     }
     const auditId = result.metadata?.["audit_id"];
-    await this.ledger.completeSideEffect(tenantId, id, typeof auditId === "string" ? auditId : undefined);
+    const messageId = result.output["messageId"];
+    await this.ledger.completeSideEffect(
+      tenantId,
+      id,
+      typeof auditId === "string" ? auditId : undefined,
+      typeof messageId === "string" ? messageId : undefined,
+    );
   }
 
   /**

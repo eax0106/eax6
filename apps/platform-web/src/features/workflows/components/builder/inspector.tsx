@@ -1,3 +1,4 @@
+import { ApprovalPolicyControls } from "../approval-policy-controls"
 import { X, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -8,7 +9,7 @@ import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 
 export function Inspector() {
-  const { selectedNodeId, nodes, setInspectorOpen, updateNodeData, onNodesChange } = useBuilderStore()
+  const { workflowId, selectedNodeId, nodes, setInspectorOpen, updateNodeData, onNodesChange } = useBuilderStore()
 
   const { data: nodeTypes } = useQuery({
     queryKey: queryKeys.nodeTypes.all,
@@ -42,6 +43,8 @@ export function Inspector() {
         {nodeDef?.description && (
           <p className="text-sm text-muted-foreground">{nodeDef.description}</p>
         )}
+
+        {node.type === "HumanApproval" && workflowId && <ApprovalPolicyControls workflowId={workflowId} nodeKey={node.id} />}
 
         <div className="space-y-4">
           <h4 className="text-sm font-medium">Configuration</h4>

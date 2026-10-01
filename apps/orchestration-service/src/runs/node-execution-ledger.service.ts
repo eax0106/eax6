@@ -314,14 +314,15 @@ export class NodeExecutionLedgerService {
     tenantIdInput: string,
     id: string,
     toolAuditId: string | undefined,
+    providerMessageId?: string,
   ): Promise<void> {
     const tenantId = bareTenantUuid(tenantIdInput);
     await this.store.withTenant(tenantId, async (tx) => {
       await tx.query(
         `UPDATE side_effects
-            SET status = 'completed', tool_audit_id = $3, completed_at = clock_timestamp()
-          WHERE tenant_id = $1 AND id = $2`,
-        [tenantId, id, toolAuditId ?? null],
+            SET status = 'completed', tool_audit_id = $3, provider_message_id = $4, completed_at = clock_timestamp()
+          WHERE tenant_id = $1 AND id = $2 AND status = 'attempted'`,
+        [tenantId, id, toolAuditId ?? null, providerMessageId ?? null],
       );
     });
   }

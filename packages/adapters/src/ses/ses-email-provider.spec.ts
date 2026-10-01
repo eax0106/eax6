@@ -6,6 +6,18 @@ import { SesEmailProvider, type SesCommandClient } from "./ses-email-provider";
 const now = () => new Date("2026-08-05T00:00:00.000Z");
 
 describe("SesEmailProvider", () => {
+  it("tags workflow email for read-back while notification templates stay outside that route", async () => {
+    const send = vi.fn<SesCommandClient["send"]>().mockResolvedValue({ MessageId: "accepted" });
+    const provider = new SesEmailProvider({ region: "ap-south-1", fromAddress: "no-reply@example.com", credentialsSecretRef: "ref", configurationSetName: "alter-dev-delivery" }, vi.fn(), { send }, now);
+    await provider.sendEmail("person@example.com", "Hello", "Body", { tenantId: "ten_fixture" });
+    const raw = (send.mock.calls[0]![0] as SendEmailCommand).input;
+    expect(raw.ConfigurationSetName).toBe("alter-dev-delivery");
+    expect(raw.EmailTags).toEqual([{ Name: "alter_tenant_id", Value: "ten_fixture" }]);
+    await provider.sendTemplatedEmail("person@example.com", "notice", {});
+    const template = (send.mock.calls[1]![0] as SendEmailCommand).input;
+    expect(template.ConfigurationSetName).toBe("alter-dev-delivery");
+    expect(template.EmailTags).toBeUndefined();
+  });
   it("sends a real SES template-shaped request", async () => {
     const send = vi.fn(async (command: unknown) => {
       expect(command).toBeInstanceOf(SendEmailCommand);

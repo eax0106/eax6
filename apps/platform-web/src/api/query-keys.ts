@@ -9,6 +9,7 @@ export const queryKeys = {
     all: ["workflows"] as const,
     detail: (id: string) => ["workflows", id] as const,
     versions: (id: string) => ["workflows", id, "versions"] as const,
+    approvalPolicies: (id: string) => ["workflows", id, "approval-policies"] as const,
     safeguards: (id: string) => ["workflows", id, "safeguards"] as const,
     estimate: (id: string) => ["workflows", id, "estimate"] as const,
   },

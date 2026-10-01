@@ -1334,7 +1334,7 @@ describe("NodeexecService failure cause (#149)", () => {
 
 // C36, design log §5.2: the mechanical check before the semantic gate.
 describe("NodeexecService mechanical check", () => {
-  function run(output: Record<string, unknown>) {
+  function run(output: Record<string, unknown>, toolName = "database.update") {
     const ledger = fakeLedger();
     Object.assign(ledger, {
       priorSideEffects: vi.fn().mockResolvedValue([]),
@@ -1353,7 +1353,7 @@ describe("NodeexecService mechanical check", () => {
     const call = nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "update_order", node_type: "ToolCall",
-      config_json: JSON.stringify({ tool_name: "database.update", input: {} }),
+      config_json: JSON.stringify({ tool_name: toolName, input: {} }),
       inputs_json: "{}", success_criteria: [],
     });
     return { call, ledger, scoreNodeInline };
@@ -1378,6 +1378,16 @@ describe("NodeexecService mechanical check", () => {
     expect(JSON.parse(response.metadata_json)).toMatchObject({
       mechanical_check: { confirmed: true, basis: "database reported 1 affected row(s)" },
     });
+  });
+
+  it("persists an unconfirmed click as a warning while preserving acceptance", async () => {
+    const { call, ledger } = run({ confirmation: { status: "unconfirmed", reason: "No expected page state declared" } }, "browser.click");
+    await call;
+    expect(ledger.recordSucceeded).toHaveBeenCalledOnce();
+    expect(ledger.recordVerificationResult).toHaveBeenCalledWith(expect.objectContaining({
+      gateType: "mechanical", verdict: "warn",
+      detailsJson: JSON.stringify({ message: "Unconfirmed: No expected page state declared" }),
+    }));
   });
 });
 
@@ -1429,7 +1439,7 @@ describe("NodeexecService idempotency gate", () => {
     }));
     expect(ledger["recordSideEffectAttempt"]!.mock.invocationCallOrder[0]!).toBeLessThan(execute.mock.invocationCallOrder[0]!);
     const id = ledger["recordSideEffectAttempt"]!.mock.calls[0]![0].id;
-    expect(ledger["completeSideEffect"]).toHaveBeenCalledWith(TENANT_ID, id, AUDIT_ID);
+    expect(ledger["completeSideEffect"]).toHaveBeenCalledWith(TENANT_ID, id, AUDIT_ID, "m-1");
   });
 
   it("refuses to run the node again once it may already have acted, and never calls the tool", async () => {

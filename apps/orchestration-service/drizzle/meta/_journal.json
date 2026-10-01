@@ -332,6 +332,13 @@
       "breakpoints": true
     },
     {
+      "idx": 47,
+      "version": "7",
+      "when": 1787004840000,
+      "tag": "0047_add_email_delivery_readback",
+      "breakpoints": true
+    },
+    {
       "idx": 48,
       "version": "7",
       "when": 1787008440000,

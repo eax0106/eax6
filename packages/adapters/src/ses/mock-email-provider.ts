@@ -50,7 +50,7 @@ export class MockEmailProvider implements EmailProvider {
     to: string,
     subject: string,
     body: string,
-    options?: { readonly html?: boolean },
+    options?: { readonly html?: boolean; readonly tenantId?: string },
   ): Promise<EmailSendResult> {
     this.sentRaw.push({ to, subject, body, html: options?.html });
     return {

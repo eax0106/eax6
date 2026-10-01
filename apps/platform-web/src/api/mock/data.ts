@@ -346,6 +346,9 @@ export const mockHumanActions: HumanAction[] = [
   {
     id: "ha_01JAX92D",
     type: "approval",
+    approvalNodeKey: "approval",
+    approvalMode: "ask",
+    approvalStatus: "pending",
     status: "open",
     priority: "high",
     title: "Refund approval required",
@@ -410,6 +413,9 @@ export const mockHumanActions: HumanAction[] = [
   {
     id: "ha_01JAX95H",
     type: "approval",
+    approvalNodeKey: "approval",
+    approvalMode: "ask",
+    approvalStatus: "approved",
     status: "resolved",
     priority: "critical",
     title: "Production deployment blocked",
