@@ -2,6 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 
 import { PostgresOrchestrationStoreProvider } from "@alterx/adapters";
+import { createMockMutableSecretsProvider, type ErasableSecretsProvider } from "@alterx/shared-clients";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -14,6 +15,7 @@ const TENANT_RETENTION = "018f4d6e-2b4a-7a3e-8c1a-1234567890c1";
 const MANIFEST = "del_018f4d6e-2b4a-7a3e-8c1a-123456789099";
 
 describe.sequential("OrchestrationDeletionService real Postgres", () => {
+  let secrets: ErasableSecretsProvider;
   let postgres: StartedPostgreSqlContainer;
   let adminStore: PostgresOrchestrationStoreProvider;
   let tenantStore: PostgresOrchestrationStoreProvider;
@@ -44,7 +46,16 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
       connectionString: `postgresql://${role}:${password}@${postgres.getHost()}:${postgres.getPort()}/${postgres.getDatabase()}`,
       migrationsFolder,
     });
-    service = new OrchestrationDeletionService(tenantStore, adminStore);
+    // Webhook signing secrets for both tenants plus one outside the prefix.
+    secrets = createMockMutableSecretsProvider({
+      secrets: {
+        [`alter/webhook-endpoints/ten_${TENANT_A}/whe_a/v1`]: "a1",
+        [`alter/webhook-endpoints/ten_${TENANT_A}/whe_a/v2`]: "a2",
+        [`alter/webhook-endpoints/ten_${TENANT_B}/whe_b/v1`]: "b1",
+        "alter/unrelated/value": "keep",
+      },
+    });
+    service = new OrchestrationDeletionService(tenantStore, adminStore, secrets);
   }, 90_000);
 
   afterAll(async () => {
@@ -104,13 +115,29 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
       deletedRows: 35,
-      deletedObjects: 0,
+      deletedObjects: 2,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
       deleted: true,
       remaining: [],
     });
     expect((await service.locateSubjectData(`ten_${TENANT_B}`)).every((item) => item.rowCount === 1)).toBe(true);
+    // C81: tenant A's webhook signing secrets are gone; B's and unrelated ones stay.
+    await expect(secrets.listSecretReferences(`alter/webhook-endpoints/ten_${TENANT_A}/`)).resolves.toEqual([]);
+    await expect(secrets.listSecretReferences("alter/")).resolves.toEqual([
+      `alter/webhook-endpoints/ten_${TENANT_B}/whe_b/v1`,
+      "alter/unrelated/value",
+    ].sort());
+  });
+
+  it("fails verification while a webhook signing secret of the tenant survives, and a retry erases it", async () => {
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_late/v1`, "late");
+    await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
+      deleted: false,
+      remaining: [expect.objectContaining({ table: "secrets:alter/webhook-endpoints", rowCount: 1 })],
+    });
+    await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deletedObjects: 1 });
+    await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
   });
 
   it("erases one workspace from the live schema and leaves the tenant's other workspace (D2)", async () => {
@@ -127,17 +154,27 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     });
     await seedAll(adminStore, TENANT_A, "w");
 
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_w/v1`, "erased");
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_x/v1`, "kept");
     const located = await service.locateWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`);
     expect(located).toHaveLength(TABLES.length);
     expect(located.every((location) => location.rowCount === 1)).toBe(true);
 
-    await expect(service.deleteWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deletedRows: TABLES.length });
+    await expect(service.deleteWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deletedRows: TABLES.length, deletedObjects: 1 });
+    await expect(secrets.listSecretReferences(`alter/webhook-endpoints/ten_${TENANT_A}/`)).resolves.toEqual([`alter/webhook-endpoints/ten_${TENANT_A}/whe_x/v1`]);
     await expect(service.verifyWorkspaceDeletion(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
     const survivors = await service.locateWorkspaceData(`ten_${TENANT_A}`, `ws_${other}`);
     expect(survivors.every((location) => location.rowCount === 1)).toBe(true);
     await expect(service.locateSubjectData(`ten_${TENANT_A}`)).resolves.toSatisfy(
       (locations: readonly { rowCount: number }[]) => locations.every((location) => location.rowCount === 1),
     );
+
+    // A signing secret whose endpoint is gone fails the workspace's verification.
+    await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_w/v2`, "orphan");
+    await expect(service.verifyWorkspaceDeletion(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
+      deleted: false,
+      remaining: [expect.objectContaining({ table: "secrets:alter/webhook-endpoints", rowCount: 1 })],
+    });
 
     await service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST);
   });

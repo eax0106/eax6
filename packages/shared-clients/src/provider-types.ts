@@ -100,6 +100,15 @@ export interface MutableSecretsProvider extends SecretsProvider {
   deleteSecret(referenceId: SecretReferenceId): Promise<void>;
 }
 
+/**
+ * A secrets provider that can enumerate its references under a prefix, so a
+ * tenant's erasure can delete every secret it owns and verify none is left.
+ * deleteSecret must be idempotent: deleting a missing reference succeeds.
+ */
+export interface ErasableSecretsProvider extends MutableSecretsProvider {
+  listSecretReferences(prefix: string): Promise<readonly SecretReferenceId[]>;
+}
+
 /** Resolves non-secret runtime configuration from a named parameter store. */
 export interface ParameterStoreProvider extends BaseProvider<"ParameterStoreProvider"> {
   getParameter(name: string): Promise<string>;

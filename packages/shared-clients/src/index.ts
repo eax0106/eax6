@@ -119,6 +119,7 @@ export {
   type LogEntry,
   type MetricPoint,
   type MigrationSupport,
+  type ErasableSecretsProvider,
   type MutableSecretsProvider,
   type MutableParameterStoreProvider,
   ModelAliasResolutionError,

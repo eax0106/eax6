@@ -1,7 +1,7 @@
 import type { ProviderCapabilities } from "@alterx/contracts";
 import { createMockProvider } from "../mock-provider";
 import type {
-  MutableSecretsProvider,
+  ErasableSecretsProvider,
   ProviderMetadata,
   SecretsProvider,
 } from "../provider-types";
@@ -86,13 +86,13 @@ export function createMockSecretsProvider(
  */
 export function createMockMutableSecretsProvider(
   options: MockSecretsProviderOptions = {},
-): MutableSecretsProvider {
+): ErasableSecretsProvider {
   const providerId = options.providerId ?? "mock.secrets.mutable";
   const secrets = new Map(
     Object.entries(options.secrets ?? DEFAULT_SECRETS),
   );
 
-  return createMockProvider<MutableSecretsProvider>({
+  return createMockProvider<ErasableSecretsProvider>({
     metadata:
       options.metadata ?? mockMetadata(providerId, "SecretsProvider"),
     capabilities: options.capabilities ?? MOCK_SECRETS_CAPABILITIES,
@@ -115,6 +115,8 @@ export function createMockMutableSecretsProvider(
         validateReferenceId(referenceId);
         secrets.delete(referenceId);
       },
+      listSecretReferences: async (prefix) =>
+        [...secrets.keys()].filter((referenceId) => referenceId.startsWith(prefix)).sort(),
     },
   });
 }

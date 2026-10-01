@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { EvalServiceClient } from "@alterx/adapters";
+import { AwsSecretsManagerProvider, EvalServiceClient } from "@alterx/adapters";
 
 import {
   DEPLOYMENT_ADMIN_TOKEN_HASH,
@@ -105,7 +105,12 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
           throw new Error("DELETION_DATABASE_USER is required for internal deletion sweeps");
         }
         const systemStore = orchestrationStore(dbConfig, deletionDatabaseUser);
-        return new OrchestrationDeletionService(tenantStore, systemStore);
+        // Webhook signing secrets live in AWS Secrets Manager (see ingress.module.ts).
+        return new OrchestrationDeletionService(
+          tenantStore,
+          systemStore,
+          new AwsSecretsManagerProvider({ region: dbConfig.awsRegion }),
+        );
       },
     },
   ],

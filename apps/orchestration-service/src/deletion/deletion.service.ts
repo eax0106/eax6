@@ -9,6 +9,9 @@ import type {
 } from "@alterx/contracts";
 import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
 import { planWorkspaceScope } from "@alterx/adapters";
+import type { ErasableSecretsProvider } from "@alterx/shared-clients";
+
+import { tenantSecretPrefix } from "../trigger-bindings/ids";
 
 import { sweepRunHistory } from "../run-retention/run-retention.service";
 
@@ -23,6 +26,8 @@ export interface DeletionTenantStore {
 }
 
 const STORE = "orchestration-service";
+// Where verifyDeletion reports webhook signing secrets left in the provider.
+const WEBHOOK_SECRETS_LOCATION = "secrets:alter/webhook-endpoints";
 // Every tenant-scoped table in this service's schema (29, drizzle/0000-0035).
 // This list is hand-maintained -- ENGINE-FIX-P0-2 closed a gap where 10 of
 // these (everything from migration 0019 onward) were missing, so
@@ -76,6 +81,10 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
   constructor(
     private readonly store: DeletionTenantStore,
     private readonly systemStore: DeletionTenantStore = store,
+    // Holds the tenant's webhook signing secrets (alter/webhook-endpoints/...).
+    // Erasure deletes them and verification lists the prefix to prove none is
+    // left; without it, erasure of those secrets cannot be claimed.
+    private readonly secrets?: ErasableSecretsProvider,
   ) {}
 
   async locateSubjectData(tenantId: string): Promise<readonly SubjectDataLocation[]> {
@@ -95,6 +104,16 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
   async deleteSubjectData(tenantId: string, manifestId: string): Promise<DeletionResult> {
     const tenant = bareTenant(tenantId);
     requireManifest(manifestId);
+    // Secrets first: if this fails the rows still exist and a retry finds the
+    // same endpoints. Listing the prefix also catches secrets whose rows are
+    // already gone. deleteSecret is idempotent, so a retry is safe.
+    let deletedObjects = 0;
+    if (this.secrets !== undefined) {
+      for (const reference of await this.secrets.listSecretReferences(tenantSecretPrefix(`ten_${tenant}`))) {
+        await this.secrets.deleteSecret(reference);
+        deletedObjects += 1;
+      }
+    }
     const deletedRows = await this.store.withTenant(tenant, async (tx) => {
       let deleted = 0;
       for (const table of DELETE_ORDER) {
@@ -102,11 +121,17 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
       }
       return deleted;
     });
-    return { store: STORE, manifestId, deletedRows, deletedObjects: 0 };
+    return { store: STORE, manifestId, deletedRows, deletedObjects };
   }
 
   async verifyDeletion(tenantId: string, manifestId: string): Promise<VerificationResult> {
     const remaining = (await this.locateSubjectData(tenantId)).filter((item) => item.rowCount > 0);
+    if (this.secrets !== undefined) {
+      const secrets = await this.secrets.listSecretReferences(tenantSecretPrefix(`ten_${bareTenant(tenantId)}`));
+      if (secrets.length > 0) {
+        remaining.push({ store: STORE, table: WEBHOOK_SECRETS_LOCATION, rowCount: secrets.length, objectReferences: [] });
+      }
+    }
     return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
   }
 
@@ -171,6 +196,23 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
   async deleteWorkspaceData(tenantId: string, workspaceId: string, manifestId: string): Promise<DeletionResult> {
     const { tenant, workspace } = workspaceSubject(tenantId, workspaceId);
     requireManifest(manifestId);
+    // The workspace's webhook signing secrets go before its rows, as in the
+    // tenant's erasure: a failure leaves the endpoints for a retry to find.
+    let deletedObjects = 0;
+    if (this.secrets !== undefined) {
+      const endpoints = await this.store.withTenant(tenant, async (tx) => {
+        const scope = await workspacePredicates(tx);
+        return (await tx.query<{ id: string }>(
+          `SELECT id FROM webhook_endpoints WHERE ${scope.get("webhook_endpoints")!}`, [tenant, workspace],
+        )).rows.map((row) => row.id);
+      });
+      for (const endpoint of endpoints) {
+        for (const reference of await this.secrets.listSecretReferences(`${tenantSecretPrefix(`ten_${tenant}`)}${endpoint}/`)) {
+          await this.secrets.deleteSecret(reference);
+          deletedObjects += 1;
+        }
+      }
+    }
     const deletedRows = await this.store.withTenant(tenant, async (tx) => {
       const scope = await workspacePredicates(tx);
       let deleted = 0;
@@ -180,11 +222,25 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
       }
       return deleted;
     });
-    return { store: STORE, manifestId, deletedRows, deletedObjects: 0 };
+    return { store: STORE, manifestId, deletedRows, deletedObjects };
   }
 
   async verifyWorkspaceDeletion(tenantId: string, workspaceId: string, manifestId: string): Promise<VerificationResult> {
     const remaining = (await this.locateWorkspaceData(tenantId, workspaceId)).filter((item) => item.rowCount > 0);
+    if (this.secrets !== undefined) {
+      // No signing secret may outlive its endpoint: with the workspace's
+      // endpoints gone, any of its secrets left is an orphan.
+      const tenant = bareTenant(tenantId);
+      const prefix = tenantSecretPrefix(`ten_${tenant}`);
+      const references = await this.secrets.listSecretReferences(prefix);
+      const endpoints = new Set(await this.store.withTenant(tenant, async (tx) =>
+        (await tx.query<{ id: string }>("SELECT id FROM webhook_endpoints WHERE tenant_id = $1", [tenant])).rows.map((row) => row.id),
+      ));
+      const orphans = references.filter((reference) => !endpoints.has(reference.slice(prefix.length).split("/")[0] ?? ""));
+      if (orphans.length > 0) {
+        remaining.push({ store: STORE, table: WEBHOOK_SECRETS_LOCATION, rowCount: orphans.length, objectReferences: [] });
+      }
+    }
     return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
   }
 
