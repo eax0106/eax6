@@ -51,6 +51,7 @@ function storedEvent(
     reasonCode: null,
     context: { request_id: "request-1" },
     occurredAt: new Date("2026-07-24T06:30:00.000Z"),
+    erasedAt: null,
     ...overrides,
     prevHash,
   } satisfies Omit<StoredAuditEvent, "entryHash">;
@@ -69,6 +70,12 @@ function serviceWithStore(events: readonly StoredAuditEvent[] = []): {
     ...base,
     append,
     readGlobalChain: vi.fn(async () => events),
+    readChainSince: vi.fn(async (afterEntryHash: Buffer) => {
+      const afterHex = afterEntryHash.toString("hex");
+      if (afterHex === auditGenesisHash().toString("hex")) return events.map((e) => ({ ...e }));
+      const idx = events.findIndex((e) => e.entryHash.toString("hex") === afterHex);
+      return idx === -1 ? [] : events.slice(idx + 1).map((e) => ({ ...e }));
+    }),
   };
   return { service: new AuditService(store), append };
 }
@@ -251,7 +258,7 @@ describe("AuditService chain verification", () => {
 });
 
 describe("AuditService.verifyChainIncremental", () => {
-  it("leaves historical rows to the full-chain verifier once they are checkpointed", async () => {
+  it("full verification does not trust an unsigned incremental checkpoint", async () => {
     const first = storedEvent(
       "018f47a2-7b11-7b11-8a11-1234567890b1",
       auditGenesisHash(),

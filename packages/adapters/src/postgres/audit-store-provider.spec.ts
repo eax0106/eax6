@@ -83,6 +83,8 @@ describe.sequential("PostgresAuditStoreProvider", () => {
       "occurred_at",
       "prev_hash",
       "entry_hash",
+      "erased_at",
+      "chain_position",
     ]);
 
     const table = await pool.query<{
@@ -411,9 +413,12 @@ describe.sequential("PostgresAuditStoreProvider", () => {
     const bounded = await provider.readChainSince(first.entryHash, 1);
     expect(bounded.map((e) => e.id)).toEqual([second.id]);
 
-    // A hash that isn't in the chain at all -- no successor rows, no error.
+    // A hash that isn't in the chain at all is a broken anchor (a checkpoint
+    // naming a row that does not exist), refused rather than read as "no
+    // successors": silently returning [] would let verification pass over
+    // a missing row (D2 compaction keeps the anchor by position instead).
     const unknownHash = Buffer.alloc(32, 7);
-    await expect(provider.readChainSince(unknownHash, 10)).resolves.toEqual([]);
+    await expect(provider.readChainSince(unknownHash, 10)).rejects.toThrow("Audit checkpoint anchor missing");
   });
 
   it("persists a chain checkpoint across reads and real upsert", async () => {

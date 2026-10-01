@@ -43,6 +43,7 @@ import {
   BENCHMARK_SWEEP_JOB_TYPE,
   DRIFT_SWEEP_JOB_TYPE,
   AUDIT_CHAIN_VERIFY_JOB_TYPE,
+  AUDIT_SKELETON_RETENTION_JOB_TYPE,
   AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
   WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
 } from "./platform-jobs/scheduled-job-types";
@@ -308,6 +309,11 @@ async function bootstrap(): Promise<void> {
     platformJobsConfig.auditChainVerifyIntervalMs,
   );
   auditChainVerifyRunner.start();
+  const auditSkeletonRetentionRunner = new IntervalJobSchedulerRunner(
+    digestDurableExecution, AUDIT_SKELETON_RETENTION_JOB_TYPE,
+    "audit-skeleton-retention-sweep", platformJobsConfig.retentionSweepIntervalMs,
+  );
+  auditSkeletonRetentionRunner.start();
 
   const auditChainFullVerifyRunner = new IntervalJobSchedulerRunner(
     digestDurableExecution,
@@ -342,6 +348,7 @@ async function bootstrap(): Promise<void> {
     void benchmarkSweepRunner.stop();
     void driftSweepRunner.stop();
     void auditChainVerifyRunner.stop();
+    void auditSkeletonRetentionRunner.stop();
     void auditChainFullVerifyRunner.stop();
     void workspaceExportSweepRunner.stop();
   });

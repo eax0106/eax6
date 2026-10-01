@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
 import type {
   GetEventRequest,
@@ -35,9 +35,14 @@ export interface AuditEventToAppend {
   readonly occurredAt: Date;
 }
 
-export interface StoredAuditEvent extends AuditEventToAppend {
+export interface StoredAuditEvent extends Omit<AuditEventToAppend, "actorRef"> {
+  readonly chainPosition?: number;
   readonly prevHash: Buffer;
   readonly entryHash: Buffer;
+  /** Set when the event was minimised to a skeleton at tenant erasure (D2). Null otherwise. */
+  readonly erasedAt: Date | null;
+  /** Null on skeletons: the human identifier is destroyed at minimisation. */
+  readonly actorRef: string | null;
 }
 
 export interface AuditEventQuery {
@@ -95,23 +100,93 @@ export interface AuditChainVerificationResult {
  * confirmed valid, instead of re-walking the full history every time.
  */
 export interface AuditChainCheckpoint {
+  readonly lastPosition?: number;
   readonly lastEntryHash: Buffer;
   readonly checkedEvents: number;
   readonly verifiedAt: Date;
+  /** HMAC-SHA256 over the canonical checkpoint (Y2 compaction seal). Absent on legacy rows. */
+  readonly signature?: Buffer | undefined;
+}
+
+/**
+ * The compaction seal (D2, Y2): binds a checkpoint's hash, count and time
+ * to the audit chain signing key, so a checkpoint that skips tampered
+ * history cannot be forged without the key.
+ */
+export function canonicalAuditCheckpoint(checkpoint: {
+  readonly lastPosition?: number;
+  readonly lastEntryHash: Buffer;
+  readonly checkedEvents: number;
+  readonly verifiedAt: Date;
+}): Buffer {
+  return Buffer.from(
+    serializeCanonical({
+      checked_events: checkpoint.checkedEvents,
+      ...(checkpoint.lastPosition === undefined ? {} : { last_position: checkpoint.lastPosition }),
+      last_entry_hash: checkpoint.lastEntryHash.toString("hex"),
+      verified_at: checkpoint.verifiedAt.toISOString(),
+    }),
+    "utf8",
+  );
+}
+
+export function signAuditCheckpoint(
+  signingKey: string,
+  checkpoint: {
+    readonly lastPosition?: number;
+    readonly lastEntryHash: Buffer;
+    readonly checkedEvents: number;
+    readonly verifiedAt: Date;
+  },
+): Buffer {
+  if (signingKey.length < 32) {
+    throw new Error("Audit chain signing key must contain at least 32 characters");
+  }
+  return createHmac("sha256", signingKey).update(canonicalAuditCheckpoint(checkpoint)).digest();
+}
+
+export function verifyAuditCheckpointSignature(
+  signingKey: string,
+  checkpoint: {
+    readonly lastPosition?: number;
+    readonly lastEntryHash: Buffer;
+    readonly checkedEvents: number;
+    readonly verifiedAt: Date;
+    readonly signature?: Buffer | undefined;
+  },
+): boolean {
+  if (checkpoint.signature === undefined || checkpoint.signature.length !== 32) {
+    return false;
+  }
+  return timingSafeEqual(checkpoint.signature, signAuditCheckpoint(signingKey, checkpoint));
 }
 
 export interface AuditStoreProvider extends BaseProvider<"AuditStoreProvider"> {
   migrate(): Promise<void>;
-  append(event: AuditEventToAppend): Promise<StoredAuditEvent>;
+  append(event: AuditEventToAppend, seal?: AuditChainCheckpoint): Promise<StoredAuditEvent>;
   getById(id: string): Promise<StoredAuditEvent | undefined>;
   readGlobalChain(): Promise<readonly StoredAuditEvent[]>;
   /** Bounded forward walk from a checkpoint hash -- never the whole table. */
   readChainSince(
     afterEntryHash: Buffer,
     limit: number,
+    afterPosition?: number,
   ): Promise<readonly StoredAuditEvent[]>;
   getChainCheckpoint(): Promise<AuditChainCheckpoint | undefined>;
   setChainCheckpoint(checkpoint: AuditChainCheckpoint): Promise<void>;
+  /**
+   * Minimise one tenant's events to skeletons at erasure: tenant linkage
+   * becomes the pseudonym, content columns go NULL, erased_at is stamped.
+   * Hashes and linkage stay byte-identical so sealed history keeps
+   * verifying. Returns rows minimised. Idempotent.
+   */
+  minimiseTenantEvents(tenantId: string, pseudonym: string, erasedAt: Date, seal?: AuditChainCheckpoint): Promise<number>;
+  /**
+   * Destroy sealed skeletons past the window: minimised rows with erased_at
+   * at or before the cutoff, excluding the anchor row and every row a
+   * surviving row links to. Returns rows destroyed.
+   */
+  expireSkeletons(cutoff: Date, anchorHash: Buffer, anchorPosition?: number): Promise<number>;
   queryEvents(query: AuditEventQuery): Promise<AuditEventQueryResult>;
   storeDeletionCertificate(certificate: DeletionCertificateToStore): Promise<void>;
   appendDeletionLedger(entry: DeletionLedgerEntry): Promise<void>;
@@ -240,6 +315,8 @@ export function verifyAuditChain(
         ...(event === undefined ? {} : { eventId: `aud_${event.id}` }),
       };
     }
+    // Sealed rows are excluded by the trusted checkpoint before this walk.
+    // A marker on a post-checkpoint row never exempts its content hash.
     if (!calculateAuditEntryHash(event).equals(event.entryHash)) {
       return {
         valid: false,

@@ -44,6 +44,7 @@ export const ORCHESTRATION_RETENTION_SWEEP_JOB_TYPE = "platform.orchestration-re
 export const BENCHMARK_SWEEP_JOB_TYPE = "platform.benchmark-sweep";
 export const DRIFT_SWEEP_JOB_TYPE = "platform.drift-sweep";
 export const AUDIT_CHAIN_VERIFY_JOB_TYPE = "platform.audit-chain-verify";
+export const AUDIT_SKELETON_RETENTION_JOB_TYPE = "platform.audit-skeleton-retention-sweep";
 export const AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE = "platform.audit-chain-full-verify";
 // D2 (C74): workspace data exports requested by workspace admins are built
 // asynchronously; this sweep drives the platform-api trigger that processes
@@ -60,6 +61,7 @@ export const SCHEDULED_PLATFORM_JOB_TYPES = [
   BENCHMARK_SWEEP_JOB_TYPE,
   DRIFT_SWEEP_JOB_TYPE,
   AUDIT_CHAIN_VERIFY_JOB_TYPE,
+  AUDIT_SKELETON_RETENTION_JOB_TYPE,
   AUDIT_CHAIN_FULL_VERIFY_JOB_TYPE,
   WORKSPACE_EXPORT_SWEEP_JOB_TYPE,
 ] as const;

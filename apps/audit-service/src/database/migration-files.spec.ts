@@ -26,6 +26,7 @@ describe("audit_db migration files", () => {
       "0000_create_audit_events.sql",
       "0001_create_deletion_records.sql",
       "0002_audit_chain_checkpoint.sql",
+      "0003_audit_skeleton_compaction.sql",
     ]);
     expect(
       readdirSync(resolve(AUDIT_MIGRATIONS_PATH, "rollback"))
@@ -35,6 +36,7 @@ describe("audit_db migration files", () => {
       "0000_drop_audit_events.sql",
       "0001_drop_deletion_records.sql",
       "0002_drop_audit_chain_checkpoint.sql",
+      "0003_drop_audit_skeleton_compaction.sql",
     ]);
   });
 

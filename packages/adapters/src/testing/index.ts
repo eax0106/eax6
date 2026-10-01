@@ -10,3 +10,9 @@ export {
   createExecutorTestHarness,
   type ExecutorTestHarness,
 } from "./executor-test-harness";
+export {
+  connectPostgresTestClient,
+  createPostgresTestPool,
+  type PostgresTestClient,
+  type PostgresTestPool,
+} from "./postgres-test-connections";

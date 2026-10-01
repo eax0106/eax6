@@ -26,7 +26,7 @@ export type DatabaseName =
   | "eval_db";
 
 /** The services whose erasure provider the audit-service DeletionOrchestrator calls. */
-export type ErasureProvider = "orchestration-service" | "ads-core" | "platform-api" | "cost-ledger-service" | "intelligence-service" | "memory-service";
+export type ErasureProvider = "orchestration-service" | "ads-core" | "platform-api" | "cost-ledger-service" | "intelligence-service" | "memory-service" | "audit-service";
 
 export type ErasureRoute =
   | { readonly kind: "provider"; readonly provider: ErasureProvider }
@@ -134,7 +134,7 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "orchestration_db", schema: "public", table: "workflow_template_variable_values", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workflow_versions", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workflows", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
-  { database: "audit_db", schema: "public", table: "audit_events", owner: "audit-service", erasure: { kind: "gap", note: "Audit events are kept for chain integrity as a minimised skeleton under a tenant pseudonym (D2: 90 days after erasure, then destroyed); destroying chained rows needs a chain-compaction design that is not built yet." } },
+  { database: "audit_db", schema: "public", table: "audit_events", owner: "audit-service", erasure: { kind: "provider", provider: "audit-service" } },
   { database: "cost_db", schema: "public", table: "billing_rollups", owner: "cost-ledger-service", erasure: { kind: "provider", provider: "cost-ledger-service" } },
   { database: "cost_db", schema: "public", table: "cost_events", owner: "cost-ledger-service", erasure: { kind: "provider", provider: "cost-ledger-service" } },
   { database: "cost_db", schema: "public", table: "model_outcomes", owner: "cost-ledger-service", erasure: { kind: "provider", provider: "cost-ledger-service" } },
@@ -196,4 +196,4 @@ export const tenantDataExemptions: readonly TenantDataExemption[] = [
 // 63 since C5 (2026-09-28): run_verdicts is new billing evidence in a
 // service that has no erasure provider yet; it is counted here rather than
 // hidden, and falls with the rest when C3b lands.
-export const MAX_ERASURE_GAPS = 1;
+export const MAX_ERASURE_GAPS = 0;

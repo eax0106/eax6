@@ -7,6 +7,7 @@ import type {
 } from "@alterx/contracts";
 import type {
   AuditStoreProvider,
+  AuditChainCheckpoint,
   JsonValue,
   ObjectStorageProvider,
 } from "@alterx/shared-clients";
@@ -18,9 +19,11 @@ export interface DeletionExecutionResult {
   readonly completed: boolean;
 }
 
+export const AUDIT_ERASURE_TABLES = ["audit_events"] as const;
+
 interface DeletionProgress {
   readonly manifestId: string;
-  stage: "locate" | "object_purge" | "provider_purge" | "verify" | "complete";
+  stage: "locate" | "object_purge" | "provider_purge" | "verify" | "audit_minimise" | "complete";
   readonly located: { store: string; locations: readonly SubjectDataLocation[] }[];
   readonly deleted: DeletionResult[];
   readonly verified: VerificationResult[];
@@ -34,6 +37,7 @@ export class DeletionOrchestrator {
     private readonly providers: readonly InternalDeletionStoreClient[],
     private readonly objects: ObjectStorageProvider,
     private readonly pseudonymKey: string,
+    private readonly sealAuditChain?: () => Promise<AuditChainCheckpoint | undefined>,
   ) {
     if (pseudonymKey.length < 32) throw new Error("Deletion pseudonym key must contain at least 32 characters");
   }
@@ -122,6 +126,18 @@ export class DeletionOrchestrator {
     }
     if (progress.verified.some((result) => !result.deleted)) {
       throw new Error("Provider deletion verification failed");
+    }
+    // D2: with every provider verified, this tenant's own audit events
+    // shrink to skeletons (pseudonym kept, content gone) stamped now. The
+    // 90-day sweep destroys them; the ledger certificate below names only
+    // the pseudonym either way.
+    progress.stage = "audit_minimise";
+    if (this.sealAuditChain === undefined) throw new Error("Audit chain sealing is required before minimisation");
+    const seal = await this.sealAuditChain();
+    const erasedAt = new Date();
+    // An empty global chain has no checkpoint and no tenant rows to minimise.
+    if (seal !== undefined) {
+      await this.auditStore.minimiseTenantEvents(tenantId, this.pseudonym(tenantId), erasedAt, seal);
     }
     progress.stage = "complete";
     return progress;
