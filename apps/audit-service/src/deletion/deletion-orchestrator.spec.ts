@@ -19,6 +19,7 @@ import {
   DELETION_SERVICE_TOKEN_HASH,
   DeletionController,
 } from "./deletion.controller";
+import { AuditService } from "../audit/audit.service";
 import { DeletionOrchestrator } from "./deletion-orchestrator";
 import type { InternalDeletionStoreClient } from "./http-deletion-provider";
 
@@ -82,7 +83,7 @@ describe("DeletionOrchestrator", () => {
     expect(() => new DeletionOrchestrator(audit, [], objects, "weak")).toThrow(
       "at least 32 characters",
     );
-    const orchestrator = new DeletionOrchestrator(audit, [], objects, HMAC_KEY);
+    const orchestrator = new DeletionOrchestrator(audit, [], objects, HMAC_KEY, () => new AuditService(audit, HMAC_KEY).sealChain());
     await expect(orchestrator.replayDeletionLedger("not-a-timestamp")).rejects.toThrow("ISO 8601");
   });
 
@@ -90,7 +91,7 @@ describe("DeletionOrchestrator", () => {
     const audit = createMockAuditStoreProvider();
     const objects = createMockObjectStorageProvider([OBJECT_REFERENCE]);
     const providers = [new MemoryDeletionClient("ads-core"), new MemoryDeletionClient("orchestration-service")];
-    const orchestrator = new DeletionOrchestrator(audit, providers, objects, HMAC_KEY);
+    const orchestrator = new DeletionOrchestrator(audit, providers, objects, HMAC_KEY, () => new AuditService(audit, HMAC_KEY).sealChain());
 
     const execution = await orchestrator.execute(TENANT);
     expect(execution).toMatchObject({ completed: true });
@@ -118,7 +119,7 @@ describe("DeletionOrchestrator", () => {
     const objects = createMockObjectStorageProvider([OBJECT_REFERENCE]);
     const provider = new MemoryDeletionClient("ads-core");
     provider.failVerification = true;
-    const orchestrator = new DeletionOrchestrator(audit, [provider], objects, HMAC_KEY);
+    const orchestrator = new DeletionOrchestrator(audit, [provider], objects, HMAC_KEY, () => new AuditService(audit, HMAC_KEY).sealChain());
 
     await expect(orchestrator.execute(TENANT)).rejects.toThrow("verification failed");
     expect(audit.deletionLedger()).toEqual([]);
@@ -148,6 +149,7 @@ describe("DeletionOrchestrator", () => {
       [new MemoryDeletionClient("ads-core")],
       objects,
       HMAC_KEY,
+      () => new AuditService(audit, HMAC_KEY).sealChain(),
     );
     await expect(orchestrator.execute(TENANT)).rejects.toThrow("Object deletion verification failed");
     expect(audit.deletionLedger()).toEqual([]);
@@ -163,7 +165,7 @@ describe("DeletionOrchestrator", () => {
       subjectSelectors: { scheme: "hmac-sha256-v1" },
       deletedAt: new Date("2026-07-30T00:00:00.000Z"),
     });
-    const orchestrator = new DeletionOrchestrator(audit, [provider], objects, HMAC_KEY);
+    const orchestrator = new DeletionOrchestrator(audit, [provider], objects, HMAC_KEY, () => new AuditService(audit, HMAC_KEY).sealChain());
 
     await expect(orchestrator.replayDeletionLedger("2026-07-29T00:00:00.000Z")).resolves.toEqual({
       store: "audit-service",
@@ -184,6 +186,7 @@ describe("DeletionOrchestrator", () => {
       [new MemoryDeletionClient("ads-core")],
       createMockObjectStorageProvider([OBJECT_REFERENCE]),
       HMAC_KEY,
+      () => new AuditService(audit, HMAC_KEY).sealChain(),
     );
     const controller = new DeletionController(
       orchestrator,

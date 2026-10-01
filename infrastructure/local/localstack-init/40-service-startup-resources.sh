@@ -8,6 +8,9 @@
 set -eu
 
 : "${COST_DB_PASSWORD:?COST_DB_PASSWORD is required}"
+: "${AUDIT_RETENTION_DB_PASSWORD:?AUDIT_RETENTION_DB_PASSWORD is required}"
+: "${AUDIT_RETENTION_DATABASE_SECRET_REF:?AUDIT_RETENTION_DATABASE_SECRET_REF is required}"
+: "${AUDIT_CHAIN_SIGNING_KEY_REF:?AUDIT_CHAIN_SIGNING_KEY_REF is required}"
 
 AUDIT_ARCHIVE_BUCKET_PARAM="${AUDIT_ARCHIVE_BUCKET_PARAM:-/alter/local/audit/archive-bucket}"
 AUDIT_ARCHIVE_BUCKET="${AUDIT_ARCHIVE_BUCKET:-alter-local-audit-archive}"
@@ -74,5 +77,11 @@ put_secret "$DELETION_SERVICE_TOKEN_REF" "file://$deletion_token_file"
 put_secret "$DELETION_PSEUDONYM_KEY_REF" "file://$deletion_key_file"
 put_secret "$COST_PSEUDONYM_KEY_REF" "file://$cost_key_file"
 put_secret "$COST_DATABASE_SECRET_REF" "file://$cost_dsn_file"
+
+# A signing key seals retained history: never rotate it on a stack restart.
+if ! awslocal secretsmanager describe-secret --secret-id "$AUDIT_CHAIN_SIGNING_KEY_REF" >/dev/null 2>&1; then
+  awslocal secretsmanager create-secret --name "$AUDIT_CHAIN_SIGNING_KEY_REF" --secret-string "$(openssl rand -hex 32)" >/dev/null
+fi
+put_secret "$AUDIT_RETENTION_DATABASE_SECRET_REF" "postgresql://audit_retention:$AUDIT_RETENTION_DB_PASSWORD@${AUDIT_DB_HOST:-127.0.0.1}:${AUDIT_DB_PORT:-5433}/audit_db"
 
 echo "Service startup resources ready"

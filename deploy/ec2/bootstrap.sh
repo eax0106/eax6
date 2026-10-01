@@ -78,6 +78,10 @@ for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE
 done
 # shellcheck disable=SC1091
 . ./.session.env
+# Added credentials are generated once without replacing existing passwords.
+touch .audit-retention.env
+grep -q '^AUDIT_RETENTION_DB_PASSWORD=' .audit-retention.env || printf 'AUDIT_RETENTION_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" >>.audit-retention.env
+. ./.audit-retention.env
 sha256() { printf %s "$1" | openssl dgst -sha256 -r | cut -d' ' -f1; }
 
 # --- 2. environment file ------------------------------------------------------
@@ -162,6 +166,11 @@ expand() {
   deletion_ref="${seen[DELETION_SERVICE_TOKEN_REF]}"
   [[ "$local_mode" == 1 ]] || deletion_ref="${deletion_ref//alter\/local\//alter\/$ALTER_ENV\/}"
   printf 'AUDIT_QUERY_SERVICE_TOKEN_REF=%s\n' "$deletion_ref"
+  printf 'AUDIT_RETENTION_DB_PASSWORD=%s\n' "$AUDIT_RETENTION_DB_PASSWORD"
+  audit_ref_environment="$ALTER_ENV"
+  [[ "$local_mode" != 1 ]] || audit_ref_environment=local
+  printf 'AUDIT_RETENTION_DATABASE_SECRET_REF=alter/%s/audit-service/retention-database\n' "$audit_ref_environment"
+  printf 'AUDIT_CHAIN_SIGNING_KEY_REF=alter/%s/audit-service/chain-signing-key\n' "$audit_ref_environment"
   # The actor-token keys are served by platform-api, on its own port.
   printf 'ACTOR_TOKEN_JWKS_URL=http://127.0.0.1:%s/.well-known/actor-jwks.json\n' "${seen[PLATFORM_API_PORT]}"
   platform_db="127.0.0.1:${seen[PLATFORM_DB_PORT]:-5432}/platform_db"
@@ -192,6 +201,9 @@ if [[ "$local_mode" != 1 ]]; then
   audit_dsn="postgresql://audit_service:$(env_value AUDIT_DB_PASSWORD)@127.0.0.1:$(env_value ENGINE_DB_PORT)/audit_db"
   cost_dsn="postgresql://cost_ledger_service:$(env_value COST_DB_PASSWORD)@127.0.0.1:$(env_value COST_DB_PORT)/cost_db"
   put_secret_if_absent "$(env_value AUDIT_DATABASE_SECRET_REF)" "$audit_dsn"
+  retention_dsn="postgresql://audit_retention:$(env_value AUDIT_RETENTION_DB_PASSWORD)@127.0.0.1:$(env_value ENGINE_DB_PORT)/audit_db"
+  put_secret_if_absent "$(env_value AUDIT_RETENTION_DATABASE_SECRET_REF)" "$retention_dsn"
+  put_secret_if_absent "$(env_value AUDIT_CHAIN_SIGNING_KEY_REF)" "$(openssl rand -hex 32)"
   put_secret_if_absent "$(env_value COST_DATABASE_SECRET_REF)" "$cost_dsn"
   put_secret_if_absent "$(env_value DELETION_SERVICE_TOKEN_REF)" "$(openssl rand -hex 32)"
   put_secret_if_absent "$(env_value DELETION_PSEUDONYM_KEY_REF)" "$(openssl rand -hex 32)"
@@ -224,6 +236,9 @@ log "platform_db runtime roles"
 platform_db_roles
 log "engine_db runtime role"
 engine_db_runtime_role
+log "audit retention database role"
+compose exec -T engine-db psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 \
+  -v retention_password="$AUDIT_RETENTION_DB_PASSWORD" <audit-retention-role.sql >/dev/null
 
 # --- 5. migrations ------------------------------------------------------------
 node_image="$ALTER_REGISTRY/node:$ALTER_IMAGE_TAG"

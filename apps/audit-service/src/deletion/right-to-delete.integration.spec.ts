@@ -12,6 +12,7 @@ import {
 import { ProblemDetailsSchema } from "@alterx/contracts";
 import { createMockObjectStorageProvider } from "@alterx/shared-clients";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import pg from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -21,6 +22,7 @@ import {
 import { OrchestrationDeletionService } from "../../../orchestration-service/src/deletion/deletion.service";
 import { DeletionOrchestrator } from "./deletion-orchestrator";
 import { HttpDeletionProvider } from "./http-deletion-provider";
+import { AuditService } from "../audit/audit.service";
 
 const TENANT_A = "018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
 const TENANT_B = "018f4d6e-2b4a-7a3e-8c1a-1234567890b1";
@@ -71,9 +73,22 @@ describe.sequential("KNOW-16 full right-to-delete flow", () => {
       migrationsFolder: migrations,
     });
     await orchestrationStore.migrate();
+    const auditAdmin = new pg.Client({ connectionString: auditDatabase.getConnectionUri() });
+    await auditAdmin.connect();
+    try {
+      await auditAdmin.query("CREATE ROLE audit_service LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'fixture-app-only'");
+      await auditAdmin.query("CREATE ROLE audit_retention LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD 'fixture-retention-only'");
+      await auditAdmin.query("ALTER DATABASE audit_db OWNER TO audit_service");
+      await auditAdmin.query("GRANT USAGE, CREATE ON SCHEMA public TO audit_service");
+    } finally { await auditAdmin.end(); }
+    const auditUrl = new URL(auditDatabase.getConnectionUri());
+    auditUrl.username = "audit_service"; auditUrl.password = "fixture-app-only";
+    const retentionUrl = new URL(auditUrl);
+    retentionUrl.username = "audit_retention"; retentionUrl.password = "fixture-retention-only";
     auditStore = new PostgresAuditStoreProvider({
       authentication: "static",
-      connectionString: auditDatabase.getConnectionUri(),
+      connectionString: auditUrl.toString(),
+      retentionConnectionString: retentionUrl.toString(),
       migrationsFolder: auditMigrations,
     });
     await auditStore.migrate();
@@ -152,6 +167,7 @@ describe.sequential("KNOW-16 full right-to-delete flow", () => {
       ],
       objects,
       KEY,
+      () => new AuditService(auditStore, KEY).sealChain(),
     );
 
     await expect(orchestrator.execute(TENANT_A_REQUEST)).resolves.toMatchObject({ completed: true });

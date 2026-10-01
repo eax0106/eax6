@@ -59,6 +59,10 @@ async function main(): Promise<void> {
   }
 
   const providers = {
+    "audit-service": providerTables(
+      "apps/audit-service/src/deletion/deletion-orchestrator.ts",
+      /export const AUDIT_ERASURE_TABLES = \[([\s\S]*?)\] as const/,
+    ),
     "orchestration-service": providerTables(
       "apps/orchestration-service/src/deletion/deletion.service.ts",
       /export const TABLES = \[([\s\S]*?)\] as const/,

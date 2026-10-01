@@ -20,6 +20,8 @@ function environment(
     MEMORY_DELETION_BASE_URL: "http://memory.internal:8002",
     DELETION_PSEUDONYM_KEY_REF: "/alter/local/audit-service/system/deletion-pseudonym-key",
     DELETION_SERVICE_TOKEN_REF: "/alter/local/audit-service/system/deletion-service-token",
+    AUDIT_CHAIN_SIGNING_KEY_REF: "/alter/local/audit-service/system/chain-signing-key",
+    AUDIT_RETENTION_DATABASE_SECRET_REF: "/alter/local/audit-service/retention-database",
     ...overrides,
   };
   if (overrides.ALTER_CONFIG_SOURCE === "appconfig" && overrides.RUNTIME_MODE === undefined) {
@@ -50,6 +52,8 @@ describe("loadAuditEnvironment", () => {
       memoryDeletionBaseUrl: "http://memory.internal:8002",
       deletionPseudonymKeyReference: "/alter/local/audit-service/system/deletion-pseudonym-key",
       deletionServiceTokenReference: "/alter/local/audit-service/system/deletion-service-token",
+      chainSigningKeyReference: "/alter/local/audit-service/system/chain-signing-key",
+      retentionDatabaseSecretReference: "/alter/local/audit-service/retention-database",
     });
   });
 
@@ -156,6 +160,8 @@ describe("loadAuditEnvironment", () => {
     ["ALTER_CONFIG_SOURCE", { ALTER_CONFIG_SOURCE: "environment" }],
     ["DATABASE_SECRET_REF", { DATABASE_SECRET_REF: "" }],
     ["AUDIT_ARCHIVE_BUCKET_PARAM", { AUDIT_ARCHIVE_BUCKET_PARAM: "" }],
+    ["AUDIT_CHAIN_SIGNING_KEY_REF", { AUDIT_CHAIN_SIGNING_KEY_REF: "" }],
+    ["AUDIT_RETENTION_DATABASE_SECRET_REF", { AUDIT_RETENTION_DATABASE_SECRET_REF: "" }],
     ["PORT", { PORT: "0" }],
     ["GRPC_BIND_ADDRESS", { GRPC_BIND_ADDRESS: "localhost:50051" }],
     ["GRPC_BIND_ADDRESS", { GRPC_BIND_ADDRESS: "127.0.0.1:70000" }],
@@ -232,6 +238,8 @@ describe("database authentication selection", () => {
     MEMORY_DELETION_BASE_URL: "http://memory.internal:8002",
     DELETION_PSEUDONYM_KEY_REF: "/alter/staging/audit-service/system/deletion-pseudonym-key",
     DELETION_SERVICE_TOKEN_REF: "/alter/staging/audit-service/system/deletion-service-token",
+    AUDIT_CHAIN_SIGNING_KEY_REF: "/alter/staging/audit-service/chain-signing-key",
+    AUDIT_RETENTION_DATABASE_SECRET_REF: "/alter/staging/audit-service/retention-database",
     DATABASE_HOST: "audit-db.internal",
     DATABASE_PORT: "5432",
     DATABASE_NAME: "audit_db",

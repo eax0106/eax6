@@ -37,6 +37,7 @@ function cloneEvent(event: StoredAuditEvent): StoredAuditEvent {
     occurredAt: new Date(event.occurredAt),
     prevHash: Buffer.from(event.prevHash),
     entryHash: Buffer.from(event.entryHash),
+    erasedAt: event.erasedAt === null ? null : new Date(event.erasedAt),
   };
 }
 
@@ -49,13 +50,17 @@ export function createMockAuditStoreProvider(
   const ledger: DeletionLedgerEntry[] = [];
   let appendBarrier: Promise<void> = Promise.resolve();
   let checkpoint: AuditChainCheckpoint | undefined;
+  let nextPosition = 1;
 
-  const append = async (event: AuditEventToAppend): Promise<StoredAuditEvent> => {
+  const append = async (event: AuditEventToAppend, seal?: AuditChainCheckpoint): Promise<StoredAuditEvent> => {
     let stored: StoredAuditEvent | undefined;
     const operation = appendBarrier.then(() => {
-      const prevHash = events.at(-1)?.entryHash ?? auditGenesisHash();
-      const pending = { ...event, prevHash };
-      stored = { ...pending, entryHash: calculateAuditEntryHash(pending) };
+      const tip = events.at(-1);
+      const prevHash = seal?.signature !== undefined && seal.lastPosition !== undefined &&
+        (tip === undefined || tip.chainPosition! < seal.lastPosition)
+        ? seal.lastEntryHash : tip?.entryHash ?? auditGenesisHash();
+      const pending = { ...event, prevHash, erasedAt: null as Date | null };
+      stored = { ...pending, chainPosition: nextPosition++, entryHash: calculateAuditEntryHash(pending) };
       events.push(stored);
     });
     appendBarrier = operation.catch(() => undefined);
@@ -78,14 +83,17 @@ export function createMockAuditStoreProvider(
         return found === undefined ? undefined : cloneEvent(found);
       },
       readGlobalChain: async () => events.map(cloneEvent),
-      readChainSince: async (afterEntryHash, limit) => {
+      readChainSince: async (afterEntryHash, limit, afterPosition) => {
+        if (afterPosition !== undefined) {
+          return events.filter(event => event.chainPosition! > afterPosition).slice(0, limit).map(cloneEvent);
+        }
         const afterHex = afterEntryHash.toString("hex");
         let startIndex: number;
         if (afterHex === auditGenesisHash().toString("hex")) {
           startIndex = 0;
         } else {
           const foundIndex = events.findIndex((event) => event.entryHash.toString("hex") === afterHex);
-          if (foundIndex === -1) return [];
+          if (foundIndex === -1) throw new Error("Audit checkpoint anchor missing");
           startIndex = foundIndex + 1;
         }
         return events.slice(startIndex, startIndex + limit).map(cloneEvent);
@@ -95,15 +103,62 @@ export function createMockAuditStoreProvider(
           ? undefined
           : {
               lastEntryHash: Buffer.from(checkpoint.lastEntryHash),
+              ...(checkpoint.lastPosition === undefined ? {} : { lastPosition: checkpoint.lastPosition }),
               checkedEvents: checkpoint.checkedEvents,
               verifiedAt: new Date(checkpoint.verifiedAt),
+              ...(checkpoint.signature === undefined
+                ? {}
+                : { signature: Buffer.from(checkpoint.signature) }),
             },
       setChainCheckpoint: async (next) => {
         checkpoint = {
           lastEntryHash: Buffer.from(next.lastEntryHash),
+          ...(next.lastPosition === undefined ? {} : { lastPosition: next.lastPosition }),
           checkedEvents: next.checkedEvents,
           verifiedAt: new Date(next.verifiedAt),
+          ...(next.signature === undefined ? {} : { signature: Buffer.from(next.signature) }),
         };
+      },
+      minimiseTenantEvents: async (tenantId, pseudonym, _erasedAt, seal) => {
+        const bare = tenantId.startsWith("ten_") ? tenantId.slice(4) : tenantId;
+        if (!events.some(event => event.tenantId === bare && event.erasedAt === null)) return 0;
+        if (checkpoint?.signature === undefined || checkpoint.lastPosition === undefined) {
+          throw new Error("Signed checkpoint required for audit minimisation");
+        }
+        if (seal === undefined || seal.lastPosition !== checkpoint.lastPosition ||
+            !seal.lastEntryHash.equals(checkpoint.lastEntryHash)) throw new Error("Signed audit prefix required");
+        let minimised = 0;
+        for (const event of events) {
+          if (event.tenantId === bare && event.erasedAt === null && event.chainPosition! <= checkpoint.lastPosition) {
+            const index = events.indexOf(event);
+            events[index] = {
+              ...event,
+              tenantId: null,
+              tenantPseudonym: pseudonym,
+              actorRef: null,
+              targetRef: null,
+              reasonCode: null,
+              context: null,
+              erasedAt: new Date(),
+            };
+            minimised += 1;
+          }
+        }
+        return minimised;
+      },
+      expireSkeletons: async (cutoff, anchorHash, anchorPosition) => {
+        if (checkpoint?.signature === undefined || checkpoint.lastPosition !== anchorPosition ||
+            !checkpoint.lastEntryHash.equals(anchorHash)) throw new Error("Signed audit prefix required");
+        const bound = Math.min(cutoff.getTime(), Date.now() - 90 * 24 * 60 * 60 * 1000);
+        const before = events.length;
+        for (let index = events.length - 1; index >= 0; index -= 1) {
+          const event = events[index]!;
+          if (event.chainPosition! <= anchorPosition! && event.erasedAt !== null &&
+              event.erasedAt.getTime() <= bound && event.tenantId === null &&
+              ledger.some(entry => entry.subjectPseudonym === event.tenantPseudonym &&
+                entry.deletedAt.getTime() <= bound)) events.splice(index, 1);
+        }
+        return before - events.length;
       },
       queryEvents: async (query: AuditEventQuery): Promise<AuditEventQueryResult> => {
         const filtered = events

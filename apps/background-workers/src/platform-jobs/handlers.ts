@@ -118,9 +118,10 @@ function createRetentionSweepHandler(
   baseUrl: string,
   serviceToken: string,
   fetchImpl: typeof fetch,
+  route = "/internal/deletion/retention",
 ): PlatformJobHandler {
   return async (): Promise<JsonValue> => {
-    const response = await fetchImpl(`${baseUrl}/internal/deletion/retention`, {
+    const response = await fetchImpl(`${baseUrl}${route}`, {
       method: "POST",
       headers: { authorization: `Bearer ${serviceToken}` },
     });
@@ -511,6 +512,10 @@ export function createPlatformJobHandlers(
     );
   }
   if (dependencies?.auditServiceInternalBaseUrl && dependencies.auditChainVerifyServiceToken) {
+    handlers.set("platform.audit-skeleton-retention-sweep", createRetentionSweepHandler(
+      dependencies.auditServiceInternalBaseUrl, dependencies.auditChainVerifyServiceToken,
+      fetchImpl, "/internal/audit-events/skeletons/sweep",
+    ));
     handlers.set(
       "platform.audit-chain-verify",
       createAuditChainVerifySweepHandler(

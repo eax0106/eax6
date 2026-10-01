@@ -4,6 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 import { createPlatformJobHandlers } from "./handlers";
 
 describe("createPlatformJobHandlers", () => {
+  it("drives audit skeleton retention with its audit credential and propagates refusal", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({ deletedRows: 2 })) as unknown as typeof fetch;
+    const dependencies = { auditServiceInternalBaseUrl: "http://audit.internal", auditChainVerifyServiceToken: "audit-token", fetchImpl };
+    await expect(createPlatformJobHandlers(dependencies).get("platform.audit-skeleton-retention-sweep")!({})).resolves.toEqual({ deletedRows: 2 });
+    expect(fetchImpl).toHaveBeenCalledWith("http://audit.internal/internal/audit-events/skeletons/sweep", expect.objectContaining({ method: "POST", headers: { authorization: "Bearer audit-token" } }));
+    expect(createPlatformJobHandlers({ auditServiceInternalBaseUrl: "http://audit.internal" }).get("platform.audit-skeleton-retention-sweep")).toBeUndefined();
+    const refused = createPlatformJobHandlers({ ...dependencies, fetchImpl: async () => new Response("refused", { status: 500 }) });
+    await expect(refused.get("platform.audit-skeleton-retention-sweep")!({})).rejects.toThrow("retention sweep failed: HTTP 500 refused");
+  });
   it("registers authenticated platform-db retention only with its own credential and propagates refusal", async () => {
     const fetchImpl = vi.fn(async () => Response.json({ deletedRows: 3 })) as unknown as typeof fetch;
     const dependencies = { platformApiInternalBaseUrl: "http://platform-api.internal", platformRetentionSweepServiceToken: "deletion-token", fetchImpl };

@@ -26,6 +26,7 @@ services:
       # visible -- previously orchestration, cost and eval silently shared the
       # audit credential with nothing recording that they did.
       AUDIT_DB_PASSWORD: ${AUDIT_DB_PASSWORD:?Set AUDIT_DB_PASSWORD in .env.local}
+      AUDIT_RETENTION_DB_PASSWORD: ${AUDIT_RETENTION_DB_PASSWORD:?Set AUDIT_RETENTION_DB_PASSWORD in .env.local}
       INTELLIGENCE_DB_PASSWORD: ${INTELLIGENCE_DB_PASSWORD:?Set INTELLIGENCE_DB_PASSWORD in .env.local}
       ORCHESTRATION_DB_PASSWORD: ${ORCHESTRATION_DB_PASSWORD:?Set ORCHESTRATION_DB_PASSWORD in .env.local}
       COST_DB_PASSWORD: ${COST_DB_PASSWORD:-}
@@ -122,6 +123,9 @@ services:
       AUDIT_DB_PORT: "5433"
       AUDIT_DATABASE_NAME: audit_db
       AUDIT_DATABASE_USER: audit_service
+      AUDIT_RETENTION_DB_PASSWORD: ${AUDIT_RETENTION_DB_PASSWORD:?Set AUDIT_RETENTION_DB_PASSWORD in .env.local}
+      AUDIT_RETENTION_DATABASE_SECRET_REF: ${AUDIT_RETENTION_DATABASE_SECRET_REF:?Set AUDIT_RETENTION_DATABASE_SECRET_REF in .env.local}
+      AUDIT_CHAIN_SIGNING_KEY_REF: ${AUDIT_CHAIN_SIGNING_KEY_REF:?Set AUDIT_CHAIN_SIGNING_KEY_REF in .env.local}
       DATABASE_SECRET_REF: ${AUDIT_DATABASE_SECRET_REF:-${DATABASE_SECRET_REF:-alter/local/audit-service/db-password}}
       ACTOR_TOKEN_SIGNING_KEY_REF: ${ACTOR_TOKEN_SIGNING_KEY_REF:-/alter/local/platform-api/system/actor-token-signing-key}
       COST_DB_PASSWORD: ${COST_DB_PASSWORD:?Set COST_DB_PASSWORD in .env.local}
