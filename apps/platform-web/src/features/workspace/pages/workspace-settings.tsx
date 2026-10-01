@@ -136,13 +136,14 @@ function DangerZone() {
   const deleteMutation = useMutation({
     mutationFn: () => {
       if (!currentWorkspace) throw new Error("No workspace")
-      return api.deleteWorkspace(currentWorkspace.id)
+      return api.deleteWorkspace(currentWorkspace.id, confirmText)
     },
-    onSuccess: () => {
+    onSuccess: ({ deletionDueAt }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.all })
-      toast.success("Workspace deleted successfully")
+      toast.success(`Workspace scheduled for deletion. You can restore it until ${new Date(deletionDueAt).toLocaleString()}.`)
       setShowConfirm(false)
-      navigate("/login")
+      setConfirmText("")
+      navigate("/")
     },
     onError: () => {
       toast.error("Failed to delete workspace")
@@ -162,7 +163,7 @@ function DangerZone() {
             <div>
               <h4 className="font-medium text-ax-text">Delete workspace</h4>
               <p className="text-sm text-ax-text-muted mt-1">
-                Permanently delete this workspace and all of its data. This action cannot be undone.
+                Hide this workspace and stop its runs. You can restore it during a restore window (7 days by default); after that it and all of its data are permanently deleted.
               </p>
             </div>
             <Button variant="danger" onClick={() => setShowConfirm(true)}>
@@ -172,13 +173,16 @@ function DangerZone() {
         </div>
       </div>
 
+      <PendingDeletionWorkspaces />
+
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="text-red-500">Delete Workspace</DialogTitle>
             <DialogDescription>
-              This will permanently delete <strong>{currentWorkspace?.name}</strong> and all associated
-              workflows, projects, runs, knowledge, connections, and billing data. This action is irreversible.
+              <strong>{currentWorkspace?.name}</strong> will be hidden at once and no run will start in it. You can
+              restore it during the restore window (7 days by default). After that it is permanently deleted with all of its workflows, projects, runs,
+              knowledge and connections.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 pt-2">
@@ -202,11 +206,60 @@ function DangerZone() {
               loading={deleteMutation.isPending}
               onClick={() => deleteMutation.mutate()}
             >
-              Delete permanently
+              Delete workspace
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
+  )
+}
+
+/** D2: workspaces waiting out their restore window, each with a restore action. */
+function PendingDeletionWorkspaces() {
+  const queryClient = useQueryClient()
+  const { data: pending } = useQuery({
+    queryKey: queryKeys.workspace.pendingDeletion,
+    queryFn: () => api.getPendingDeletionWorkspaces(),
+    retry: false,
+  })
+  const restoreMutation = useMutation({
+    mutationFn: (id: string) => api.restoreWorkspace(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.all })
+      toast.success("Workspace restored")
+    },
+    onError: () => {
+      toast.error("Failed to restore workspace")
+    },
+  })
+
+  if (!pending || pending.length === 0) return null
+  return (
+    <div className="rounded-xl border border-ax-border overflow-hidden mt-6">
+      <div className="px-6 py-5 border-b border-ax-border">
+        <h3 className="text-lg font-medium text-ax-text">Pending deletion</h3>
+      </div>
+      <ul className="divide-y divide-ax-border">
+        {pending.map((workspace) => (
+          <li key={workspace.id} className="flex items-center justify-between px-6 py-4">
+            <div>
+              <p className="font-medium text-ax-text">{workspace.name}</p>
+              <p className="text-sm text-ax-text-muted">
+                Deleted for good on {new Date(workspace.deletionDueAt).toLocaleString()}
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              disabled={restoreMutation.isPending}
+              loading={restoreMutation.isPending && restoreMutation.variables === workspace.id}
+              onClick={() => restoreMutation.mutate(workspace.id)}
+            >
+              Restore
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }

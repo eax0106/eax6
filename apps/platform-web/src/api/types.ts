@@ -14,6 +14,13 @@ export interface Workspace {
   createdAt: string
 }
 
+/** D2: a deleted workspace waiting out its restore window. */
+export interface PendingDeletionWorkspace {
+  id: string
+  name: string
+  deletionDueAt: string
+}
+
 export type TenantRole = "owner" | "admin" | "billing" | "member"
 
 export interface TenantDataResidency {
