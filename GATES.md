@@ -4,6 +4,11 @@ OWNS: apps/platform-web/src/api/**, apps/platform-web/src/features/workflows/com
 
 Scope: Live and mock users can view approval modes on the approval step and Action Centre, save with a current ETag and explicit consequence confirmation, configure skip windows, and see unapplied promotion suggestions and policy/timeout outcomes.
 
+- [x] G6: Merged Nx env patch accepts the actual generated fixture; current architecture baseline passes
+  CHECK: node scripts/check-nx-env-local.mjs && node scripts/gates/run-all.mjs && echo approval-post-merge-passed
+  EXPECT: approval-post-merge-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=8b6873ab3849057d23ad717cdf43d553efdb080a1d8054e1c8f421e113c5280c; exit=0; EXPECT=matched; output-sha256=e864d69fc91d2f6c65e754ec90cb1f58f1c9bfc7bb97baa2a23e45106bace16f; output-bytes=1146; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries
+
 - [x] G1: Real Postgres approval reads expose the workflow and graph approval key with tenant isolation
   CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/approvals/approval-context.integration.spec.ts && echo approval-context-passed
   EXPECT: approval-context-passed
