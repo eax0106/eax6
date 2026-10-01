@@ -78,6 +78,15 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function parseJsonObjectOrEmpty(json: string | undefined): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(json ?? "{}");
+    return isPlainObject(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function parseJsonObject(json: string, field: string): Record<string, unknown> {
   let parsed: unknown;
   try {
@@ -140,6 +149,8 @@ export class NodeexecService {
     private readonly selectionBindingFailClosed?: SelectionBindingFailClosedConfig,
     private readonly runFinalizationMemoryWriter?: RunFinalizationMemoryWriter,
     private readonly runAcceptance?: RunAcceptanceCheck,
+    // D5: marks an approval skipped on timeout and flags its run.
+    private readonly approvalSkips?: { markSkipped(tenantId: string, runId: string, nodeExecutionId: string): Promise<void> },
   ) {}
 
   async executeNode(
@@ -870,6 +881,9 @@ export class NodeexecService {
     }
 
     if (request.decision === "approved") {
+      if (parseJsonObjectOrEmpty(request.decision_output_json)["skipped"] === true) {
+        await this.approvalSkips?.markSkipped(request.tenant_id, request.run_id, request.node_execution_id);
+      }
       await this.ledger.recordSucceeded({
         tenantId: request.tenant_id,
         runId: request.run_id,

@@ -63,6 +63,7 @@ describe("orchestration migration files", () => {
       "0043_workflow_version_deploy_marks.sql",
       "0044_create_workspace_holds.sql",
       "0045_create_workspace_run_retention.sql",
+      "0046_create_approval_step_policies.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -115,6 +116,7 @@ describe("orchestration migration files", () => {
       "0043_drop_workflow_version_deploy_marks.sql",
       "0044_drop_workspace_holds.sql",
       "0045_drop_workspace_run_retention.sql",
+      "0046_drop_approval_step_policies.sql",
     ]);
   });
 
@@ -137,13 +139,13 @@ describe("orchestration migration files", () => {
     },
   );
 
-  it("defines immutability function once and reuses it thirty-three times", () => {
+  it("defines immutability function once and reuses it thirty-four times", () => {
     const allSql = migrationSql.map(({ sql }) => sql).join("\n");
 
     expect(allSql.match(/CREATE OR REPLACE FUNCTION reject_tenant_id_change/g))
       .toHaveLength(1);
     expect(allSql.match(/EXECUTE FUNCTION reject_tenant_id_change\(\)/g))
-      .toHaveLength(33);
+      .toHaveLength(34);
   });
 
   it("persists a bounded traffic percentage only for canary versions", () => {
