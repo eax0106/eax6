@@ -27,7 +27,11 @@ import { PlatformDeletionService } from "./platform-deletion.service";
       // The database URL comes through the runtime reference resolver, like the token below, so
       // this module reads no environment itself.
       useFactory: async (secrets: MutableSecretsProvider) =>
-        new PlatformDeletionService(new PgErasureStore(sharedPool(await resolveRuntimeSecret("env:DATABASE_URL"))), secrets),
+        new PlatformDeletionService(
+          new PgErasureStore(sharedPool(await resolveRuntimeSecret("env:DATABASE_URL"))),
+          secrets,
+          new PgErasureStore(sharedPool(await resolveRuntimeSecret("env:PLATFORM_RETENTION_DATABASE_URL"))),
+        ),
     },
     {
       provide: PLATFORM_DELETION_TOKEN_HASH,

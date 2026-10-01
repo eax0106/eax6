@@ -54,6 +54,7 @@ done
 roles_file="$work/deploy/ec2/.db-roles.env"
 [[ "$(value DATABASE_URL)" == postgresql://platform_app:*@127.0.0.1:*/platform_db ]] || fail "DATABASE_URL is not the platform_app role: $(value DATABASE_URL | sed 's#:[^:@]*@#:***@#')"
 [[ "$(value MARKETPLACE_DATABASE_URL)" == postgresql://platform_app:* ]] || fail "MARKETPLACE_DATABASE_URL is not the platform_app role"
+[[ "$(value PLATFORM_RETENTION_DATABASE_URL)" == postgresql://platform_retention:*@127.0.0.1:*/platform_db ]] || fail "retention URL is not the dedicated role"
 [[ "$(value OPERATIONS_PLATFORM_DATABASE_URL)" == postgresql://platform_operations:* ]] || fail "OPERATIONS_PLATFORM_DATABASE_URL is not the platform_operations role"
 [[ "$(value OPERATIONS_MARKETPLACE_DATABASE_URL)" == postgresql://platform_operations:* ]] || fail "OPERATIONS_MARKETPLACE_DATABASE_URL is not the platform_operations role"
 for job in NOTIFICATION_DIGEST_SYSTEM_DATABASE_URL CONNECTOR_HEALTH_SWEEP_SYSTEM_DATABASE_URL; do

@@ -108,6 +108,7 @@ generate_values() {
   token="$(gen_hex 32)"; token_sha="$(printf %s "$token" | sha256_of)"
   cursor="$(gen_hex 32)"
   printf 'PLATFORM_DB_PASSWORD=%s\n' "$platform"
+  printf 'PLATFORM_RETENTION_DB_PASSWORD=%s\n' "$(gen_hex 24)"
   printf 'ENGINE_DB_ADMIN_PASSWORD=%s\n' "$admin"
   printf 'AUDIT_DB_PASSWORD=%s\n' "$audit"
   printf 'AUDIT_RETENTION_DB_PASSWORD=%s\n' "$(gen_hex 24)"
@@ -176,6 +177,7 @@ render() {
     val="${line#*=}"
     # URL interpolations:
     val="${val//<PLATFORM_DB_PASSWORD>/$PLATFORM_DB_PASSWORD}"
+    val="${val//<PLATFORM_RETENTION_DB_PASSWORD>/$PLATFORM_RETENTION_DB_PASSWORD}"
     val="${val//<ENGINE_DB_ADMIN_PASSWORD>/$ENGINE_DB_ADMIN_PASSWORD}"
     val="${val//<AUDIT_DB_PASSWORD>/$AUDIT_DB_PASSWORD}"
     val="${val//<INTELLIGENCE_DB_PASSWORD>/$INTELLIGENCE_DB_PASSWORD}"
@@ -185,6 +187,7 @@ render() {
     val="${val//<ADS_DB_PASSWORD>/$ADS_DB_PASSWORD}"
     # Generate-style placeholders on the password/token lines:
     val="${val//<generate-local-platform-password>/$PLATFORM_DB_PASSWORD}"
+    val="${val//<generate-local-retention-password>/$PLATFORM_RETENTION_DB_PASSWORD}"
     val="${val//<generate-local-admin-password>/$ENGINE_DB_ADMIN_PASSWORD}"
     val="${val//<generate-local-audit-password>/$AUDIT_DB_PASSWORD}"
     val="${val//<generate-local-audit-retention-password>/$AUDIT_RETENTION_DB_PASSWORD}"

@@ -50,6 +50,7 @@ describe("IdentityBrokerModule", () => {
 });
 
 function configureBaseEnvironment(): void {
+  process.env.PLATFORM_RETENTION_DATABASE_URL = "postgres://platform_retention:fixture-only@localhost:5432/platform_db";
   process.env.DATABASE_URL =
     "postgres://platform_api:platform_api_local@localhost:5432/platform_db";
   process.env.MARKETPLACE_DATABASE_URL =

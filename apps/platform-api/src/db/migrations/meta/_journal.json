@@ -232,6 +232,13 @@
       "when": 1790064000000,
       "tag": "0028_workspace_exports",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1790067600000,
+      "tag": "0029_staff_expiry",
+      "breakpoints": true
     }
   ]
 }

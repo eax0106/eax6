@@ -143,6 +143,7 @@ services:
       # platform-api resolves secret references as environment variable names;
       # tool-gateway resolves the same variable in Secrets Manager.
       SES_CREDENTIALS_SECRET_REF: env:SES_CREDENTIALS_JSON
+      PLATFORM_RETENTION_DATABASE_URL: ${PLATFORM_RETENTION_DATABASE_URL:?}
 
   # --- Python services -------------------------------------------------------
   ads-core:
