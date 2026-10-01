@@ -15,9 +15,9 @@ import {
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import type { EngineResponse } from "../engine";
-import { EtagConstrained, EtagResponseInterceptor } from "../concurrency";
+import { ConcurrencyHttpError, ConcurrencyExceptionFilter, EtagConstrained, EtagResponseInterceptor } from "../concurrency";
 import { Idempotent } from "../idempotency";
-import { ActorContext, RequireWorkspaceRole } from "../rbac";
+import { ActorContext, RequirePermission, RequireWorkspaceRole } from "../rbac";
 import type { ActorContextType } from "../rbac";
 import { WorkflowHttpError } from "./problem";
 import type {
@@ -28,6 +28,7 @@ import type {
 } from "./types";
 import {
   createWorkflowSchema,
+  approvalPolicySchema,
   emptyActionSchema,
   parseWorkflowInput,
   saveCanvasSchema,
@@ -42,6 +43,7 @@ import { WorkflowService } from "./workflow.service";
 
 const readRoles = ["admin", "editor", "operator", "approver", "viewer"] as const;
 const writeRoles = ["admin", "editor"] as const;
+const approvalRoles = ["admin", "operator", "approver"] as const;
 const operateRoles = ["admin", "editor", "operator"] as const;
 
 @Controller("/api/v1/workflows")
@@ -90,6 +92,45 @@ export class WorkflowController {
       ),
       reply,
     );
+  }
+
+  @Get(":workflowId/approval-policies")
+  @RequireWorkspaceRole(...readRoles)
+  @RequirePermission("human-actions:read")
+  async approvalPolicies(
+    @Param("workflowId") workflowId: string,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<WorkflowActionResult> {
+    const caller = requireActor(actor, `/api/v1/workflows/${workflowId}/approval-policies`);
+    const response = await this.workflows.approvalPolicies(workflowId, caller, traceparent);
+    const roles = caller.workspaceRoles === undefined ? caller.roles : caller.workspaceRoles
+      .filter(binding => binding.workspaceId === caller.workspace_id).map(binding => binding.role);
+    return { ...project(response, reply), can_edit: caller.permissions.includes("approvals:decide") &&
+      roles.some(role => approvalRoles.some(allowed => allowed === role)) };
+  }
+
+  @Put(":workflowId/approval-policies/:nodeKey")
+  @RequireWorkspaceRole(...approvalRoles)
+  @RequirePermission("approvals:decide")
+  @Idempotent()
+  @UseFilters(ConcurrencyExceptionFilter)
+  async setApprovalPolicy(
+    @Param("workflowId") workflowId: string,
+    @Param("nodeKey") nodeKey: string,
+    @Body() body: unknown,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+    @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply,
+  ): Promise<WorkflowActionResult> {
+    const instance = `/api/v1/workflows/${workflowId}/approval-policies/${nodeKey}`;
+    if (!ifMatch?.trim()) throw new ConcurrencyHttpError(428, "IF_MATCH_REQUIRED", "If-Match with the step's ETag is required", instance);
+    return project(await this.workflows.setApprovalPolicy(workflowId, nodeKey,
+      parseWorkflowInput(approvalPolicySchema, body, instance), requireActor(actor, instance),
+      traceparent, idempotencyKey!, ifMatch.trim()), reply);
   }
 
   @Get(":workflowId")

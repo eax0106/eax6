@@ -21,6 +21,16 @@ export const saveCanvasSchema = z
   })
   .strict();
 
+export const approvalPolicySchema = z.object({
+  mode: z.enum(["ask", "auto"]),
+  skip_on_timeout: z.boolean().default(false),
+  timeout_seconds: z.number().int().min(60).max(2_592_000).nullable().default(null),
+  confirm_consequence: z.string().max(500).optional(),
+}).strict().refine((input) => !input.skip_on_timeout || input.timeout_seconds !== null, {
+  message: "skip_on_timeout needs timeout_seconds", path: ["timeout_seconds"],
+});
+export type ApprovalPolicyInput = z.infer<typeof approvalPolicySchema>;
+
 export const emptyActionSchema = z.object({}).strict();
 
 export const simulateWorkflowSchema = z

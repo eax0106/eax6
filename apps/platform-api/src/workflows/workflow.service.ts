@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { CompiledDagSchema } from "@alterx/contracts";
 import { Injectable } from "@nestjs/common";
 import type { JsonValue } from "@alterx/shared-clients";
 import {
@@ -26,6 +27,8 @@ import type {
 } from "./types";
 import {
   parseTraceparent,
+  parseWorkflowInput,
+  type ApprovalPolicyInput,
   parseVersionQuery,
   withNameQuery,
   parseWorkflowId,
@@ -83,6 +86,25 @@ export class WorkflowService {
       `/api/v1/workflows/${encodeURIComponent(id)}`,
       callerContext(actor, traceparent, instance),
     );
+  }
+
+  approvalPolicies(
+    workflowId: string, actor: ActorContext, traceparent: string | undefined,
+  ): Promise<EngineResponse<WorkflowActionResult>> {
+    const instance = `/api/v1/workflows/${workflowId}/approval-policies`;
+    const id = parseWorkflowId(workflowId, instance);
+    return this.engine.get(`/api/v1/workflows/${encodeURIComponent(id)}/approval-policies`, callerContext(actor, traceparent, instance));
+  }
+
+  setApprovalPolicy(
+    workflowId: string, nodeKey: string, input: ApprovalPolicyInput, actor: ActorContext,
+    traceparent: string | undefined, idempotencyKey: string, ifMatch: string,
+  ): Promise<EngineResponse<WorkflowActionResult>> {
+    const instance = `/api/v1/workflows/${workflowId}/approval-policies/${nodeKey}`;
+    const id = parseWorkflowId(workflowId, instance);
+    const key = parseWorkflowInput(CompiledDagSchema.shape.nodes.element.shape.key, nodeKey, instance);
+    return this.engine.put(`/api/v1/workflows/${encodeURIComponent(id)}/approval-policies/${encodeURIComponent(key)}`,
+      jsonBody(input), callerContext(actor, traceparent, instance), { idempotencyKey, ifMatch });
   }
 
   saveCanvas(
