@@ -19,7 +19,7 @@ const BASE = "/api/v1/run-retention";
  * sweep applies it; this relays the web's routes through the caller's
  * identity and audits every change.
  */
-export class RunRetentionService {
+export class RunRetentionRelayService {
   constructor(
     private readonly engine: EngineClient,
     private readonly audit: AuditEventHandler,

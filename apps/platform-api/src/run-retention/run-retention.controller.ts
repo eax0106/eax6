@@ -2,15 +2,15 @@ import { Body, Controller, Get, Headers, Put, Query, Res } from "@nestjs/common"
 import type { FastifyReply } from "fastify";
 import { ActorContext, RequirePermission, RequireWorkspaceRole, type ActorContextType } from "../rbac";
 import { PlatformHttpError } from "../signup/problem";
-import { RunRetentionService } from "./run-retention.service";
+import { RunRetentionRelayService } from "./run-retention.service";
 
 const readRoles = ["admin", "editor", "operator", "approver", "viewer"] as const;
 const BASE = "/api/v1/run-retention";
 
 /** D2: the current workspace's run-history retention (7 to 365 days). */
 @Controller(BASE)
-export class RunRetentionController {
-  constructor(private readonly retention: RunRetentionService) {}
+export class RunRetentionRelayController {
+  constructor(private readonly retention: RunRetentionRelayService) {}
 
   @Get()
   @RequireWorkspaceRole(...readRoles)

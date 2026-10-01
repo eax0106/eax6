@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import { EngineProblemError, type EngineClient } from "../engine";
 import { permissionsForRoles } from "../rbac/permissions";
 import { permissionsMetadataKey, workspaceRolesMetadataKey } from "../rbac/rbac.metadata";
-import { RunRetentionController } from "./run-retention.controller";
+import { RunRetentionRelayController } from "./run-retention.controller";
 import type { ActorContext } from "../rbac/types";
-import { RunRetentionService } from "./run-retention.service";
+import { RunRetentionRelayService } from "./run-retention.service";
 
 const actor: ActorContext = {
   user_id: "018f4d6e-2b4a-7a3e-8c1a-1234567890a1",
@@ -24,11 +24,11 @@ function harness() {
     put: vi.fn(async () => ({ status: 200, body: view(30, '"after"') })),
   };
   const audit = { recordEvent: vi.fn(async () => ({})) };
-  const service = new RunRetentionService(engine as unknown as EngineClient, audit as unknown as AuditEventHandler);
+  const service = new RunRetentionRelayService(engine as unknown as EngineClient, audit as unknown as AuditEventHandler);
   return { engine, audit, service };
 }
 
-describe("RunRetentionService relay (D2)", () => {
+describe("RunRetentionRelayService relay (D2)", () => {
   it("grants runs:retention:write to workspace admins only", () => {
     expect(permissionsForRoles(["admin"])).toContain("runs:retention:write");
     for (const role of ["editor", "operator", "approver", "viewer", "member", "billing"]) {
@@ -38,8 +38,8 @@ describe("RunRetentionService relay (D2)", () => {
 
   it("lets only a workspace admin with the grant preview or change it", () => {
     for (const method of ["preview", "set"] as const) {
-      expect(Reflect.getMetadata(workspaceRolesMetadataKey, RunRetentionController.prototype[method])).toEqual(["admin"]);
-      expect(Reflect.getMetadata(permissionsMetadataKey, RunRetentionController.prototype[method])).toEqual(["runs:retention:write"]);
+      expect(Reflect.getMetadata(workspaceRolesMetadataKey, RunRetentionRelayController.prototype[method])).toEqual(["admin"]);
+      expect(Reflect.getMetadata(permissionsMetadataKey, RunRetentionRelayController.prototype[method])).toEqual(["runs:retention:write"]);
     }
   });
 
