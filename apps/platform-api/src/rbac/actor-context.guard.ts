@@ -47,12 +47,17 @@ export class ActorContextGuard implements CanActivate {
           WHERE tenant_id = $1 AND user_id = $2`,
         [session.tenantId, session.userId],
       );
+      // D2: no workspace role is granted in a workspace pending deletion, so
+      // its workspace-scoped routes (runs, triggers, settings) are refused
+      // until it is restored.
       const workspaceRoles = await this.db.queryTenant<RoleRow>(
         session.tenantId,
-        `SELECT role, workspace_id AS "workspaceId"
-           FROM workspace_members
-          WHERE tenant_id = $1 AND user_id = $2
-          ORDER BY created_at ASC, workspace_id ASC`,
+        `SELECT m.role, m.workspace_id AS "workspaceId"
+           FROM workspace_members m
+           JOIN workspaces w ON w.id = m.workspace_id AND w.tenant_id = m.tenant_id
+          WHERE m.tenant_id = $1 AND m.user_id = $2
+            AND w.status <> 'pending_deletion'
+          ORDER BY m.created_at ASC, m.workspace_id ASC`,
         [session.tenantId, session.userId],
       );
       request.actorContext = {

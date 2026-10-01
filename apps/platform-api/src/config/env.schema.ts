@@ -6,6 +6,8 @@ export const platformApiEnvSchema = z
     PLATFORM_RETENTION_DATABASE_URL: z.string().url().optional(),
     MARKETPLACE_DATABASE_URL: z.string().url(),
     MARKETPLACE_SEARCH_CURSOR_SECRET: z.string().min(1),
+    // D2: how long a deleted workspace stays restorable before it is erased.
+    WORKSPACE_DELETION_WINDOW_DAYS: z.coerce.number().int().min(1).max(30).default(7),
     OPERATIONS_PLATFORM_DATABASE_URL: z.string().url().optional(),
     OPERATIONS_MARKETPLACE_DATABASE_URL: z.string().url().optional(),
     // Reserved for platform cache wiring in a later ticket.

@@ -12,17 +12,38 @@ export interface WorkspaceView {
   updatedAt: Date;
 }
 
+export interface PendingDeletionWorkspaceView extends WorkspaceView {
+  deletionRequestedAt: Date;
+  deletionDueAt: Date;
+}
+
 export class WorkspacesService {
   constructor(private readonly db: PlatformDb) {}
 
+  // D2: a workspace pending deletion is hidden from the normal list and shown
+  // only in listPendingDeletion, where an admin can restore it.
   list(actor: ActorContext): Promise<WorkspaceView[]> {
     return this.db.queryTenant<WorkspaceView>(
       actor.tenant_id,
       `SELECT id, tenant_id AS "tenantId", name, status,
               updated_at AS "updatedAt"
          FROM workspaces
-        WHERE tenant_id = $1
+        WHERE tenant_id = $1 AND status <> 'pending_deletion'
         ORDER BY created_at`,
+      [actor.tenant_id],
+    );
+  }
+
+  listPendingDeletion(actor: ActorContext): Promise<PendingDeletionWorkspaceView[]> {
+    return this.db.queryTenant<PendingDeletionWorkspaceView>(
+      actor.tenant_id,
+      `SELECT id, tenant_id AS "tenantId", name, status,
+              updated_at AS "updatedAt",
+              deletion_requested_at AS "deletionRequestedAt",
+              deletion_due_at AS "deletionDueAt"
+         FROM workspaces
+        WHERE tenant_id = $1 AND status = 'pending_deletion'
+        ORDER BY deletion_due_at`,
       [actor.tenant_id],
     );
   }
