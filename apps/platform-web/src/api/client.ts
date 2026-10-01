@@ -52,7 +52,7 @@ import {
   type HumanAction, type HumanActionType, type HumanAnnotation, type RecoveryEvent, type WorkflowHealth, type NodeVerification,
   type Conversation, type ConversationMessage, type Trigger, type WebhookEndpoint, type IncomingEvent, type DashboardOverview,
   type KnowledgeSource, type KnowledgeDocument, type IntegrationDefinition, type Connection,
-  type Credential, type WhatsAppChannel, type MemoryConfiguration, type RetrievalResult
+  type Credential, type WhatsAppChannel, type WhatsAppTemplate, type WhatsAppTestMessage, type MemoryConfiguration, type RetrievalResult
 } from "./types"
 
 const MOCK_DELAY = 600
@@ -1326,15 +1326,20 @@ class ApiClient {
     return ch
   }
 
-  async testWhatsAppChannel(_id: string): Promise<{ success: boolean; message: string }> {
-    // Not wired -- the real action (POST .../accounts/:id/test-send)
-    // sends an actual WhatsApp template message to a real phone number
-    // and needs {to, templateName, languageCode?} that nothing on
-    // WhatsAppChannel captures. Needs a real "send test message" form
-    // first (recipient + template picker), not a client.ts swap. See PR
-    // description.
+  async getWhatsAppTemplates(id: string): Promise<WhatsAppTemplate[]> {
+    if (isLiveApi) return live.getWhatsAppTemplates(id)
     await delay(MOCK_DELAY)
-    return { success: true, message: "Test message sent successfully." }
+    if (!mockWhatsAppChannels.some(channel => channel.id === id)) throw new Error("WhatsApp account not found")
+    return [{ name: "hello_world", language: "en_US", status: "APPROVED" }]
+  }
+
+  async testWhatsAppChannel(id: string, message: WhatsAppTestMessage, requestKey: string): Promise<{ messageId: string }> {
+    if (isLiveApi) return live.testWhatsAppChannel(id, message, requestKey)
+    const templates = await this.getWhatsAppTemplates(id)
+    if (!/^[1-9][0-9]{6,14}$/.test(message.to) || !templates.some(template => template.name === message.templateName && template.language === message.languageCode)) {
+      throw new Error("Enter a recipient and select an approved template")
+    }
+    return { messageId: `mock-${id}-${requestKey}` }
   }
 
   async deleteWhatsAppChannel(id: string): Promise<void> {
