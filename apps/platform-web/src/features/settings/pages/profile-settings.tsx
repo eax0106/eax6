@@ -71,18 +71,20 @@ export function ProfileSettings() {
                 {profile.name.substring(0, 2).toUpperCase()}
               </AvatarFallback>
             </Avatar>
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" type="button" className="gap-2">
-                  <Upload className="h-4 w-4" />
-                  Change photo
-                </Button>
-                <Button variant="ghost" size="sm" type="button" className="text-danger hover:bg-danger/10 hover:text-danger">
-                  Remove
-                </Button>
+            {!isLiveApi && (
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" type="button" className="gap-2">
+                    <Upload className="h-4 w-4" />
+                    Change photo
+                  </Button>
+                  <Button variant="ghost" size="sm" type="button" className="text-danger hover:bg-danger/10 hover:text-danger">
+                    Remove
+                  </Button>
+                </div>
+                <p className="text-xs text-text-muted">JPG, GIF or PNG. 1MB max.</p>
               </div>
-              <p className="text-xs text-text-muted">JPG, GIF or PNG. 1MB max.</p>
-            </div>
+            )}
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
