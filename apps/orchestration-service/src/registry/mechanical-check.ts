@@ -47,9 +47,7 @@ export function mechanicalCheck(
 }
 
 export class MechanicalCheckFailedError extends Error {
-  readonly code = "MECHANICAL_CHECK_FAILED";
-
-  constructor(detail: string) {
+  constructor(detail: string, readonly code = "MECHANICAL_CHECK_FAILED") {
     super(detail);
     this.name = "MechanicalCheckFailedError";
   }

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   NodeexecGrpcController,
+  RECOVERY_CLARIFICATION_PREFIX,
   SAFETY_VIOLATION_PREFIX,
   type NodeexecHandler,
 } from "./nodeexec-grpc-transport";
@@ -26,6 +27,10 @@ async function rpcError(controller: NodeexecGrpcController): Promise<{ code: num
 }
 
 describe("NodeexecGrpcController error mapping", () => {
+  it.each(["TARGET_MISSING", "AMBIGUOUS_OUTCOME"])("marks %s as a clarification across the wire", async code => {
+    const mapped = await rpcError(controllerThrowing(Object.assign(new Error("Review the external target"), { code })));
+    expect(mapped).toEqual({ code: status.FAILED_PRECONDITION, message: `${RECOVERY_CLARIFICATION_PREFIX}Review the external target` });
+  });
   it("carries a safety halt across the wire as its own marked failure (design log §4)", async () => {
     const error = new Error("Verify Gate blocked node output as a safety violation; the workflow halts");
     error.name = "SafetyViolationError";

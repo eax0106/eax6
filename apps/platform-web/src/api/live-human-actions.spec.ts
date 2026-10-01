@@ -8,8 +8,8 @@ vi.mock("./http", () => ({
   mutationKey: (prefix: string) => `${prefix}-test-key`,
 }))
 
-import { apiGet } from "./http"
-import { getHumanAction, getHumanActions } from "./live"
+import { apiGet, apiPost } from "./http"
+import { answerHumanAction, getHumanAction, getHumanActions } from "./live"
 import type { HumanActionFilters } from "./types"
 
 // One page per source lifecycle, shaped as /api/v1/action-centre returns it.
@@ -44,6 +44,16 @@ async function ids(filters?: HumanActionFilters) {
 }
 
 describe("One human action", () => {
+  it("shows the recovery question and answers through the run-scoped clarification route", async () => {
+    const item = { id: "clr_recovery", status: "open", run_id: "run_recovery", node_execution_id: "node_action",
+      description: "The outcome is uncertain. Check the external system; Alter will not retry or swap this step." }
+    vi.mocked(apiGet).mockResolvedValue({ source_type: "clarification", item })
+    expect(await getHumanAction(item.id)).toMatchObject({ type: "clarification", runId: item.run_id, description: item.description })
+    vi.mocked(apiPost).mockResolvedValue({ ...item, status: "answered", answer: "Checked external system" })
+    expect(await answerHumanAction(item.id, { comment: "Checked external system" })).toMatchObject({ type: "clarification", status: "answered", runId: item.run_id })
+    expect(apiPost).toHaveBeenCalledWith("/api/v1/runs/run_recovery/clarifications/clr_recovery/answer", { note: "Checked external system" })
+  })
+
   it("is read by its own id, not by loading the queue and searching it", async () => {
     const item = { source_type: "escalation", item: { id: "esc_1", status: "claimed" } }
     vi.mocked(apiGet).mockReset()

@@ -63,7 +63,7 @@ export class AgentCreationFailedError extends Error {
  * Carries its own code so Recovery sees why, not a generic failure.
  */
 export class SideEffectAlreadyAppliedError extends Error {
-  readonly code = "SIDE_EFFECT_ALREADY_APPLIED";
+  readonly code = "AMBIGUOUS_OUTCOME";
 
   constructor(nodeKey: string, toolName: string, priorStatus: string) {
     super(
@@ -191,6 +191,7 @@ export class NodeexecService {
 
     let boundAgentId: string | undefined;
     let executedMetadata: Record<string, unknown> | undefined;
+    let externalActionPending = false;
     const executionStartedAtMs = Date.now();
     try {
       const config = parseJsonObject(request.config_json, "config_json");
@@ -217,6 +218,7 @@ export class NodeexecService {
       boundAgentId = agentBinding.agent_id;
       const successCriteria = request.success_criteria ?? [];
       const sideEffectId = await this.#passIdempotencyGate(request, executionConfig);
+      externalActionPending = sideEffectId !== undefined;
       const result = await this.registry.execute(request.node_type, {
         config: executionConfig,
         inputs,
@@ -237,7 +239,14 @@ export class NodeexecService {
 
       executedMetadata = result.metadata;
       if (sideEffectId !== undefined) {
+        const failure = ProblemDetailsSchema.safeParse(result.output);
+        if (failure.success && failure.data.status >= 400 && ![
+          "TOOL_CALL_VALIDATION_FAILED", "TOOL_GATEWAY_PERMISSION_DENIED", "TOOL_GATEWAY_RATE_LIMITED", "TOOL_NOT_IMPLEMENTED",
+        ].includes(failure.data.error_code)) {
+          throw Object.assign(new Error(failure.data.detail), { code: "AMBIGUOUS_OUTCOME" });
+        }
         await this.#settleSideEffect(request.tenant_id, sideEffectId, result);
+        externalActionPending = false;
       }
       if (request.node_type === "SandboxExec") {
         await this.#appendTerminalFramesBestEffort(request, result.output);
@@ -305,7 +314,9 @@ export class NodeexecService {
         if (mechanical !== undefined) {
           metadata = { ...metadata, mechanical_check: mechanical };
           if ("confirmed" in mechanical && !mechanical.confirmed) {
-            throw new MechanicalCheckFailedError(mechanical.reason);
+            const missingTarget = ["database.insert", "database.update", "database.delete"].includes(String(executionConfig["tool_name"])) &&
+              result.output["rowCount"] === 0;
+            throw new MechanicalCheckFailedError(mechanical.reason, missingTarget ? "TARGET_MISSING" : "AMBIGUOUS_OUTCOME");
           }
         }
         const verification = await this.verifyGate?.scoreNodeInline({
@@ -373,7 +384,9 @@ export class NodeexecService {
       }
       return { output_json: outputJson, metadata_json: JSON.stringify(metadata) };
     } catch (error: unknown) {
-      const failure = persistedError(error);
+      const failure = externalActionPending && !(error instanceof SafetyViolationError)
+        ? { code: "AMBIGUOUS_OUTCOME", detail: persistedError(error).detail }
+        : persistedError(error);
       await this.ledger.recordFailed(
         {
           tenantId: request.tenant_id,
@@ -396,6 +409,9 @@ export class NodeexecService {
       // is never asked to find a way to keep going.
       if (!(error instanceof SafetyViolationError)) {
         await this.#triggerRecoveryForFailureBestEffort(request, failure);
+      }
+      if (externalActionPending && failure.code === "AMBIGUOUS_OUTCOME") {
+        throw Object.assign(new Error(failure.detail), { code: failure.code });
       }
       throw error;
     }

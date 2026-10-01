@@ -68,6 +68,8 @@ import { ApprovalPolicyService } from "./approvals/approval-policy.service";
 import { ApprovalsService } from "./approvals/approvals.service";
 import { EscalationsController } from "./escalations/escalations.controller";
 import { EscalationsService } from "./escalations/escalations.service";
+import { ClarificationsService } from "./clarifications/clarifications.service";
+import { RecoveryClarificationController } from "./clarifications/clarifications.controller";
 import { createRuntimeNodeHandlerRegistry } from "./registry/node-handler-registry";
 import { PostgresVerificationGateReader } from "./registry/verification-gate-reader";
 import { PostgresRunFinalizationMemoryWriter } from "./registry/run-finalization-memory-writer";
@@ -169,6 +171,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     capabilityResolverForRecovery,
     selectionBinding,
     escalations,
+    new ClarificationsService(store, durable),
   );
   return new RecoveryPolicyService(
     store,
@@ -215,9 +218,21 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     ApprovalsController,
     ApprovalPoliciesController,
     EscalationsController,
+    RecoveryClarificationController,
     NodeTypeController,
   ],
   providers: [
+    {
+      provide: ClarificationsService,
+      useFactory: () => {
+        const dbConfig = sessionGatewayEnvironment(process.env);
+        const config = loadRunLauncherEnvironment(process.env);
+        return new ClarificationsService(orchestrationStore(dbConfig), new TemporalDurableExecutionProvider({
+          address: config.temporalAddress, namespace: config.temporalNamespace, taskQueue: config.taskQueue,
+          ...(config.temporalApiKey === undefined ? {} : { apiKey: config.temporalApiKey }),
+        }));
+      },
+    },
     {
       provide: WorkspaceHoldsService,
       useFactory: () => new WorkspaceHoldsService(orchestrationStore(sessionGatewayEnvironment(process.env))),

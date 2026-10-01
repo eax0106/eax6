@@ -1366,7 +1366,7 @@ describe("NodeexecService mechanical check", () => {
 
     expect(scoreNodeInline).not.toHaveBeenCalled();
     expect(ledger.recordSucceeded).not.toHaveBeenCalled();
-    expect(ledger.recordFailed).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ code: "MECHANICAL_CHECK_FAILED" }));
+    expect(ledger.recordFailed).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ code: "TARGET_MISSING" }));
   });
 
   it("passes a confirmed write on to the semantic gate and records the basis", async () => {
@@ -1440,8 +1440,8 @@ describe("NodeexecService idempotency gate", () => {
 
     expect(execute).not.toHaveBeenCalled();
     expect(ledger["recordSideEffectAttempt"]).not.toHaveBeenCalled();
-    expect(ledger["recordFailed"]).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ code: "SIDE_EFFECT_ALREADY_APPLIED" }));
-    expect(recovery.triggerForFailedNode).toHaveBeenCalledWith(expect.objectContaining({ errorCode: "SIDE_EFFECT_ALREADY_APPLIED" }));
+    expect(ledger["recordFailed"]).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ code: "AMBIGUOUS_OUTCOME" }));
+    expect(recovery.triggerForFailedNode).toHaveBeenCalledWith(expect.objectContaining({ errorCode: "AMBIGUOUS_OUTCOME" }));
   });
 
   it("withdraws the attempt when the call was refused before dispatch", async () => {
