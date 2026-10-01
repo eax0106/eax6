@@ -1,3 +1,4 @@
+import { createSign, generateKeyPairSync } from "node:crypto";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -35,6 +36,7 @@ const tavilyRequests: TavilyRequest[] = [];
 let tavilyServer: Server;
 let toolGatewayProcess: ChildProcessWithoutNullStreams;
 let handler: ToolCallHandler;
+let address: string;
 
 describe("ToolCallHandler real Tool Gateway boundary", () => {
   beforeAll(async () => {
@@ -44,7 +46,20 @@ describe("ToolCallHandler real Tool Gateway boundary", () => {
       );
     }
 
+    const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const key = { ...pair.publicKey.export({ format: "jwk" }), kid: "toolcall-fixture", alg: "RS256", use: "sig" };
+    const accessTokenProvider = { getAccessToken: async () => {
+      const now = Math.floor(Date.now() / 1000);
+      const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
+      const input = `${encode({ alg: "RS256", kid: key.kid, typ: "JWT" })}.${encode({ iss: "https://toolcall-auth.test/", aud: "alter-engine", iat: now, exp: now + 300 })}`;
+      return `${input}.${createSign("RSA-SHA256").update(input).sign(pair.privateKey).toString("base64url")}`;
+    } };
     tavilyServer = createServer((request, response) => {
+      if (request.url === "/.well-known/jwks.json") {
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end(JSON.stringify({ keys: [key] }));
+        return;
+      }
       const chunks: Buffer[] = [];
       request.on("data", (chunk: Buffer) => chunks.push(chunk));
       request.on("end", () => {
@@ -68,11 +83,15 @@ describe("ToolCallHandler real Tool Gateway boundary", () => {
     });
     const tavilyPort = await listenOnRandomPort(tavilyServer);
     const grpcPort = await availableTcpPort();
+    address = `127.0.0.1:${grpcPort}`;
 
     toolGatewayProcess = spawn(process.execPath, [SERVER_PATH], {
       cwd: process.cwd(),
       env: {
         ...process.env,
+        AUTH0_DOMAIN: "toolcall-auth.test",
+        API_AUDIENCE: "alter-engine",
+        AUTH0_JWKS_URL: `http://127.0.0.1:${tavilyPort}/.well-known/jwks.json`,
         TOOLGW_E2E_CREDENTIAL_REF: CREDENTIAL_REF,
         TOOLGW_E2E_GRPC_ADDRESS: `127.0.0.1:${grpcPort}`,
         TOOLGW_E2E_PROTO_PATH: PROTO_PATH,
@@ -85,7 +104,8 @@ describe("ToolCallHandler real Tool Gateway boundary", () => {
     await waitForReady(toolGatewayProcess);
     handler = new ToolCallHandler(
       new ToolGatewayClient({
-        address: `127.0.0.1:${grpcPort}`,
+        address,
+        accessTokenProvider,
         protoPath: PROTO_PATH,
         timeoutMs: 5_000,
       }),
@@ -95,6 +115,14 @@ describe("ToolCallHandler real Tool Gateway boundary", () => {
   afterAll(async () => {
     toolGatewayProcess?.kill("SIGTERM");
     await closeServer(tavilyServer);
+  });
+
+  it("refuses calls without service authentication before reaching the tool", async () => {
+    const before = tavilyRequests.length;
+    const unauthorized = new ToolCallHandler(new ToolGatewayClient({ address, protoPath: PROTO_PATH, timeoutMs: 5_000 }));
+    const result = await unauthorized.execute(executionContext("search.web", { query: "must not be sent", maxResults: 2 }));
+    expect(ProblemDetailsSchema.parse(result.output)).toMatchObject({ status: 502, error_code: "TOOL_GATEWAY_INTERNAL_ERROR" });
+    expect(tavilyRequests).toHaveLength(before);
   });
 
   it("calls spawned Tool Gateway -> real search.web -> Tavily adapter", async () => {
