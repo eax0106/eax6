@@ -1711,6 +1711,12 @@ function mapHumanAction(wrapper: unknown): HumanAction {
     projectName: item.project_name,
     nodeId: item.node_execution_id,
     nodeName: item.node_name ?? "Node",
+    ...(type === "approval" ? {
+      approvalNodeKey: item.node_key ?? undefined,
+      approvalMode: item.mode === "auto" ? "auto" : "ask",
+      approvalStatus: item.status,
+      policySetBy: item.policy_set_by ?? undefined,
+    } : {}),
     createdAt: asDate(item.requested_at ?? item.created_at ?? item.createdAt),
     dueAt: item.expiry_at ? asDate(item.expiry_at) : undefined,
     claimedBy: item.assigned_to ? { id: item.assigned_to, name: "Assigned User" } : undefined,
@@ -1724,7 +1730,7 @@ function mapHumanActionStatus(value: unknown, type: HumanActionType): HumanActio
   if (type === "approval") {
     if (value === "pending") return "open"
     if (value === "approved" || value === "rejected") return "resolved"
-    if (value === "expired") return "expired"
+    if (value === "expired" || value === "skipped") return "expired"
     throw new Error("Unsupported approval status")
   }
   if (value === "pending" || value === "open") return "open"

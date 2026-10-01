@@ -28,6 +28,9 @@ import type {
   RepositoryBranch,
   RepositoryPullRequest,
 } from "./types"
+import * as approvalPoliciesLive from "./live-approval-policies"
+import * as approvalPoliciesMock from "./mock/approval-policies"
+import type { ApprovalPolicyChange } from "./types"
 import * as live from "./live"
 import * as liveDataExport from "./live-data-export"
 import { 
@@ -312,6 +315,13 @@ class ApiClient {
     if (isLiveApi) return live.getRunEstimate(id)
     await delay(MOCK_DELAY)
     return { atMostMinor: 1250, usuallyMinor: null, sampleRuns: 0, unpricedCalls: 0 }
+  }
+
+  async getApprovalPolicies(workflowId: string) {
+    return isLiveApi ? approvalPoliciesLive.getApprovalPolicies(workflowId) : approvalPoliciesMock.getMockApprovalPolicies(workflowId)
+  }
+  async setApprovalPolicy(workflowId: string, nodeKey: string, change: ApprovalPolicyChange, etag: string) {
+    return isLiveApi ? approvalPoliciesLive.setApprovalPolicy(workflowId, nodeKey, change, etag) : approvalPoliciesMock.setMockApprovalPolicy(workflowId, nodeKey, change, etag)
   }
 
   async getWorkflowSafeguards(id: string): Promise<WorkflowSafeguards> {

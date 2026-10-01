@@ -466,7 +466,7 @@ export interface TestResult {
 
 export type HumanActionType = "approval" | "clarification" | "escalation"
 // Engine approval API vocabulary. UI tabs use HumanActionTab below.
-export const approvalStatuses = ["pending", "approved", "rejected", "expired"] as const
+export const approvalStatuses = ["pending", "approved", "rejected", "expired", "skipped"] as const
 export type ApprovalStatus = typeof approvalStatuses[number]
 // Approval API status is separate from UI action lifecycle status.
 export type HumanActionStatus = "open" | "claimed" | "resolved" | "expired" | "cancelled"
@@ -524,6 +524,10 @@ export interface HumanAction {
   projectName?: string
   nodeId?: string
   nodeName?: string
+  approvalNodeKey?: string
+  approvalMode?: "ask" | "auto"
+  approvalStatus?: ApprovalStatus
+  policySetBy?: string
   createdAt: string
   dueAt?: string
   claimedBy?: UserSummary
@@ -1343,4 +1347,26 @@ export interface RunCostEstimate {
   sampleRuns: number
   /** Model calls with no price on record: the worst case is too low by their share. */
   unpricedCalls: number
+}
+
+export interface ApprovalPolicyStep {
+  nodeKey: string
+  mode: "ask" | "auto"
+  sideEffectConsequence: string | null
+  autoConfirmedBy: string | null
+  autoConfirmedAt: string | null
+  skipOnTimeout: boolean
+  timeoutSeconds: number | null
+  consecutiveApprovals: number
+  promotionSuggested: boolean
+  setBy: string | null
+  updatedAt: string | null
+  etag: string
+}
+export interface ApprovalPolicies { policies: ApprovalPolicyStep[]; canEdit: boolean }
+export interface ApprovalPolicyChange {
+  mode: "ask" | "auto"
+  skipOnTimeout: boolean
+  timeoutSeconds: number | null
+  confirmConsequence?: string
 }

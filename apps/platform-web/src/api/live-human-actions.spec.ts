@@ -94,3 +94,8 @@ describe("Human Actions tabs over approvals, escalations and clarifications", ()
     ])
   })
 })
+
+it("keeps policy context and closes skipped approvals", async () => {
+  vi.mocked(apiGet).mockResolvedValue({ source_type: "approval", item: { id: "apr_1", status: "skipped", workflow_id: "wf_1", node_key: "approval", mode: "auto", policy_set_by: "usr_1" } })
+  expect(await getHumanAction("apr_1")).toMatchObject({ status: "expired", workflowId: "wf_1", approvalNodeKey: "approval", approvalMode: "auto", approvalStatus: "skipped", policySetBy: "usr_1" })
+})
