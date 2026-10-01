@@ -26,6 +26,11 @@ overrides:
   '@grpc/grpc-js@<1.14.5': 1.14.5
   smol-toml@<=1.7.0: ^1.7.1
 
+patchedDependencies:
+  dotenv-expand@12.0.3:
+    hash: atzhhaxnokny5cgdkbonwwjuom
+    path: patches/dotenv-expand@12.0.3.patch
+
 importers:
 
   .:
@@ -14302,7 +14307,7 @@ snapshots:
 
   dom-accessibility-api@0.5.16: {}
 
-  dotenv-expand@12.0.3:
+  dotenv-expand@12.0.3(patch_hash=atzhhaxnokny5cgdkbonwwjuom):
     dependencies:
       dotenv: 16.4.7
 
@@ -15868,7 +15873,7 @@ snapshots:
       define-lazy-prop: 3.0.0
       delayed-stream: 1.0.0
       dotenv: 16.4.7
-      dotenv-expand: 12.0.3
+      dotenv-expand: 12.0.3(patch_hash=atzhhaxnokny5cgdkbonwwjuom)
       dunder-proto: 1.0.1
       ejs: 5.0.1
       emoji-regex: 8.0.0
