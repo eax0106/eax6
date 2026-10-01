@@ -49,6 +49,8 @@ import { runLearningAuditClient } from "./runs/run-learning-audit";
 import { RecoveryFeedController } from "./runs/recovery-feed.controller";
 import { WorkspaceHoldsController } from "./workspace-holds/workspace-holds.controller";
 import { WorkspaceHoldsService } from "./workspace-holds/workspace-holds.service";
+import { RunRetentionController } from "./run-retention/run-retention.controller";
+import { RunRetentionService } from "./run-retention/run-retention.service";
 import { DeploymentChangesController } from "./deployment-feed/deployment-changes.controller";
 import { DeploymentChangesService } from "./deployment-feed/deployment-changes.service";
 import { EngineWorkspaceExportController } from "./workspace-export/workspace-export.controller";
@@ -202,6 +204,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     RunObservabilityController,
     RecoveryFeedController,
     WorkspaceHoldsController,
+    RunRetentionController,
     DeploymentChangesController,
     EngineWorkspaceExportController,
     AgentWorkflowsController,
@@ -215,6 +218,10 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: WorkspaceHoldsService,
       useFactory: () => new WorkspaceHoldsService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+    },
+    {
+      provide: RunRetentionService,
+      useFactory: () => new RunRetentionService(orchestrationStore(sessionGatewayEnvironment(process.env))),
     },
     {
       provide: EngineWorkspaceExportService,

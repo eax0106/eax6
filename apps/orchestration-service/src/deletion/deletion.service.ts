@@ -8,6 +8,8 @@ import type {
 } from "@alterx/contracts";
 import { TenantIdSchema } from "@alterx/contracts";
 
+import { sweepRunHistory } from "../run-retention/run-retention.service";
+
 interface TransactionLike {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
     statement: string,
@@ -39,6 +41,7 @@ export const TABLES = [
   "escalations", "run_dispatch_queue", "side_effects",
   "budgets", "budget_usage", "budget_reservations",
   "workspace_holds",
+  "workspace_run_retention",
 ] as const;
 // Children before parents. A child ordered after a table it has a plain FK
 // to makes the DELETE fail outright; a child ordered after a table it has
@@ -58,7 +61,7 @@ export const TABLES = [
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
-  "workspace_holds", "budget_reservations", "budget_usage", "budgets", "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
+  "workspace_holds", "workspace_run_retention", "budget_reservations", "budget_usage", "budgets", "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
   "deployments", "artifacts", "escalations", "project_plans", "recovery_actions",
   "run_dispatch_queue", "run_outcomes", "run_stream_events", "side_effects", "trigger_integration_bindings",
   "trigger_webhook_secrets", "verification_results", "node_executions", "runs", "events",
@@ -136,6 +139,8 @@ export class OrchestrationDeletionService implements DeletionProvider {
         changed += (await tx.query("DELETE FROM conversation_goal_states WHERE tenant_id=$1 AND conversation_id=$2", [tenant, row.id])).rowCount;
         changed += (await tx.query("DELETE FROM conversations WHERE tenant_id=$1 AND id=$2", [tenant, row.id])).rowCount;
       }
+      // D2: each workspace's run-history retention (365 days unless set).
+      changed += await sweepRunHistory(tx, tenant);
       return changed;
     });
     return { store: STORE, deletedRows, deletedObjects: 0, sweptAt: new Date().toISOString() };

@@ -316,6 +316,13 @@
       "when": 1786994040000,
       "tag": "0044_create_workspace_holds",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1786997640000,
+      "tag": "0045_create_workspace_run_retention",
+      "breakpoints": true
     }
   ]
 }
