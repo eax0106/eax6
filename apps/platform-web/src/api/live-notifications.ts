@@ -61,6 +61,7 @@ export async function markAllRead(): Promise<void> {
 export async function getPreferences(): Promise<NotificationPreference[]> {
   const rows = (await apiGet<unknown>("/api/v1/notifications/preferences")) as AnyRecord[]
   const enabled = (eventClass: EventClass, channel: "in_app" | "email") => {
+    if (eventClass === "approval" && channel === "in_app") return true
     const row = (Array.isArray(rows) ? rows : []).find((r) => r.eventClass === eventClass && r.channel === channel)
     // The API delivers on both channels until a preference says otherwise.
     return row ? row.enabled === true : true
@@ -77,7 +78,7 @@ export async function updatePreferences(preferences: NotificationPreference[]): 
     const eventClass = classByCategory[preference.category]
     if (!eventClass) return []
     return [
-      { event_class: eventClass, channel: "in_app", enabled: preference.inApp },
+      { event_class: eventClass, channel: "in_app", enabled: eventClass === "approval" || preference.inApp },
       { event_class: eventClass, channel: "email", enabled: preference.email },
     ]
   })
