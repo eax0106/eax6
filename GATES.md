@@ -1,25 +1,30 @@
-# Gates: knowledge document deletion (C96)
+# Gates: D13 recovery clarification routes (C95)
 
-OWNS: apps/platform-web/src/features/knowledge/components/document-list*, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/live.ts, apps/platform-web/src/api/live-knowledge.spec.ts, apps/platform-web/src/api/knowledge-delete-mock.spec.ts, docs/work-queue.md
+OWNS: apps/orchestration-service/src/recovery/**, apps/orchestration-service/src/registry/**, apps/orchestration-service/src/clarifications/**, apps/orchestration-service/src/execution-runtime.module.ts, apps/orchestration-service/db/schema/clarifications.ts, apps/orchestration-service/drizzle/**, apps/orchestration-service/src/database/**, apps/orchestration-service/src/deletion/**, apps/platform-web/src/api/**, packages/adapters/src/grpc/nodeexec-grpc-transport*, packages/adapters/src/temporal/activities/executor-activities*, docs/work-queue.md
 
-Scope: Each knowledge document has a confirmed delete action through the existing tenant/workspace guarded endpoint. Success refreshes documents and source counts; failure keeps the row and displays an error. Mock behavior removes only the requested document.
+Scope: Missing targets produce a redirect/recreate question. Ambiguous side effects require clarification without retry or swap, including promoted policies and repeated recovery. Existing tenant-scoped clarification and D1 notice routes carry the request.
 
-- [x] G1: Rendered live document rows confirm before deletion, send the actual route, refresh on success and preserve the row on failure
-  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/knowledge/components/document-list.spec.tsx apps/platform-web/src/api/live-knowledge.spec.ts && echo knowledge-delete-live-passed
-  EXPECT: knowledge-delete-live-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=f1449af0b3e5e6e7cfef8d7efebcd6910707150bedc0f805abddf7191b64e4e6; exit=0; EXPECT=matched; output-sha256=5c28946cfe5ffc572cbc7fa2f7c9c3f220eae726c5ff7258c9237a8bd28dae3c; output-bytes=274; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
+- [x] G1: Recovery dispatch persists real tenant-scoped clarifications with the correct questions and never retries ambiguous side effects
+  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/recovery/recovery-clarification.integration.spec.ts apps/orchestration-service/src/recovery/recovery-dispatch.service.spec.ts -t 'Postgres|HTTP|RecoveryDispatch' && echo recovery-clarification-passed
+  EXPECT: recovery-clarification-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b0f94b0f36247f172dfc55c4ef55b857bc6d4c9389395f7cf4296711e1b9e98c; exit=0; EXPECT=matched; output-sha256=701d242cbdcf1fe221044a4f48878644ac9ca6a370f5d775c93b4d4757a23ee7; output-bytes=665; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Mock deletion removes only its selected document and refreshes source counts
-  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/api/knowledge-delete-mock.spec.ts && echo knowledge-delete-mock-passed
-  EXPECT: knowledge-delete-mock-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=f18e2a60ac71b2e666c859f1d52b8f016c9434c497b0df9b47b918d5cb522a5f; exit=0; EXPECT=matched; output-sha256=dec0575637a7a041c6001b70ecd7d69219bbe0b21a44efe8a8f9677a781dd051; output-bytes=274; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
+- [x] G2: Actual tool and node producers emit missing-target and ambiguous-outcome observations, and policy routing stays clarification only
+  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/registry/nodeexec.service.spec.ts apps/orchestration-service/src/recovery/failure-classifier.spec.ts apps/orchestration-service/src/recovery/recovery-strategy-table.spec.ts packages/adapters/src/grpc/nodeexec-grpc-transport.spec.ts packages/adapters/src/temporal/activities/executor-activities.spec.ts && echo recovery-producers-passed
+  EXPECT: recovery-producers-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e479e61c4a543d50ec30fb3925773ec7ffbb7d8fb9302d21109881493d15dc73; exit=0; EXPECT=matched; output-sha256=72911532ad4a1e8abb00f4bcfaba701a4c66d0fae34bfe11fb877ad334090b4c; output-bytes=2228; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
 
-- [x] G3: The original component and broken route fail regression assertions and sources are restored
+- [x] G3: Real Temporal executor parks for clarification and resumes or terminates without replaying uncertain side effects
+  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/recovery/recovery-clarification.integration.spec.ts -t Temporal && echo recovery-executor-passed
+  EXPECT: recovery-executor-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=7de6882700d9b20af2c6c38afd60db3c81c63b2776152eada381220e5f38e7c2; exit=0; EXPECT=matched; output-sha256=0c9375235e0ab4c2ef73d51b8927cd1e6979eda75667fc2d1d6abf72df5d6bc8; output-bytes=14518; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+
+- [x] G4: Original-code and mutation controls fail the behavior checks and restore sources
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: knowledge-delete-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=72d413d02c020ba8e3b5db4db6333dd7dd559a5a912b985d0ff8a26981ac7d3f; exit=0; EXPECT=matched; output-sha256=50da1953d948b2db44ddb807d44203246bc52ef4d9477d2a11f52f1373f37cfc; output-bytes=269; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
+  EXPECT: recovery-clarification-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1dd6961e3fb5ede88c4cfe95679ddfce1cd5287faa6996da972e90b0ba9ba266; exit=0; EXPECT=matched; output-sha256=e1425edcc980d991f3c7c375895613f7b9b5acb653f2a292389964c5c9fc57b5; output-bytes=620; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Full web suite, build, typecheck, lint, architecture and zero added AST findings pass
+- [x] G5: Builds, typecheck, lint, full affected suites, architecture and zero new AST entries pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: knowledge-delete-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=7987f04d64befdeff0638ed4621ed900838e182887272a517004b8142c2d7838; exit=0; EXPECT=matched; output-sha256=de60d30bbb99c6b78f32b0101bd46dac1d52e2e7fe20aa6f24dd98325c588edd; output-bytes=221; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
+  EXPECT: recovery-clarification-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b5dc47c3f7c6d9efd82e00770981a78e065e83499578487376c836fe07ddff7f; exit=0; EXPECT=matched; output-sha256=697f2e67cf4eccc6fa6c6e4c46e05c6611c687dd5279cdc1aa447a8445e837a0; output-bytes=483; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries

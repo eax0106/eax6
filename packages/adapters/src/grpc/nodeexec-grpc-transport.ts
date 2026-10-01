@@ -100,6 +100,7 @@ export function connectNodeexecGrpcTransport(
 
 /** Prefix a safety halt carries across the wire; the Executor reads it. */
 export const SAFETY_VIOLATION_PREFIX = "SAFETY_VIOLATION: ";
+export const RECOVERY_CLARIFICATION_PREFIX = "RECOVERY_CLARIFICATION: ";
 
 function mapNodeexecError(error: unknown, fallbackMessage: string): RpcException {
   if (isNamedError(error, "SafetyViolationError")) {
@@ -107,6 +108,11 @@ function mapNodeexecError(error: unknown, fallbackMessage: string): RpcException
       code: status.FAILED_PRECONDITION,
       message: `${SAFETY_VIOLATION_PREFIX}${error.message}`,
     });
+  }
+  if (error instanceof Error && "code" in error &&
+      (error.code === "AMBIGUOUS_OUTCOME" || error.code === "TARGET_MISSING")) {
+    return new RpcException({ code: status.FAILED_PRECONDITION,
+      message: `${RECOVERY_CLARIFICATION_PREFIX}${error.message}` });
   }
   if (isNamedError(error, "NodeHandlerValidationError")) {
     return new RpcException({

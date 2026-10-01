@@ -64,6 +64,7 @@ function buildService(overrides: {
   resolveNodeRequirements?: CapabilityResolverHandler["resolveNodeRequirements"];
   bindAgentModelTool?: SelectionBindingHandler["bindAgentModelTool"];
   createEscalation?: (request: unknown) => Promise<{ readonly id: string }>;
+  createRecovery?: (request: unknown) => Promise<{ readonly id: string }>;
 } = {}): RecoveryDispatchService {
   const modelGateway = {
     invoke:
@@ -146,10 +147,34 @@ function buildService(overrides: {
     overrides.createEscalation === undefined
       ? undefined
       : ({ create: overrides.createEscalation } as never),
+    overrides.createRecovery === undefined ? undefined : ({ createRecovery: overrides.createRecovery } as never),
   );
 }
 
 describe("RecoveryDispatchService", () => {
+  it.each(["target_missing", "ambiguous_outcome"])("%s creates a clarification even for persisted retry and swap strategies", async failureClass => {
+    const createRecovery = vi.fn().mockResolvedValue({ id: "clr_real" });
+    const signalWorkflow = vi.fn(), createPending = vi.fn(), bindAgentModelTool = vi.fn();
+    const service = buildService({ createRecovery, signalWorkflow, createPending, bindAgentModelTool });
+    for (const strategy of ["retry", "backoff", "swap_agent", "ask_user"] as const) {
+      await expect(service.dispatch(strategy, { ...CONTEXT, failureClass })).resolves.toMatchObject({ outcome: "escalated" });
+    }
+    expect(createRecovery).toHaveBeenCalledTimes(4);
+    expect(createRecovery).toHaveBeenCalledWith({ tenantId: `ten_${CONTEXT.tenantId}`, runId: CONTEXT.runId,
+      nodeExecutionId: CONTEXT.nodeExecutionId, recoveryActionId: CONTEXT.recoveryActionId });
+    expect(signalWorkflow).not.toHaveBeenCalled();
+    expect(createPending).not.toHaveBeenCalled();
+    expect(bindAgentModelTool).not.toHaveBeenCalled();
+  });
+
+  it("does not commit a false escalation when the clarification queue is unavailable", async () => {
+    await expect(buildService().dispatch("ask_user", { ...CONTEXT, failureClass: "ambiguous_outcome" }))
+      .rejects.toThrow("Recovery clarification queue is not configured");
+    const createRecovery = vi.fn().mockRejectedValue(new Error("queue unavailable"));
+    await expect(buildService({ createRecovery }).dispatch("retry", { ...CONTEXT, failureClass: "target_missing" }))
+      .rejects.toThrow("queue unavailable");
+  });
+
   it("handles every one of the 10 locked strategy values without throwing (exhaustiveness guarantee)", async () => {
     const service = buildService();
     for (const strategy of ALL_STRATEGIES) {

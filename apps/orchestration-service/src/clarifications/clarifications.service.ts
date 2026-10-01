@@ -1,4 +1,6 @@
-import { TenantIdSchema } from "@alterx/contracts";
+import { NodeExecutionIdSchema, RecoveryActionIdSchema, RunIdSchema, TenantIdSchema } from "@alterx/contracts";
+import { randomUUID } from "node:crypto";
+import type { EscalationRetrySignaler } from "../escalations/escalations.service";
 
 interface OrchestrationTransactionLike {
   query<TRow extends Record<string, unknown> = Record<string, unknown>>(
@@ -37,7 +39,11 @@ export class ClarificationStateConflictError extends Error {
 
 export interface ClarificationRow extends Record<string, unknown> {
   readonly id: string;
-  readonly conversation_id: string;
+  readonly conversation_id: string | null;
+  readonly run_id?: string | null;
+  readonly node_execution_id?: string | null;
+  readonly recovery_action_id?: string | null;
+  readonly answer?: string | null;
   readonly question: string;
   readonly status: "open" | "answered" | "expired";
   readonly assignee_user_id: string | null;
@@ -60,7 +66,10 @@ export interface ClarificationPage {
 }
 
 const SELECT_COLUMNS = `id, conversation_id, question, status, assignee_user_id::text,
-       assigned_at::text, requested_at::text, answered_at::text, expiry_at::text, workspace_id`;
+       assigned_at::text, requested_at::text, answered_at::text, expiry_at::text, workspace_id,
+       recovery_action_id, answer,
+       (SELECT a.run_id FROM recovery_actions a WHERE a.tenant_id = clarifications.tenant_id AND a.id = clarifications.recovery_action_id) AS run_id,
+       (SELECT a.node_execution_id FROM recovery_actions a WHERE a.tenant_id = clarifications.tenant_id AND a.id = clarifications.recovery_action_id) AS node_execution_id`;
 
 function bareTenantUuid(tenantId: string): string {
   const parsed = TenantIdSchema.safeParse(tenantId);
@@ -92,7 +101,66 @@ function normalizeLimit(limit: number | undefined): number {
 }
 
 export class ClarificationsService {
-  constructor(private readonly store: OrchestrationTenantStore) {}
+  constructor(private readonly store: OrchestrationTenantStore, private readonly signaler?: EscalationRetrySignaler) {}
+
+  async createRecovery(input: { readonly tenantId: string; readonly runId: string;
+    readonly nodeExecutionId: string; readonly recoveryActionId: string }): Promise<ClarificationRow> {
+    const tenantId = bareTenantUuid(input.tenantId);
+    if (!RunIdSchema.safeParse(input.runId).success || !NodeExecutionIdSchema.safeParse(input.nodeExecutionId).success ||
+        !RecoveryActionIdSchema.safeParse(input.recoveryActionId).success) {
+      throw new ClarificationValidationError("Recovery clarification requires valid run, node and recovery ids");
+    }
+    const uuid = randomUUID();
+    const id = `clr_${uuid.slice(0, 14)}7${uuid.slice(15)}`;
+    return this.store.withTenant(tenantId, async tx => {
+      const result = await tx.query<ClarificationRow>(
+        `INSERT INTO clarifications (id, tenant_id, workspace_id, conversation_id, recovery_action_id, question, expiry_at)
+         SELECT $1, $2, r.workspace_id, r.conversation_id, a.id,
+           CASE WHEN a.failure_class = 'target_missing'
+             THEN 'The target for this step is missing. Where should it be redirected, or should the target be recreated? Answer, update the workflow target, and start a new run when ready. This run will not repeat the action.'
+             ELSE 'The outcome of this action is uncertain. Check the external system and tell us what happened. Answering closes this failed run; Alter will not retry or swap this step.' END,
+           clock_timestamp() + make_interval(secs => 86400)
+         FROM recovery_actions a JOIN runs r ON r.tenant_id = a.tenant_id AND r.id = a.run_id
+         WHERE a.tenant_id = $2 AND a.id = $3 AND a.run_id = $4 AND a.node_execution_id = $5
+           AND a.failure_class IN ('target_missing', 'ambiguous_outcome')
+         ON CONFLICT (tenant_id, recovery_action_id) DO UPDATE SET id = clarifications.id
+         RETURNING ${SELECT_COLUMNS}`,
+        [id, tenantId, input.recoveryActionId, input.runId, input.nodeExecutionId]);
+      const row = result.rows[0];
+      if (row === undefined) throw new ClarificationValidationError("Recovery action was not found for this run and tenant");
+      return row;
+    });
+  }
+
+  async answerRecovery(tenantIdInput: string, runId: string, clarificationId: string, note: unknown): Promise<ClarificationRow> {
+    const tenantId = bareTenantUuid(tenantIdInput);
+    requireClarificationId(clarificationId);
+    if (!RunIdSchema.safeParse(runId).success || typeof note !== "string" || !note.trim() || note.length > 10_000) {
+      throw new ClarificationValidationError("A valid run id and a non-empty answer of at most 10000 characters are required");
+    }
+    const answer = note.trim();
+    return this.store.withTenant(tenantId, async tx => {
+      const found = await tx.query<ClarificationRow & { readonly past_due: boolean }>(
+        `SELECT ${SELECT_COLUMNS}, expiry_at < clock_timestamp() AS past_due FROM clarifications
+         WHERE tenant_id = $1 AND id = $2 AND recovery_action_id IN
+           (SELECT id FROM recovery_actions WHERE tenant_id = $1 AND run_id = $3
+            AND failure_class IN ('target_missing', 'ambiguous_outcome')) FOR UPDATE`, [tenantId, clarificationId, runId]);
+      const row = found.rows[0];
+      if (row === undefined) throw new ClarificationNotFoundError(clarificationId);
+      if (row.status === "answered" && row.answer === answer) return row;
+      if (row.status !== "open" || row.past_due) throw new ClarificationStateConflictError("This clarification is no longer open");
+      if (!this.signaler || !row.node_execution_id) throw new Error("Recovery clarification cannot reach its waiting run");
+      // A note never authorizes repeating an uncertain external action. The
+      // existing idempotent signal ends the failed run without another attempt.
+      // Signal failure rolls back the answer so the caller can safely retry.
+      await this.signaler.signalWorkflow({ workflowId: runId, signalName: "nodeRetryDecided",
+        payload: { nodeExecutionId: row.node_execution_id, action: "give_up" } });
+      const updated = await tx.query<ClarificationRow>(`UPDATE clarifications SET answer = $3,
+        status = 'answered', answered_at = clock_timestamp() WHERE tenant_id = $1 AND id = $2 RETURNING ${SELECT_COLUMNS}`,
+      [tenantId, clarificationId, answer]);
+      return updated.rows[0]!;
+    });
+  }
 
   // ENGINE-FIX-P5-1b: single-resource read so platform-api's workspace-bound
   // RBAC resolver can answer "which workspace owns this clarification"

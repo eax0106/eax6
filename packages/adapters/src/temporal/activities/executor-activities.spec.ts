@@ -44,6 +44,16 @@ function fakeBlackboardClient(
 }
 
 describe("createExecutorActivities.executeNode", () => {
+  it("makes a recovery clarification non-retryable and never writes it as successful output", async () => {
+    const client = fakeNodeExecutionClient("{}");
+    vi.mocked(client.executeNode).mockRejectedValue(new Error("9 FAILED_PRECONDITION: RECOVERY_CLARIFICATION: uncertain action"));
+    const blackboard = fakeBlackboardClient();
+    const activities = createExecutorActivities(client, blackboard);
+    await expect(activities.executeNode({ ...BASE_INPUT, predecessorKeys: [] })).rejects.toMatchObject({
+      type: "RecoveryClarification", nonRetryable: true,
+    });
+    expect(blackboard.writeValue).not.toHaveBeenCalled();
+  });
   it("reads each predecessor's value from the Blackboard and assembles inputs_json", async () => {
     const nodeExecutionClient = fakeNodeExecutionClient(JSON.stringify({ ok: true }));
     const blackboardClient = fakeBlackboardClient({
