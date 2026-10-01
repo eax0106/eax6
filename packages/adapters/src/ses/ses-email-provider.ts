@@ -11,6 +11,7 @@ export interface SesEmailProviderConfig {
   readonly region: string;
   readonly fromAddress: string;
   readonly credentialsSecretRef: string;
+  readonly configurationSetName?: string;
 }
 
 export interface SesCommandClient {
@@ -80,6 +81,7 @@ export class SesEmailProvider implements EmailProvider {
     const response = await (await this.#getClient()).send(
       new SendEmailCommand({
         FromEmailAddress: this.#config.fromAddress,
+        ...(this.#config.configurationSetName === undefined ? {} : { ConfigurationSetName: this.#config.configurationSetName }),
         Destination: { ToAddresses: [to] },
         Content: {
           Template: {
@@ -106,7 +108,7 @@ export class SesEmailProvider implements EmailProvider {
     to: string,
     subject: string,
     body: string,
-    options?: { readonly html?: boolean },
+    options?: { readonly html?: boolean; readonly tenantId?: string },
   ): Promise<EmailSendResult> {
     const combinedBytes = Buffer.byteLength(subject, "utf8") + Buffer.byteLength(body, "utf8");
     if (combinedBytes > SES_EMAIL_CAPABILITIES.maximum_payload) {
@@ -117,6 +119,8 @@ export class SesEmailProvider implements EmailProvider {
     const response = await (await this.#getClient()).send(
       new SendEmailCommand({
         FromEmailAddress: this.#config.fromAddress,
+        ...(this.#config.configurationSetName === undefined ? {} : { ConfigurationSetName: this.#config.configurationSetName }),
+        ...(options?.tenantId === undefined ? {} : { EmailTags: [{ Name: "alter_tenant_id", Value: options.tenantId }] }),
         Destination: { ToAddresses: [to] },
         Content: {
           Simple: {

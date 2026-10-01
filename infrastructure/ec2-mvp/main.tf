@@ -300,6 +300,7 @@ resource "aws_instance" "host" {
 
   user_data = templatefile("${path.module}/user_data.sh.tftpl", {
     alter_env      = var.alter_env
+    aws_region     = var.aws_region
     repository_url = var.repository_url
     repository_ref = var.repository_ref
   })

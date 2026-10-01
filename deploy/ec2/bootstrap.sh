@@ -77,7 +77,7 @@ fi
 # the tokens platform-api presents to orchestration's eval facade and
 # deployment admin routes.
 touch .session.env
-for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN; do
+for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN SES_EVENT_WEBHOOK_SECRET; do
   grep -q "^$key=" .session.env || printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" >>.session.env
 done
 # shellcheck disable=SC1091
@@ -87,6 +87,11 @@ touch .audit-retention.env
 grep -q '^AUDIT_RETENTION_DB_PASSWORD=' .audit-retention.env || printf 'AUDIT_RETENTION_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" >>.audit-retention.env
 . ./.audit-retention.env
 sha256() { printf %s "$1" | openssl dgst -sha256 -r | cut -d' ' -f1; }
+
+if [[ "$local_mode" != 1 ]]; then
+  SES_DELIVERY_KIT_JSON="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/ses/delivery-kit" --query Parameter.Value --output text)"
+  SES_CONFIGURATION_SET_NAME="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["configurationSet"])' <<<"$SES_DELIVERY_KIT_JSON")"
+fi
 
 # --- 2. environment file ------------------------------------------------------
 log "writing .env for ALTER_ENV=$ALTER_ENV"
@@ -148,6 +153,7 @@ expand() {
     # tool-gateway resolves SES_CREDENTIALS_SECRET_REF in Secrets Manager;
     # platform-api reads SES_CREDENTIALS_JSON instead (compose.yml override).
     printf 'EMAIL_PROVIDER=ses\nSES_FROM_ADDRESS=%s\nSES_CREDENTIALS_SECRET_REF=%s\n' "$SES_FROM_ADDRESS" "$SES_CREDENTIALS_SECRET_REF"
+    printf 'SES_CONFIGURATION_SET_NAME=%s\nSES_EVENT_WEBHOOK_SECRET=%s\n' "${SES_CONFIGURATION_SET_NAME:-alterx-delivery}" "$SES_EVENT_WEBHOOK_SECRET"
     printf 'SES_CREDENTIALS_JSON=%s\n' "$(secret "$SES_CREDENTIALS_SECRET_REF")"
     media_bucket="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/orchestration/artifacts-bucket" --query Parameter.Value --output text)"
     printf 'MEDIA_OBJECT_STORAGE_PROVIDER=s3\nIMAGE_GEN_PROVIDER=titan\nTEXT_TO_SPEECH_PROVIDER=polly\nSPEECH_TO_TEXT_PROVIDER=transcribe\nMEDIA_BUCKET_NAME=%s\n' "$media_bucket"
@@ -275,6 +281,11 @@ docker run --rm -u "$(id -u):$(id -g)" -v "$here/web:/out" \
 # --- 7. services ------------------------------------------------------------------
 log "starting services"
 compose up -d
+if [[ "$local_mode" != 1 ]]; then
+  log "configuring SES delivery route"
+  SES_DELIVERY_KIT_JSON="$SES_DELIVERY_KIT_JSON" SES_EVENT_WEBHOOK_SECRET="$SES_EVENT_WEBHOOK_SECRET" \
+    python3 "$here/provision-ses-delivery.py"
+fi
 log "waiting for every /health"
 failed=0
 for pair in \

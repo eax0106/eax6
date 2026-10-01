@@ -349,9 +349,7 @@
     "packages/adapters/src/http/performance-recorder-client.ts :: Reads process.env outside the config module. Take configuration as a parameter — confining environment access to one audited place is what makes an unsafe default impossible rather than merely detectable.": 1,
     "packages/adapters/src/http/planner-client.ts :: Reads process.env outside the config module. Take configuration as a parameter — confining environment access to one audited place is what makes an unsafe default impossible rather than merely detectable.": 1,
     "packages/adapters/src/http/policy-store-client.ts :: Reads process.env outside the config module. Take configuration as a parameter — confining environment access to one audited place is what makes an unsafe default impossible rather than merely detectable.": 1,
-    "packages/adapters/src/http/selection-binding-client.ts :: Reads process.env outside the config module. Take configuration as a parameter — confining environment access to one audited place is what makes an unsafe default impossible rather than merely detectable.": 1,
-    "packages/adapters/src/ses/resolve-email-provider.ts :: Environment read falls back to \"\"mock\"\". Unset must never grant a permission — fail, or default to the safe side.": 1,
-    "packages/adapters/src/ses/resolve-email-provider.ts :: Reads process.env outside the config module. Take configuration as a parameter — confining environment access to one audited place is what makes an unsafe default impossible rather than merely detectable.": 4
+    "packages/adapters/src/http/selection-binding-client.ts :: Reads process.env outside the config module. Take configuration as a parameter — confining environment access to one audited place is what makes an unsafe default impossible rather than merely detectable.": 1
   },
   "verifier-driver": {
     "apps/platform-api/src/identity-broker/jwt.ts :: \"verifyActorToken\" verifies something and is called by nothing outside a test. A verifier tested only by its own test is a smoke alarm in a drawer — it works, and it is not installed. Call it from a real path, or mark it @verifier-driver <name> saying who will.": 1,

@@ -17,7 +17,13 @@ sed -e 's/=<[^>]*>/=value/' \
     -e 's#^AUTH0_DOMAIN=.*#AUTH0_DOMAIN=tenant.example.auth0.com#' \
     "$work/deploy/ec2/operator.env.example" >"$work/deploy/ec2/operator.env"
 mkdir -p "$work/stub"
-printf '#!/bin/sh\necho stubbed-secret-value\n' >"$work/stub/aws"
+cat >"$work/stub/aws" <<'STUB'
+#!/bin/sh
+case "$*" in
+  *delivery-kit*) echo '{"configurationSet":"alter-dev-delivery"}' ;;
+  *) echo stubbed-secret-value ;;
+esac
+STUB
 chmod +x "$work/stub/aws"
 
 # The container runs as root; ownership goes back to the caller so the 0600
@@ -43,6 +49,8 @@ grep -qE '^[A-Za-z_][A-Za-z0-9_]*=<' "$env_file" && fail "placeholder left: $(gr
 [[ "$(value DATABASE_AUTHENTICATION)" == static ]] || fail "not static database authentication"
 [[ "$(value AUTH0_JWKS_URL)" == https://tenant.example.auth0.com/.well-known/jwks.json ]] || fail "JWKS URL not derived"
 [[ "$(value TEMPORAL_API_KEY)" == stubbed-secret-value ]] || fail "Temporal key not resolved from its secret"
+[[ "$(value SES_CONFIGURATION_SET_NAME)" == alter-dev-delivery ]] || fail "SES configuration set not read from Terraform kit"
+[[ "$(value SES_EVENT_WEBHOOK_SECRET)" =~ ^[0-9a-f]{64}$ ]] || fail "SES webhook key missing"
 [[ "$(value ENGINE_DB_PORT)" =~ ^[0-9]+$ ]] || fail "ENGINE_DB_PORT not a number: $(value ENGINE_DB_PORT)"
 [[ -n "$(value MODEL_GATEWAY_APPCONFIG_APPLICATION_ID)" ]] || fail "scoped AppConfig identifiers missing"
 for key in MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID; do
