@@ -7,6 +7,9 @@ import type {
   VerificationResult,
 } from "@alterx/contracts";
 import { TenantIdSchema } from "@alterx/contracts";
+import type { ErasableSecretsProvider } from "@alterx/shared-clients";
+
+import { tenantSecretPrefix } from "../trigger-bindings/ids";
 
 interface TransactionLike {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
@@ -19,6 +22,8 @@ export interface DeletionTenantStore {
 }
 
 const STORE = "orchestration-service";
+// Where verifyDeletion reports webhook signing secrets left in the provider.
+const WEBHOOK_SECRETS_LOCATION = "secrets:alter/webhook-endpoints";
 // Every tenant-scoped table in this service's schema (29, drizzle/0000-0035).
 // This list is hand-maintained -- ENGINE-FIX-P0-2 closed a gap where 10 of
 // these (everything from migration 0019 onward) were missing, so
@@ -71,6 +76,10 @@ export class OrchestrationDeletionService implements DeletionProvider {
   constructor(
     private readonly store: DeletionTenantStore,
     private readonly systemStore: DeletionTenantStore = store,
+    // Holds the tenant's webhook signing secrets (alter/webhook-endpoints/...).
+    // Erasure deletes them and verification lists the prefix to prove none is
+    // left; without it, erasure of those secrets cannot be claimed.
+    private readonly secrets?: ErasableSecretsProvider,
   ) {}
 
   async locateSubjectData(tenantId: string): Promise<readonly SubjectDataLocation[]> {
@@ -90,6 +99,16 @@ export class OrchestrationDeletionService implements DeletionProvider {
   async deleteSubjectData(tenantId: string, manifestId: string): Promise<DeletionResult> {
     const tenant = bareTenant(tenantId);
     requireManifest(manifestId);
+    // Secrets first: if this fails the rows still exist and a retry finds the
+    // same endpoints. Listing the prefix also catches secrets whose rows are
+    // already gone. deleteSecret is idempotent, so a retry is safe.
+    let deletedObjects = 0;
+    if (this.secrets !== undefined) {
+      for (const reference of await this.secrets.listSecretReferences(tenantSecretPrefix(`ten_${tenant}`))) {
+        await this.secrets.deleteSecret(reference);
+        deletedObjects += 1;
+      }
+    }
     const deletedRows = await this.store.withTenant(tenant, async (tx) => {
       let deleted = 0;
       for (const table of DELETE_ORDER) {
@@ -97,11 +116,17 @@ export class OrchestrationDeletionService implements DeletionProvider {
       }
       return deleted;
     });
-    return { store: STORE, manifestId, deletedRows, deletedObjects: 0 };
+    return { store: STORE, manifestId, deletedRows, deletedObjects };
   }
 
   async verifyDeletion(tenantId: string, manifestId: string): Promise<VerificationResult> {
     const remaining = (await this.locateSubjectData(tenantId)).filter((item) => item.rowCount > 0);
+    if (this.secrets !== undefined) {
+      const secrets = await this.secrets.listSecretReferences(tenantSecretPrefix(`ten_${bareTenant(tenantId)}`));
+      if (secrets.length > 0) {
+        remaining.push({ store: STORE, table: WEBHOOK_SECRETS_LOCATION, rowCount: secrets.length, objectReferences: [] });
+      }
+    }
     return { store: STORE, manifestId, deleted: remaining.length === 0, remaining };
   }
 
