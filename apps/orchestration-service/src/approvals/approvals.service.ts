@@ -54,6 +54,8 @@ export interface ApprovalRow extends Record<string, unknown> {
   readonly decision_note: string | null;
   readonly expiry_at: string;
   // D5: the mode used for this approval and who set it (null: the default).
+  readonly workflow_id?: string | null;
+  readonly node_key?: string | null;
   readonly mode?: string;
   readonly policy_set_by?: string | null;
 }
@@ -90,7 +92,9 @@ function normalizeLimit(limit: number | undefined): number {
 
 const APPROVAL_SELECT_COLUMNS = `id, run_id, node_execution_id, requested_action, status, workspace_id,
        requested_at::text, decided_at::text, decided_by::text, decision_note,
-       expiry_at::text, mode, policy_set_by`;
+       expiry_at::text, mode, policy_set_by,
+       (SELECT r.workflow_id FROM runs r WHERE r.tenant_id = approvals.tenant_id AND r.id = approvals.run_id) AS workflow_id,
+       (SELECT n.dag_node_id FROM node_executions n WHERE n.tenant_id = approvals.tenant_id AND n.id = approvals.node_execution_id) AS node_key`;
 
 export interface CreatePendingApprovalRequest {
   readonly tenantId: string;

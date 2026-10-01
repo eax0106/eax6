@@ -1,20 +1,35 @@
-# Gates: Nx root env regression (C93, L33)
+# Gates: D5 approval mode controls (C90)
 
-OWNS: scripts/check-nx-env-local.mjs, .github/workflows/ci.yml, package.json, pnpm-lock.yaml, patches/**, docs/work-queue.md
+OWNS: apps/platform-web/src/api/**, apps/platform-web/src/features/workflows/components/**, apps/platform-web/src/features/human-actions/**, apps/orchestration-service/src/approvals/approvals.service.ts, apps/orchestration-service/src/approvals/approval-context.integration.spec.ts, docs/work-queue.md
 
-Scope: A minimal dotenv-expand dependency patch makes Nx load generated self-referential shell-default root env values without looping. CI keeps that generated fixture present for its Nx build, lint, typecheck and test commands. Existing local env files are never overwritten.
+Scope: Live and mock users can view approval modes on the approval step and Action Centre, save with a current ETag and explicit consequence confirmation, configure skip windows, and see unapplied promotion suggestions and policy/timeout outcomes.
 
-- [x] G1: Actual Nx project graph and command execution accept root env defaults with loading enabled
-  CHECK: node scripts/check-nx-env-local.mjs
-  EXPECT: nx-env-local-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=0cbeab36c7100eeb7602f57ee9668dd7b97871d9ef03baacb094acee53063bc1; exit=0; EXPECT=matched; output-sha256=df86b51e203a4a1437ce362d7383bdf1078f993a5f9d4ecd0baf66fe3f63a40f; output-bytes=33; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-nx-env-c93; path=b33e9cf43ae9/31 entries
+- [x] G6: Merged Nx env patch accepts the actual generated fixture; current architecture baseline passes
+  CHECK: node scripts/check-nx-env-local.mjs && node scripts/gates/run-all.mjs && echo approval-post-merge-passed
+  EXPECT: approval-post-merge-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=8b6873ab3849057d23ad717cdf43d553efdb080a1d8054e1c8f421e113c5280c; exit=0; EXPECT=matched; output-sha256=e864d69fc91d2f6c65e754ec90cb1f58f1c9bfc7bb97baa2a23e45106bace16f; output-bytes=1146; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Wrong inherited values fail the child assertion and original expansion loops on the same positive fixture
-  CHECK: node .unlazy/negative-control.mjs
-  EXPECT: nx-env-negative-control-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=f59ae6701a3349d9c9f9d3d448c17e37018fe9eeebd4c009598ddc81aba7181a; exit=0; EXPECT=matched; output-sha256=0e05d8a9473648d664bf81b03b305e421740eef63ed8d5a1512d46b7e095f3bf; output-bytes=31; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-nx-env-c93; path=b33e9cf43ae9/31 entries
+- [x] G1: Real Postgres approval reads expose the workflow and graph approval key with tenant isolation
+  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/approvals/approval-context.integration.spec.ts && echo approval-context-passed
+  EXPECT: approval-context-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b96f66eabe0534608c4c14a55519e3454cf41bef654980ddcbc7a084bac85ad0; exit=0; EXPECT=matched; output-sha256=4181e1b63a3583a6af273da05d0bf1dc8ebd7f0764af0eeef156f6c7818e9a07; output-bytes=633; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries
 
-- [x] G3: CI installs the fixture before Nx checks and cleans it on every outcome; architecture and AST baseline pass
-  CHECK: node .unlazy/verify-static.mjs
-  EXPECT: nx-env-static-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5528236b3b5e6ed349646eb2d7204e6a715e3432a6f9a8f86ab0ed2c4efc3dc6; exit=0; EXPECT=matched; output-sha256=1d0d039cc49e9f71b2c10e31814dff7aacd94d2a59817dbdda1dd206ce62b239; output-bytes=21; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-nx-env-c93; path=b33e9cf43ae9/31 entries
+- [x] G2: Live adapter preserves policy metadata, preconditions and skipped lifecycle; mock mirrors it
+  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/api/live-approval-policies.spec.ts apps/platform-web/src/api/live-human-actions.spec.ts apps/platform-web/src/api/mock/approval-policies.spec.ts && echo approval-adapters-passed
+  EXPECT: approval-adapters-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=6a1e2e0102142357ebdc068869428db099ef77110388714e1d66d6217e3279b0; exit=0; EXPECT=matched; output-sha256=da4f1df459e539d20dcebabfa8b32f509e0a75dbcb9ae7e38677e4e6b80d23a3; output-bytes=262; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries
+
+- [x] G3: Rendered controls require explicit confirmation and rights, preserve settings and reload stale state
+  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/workflows/components/approval-policy-controls.spec.tsx apps/platform-web/src/features/human-actions/components/approval-policy-section.spec.tsx && echo approval-controls-passed
+  EXPECT: approval-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=97c702b16e6b6b1633a2cb23c23fe6f7e0edd18f9866a1c5748eaee574e607dc; exit=0; EXPECT=matched; output-sha256=c5be4b96238fe0ff9a24f46b74e8caebec9dbe4f95661c86da134034362d5ecc; output-bytes=260; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries
+
+- [x] G4: Removing key enforcement fails behavioral regression controls
+  CHECK: node .unlazy/negative-controls.mjs
+  EXPECT: approval-ui-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=33bef0459a9f1e1c56dce5dc590e9d927e8d45d6e42d5393ab6040dc0cbe0570; exit=0; EXPECT=matched; output-sha256=ed96fb3364c88c6172d693406653d7fe12e12a5e11bedf30bd4f5862cfbb7af5; output-bytes=319; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries
+
+- [x] G5: Full web and engine tests, static checks, architecture and unchanged AST baseline pass
+  CHECK: node .unlazy/verify-full.mjs
+  EXPECT: approval-ui-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3550bf73d0be50156a4c09695cadd4d3654fe09f0a9298dbb803fa0c668c6e31; exit=0; EXPECT=matched; output-sha256=47d7ebce6d0db18da156321cffc19e7ee5b799e3200c83496cf372cefb7bb944; output-bytes=173; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d5-web-c90; path=b33e9cf43ae9/31 entries

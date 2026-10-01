@@ -6,6 +6,7 @@ import { queryKeys } from "@/api/query-keys"
 import { Button } from "@/components/ui/button"
 import { ErrorState } from "@/components/feedback/error-state"
 import { ArrowLeft, Clock, Activity, FileText } from "lucide-react"
+import { ApprovalPolicySection } from "../components/approval-policy-section"
 import { DecisionPanel } from "../components/decision-panel"
 import { ContextPanel } from "../components/context-panel"
 import { ActivityTimeline } from "../components/activity-timeline"
@@ -95,6 +96,7 @@ export function HumanActionDetail() {
 
           <div className="lg:col-span-1 space-y-6">
             <DecisionPanel action={action} />
+            <ApprovalPolicySection action={action} />
           </div>
         </div>
       </div>
