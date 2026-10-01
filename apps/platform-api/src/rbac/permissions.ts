@@ -56,6 +56,7 @@ const ROLE_PERMISSIONS: Record<string, readonly string[]> = {
     "projects:write",
     "runs:clarifications:answer",
     "runs:read",
+    "runs:retention:write",
     "workflows:deploy",
     "workflows:read",
     "workflows:write",
