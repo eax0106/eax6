@@ -45,4 +45,13 @@ describe("live knowledge documents", () => {
     expect(init?.method).toBe("DELETE")
     expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^knowledge-source-delete-/)
   })
+
+  it("deletes only the named document through the guarded route with an idempotency key", async () => {
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }))
+    await api.deleteKnowledgeDocument("doc_1/part")
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toContain("/api/v1/ads/documents/doc_1%2Fpart")
+    expect(init?.method).toBe("DELETE")
+    expect(new Headers(init?.headers).get("Idempotency-Key")).toMatch(/^knowledge-document-delete-/)
+  })
 })

@@ -39,7 +39,7 @@ import {
   mockNodeTypes, mockProjects, mockArtifacts,
   mockHumanActions, mockHumanAnnotations, mockRecoveryEvents, mockWorkflowHealth,
   mockConversations, mockConversationMessages, mockTriggers, mockWebhooks, mockEvents, mockDashboardOverview,
-  mockKnowledgeSources, mockKnowledgeDocuments, mockIntegrationDefinitions, mockConnections,
+  mockKnowledgeSources, mockKnowledgeDocuments, mockKnowledgeChunks, mockIntegrationDefinitions, mockConnections,
   mockCredentials, mockWhatsAppChannels, mockMemoryConfig
 } from "./mock/data"
 import { 
@@ -1035,6 +1035,23 @@ class ApiClient {
     d.status = "processing"
     d.error = undefined
     return d
+  }
+
+  async deleteKnowledgeDocument(id: string): Promise<void> {
+    if (isLiveApi) return live.deleteKnowledgeDocument(id)
+    await delay(MOCK_DELAY)
+    const index = mockKnowledgeDocuments.findIndex(doc => doc.id === id)
+    if (index === -1) throw new Error("Document not found")
+    const [document] = mockKnowledgeDocuments.splice(index, 1)
+    for (let i = mockKnowledgeChunks.length - 1; i >= 0; i--) {
+      if (mockKnowledgeChunks[i].documentId === id) mockKnowledgeChunks.splice(i, 1)
+    }
+    const source = mockKnowledgeSources.find(source => source.id === document.sourceId)
+    if (source) {
+      source.documentCount = Math.max(0, source.documentCount - 1)
+      source.chunkCount = Math.max(0, source.chunkCount - (document.chunkCount ?? 0))
+      source.updatedAt = new Date().toISOString()
+    }
   }
 
   async testRetrieval(query: string, filters?: any): Promise<RetrievalResult[]> {

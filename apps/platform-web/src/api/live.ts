@@ -939,6 +939,12 @@ export async function deleteKnowledgeSource(id: string): Promise<void> {
   })
 }
 
+export async function deleteKnowledgeDocument(id: string): Promise<void> {
+  await apiDelete(`/api/v1/ads/documents/${encodeURIComponent(id)}`, {
+    idempotencyKey: mutationKey("knowledge-document-delete"),
+  })
+}
+
 export async function retryKnowledgeDocument(id: string): Promise<KnowledgeDocument> {
   const body = await apiPost<AnyRecord>(`/api/v1/ads/documents/${encodeURIComponent(id)}/actions/reindex`, {}, {
     idempotencyKey: mutationKey("knowledge-document-reindex"),
