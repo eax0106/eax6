@@ -21,6 +21,7 @@ import { MarketplaceAdminService } from "./services/marketplace-admin"
 import { FeatureFlagsService } from "./services/feature-flags"
 import { SupportAccessService } from "./services/support-access"
 import { isLiveApi } from "./http"
+import { hasExternalSideEffect } from "@alterx/contracts"
 import type {
   AvailableRepository,
   HumanActionFilters,
@@ -448,7 +449,10 @@ class ApiClient {
   async simulateWorkflow(_id: string, _input: any): Promise<any> {
     if (isLiveApi) return live.workflowAction(_id, "simulate", _input)
     await delay(MOCK_DELAY * 3)
-    return { status: "success", steps: [] }
+    const workflow = mockWorkflows.find(item => item.id === _id)
+    if (!workflow?.dag) throw new Error("Workflow has no saved canvas to simulate")
+    return { trace: workflow.dag.waves.slice().sort((a, b) => a.order - b.order).flatMap(wave =>
+      wave.node_keys.map(key => ({ key, type: workflow.dag!.nodes.find(node => node.key === key)?.type ?? "unknown", status: "simulated", input: _input }))) }
   }
 
   // Projects
@@ -958,9 +962,33 @@ class ApiClient {
     return e
   }
 
-  async replayEvent(_id: string): Promise<{ runId: string }> {
+  async replayEvent(id: string): Promise<import("./types").EventReplayPreview> {
+    if (isLiveApi) return live.replayEvent(id)
+    const event = await api.getEvent(id)
+    if (!event.workflowId) throw new Error("This event has no matched workflow to replay")
+    const result = await api.simulateWorkflow(event.workflowId, event.payload ?? {})
+    const workflow = await api.getWorkflow(event.workflowId)
+    const actions = workflow.dag!.nodes.filter(node => node.type === "ToolCall" && typeof node.config["tool_name"] === "string" &&
+      hasExternalSideEffect(node.config["tool_name"])).map(node => ({ nodeKey: node.key, toolName: String(node.config["tool_name"]) }))
+    return { mode: "dry_run", eventId: id, workflowId: event.workflowId, workflowVersionId: "mock",
+      payload: event.payload ?? {}, trace: result.trace, actions, confirmationToken: JSON.stringify({ id, payload: event.payload ?? {}, dag: workflow.dag }) }
+  }
+
+  async replayEventForReal(id: string, confirmationToken: string, requestKey?: string): Promise<{ runId: string; replayedFrom: string }> {
+    if (isLiveApi) return live.replayEventForReal(id, confirmationToken, requestKey)
+    const event = await api.getEvent(id)
+    const preview = await api.replayEvent(id)
+    if (!event.workflowId || confirmationToken !== preview.confirmationToken) throw new Error("Preview and confirm this event before replaying")
     await delay(MOCK_DELAY * 2)
-    return { runId: `run_${Date.now()}` }
+    const runId = `run_${requestKey ?? crypto.randomUUID()}`
+    const existing = mockRuns.find(item => item.id === runId)
+    if (existing) {
+      if (existing.triggeredBy?.id !== id) throw new Error("Idempotency key already used for a different event")
+      return { runId: existing.id, replayedFrom: id }
+    }
+    const run: Run = { id: runId, workflowId: event.workflowId, mode: "workflow", status: "queued", createdAt: new Date().toISOString(), triggeredBy: { id, name: "Event replay" } }
+    mockRuns.push(run)
+    return { runId: run.id, replayedFrom: id }
   }
 
   // Phase 6: Dashboard Aggregates

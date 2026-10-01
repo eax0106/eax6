@@ -10,6 +10,7 @@ import type {
   DashboardOverview,
   DashboardSummary,
   IncomingEvent,
+  EventReplayPreview,
   Member,
   NodeTypeDefinition,
   Profile,
@@ -854,6 +855,15 @@ export async function getEvent(id: string): Promise<IncomingEvent> {
   return mapEvent(await apiGet<unknown>(`/api/v1/events/${encodeURIComponent(id)}`))
 }
 
+export async function replayEvent(id: string): Promise<EventReplayPreview> {
+  return apiPost<EventReplayPreview>(`/api/v1/events/${encodeURIComponent(id)}/replay`, {})
+}
+
+export async function replayEventForReal(id: string, confirmationToken: string, requestKey = mutationKey("event-replay")): Promise<{ runId: string; replayedFrom: string }> {
+  return apiPost(`/api/v1/events/${encodeURIComponent(id)}/replay-for-real`, { confirmed: true, confirmationToken },
+    { idempotencyKey: requestKey })
+}
+
 export async function getWebhooks(): Promise<WebhookEndpoint[]> {
   return []
 }
@@ -1518,6 +1528,7 @@ function mapEvent(value: unknown): IncomingEvent {
     workflowId: item.workflowId ?? item.workflow_id,
     triggerId: item.triggerId ?? item.trigger_id,
     runId: item.runId ?? item.run_id,
+    payload: item.payload ?? item.payload_inline ?? undefined,
     receivedAt: asDate(item.receivedAt ?? item.received_at ?? item.createdAt ?? item.created_at),
   }
 }

@@ -159,7 +159,7 @@ function assertJsonValue(
   seen.delete(value);
 }
 
-function serializeValue(value: JsonValue): string {
+export function serializeValue(value: JsonValue): string {
   assertJsonValue(value, 0, new WeakSet());
   const serialized = JSON.stringify(value);
   if (Buffer.byteLength(serialized, "utf8") > MAX_CONTEXT_VALUE_BYTES) {

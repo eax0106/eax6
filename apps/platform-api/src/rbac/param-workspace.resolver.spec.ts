@@ -77,6 +77,7 @@ describe("defaultWorkspaceResolutionRules dispatch", () => {
       if (path.includes("/approvals/")) return { status: 200, body: { workspace_id: workspaceA } };
       if (path.includes("/escalations/")) return { status: 200, body: { workspace_id: workspaceB } };
       if (path.includes("/clarifications/")) return { status: 200, body: { workspace_id: workspaceA } };
+      if (path.includes("/events/")) return { status: 200, body: { workspace_id: workspaceB } };
       if (path.endsWith("/missing")) return { status: 404 };
       return { status: 500 };
     }
@@ -109,6 +110,7 @@ describe("defaultWorkspaceResolutionRules dispatch", () => {
     ["ads documents", "/api/v1/ads/documents/d/permissions", { documentId }, workspaceB],
     ["ads ingestion jobs", "/api/v1/ads/ingestion/jobs/j", { jobId }, workspaceA],
     ["triggers (bare id)", "/api/v1/triggers/t/status", { id: triggerId }, workspaceB],
+    ["events", "/api/v1/events/e/replay-for-real", { eventId: "evt_018f47a5-7b2c-7d10-8f11-123456789abc" }, workspaceB],
     ["approvals", "/api/v1/approvals/a/actions/approve", { approvalId: approvalId }, workspaceA],
     ["escalations", "/api/v1/escalations/e/actions/claim", { escalationId: escalationId }, workspaceB],
     ["clarifications", "/api/v1/clarifications/c/actions/assign", { clarificationId: clarificationId }, workspaceA],

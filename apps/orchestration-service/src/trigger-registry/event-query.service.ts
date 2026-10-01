@@ -48,7 +48,8 @@ export class EventNotFoundError extends Error {
 const fromClause =
   "FROM events e " +
   "LEFT JOIN triggers t ON t.tenant_id = e.tenant_id AND t.id = e.trigger_id " +
-  "LEFT JOIN runs r ON r.tenant_id = e.tenant_id AND r.triggering_event_id = e.event_id";
+  "LEFT JOIN LATERAL (SELECT id FROM runs WHERE tenant_id = e.tenant_id AND triggering_event_id = e.event_id " +
+  "AND replayed_from IS NULL ORDER BY created_at, id LIMIT 1) r ON true";
 const fields =
   "e.event_id, e.event_type, e.tenant_id, e.workspace_id, e.source, e.source_account_id, " +
   "e.trigger_id, e.trigger_version, e.occurred_at::text, e.received_at::text, e.signature_status, " +
@@ -178,7 +179,7 @@ export class EventQueryService {
     requireEventId(eventId);
     return this.store.withTenant(tenantId, async (tx) => {
       const result = await tx.query<Record<string, unknown>>(
-        `SELECT ${fields} ${fromClause} WHERE e.tenant_id = $1 AND e.event_id = $2`,
+        `SELECT ${fields}, e.payload AS payload_inline, e.payload_reference ${fromClause} WHERE e.tenant_id = $1 AND e.event_id = $2`,
         [tenantId, eventId],
       );
       const row = result.rows[0];

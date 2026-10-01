@@ -11,7 +11,9 @@ import {
 import type {
   DurableExecutionProvider,
   DurableWorkflowHandle,
+  AuditEventHandler,
 } from "@alterx/shared-clients";
+import { replayActions, replayToken, storedReplayEvent, ReplayConfirmationError, type ReplayActor } from "../trigger-registry/event-replay.service";
 import type { RunBudgetGate } from "../budgets/run-budget-gate";
 import type { RunOutcomeService } from "./run-outcome.service";
 import { DurableRunQueue } from "./durable-run-queue.service";
@@ -132,6 +134,11 @@ export interface RunRow extends Record<string, unknown> {
   readonly deadline_at?: string | null;
   readonly created_at: string;
   readonly triggering_event_id?: string | null;
+  readonly replayed_from?: string | null;
+  readonly replay_confirmed_by?: string | null;
+  readonly replay_confirmation_token?: string | null;
+  readonly replay_confirmed_at?: string | null;
+  readonly replay_actions?: unknown;
 }
 
 export interface CreateProjectRunInput extends ProjectRunProvisioningInput {
@@ -145,6 +152,7 @@ export interface CreateRunOptions {
   readonly timeoutMs?: number;
   /** Internal dispatch priority. Larger values dispatch first. */
   readonly priority?: number;
+  readonly replay?: { readonly actor: ReplayActor; readonly eventId: string; readonly confirmationToken: string; readonly requestKey: string };
 }
 
 export interface RunPage {
@@ -240,7 +248,8 @@ const RUN_SELECT_COLUMNS = `id, workflow_id, project_id, workflow_version_id,
        workspace_id,
        provisioning_session_id, provisioning_cycle_id, provisioning_template_id,
        provisioning_closed_at::text, parent_kind, status, started_at::text,
-       ended_at::text, deadline_at::text, created_at::text, triggering_event_id`;
+       ended_at::text, deadline_at::text, created_at::text, triggering_event_id,
+       replayed_from, replay_confirmed_by::text, replay_confirmed_at::text, replay_confirmation_token, replay_actions`;
 
 /**
  * Owns the run's actual lifecycle: creating the durable `runs` row,
@@ -256,6 +265,7 @@ export class RunLauncherService {
     private readonly projectProvisioning?: ProjectRunProvisioningService,
     private readonly queue?: DurableRunQueue,
     private readonly budgetGate?: RunBudgetGate,
+    private readonly audit?: AuditEventHandler,
   ) {}
 
   /**
@@ -267,7 +277,7 @@ export class RunLauncherService {
     tenantIdInput: string,
     workflowId: string,
     workflowVersionId?: string,
-  ): Promise<{ readonly workspaceId: string; readonly compiledDag: CompiledDag }> {
+  ): Promise<{ readonly workspaceId: string; readonly workflowVersionId: string; readonly compiledDag: CompiledDag }> {
     const tenantId = bareTenantUuid(tenantIdInput);
     requireWorkflowId(workflowId);
     if (workflowVersionId !== undefined) {
@@ -282,7 +292,7 @@ export class RunLauncherService {
         throw new WorkflowNotFoundError(workflowId);
       }
       const version = await this.resolveVersion(tx, tenantId, workflowId, workflowVersionId);
-      return { workspaceId: workflow.rows[0]!.workspace_id, compiledDag: version.compiledDag };
+      return { workspaceId: workflow.rows[0]!.workspace_id, workflowVersionId: version.id, compiledDag: version.compiledDag };
     });
   }
 
@@ -314,20 +324,45 @@ export class RunLauncherService {
         throw new WorkflowNotFoundError(workflowId);
       }
 
+      const replay = options.replay;
+      if (replay !== undefined && this.queue === undefined) throw new Error("Replay dispatch queue is unavailable");
+      const event = replay === undefined ? undefined : await storedReplayEvent(tx, replay.actor, replay.eventId, true);
+      if (event !== undefined && (replay!.actor.tenantId !== tenantIdInput || event.workflow_id !== workflowId ||
+          event.workspace_id !== workflow.rows[0]!.workspace_id || triggeringEventId !== event.event_id)) {
+        throw new RunValidationError("Replay does not belong to this workflow and workspace");
+      }
+      if (replay !== undefined) {
+        const existing = await tx.query<RunRow>(`SELECT ${RUN_SELECT_COLUMNS} FROM runs WHERE tenant_id = $1 AND replay_request_key = $2`,
+          [tenantId, replay.requestKey]);
+        if (existing.rows[0]) {
+          const row = existing.rows[0];
+          if (row.replayed_from !== replay.eventId || row.replay_confirmed_by !== replay.actor.userId.slice(4) ||
+              row.replay_confirmation_token !== replay.confirmationToken) throw new RunStateConflictError("Idempotency-Key already used for a different replay");
+          return { row, compiledDag: undefined };
+        }
+      }
       if (await isWorkspaceHeld(tx, tenantId, workflow.rows[0]!.workspace_id)) {
         throw new WorkspacePendingDeletionError();
       }
       const version = await this.resolveVersion(tx, tenantId, workflowId, workflowVersionId);
+      if (replay !== undefined && (this.audit === undefined || replay.confirmationToken !== replayToken(replay.actor, event!, version.id, version.compiledDag))) {
+        if (this.audit === undefined) throw new Error("Replay audit is unavailable");
+        throw new ReplayConfirmationError();
+      }
       const runId = newRunId();
 
       const inserted = await tx.query<RunRow>(
         `INSERT INTO runs (id, tenant_id, workspace_id, parent_kind, workflow_id,
-                           workflow_version_id, status, triggering_event_id, deadline_at)
+                           workflow_version_id, status, triggering_event_id, deadline_at,
+                           replayed_from, replay_confirmed_by, replay_confirmed_at, replay_actions, replay_request_key, replay_confirmation_token)
          SELECT $3, $1, workspace_id, 'workflow', $2, $4, 'pending', $5,
-                clock_timestamp() + ($6::bigint * interval '1 millisecond')
+                clock_timestamp() + ($6::bigint * interval '1 millisecond'),
+                $7, $8::uuid, CASE WHEN $7::text IS NULL THEN NULL ELSE clock_timestamp() END, $9::jsonb, $10, $11
          FROM workflows WHERE tenant_id = $1 AND id = $2
          RETURNING ${RUN_SELECT_COLUMNS}`,
-        [tenantId, workflowId, runId, version.id, triggeringEventId ?? null, timeoutMs],
+        [tenantId, workflowId, runId, version.id, triggeringEventId ?? null, timeoutMs,
+          replay?.eventId ?? null, replay?.actor.userId.slice(4) ?? null,
+          replay === undefined ? null : JSON.stringify(replayActions(version.compiledDag)), replay?.requestKey ?? null, replay?.confirmationToken ?? null],
       );
       const row = inserted.rows[0]!;
       // D3: a run over budget is refused here, and its row rolls back with it.
@@ -338,9 +373,24 @@ export class RunLauncherService {
         runId,
         compiledDag: version.compiledDag,
       });
+      if (replay !== undefined) {
+        const key = `replay.${runId}`;
+        if (version.compiledDag.nodes.some(node => node.key === key)) throw new RunValidationError("Replay input key conflicts with a workflow node");
+        await tx.query(`INSERT INTO blackboard_checkpoints (tenant_id, run_id, context_key, value_json)
+          VALUES ($1, $2, $3, $4::jsonb)`, [tenantId, runId, key, JSON.stringify(event!.payload_inline)]);
+        await this.queue!.enqueue(tenantId, { runId, compiledDag: version.compiledDag }, tx);
+        await this.audit!.recordEvent({ tenant_id: tenantId, actor_type: "user", actor_ref: replay.actor.userId,
+          action: "event.replay.confirmed", target_type: "run", target_ref: runId, result: "success", reason_code: "outside_actions_confirmed",
+          context_json: JSON.stringify({ replayed_from: replay.eventId, workflow_version_id: version.id, actions: replayActions(version.compiledDag) }),
+          occurred_at: new Date().toISOString() });
+      }
       return { row, compiledDag: version.compiledDag };
     });
 
+    if (created.compiledDag === undefined) {
+      await this.#drainQueuedRuns(tenantId);
+      return this.getRun(tenantIdInput, created.row.id);
+    }
     return this.startAndTransition(tenantId, created.row, created.compiledDag, {
       ...(options.priority === undefined ? {} : { priority: options.priority }),
     });
@@ -908,6 +958,7 @@ export class RunLauncherService {
           tenantId: tenantIdWithPrefix,
           runId: row.id,
           compiledDagJson: JSON.stringify(compiledDag),
+          ...(row.replayed_from ? { initialInputKey: `replay.${row.id}` } : {}),
         },
         executionTimeout: temporalDurationUntil(row.deadline_at),
       });

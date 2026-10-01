@@ -673,7 +673,19 @@ export interface IncomingEvent {
   runId?: string
   receivedAt: string
   payloadRef?: DataReference
+  payload?: Record<string, unknown>
   error?: ApiError
+}
+
+export interface EventReplayPreview {
+  mode: "dry_run"
+  eventId: string
+  workflowId: string
+  workflowVersionId: string
+  payload: Record<string, unknown>
+  trace: { key: string; type: string; status: "simulated"; input: Record<string, unknown> }[]
+  actions: { nodeKey: string; toolName: string }[]
+  confirmationToken: string
 }
 
 export interface DashboardOverview {
