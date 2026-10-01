@@ -36,6 +36,21 @@ describe("live notifications (B3.1)", () => {
     ])
   })
 
+  it("keeps approval in-app delivery on even when an old preference or client input disables it", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json([
+      { eventClass: "approval", channel: "in_app", enabled: false },
+      { eventClass: "approval", channel: "email", enabled: false },
+    ]))
+    expect((await notificationsService.getPreferences()).find(p => p.category === "human_action"))
+      .toEqual({ category: "human_action", inApp: true, email: false })
+    fetchMock.mockResolvedValueOnce(Response.json([]))
+    await notificationsService.updatePreferences([{ category: "human_action", inApp: false, email: false }])
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]!.body))).toEqual({ preferences: [
+      { event_class: "approval", channel: "in_app", enabled: true },
+      { event_class: "approval", channel: "email", enabled: false },
+    ] })
+  })
+
   it("marks every unread notification read one by one", async () => {
     fetchMock.mockImplementation(async (url) =>
       String(url).includes("read=false") ? Response.json({ items: [event("evt_1"), event("evt_2")], nextCursor: null }) : new Response(null, { status: 204 }),

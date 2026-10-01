@@ -67,6 +67,7 @@ export class NotificationRepository implements OnModuleDestroy {
     return this.insertEvent(id, input, inAppEnabled);
   }
 
+  // D5: approval delivery is always in-app, including notices hidden by old preferences.
   private insertEvent(
     id: string,
     input: CreateNotificationEventInput,
@@ -101,7 +102,7 @@ export class NotificationRepository implements OnModuleDestroy {
         `INSERT INTO notification_reads
            (id, tenant_id, notification_event_id, user_id, in_app_enabled)
          VALUES ($1, $2, $3, $4, $5)`,
-        [randomUUID(), input.tenantId, id, input.userId, inAppEnabled],
+        [randomUUID(), input.tenantId, id, input.userId, input.eventClass === "approval" || inAppEnabled],
       );
       return mapEvent(row);
     });
@@ -117,7 +118,7 @@ export class NotificationRepository implements OnModuleDestroy {
            FROM notification_events e
            JOIN notification_reads r
              ON r.tenant_id = e.tenant_id AND r.notification_event_id = e.id
-          WHERE e.tenant_id = $1 AND r.user_id = $2 AND r.in_app_enabled = true
+          WHERE e.tenant_id = $1 AND r.user_id = $2 AND (r.in_app_enabled = true OR e.event_class = 'approval')
             AND ($3::boolean IS NULL OR (r.read_at IS NOT NULL) = $3)
             AND ($4::text IS NULL OR e.severity = $4)
             AND ($5::text IS NULL OR e.event_class = $5)
@@ -194,7 +195,7 @@ export class NotificationRepository implements OnModuleDestroy {
       return result.rows.map((row) => ({
         eventClass: row.event_class,
         channel: row.channel,
-        enabled: row.enabled,
+        enabled: row.event_class === "approval" && row.channel === "in_app" ? true : row.enabled,
         deliveryMode: row.delivery_mode,
       }));
     });
@@ -254,13 +255,13 @@ export class NotificationRepository implements OnModuleDestroy {
          ON CONFLICT (tenant_id, user_id, event_class, channel) DO UPDATE
            SET enabled = EXCLUDED.enabled, delivery_mode = EXCLUDED.delivery_mode
          RETURNING event_class, channel, enabled, delivery_mode`,
-        [randomUUID(), tenantId, userId, eventClass, channel, enabled, deliveryMode],
+        [randomUUID(), tenantId, userId, eventClass, channel, eventClass === "approval" && channel === "in_app" ? true : enabled, deliveryMode],
       );
       const row = result.rows[0]!;
       return {
         eventClass: row.event_class,
         channel: row.channel,
-        enabled: row.enabled,
+        enabled: row.event_class === "approval" && row.channel === "in_app" ? true : row.enabled,
         deliveryMode: row.delivery_mode,
       };
     });
@@ -371,9 +372,11 @@ export class NotificationRepository implements OnModuleDestroy {
   ): Promise<boolean> {
     return this.withTenant(tenantId, async (client) => {
       const result = await client.query(
-        `UPDATE notification_reads SET ${update}
-          WHERE tenant_id = $1 AND user_id = $2 AND notification_event_id = $3
-            AND in_app_enabled = true`,
+        `UPDATE notification_reads r SET ${update}
+          FROM notification_events e
+          WHERE r.tenant_id = $1 AND r.user_id = $2 AND r.notification_event_id = $3
+            AND e.tenant_id = r.tenant_id AND e.id = r.notification_event_id
+            AND (r.in_app_enabled = true OR e.event_class = 'approval')`,
         [tenantId, userId, eventId],
       );
       return result.rowCount === 1;

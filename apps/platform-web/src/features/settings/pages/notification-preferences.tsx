@@ -24,7 +24,7 @@ export function NotificationPreferencesPage() {
 
   useEffect(() => {
     if (preferences) {
-      setLocalPrefs(JSON.parse(JSON.stringify(preferences)))
+      setLocalPrefs(preferences.map(pref => pref.category === "human_action" ? { ...pref, inApp: true } : { ...pref }))
       setHasChanges(false)
     }
   }, [preferences])
@@ -112,17 +112,24 @@ export function NotificationPreferencesPage() {
                   <p className="text-xs text-text-secondary mt-1">
                     {meta.desc}
                   </p>
+                  {pref.category === "human_action" && (
+                    <p id="approval-delivery-required" className="text-xs text-text-secondary mt-1">Approval notices always appear in-app. Email is optional.</p>
+                  )}
                 </div>
                 <div className="col-span-2 flex justify-center">
                   <Switch 
                     id={`${pref.category}-inapp`} 
-                    checked={pref.inApp} 
+                    aria-label={`${meta.title} in-app notifications`}
+                    aria-describedby={pref.category === "human_action" ? "approval-delivery-required" : undefined}
+                    disabled={pref.category === "human_action"}
+                    checked={pref.category === "human_action" || pref.inApp}
                     onCheckedChange={() => handleToggle(pref.category, "inApp")}
                   />
                 </div>
                 <div className="col-span-2 flex justify-center">
                   <Switch 
                     id={`${pref.category}-email`} 
+                    aria-label={`${meta.title} email notifications`}
                     checked={pref.email} 
                     onCheckedChange={() => handleToggle(pref.category, "email")}
                   />

@@ -99,6 +99,49 @@ describe.skipIf(!databaseUrl)("NotificationService.notifyWorkspaceRoles on Postg
     }
   });
 
+  it("approval delivery is always in-app while email opt-out and deduplication remain effective", async () => {
+    // A disabled preference can predate D5. Exercise both event writers.
+    await admin.query(
+      `INSERT INTO notification_preferences (id, tenant_id, user_id, event_class, channel, enabled)
+       VALUES ($1, $3, $4, 'approval', 'in_app', false),
+              ($2, $3, $4, 'approval', 'email', false)`,
+      [randomUUID(), randomUUID(), tenantA, adminA],
+    );
+    const preferences = await service.listPreferences(tenantA, adminA);
+    expect(preferences.find(p => p.eventClass === "approval" && p.channel === "in_app")?.enabled).toBe(true);
+    expect(preferences.find(p => p.eventClass === "approval" && p.channel === "email")?.enabled).toBe(false);
+    expect(await service.updatePreference(tenantA, adminA, "approval", "in_app", false)).toMatchObject({ enabled: true });
+    const stored = await admin.query<{ enabled: boolean }>(`SELECT enabled FROM notification_preferences WHERE event_class = 'approval' AND channel = 'in_app'`);
+    expect(stored.rows[0]?.enabled).toBe(true);
+    // Keep a legacy disabled row to ensure the write path enforces D5 too.
+    await admin.query(`UPDATE notification_preferences SET enabled = false WHERE event_class = 'approval' AND channel = 'in_app'`);
+    const input = {
+      tenantId: tenantA, workspaceId: workspaceA, userId: adminA,
+      eventClass: "approval" as const, severity: "warning" as const,
+      title: "Approval waiting", body: "Please decide", deepLink: "/app/human-actions/apr_1",
+      sourceService: "platform-api.engine-events",
+    };
+    await service.createEvent(input);
+    expect(await service.createEventOnce({ ...input, dedupeKey: "approval.requested:apr_1" })).not.toBeNull();
+    expect(await service.createEventOnce({ ...input, dedupeKey: "approval.requested:apr_1" })).toBeNull();
+    const reads = await admin.query<{ in_app_enabled: boolean }>(`SELECT in_app_enabled FROM notification_reads`);
+    expect(reads.rows.map(row => row.in_app_enabled)).toEqual([true, true]);
+    // Notices produced before D5 must become visible too; no repeat email.
+    await admin.query(`UPDATE notification_reads SET in_app_enabled = false`);
+    const page = await service.list({ tenantId: tenantA, userId: adminA, limit: 10 });
+    expect(page.items).toHaveLength(2);
+    await service.markRead(tenantA, adminA, page.items[0]!.id);
+    await service.acknowledge(tenantA, adminA, page.items[1]!.id);
+    expect((await service.list({ tenantId: tenantA, userId: adminA, read: true, limit: 10 })).items).toHaveLength(2);
+    await service.updatePreference(tenantA, adminA, "workflow", "in_app", false);
+    await service.updatePreference(tenantA, adminA, "workflow", "email", false);
+    const hidden = await service.createEvent({ ...input, eventClass: "workflow" });
+    expect((await service.list({ tenantId: tenantA, userId: adminA, limit: 10 })).items).toHaveLength(2);
+    await expect(service.markRead(tenantA, adminA, hidden.id)).rejects.toMatchObject({ status: 404 });
+    expect(sent).toEqual([]);
+    expect(await service.list({ tenantId: tenantB, userId: adminTenantB, limit: 10 })).toMatchObject({ items: [] });
+  });
+
   it("creates one event for each holder of the role in that workspace only", async () => {
     const count = await service.notifyWorkspaceRoles(["admin"], {
       tenantId: tenantA,
