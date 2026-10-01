@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { Body, Controller, Get, HttpException, Param, Put, Req } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpException, Param, Put, Req } from "@nestjs/common";
 import type { SessionGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
@@ -7,6 +7,7 @@ import {
   ApprovalPolicyConfirmationRequiredError,
   ApprovalPolicyNotFoundError,
   ApprovalPolicyService,
+  ApprovalPolicyStaleError,
   ApprovalPolicyValidationError,
   type ApprovalStepPolicy,
 } from "./approval-policy.service";
@@ -34,11 +35,15 @@ export class ApprovalPoliciesController {
     @Param("workflowId") workflowId: string,
     @Param("nodeKey") nodeKey: string,
     @Body() body: unknown,
+    @Headers("if-match") ifMatch?: string,
   ) {
     const { tenantId, workspaceId } = scope(request);
     const actor = request.actorContext!;
     if (actor.actor_type !== "user" || actor.user_id === null || !actor.permissions.includes(APPROVAL_RIGHTS)) {
       throw new HttpException(problem(request.url, 403, "APPROVAL_POLICY_FORBIDDEN", "Setting an approval mode needs approval rights"), 403);
+    }
+    if (ifMatch === undefined || ifMatch.trim().length === 0) {
+      throw new HttpException(problem(request.url, 428, "APPROVAL_POLICY_IF_MATCH_REQUIRED", "If-Match with the step's ETag is required"), 428);
     }
     if (typeof body !== "object" || body === null || Array.isArray(body)) throw badRequest(request.url, "a JSON object body is required");
     const input = body as Record<string, unknown>;
@@ -60,7 +65,7 @@ export class ApprovalPoliciesController {
         timeoutSeconds: typeof input.timeout_seconds === "number" ? input.timeout_seconds : null,
         ...(typeof input.confirm_consequence === "string" ? { confirmConsequence: input.confirm_consequence } : {}),
         setBy: actor.user_id!,
-      }),
+      }, ifMatch.trim()),
     );
     return toResponse(step);
   }
@@ -70,6 +75,9 @@ export class ApprovalPoliciesController {
       return await operation();
     } catch (error: unknown) {
       if (error instanceof HttpException) throw error;
+      if (error instanceof ApprovalPolicyStaleError) {
+        throw new HttpException(problem(request.url, 412, "APPROVAL_POLICY_STALE", error.message), 412);
+      }
       if (error instanceof ApprovalPolicyValidationError) throw badRequest(request.url, error.message);
       if (error instanceof ApprovalPolicyNotFoundError) {
         throw new HttpException(problem(request.url, 404, "APPROVAL_STEP_NOT_FOUND", error.message), 404);
@@ -87,6 +95,7 @@ export class ApprovalPoliciesController {
 
 function toResponse(step: ApprovalStepPolicy) {
   return {
+    etag: step.etag,
     node_key: step.nodeKey,
     mode: step.mode,
     side_effect_consequence: step.sideEffectConsequence,
@@ -106,15 +115,15 @@ function scope(request: SessionGatewayRequest): { tenantId: string; workspaceId:
   if (actor === undefined || actor.workspace_id === null || actor.workspace_id === undefined) {
     throw new HttpException(problem(request.url, 500, "APPROVAL_POLICY_INTERNAL", "Missing authenticated workspace context"), 500);
   }
-  return { tenantId: actor.tenant_id, workspaceId: actor.workspace_id };
+  return { tenantId: actor.tenant_id.replace(/^ten_/, ""), workspaceId: actor.workspace_id.replace(/^ws_/, "") };
 }
 
 function badRequest(instance: string | undefined, detail: string): HttpException {
   return new HttpException(problem(instance, 400, "APPROVAL_POLICY_VALIDATION_FAILED", detail), 400);
 }
 
-function problem(instance: string | undefined, status: 400 | 403 | 404 | 409 | 500, errorCode: string, detail: string): ProblemDetails {
-  const titles = { 400: "Bad Request", 403: "Forbidden", 404: "Not Found", 409: "Conflict", 500: "Internal Server Error" } as const;
+function problem(instance: string | undefined, status: 400 | 403 | 404 | 409 | 412 | 428 | 500, errorCode: string, detail: string): ProblemDetails {
+  const titles = { 400: "Bad Request", 403: "Forbidden", 404: "Not Found", 409: "Conflict", 412: "Precondition Failed", 428: "Precondition Required", 500: "Internal Server Error" } as const;
   const id = randomUUID();
   return {
     type: `https://alter.dev/problems/${errorCode.toLowerCase().replaceAll("_", "-")}`,

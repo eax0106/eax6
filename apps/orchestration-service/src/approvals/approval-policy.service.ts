@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import type { AuditEventHandler } from "@alterx/shared-clients";
 import { CompiledDagSchema, hasExternalSideEffect } from "@alterx/contracts";
 
 import type { OrchestrationTenantStore } from "./approvals.service";
@@ -21,6 +23,13 @@ export class ApprovalPolicyValidationError extends Error {
   }
 }
 
+export class ApprovalPolicyStaleError extends Error {
+  constructor() {
+    super("Approval policy changed since it was read");
+    this.name = "ApprovalPolicyStaleError";
+  }
+}
+
 export class ApprovalPolicyNotFoundError extends Error {
   constructor(message: string) {
     super(message);
@@ -37,6 +46,7 @@ export class ApprovalPolicyConfirmationRequiredError extends Error {
 }
 
 export interface ApprovalStepPolicy {
+  readonly etag: string;
   readonly nodeKey: string;
   readonly mode: ApprovalMode;
   /** Set when the step guards a side effect; auto then needs it confirmed. */
@@ -99,7 +109,7 @@ const CONSEQUENCES: Readonly<Record<string, string>> = {
  * when none is promoted); a step with no stored row is "Ask me first".
  */
 export class ApprovalPolicyService {
-  constructor(private readonly store: OrchestrationTenantStore) {}
+  constructor(private readonly store: OrchestrationTenantStore, private readonly audit: AuditEventHandler) {}
 
   async list(tenantId: string, workspaceId: string, workflowId: string): Promise<readonly ApprovalStepPolicy[]> {
     return this.store.withTenant(tenantId, async (tx) => {
@@ -119,6 +129,7 @@ export class ApprovalPolicyService {
     workflowId: string,
     nodeKey: string,
     input: SetApprovalStepPolicyInput,
+    ifMatch: string,
   ): Promise<ApprovalStepPolicy> {
     if (input.skipOnTimeout && input.timeoutSeconds === null) {
       throw new ApprovalPolicyValidationError("skip_on_timeout needs timeout_seconds");
@@ -127,6 +138,8 @@ export class ApprovalPolicyService {
       throw new ApprovalPolicyValidationError("timeout_seconds must be a whole number from 60 to 2592000");
     }
     return this.store.withTenant(tenantId, async (tx) => {
+      // Lock the workflow too: the first policy write has no policy row to lock.
+      await tx.query("SELECT id FROM workflows WHERE tenant_id = $1 AND workspace_id = $2 AND id = $3 FOR UPDATE", [tenantId, workspaceId, workflowId]);
       const steps = await approvalSteps(tx, tenantId, workspaceId, workflowId);
       if (!steps.has(nodeKey)) throw new ApprovalPolicyNotFoundError(`Workflow ${workflowId} has no approval step ${nodeKey}`);
       const consequence = steps.get(nodeKey) ?? null;
@@ -139,6 +152,7 @@ export class ApprovalPolicyService {
           WHERE tenant_id = $1 AND workflow_id = $2 AND node_key = $3 FOR UPDATE`,
         [tenantId, workflowId, nodeKey],
       );
+      if (ifMatch !== view(nodeKey, consequence, current.rows[0]).etag) throw new ApprovalPolicyStaleError();
       // Moving to auto ends the streak the promotion suggestion counted.
       const resetCounter = input.mode === "auto" && current.rows[0]?.mode !== "auto";
       const result = await tx.query<PolicyRow>(
@@ -163,6 +177,18 @@ export class ApprovalPolicyService {
           confirmed ? input.setBy : null, input.skipOnTimeout, input.timeoutSeconds, input.setBy, resetCounter,
         ],
       );
+      await this.audit.recordEvent({
+        tenant_id: tenantId,
+        actor_type: "user",
+        actor_ref: input.setBy,
+        action: "approval.policy.update",
+        target_type: "workflow",
+        target_ref: `${workflowId}/${nodeKey}`,
+        result: "success",
+        reason_code: confirmed ? "consequence_confirmed" : "",
+        context_json: JSON.stringify({ scope: "approval_policy" }),
+        occurred_at: new Date().toISOString(),
+      });
       return view(nodeKey, consequence, result.rows[0]);
     });
   }
@@ -252,7 +278,9 @@ async function approvalSteps(
 function view(nodeKey: string, consequence: string | null, row: PolicyRow | undefined): ApprovalStepPolicy {
   const mode = row?.mode ?? "ask";
   const consecutiveApprovals = row?.consecutive_approvals ?? 0;
+  const etag = `"${createHash("sha256").update(JSON.stringify({ nodeKey, consequence, mode, updatedAt: row?.updated_at ?? null })).digest("hex")}"`;
   return {
+    etag,
     nodeKey,
     mode,
     sideEffectConsequence: consequence,

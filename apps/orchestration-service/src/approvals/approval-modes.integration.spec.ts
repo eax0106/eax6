@@ -6,6 +6,7 @@ import {
   type BlackboardHandlerClient,
 } from "@alterx/adapters";
 import { createExecutorTestHarness, type ExecutorTestHarness } from "@alterx/adapters/testing";
+import { createMockAuditEventHandler, type MockAuditEventHandler } from "@alterx/shared-clients";
 import type { NodeType } from "@alterx/contracts";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -17,7 +18,7 @@ import { NodeHandlerRegistry } from "../registry/node-handler-registry";
 import { NodeexecService } from "../registry/nodeexec.service";
 import { NodeExecutionLedgerService } from "../runs/node-execution-ledger.service";
 import { RunStreamEventService } from "../runs/run-stream-event.service";
-import { ApprovalPolicyConfirmationRequiredError, ApprovalPolicyService, PROMOTION_SUGGESTION_THRESHOLD } from "./approval-policy.service";
+import { ApprovalPolicyConfirmationRequiredError, ApprovalPolicyService, ApprovalPolicyStaleError, type SetApprovalStepPolicyInput, PROMOTION_SUGGESTION_THRESHOLD } from "./approval-policy.service";
 import { ApprovalsService } from "./approvals.service";
 
 /**
@@ -100,6 +101,7 @@ describe.sequential("approval modes (D5), end to end", () => {
   let harness: ExecutorTestHarness;
   let approvals: ApprovalsService;
   let policies: ApprovalPolicyService;
+  let audit: MockAuditEventHandler;
   const role = `approval_modes_${randomBytes(6).toString("hex")}`;
   const password = randomBytes(24).toString("hex");
 
@@ -138,7 +140,8 @@ describe.sequential("approval modes (D5), end to end", () => {
     );
     harness = await createExecutorTestHarness(TASK_QUEUE, createExecutorActivities(nodeexec, blackboard()));
     approvals = new ApprovalsService(store, harness.durable);
-    policies = new ApprovalPolicyService(store);
+    audit = createMockAuditEventHandler();
+    policies = new ApprovalPolicyService(store, audit);
   }, 180_000);
 
   afterAll(async () => {
@@ -153,6 +156,11 @@ describe.sequential("approval modes (D5), end to end", () => {
     sent.clear();
     await admin.withTenant(TENANT_A, (tx) => tx.query("DELETE FROM approval_step_policies WHERE tenant_id = $1", [TENANT_A]));
   });
+
+  async function setPolicy(workflow: string, nodeKey: string, input: SetApprovalStepPolicyInput) {
+    const step = (await policies.list(TENANT_A, WORKSPACE, workflow)).find((row) => row.nodeKey === nodeKey)!;
+    return policies.set(TENANT_A, WORKSPACE, workflow, nodeKey, input, step.etag);
+  }
 
   async function startRun(workflow = WORKFLOW) {
     const runId = `run_${uuidV7()}`;
@@ -184,8 +192,40 @@ describe.sequential("approval modes (D5), end to end", () => {
     ]);
   });
 
+  it("serializes competing first writes and rejects stale updates without recording an audit", async () => {
+    const [initial] = await policies.list(TENANT_A, WORKSPACE, WORKFLOW);
+    const input = { mode: "ask" as const, skipOnTimeout: false, timeoutSeconds: 120, setBy: "usr_setter" };
+    const beforeEvents = audit.getRecordedEvents().length;
+    const attempts = await Promise.allSettled([
+      policies.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, input, initial!.etag),
+      policies.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, { ...input, timeoutSeconds: 180 }, initial!.etag),
+    ]);
+    expect(attempts.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    const failed = attempts.find((result) => result.status === "rejected");
+    expect(failed?.status === "rejected" && failed.reason).toBeInstanceOf(ApprovalPolicyStaleError);
+    expect(audit.getRecordedEvents().slice(beforeEvents)).toEqual([expect.objectContaining({
+      tenant_id: TENANT_A, actor_ref: "usr_setter", action: "approval.policy.update", target_ref: `${WORKFLOW}/${approvalKey}`,
+      context_json: JSON.stringify({ scope: "approval_policy" }),
+    })]);
+    const [current] = await policies.list(TENANT_A, WORKSPACE, WORKFLOW);
+    expect(current!.etag).not.toBe(initial!.etag);
+    await expect(policies.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, input, initial!.etag)).rejects.toBeInstanceOf(ApprovalPolicyStaleError);
+    expect(audit.getRecordedEvents()).toHaveLength(beforeEvents + 1);
+  });
+
+  it("rolls back both first and existing policy writes when audit recording fails", async () => {
+    const failing = new ApprovalPolicyService(store, createMockAuditEventHandler({ recordEvent: async () => { throw new Error("audit unavailable"); } }));
+    const input = { mode: "auto" as const, skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter" };
+    const [initial] = await policies.list(TENANT_A, WORKSPACE, WORKFLOW);
+    await expect(failing.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, input, initial!.etag)).rejects.toThrow("audit unavailable");
+    expect(await policies.list(TENANT_A, WORKSPACE, WORKFLOW)).toEqual([initial]);
+    const saved = await setPolicy(WORKFLOW, approvalKey, { ...input, mode: "ask" });
+    await expect(failing.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, input, saved.etag)).rejects.toThrow("audit unavailable");
+    expect(await policies.list(TENANT_A, WORKSPACE, WORKFLOW)).toEqual([saved]);
+  });
+
   it("Always go ahead approves by policy without waiting, recording the mode and who set it", async () => {
-    await policies.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, { mode: "auto", skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter" });
+    await setPolicy( WORKFLOW, approvalKey, { mode: "auto", skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter" });
     const { runId, result } = await startRun();
     await expect(result).resolves.toBeDefined();
     expect(sent.has(runId)).toBe(true);
@@ -207,16 +247,17 @@ describe.sequential("approval modes (D5), end to end", () => {
     const [step] = await policies.list(TENANT_A, WORKSPACE, EMAIL_WORKFLOW);
     expect(step!.sideEffectConsequence).toBe("this will send emails without asking");
     for (const confirmConsequence of [undefined, "yes"]) {
-      await expect(policies.set(TENANT_A, WORKSPACE, EMAIL_WORKFLOW, approvalKey, {
+      await expect(setPolicy( EMAIL_WORKFLOW, approvalKey, {
         mode: "auto", skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter",
         ...(confirmConsequence === undefined ? {} : { confirmConsequence }),
       })).rejects.toBeInstanceOf(ApprovalPolicyConfirmationRequiredError);
     }
     await expect(policies.list(TENANT_A, WORKSPACE, EMAIL_WORKFLOW)).resolves.toEqual([expect.objectContaining({ mode: "ask" })]);
-    const confirmed = await policies.set(TENANT_A, WORKSPACE, EMAIL_WORKFLOW, approvalKey, {
+    const confirmed = await setPolicy( EMAIL_WORKFLOW, approvalKey, {
       mode: "auto", skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter", confirmConsequence: "this will send emails without asking",
     });
     expect(confirmed).toMatchObject({ mode: "auto", autoConfirmedBy: "usr_setter", autoConfirmedAt: expect.any(String) });
+    expect(audit.getRecordedEvents().at(-1)).toMatchObject({ actor_ref: "usr_setter", reason_code: "consequence_confirmed" });
     // The database refuses an unconfirmed auto side-effect row outright.
     await expect(admin.withTenant(TENANT_A, (tx) =>
       tx.query("UPDATE approval_step_policies SET auto_confirmed_by = NULL WHERE tenant_id = $1 AND workflow_id = $2", [TENANT_A, EMAIL_WORKFLOW]),
@@ -238,12 +279,12 @@ describe.sequential("approval modes (D5), end to end", () => {
     await expect(policies.list(TENANT_A, WORKSPACE, WORKFLOW)).resolves.toEqual([
       expect.objectContaining({ mode: "ask", consecutiveApprovals: 10, promotionSuggested: true }),
     ]);
-    const promoted = await policies.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, { mode: "auto", skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter" });
+    const promoted = await setPolicy( WORKFLOW, approvalKey, { mode: "auto", skipOnTimeout: false, timeoutSeconds: null, setBy: "usr_setter" });
     expect(promoted).toMatchObject({ mode: "auto", consecutiveApprovals: 0, promotionSuggested: false });
   }, 600_000);
 
   it("skip-on-timeout continues past an unanswered approval and flags the run", async () => {
-    await policies.set(TENANT_A, WORKSPACE, WORKFLOW, approvalKey, { mode: "ask", skipOnTimeout: true, timeoutSeconds: 60, setBy: "usr_setter" });
+    await setPolicy( WORKFLOW, approvalKey, { mode: "ask", skipOnTimeout: true, timeoutSeconds: 60, setBy: "usr_setter" });
     const { runId, result } = await startRun();
     const approval = await approvalOf(runId);
     expect(approval.status).toBe("pending");

@@ -25,7 +25,7 @@ import {
   ToolGatewayClient,
   VerifyServiceClient,
 } from "@alterx/adapters";
-import { createMockQueueProvider } from "@alterx/shared-clients";
+import { createMockQueueProvider, type AuditEventHandler } from "@alterx/shared-clients";
 import { MODELGW_CLIENT_PROTO_PATH } from "./conversation/grpc.constants";
 import { GraphCompilerService } from "./compiler/graph-compiler.service";
 import { CAPABILITY_CLIENT_PROTO_PATH } from "./compiler/capability-client.constants";
@@ -463,7 +463,8 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     },
     {
       provide: ApprovalPolicyService,
-      useFactory: () => new ApprovalPolicyService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      inject: [RUN_LEARNING_AUDIT],
+      useFactory: (audit: AuditEventHandler) => new ApprovalPolicyService(orchestrationStore(sessionGatewayEnvironment(process.env)), audit),
     },
     {
       provide: ApprovalsService,
