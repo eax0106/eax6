@@ -6,7 +6,7 @@ import { type KnowledgeDocument } from "@/api/types"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { FileText, FileJson, RefreshCw, AlertCircle } from "lucide-react"
+import { FileText, FileJson, RefreshCw, AlertCircle, Trash2 } from "lucide-react"
 
 interface DocumentListProps {
   sourceId: string
@@ -28,6 +28,16 @@ export function DocumentList({ sourceId, onSelectDocument }: DocumentListProps) 
     }
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteKnowledgeDocument(id),
+    onSuccess: (_, id) => {
+      queryClient.removeQueries({ queryKey: queryKeys.knowledge.chunks(sourceId, id) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.knowledge.documents(sourceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.knowledge.sources.detail(sourceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.knowledge.sources.list })
+    },
+  })
+
   if (isLoading) {
     return <div className="p-8 text-center text-muted-foreground">Loading documents...</div>
   }
@@ -44,6 +54,9 @@ export function DocumentList({ sourceId, onSelectDocument }: DocumentListProps) 
 
   return (
     <div className="rounded-md border">
+      {deleteMutation.isError && <p role="alert" className="p-4 text-destructive">
+        Delete failed: {deleteMutation.error instanceof Error ? deleteMutation.error.message : "Try again."}
+      </p>}
       <Table>
         <TableHeader>
           <TableRow>
@@ -87,6 +100,15 @@ export function DocumentList({ sourceId, onSelectDocument }: DocumentListProps) 
                 {formatDistanceToNow(new Date(doc.createdAt), { addSuffix: true })}
               </TableCell>
               <TableCell className="text-right">
+                <Button variant="ghost" size="icon" aria-label={`Delete ${doc.name}`} disabled={deleteMutation.isPending}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (window.confirm(`Delete "${doc.name}" and all its indexed content? This cannot be undone.`)) {
+                      deleteMutation.mutate(doc.id)
+                    }
+                  }}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
                 {doc.status === "failed" && (
                   <Button 
                     variant="ghost" 

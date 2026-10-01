@@ -1,40 +1,25 @@
-# Gates: D14 read-back (C94)
+# Gates: knowledge document deletion (C96)
 
-OWNS: apps/orchestration-service/src/**, apps/orchestration-service/db/schema/verification_results.ts, apps/orchestration-service/drizzle/**, apps/platform-api/src/notifications/engine-events/**, apps/platform-web/src/features/runs/components/run-inspector.spec.tsx, apps/tool-gateway/src/gateway/**, packages/adapters/src/ses/**, packages/shared-clients/src/**, packages/contracts/src/workflow-dag.ts, deploy/ec2/**, infrastructure/ec2-mvp/**, docs/work-queue.md
+OWNS: apps/platform-web/src/features/knowledge/components/document-list*, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/live.ts, apps/platform-web/src/api/live-knowledge.spec.ts, apps/platform-web/src/api/knowledge-delete-mock.spec.ts, docs/work-queue.md
 
-Scope: D14 acceptance passes immediately; SES Delivery/Bounce updates the matching side-effect atomically and a later bounce flags the run and reaches D1 notifications. Click reads expected page state only when declared, with confirmation persisted for the existing verification view. EC2 kit provisions the event route; actual AWS deployment awaits the deployment account.
+Scope: Each knowledge document has a confirmed delete action through the existing tenant/workspace guarded endpoint. Success refreshes documents and source counts; failure keeps the row and displays an error. Mock behavior removes only the requested document.
 
-- [x] G7: Unconfirmed browser actions persist a warning that the live adapter and rendered verification view label explicitly
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/registry/nodeexec.service.spec.ts apps/orchestration-service/src/webhooks/ses-delivery-events.integration.spec.ts && node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/runs/components/run-inspector.spec.tsx && echo readback-visible-passed
-  EXPECT: readback-visible-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=d8409783f8a07812ba616dad386d392ad02e8db793d4002c1d6896a148f1fb5d; exit=0; EXPECT=matched; output-sha256=c1301f920f6f09e3cb20accb33007eee7b1f40106d407ed9518ad81042afa331; output-bytes=2950; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
+- [x] G1: Rendered live document rows confirm before deletion, send the actual route, refresh on success and preserve the row on failure
+  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/knowledge/components/document-list.spec.tsx apps/platform-web/src/api/live-knowledge.spec.ts && echo knowledge-delete-live-passed
+  EXPECT: knowledge-delete-live-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=f1449af0b3e5e6e7cfef8d7efebcd6910707150bedc0f805abddf7191b64e4e6; exit=0; EXPECT=matched; output-sha256=5c28946cfe5ffc572cbc7fa2f7c9c3f220eae726c5ff7258c9237a8bd28dae3c; output-bytes=274; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
 
-- [x] G1: Restricted-role Postgres proves delivery, bounce, duplicates, order, tenant isolation, early-event retry and atomic stream rollback; real HTTP proves authentication and retry status
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/webhooks/ses-delivery-events.integration.spec.ts apps/orchestration-service/src/webhooks/ses-delivery-events.controller.spec.ts apps/orchestration-service/src/webhooks/ses-delivery-events.service.spec.ts && echo ses-readback-passed
-  EXPECT: ses-readback-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=e60db4d80c1ed5648adce68d76da8178ebddbec31d83774f25452144eb3f35b1; exit=0; EXPECT=matched; output-sha256=c641f263cf1a3a95717f25c12902302b31f0c27541c899c55ea331b21f25a57e; output-bytes=2705; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
+- [x] G2: Mock deletion removes only its selected document and refreshes source counts
+  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/api/knowledge-delete-mock.spec.ts && echo knowledge-delete-mock-passed
+  EXPECT: knowledge-delete-mock-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=f18e2a60ac71b2e666c859f1d52b8f016c9434c497b0df9b47b918d5cb522a5f; exit=0; EXPECT=matched; output-sha256=dec0575637a7a041c6001b70ecd7d69219bbe0b21a44efe8a8f9677a781dd051; output-bytes=274; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
 
-- [x] G2: D1 producer uses delivery failure time and per-side-effect deduplication, including old runs
-  CHECK: node_modules/.bin/vitest run apps/platform-api/src/notifications/engine-events/email-delivery-failed.producer.spec.ts && echo d1-delivery-notification-passed
-  EXPECT: d1-delivery-notification-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=fb196991f4f3b304362c8b8f3e5608341d83fd259780781c25483f7819cc58bf; exit=0; EXPECT=matched; output-sha256=4065810378f19192cae118a32c2d29a992fccb3ae7e0024d04306b88b162bfe3; output-bytes=874; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
-
-- [x] G3: Clicks without expectations make no read-back call; text/selector checks confirm, fail or remain unconfirmed honestly
-  CHECK: node_modules/.bin/vitest run apps/tool-gateway/src/gateway/tool-gateway.service.spec.ts apps/orchestration-service/src/registry/mechanical-check.spec.ts apps/orchestration-service/src/registry/handlers/toolcall.handler.spec.ts && echo browser-readback-passed
-  EXPECT: browser-readback-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=e44e6620b7edf607ee2082a694fef7e47b4f2c6141a1d11841a3fda994d6b77b; exit=0; EXPECT=matched; output-sha256=deaac098308f06cb594ffffc2b6b24c51c1911d4d2665486552d51331f12b3bd; output-bytes=641; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Removing delivery updates, notification identity or conditional snapshots fails behavioral assertions and restores all sources
+- [x] G3: The original component and broken route fail regression assertions and sources are restored
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: d14-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=8ecf3a6515c9e80b0a42f1955499fcb7b6ed52171e0eb36d8c674c3a235649ea; exit=0; EXPECT=matched; output-sha256=4b2a50fa365fea93e68ae83d23267a68eb532c6e617a7f8096765fd0766123f7; output-bytes=683; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
+  EXPECT: knowledge-delete-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=72d413d02c020ba8e3b5db4db6333dd7dd559a5a912b985d0ff8a26981ac7d3f; exit=0; EXPECT=matched; output-sha256=50da1953d948b2db44ddb807d44203246bc52ef4d9477d2a11f52f1373f37cfc; output-bytes=269; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
 
-- [x] G5: EC2 kit routes SES events to authenticated engine with retries and a dead-letter queue; local provisioner controls pass
-  CHECK: python3 deploy/ec2/check-ses-delivery.py && bash deploy/ec2/check-bootstrap-env.sh && terraform -chdir=infrastructure/ec2-mvp validate
-  EXPECT: ses-delivery-kit-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=785a234dfbe1dae4df08022f484bac31a17f213a08329cd5ed75f399098e21af; exit=0; EXPECT=matched; output-sha256=80d6d381a93a1f1239213562fbc777e66952de999b65183e1d9f52ec4d443702; output-bytes=150; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
-
-- [x] G6: Builds, typecheck, lint, affected suites, architecture and zero new AST entries pass
+- [x] G4: Full web suite, build, typecheck, lint, architecture and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: d14-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=cd33a59db1f310d2a9722c5eab02b7cdf1c5017f6f0a802e7b5a67604cbd8319; exit=0; EXPECT=matched; output-sha256=82160ebb878a9f67cfe8fb493a7383c0a269e4bd31bc358aa1a63a4aea727327; output-bytes=463; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-d14-readback-c94; path=b33e9cf43ae9/31 entries
+  EXPECT: knowledge-delete-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=7987f04d64befdeff0638ed4621ed900838e182887272a517004b8142c2d7838; exit=0; EXPECT=matched; output-sha256=de60d30bbb99c6b78f32b0101bd46dac1d52e2e7fe20aa6f24dd98325c588edd; output-bytes=221; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-knowledge-delete-c96; path=b33e9cf43ae9/31 entries
