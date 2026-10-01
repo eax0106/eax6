@@ -169,6 +169,8 @@ describe.sequential("D11 stored event replay", () => {
   it("transaction: budget, workspace hold and audit failure leave no replay run or input", async () => {
     const item = await fixture(), preview = await replay.preview(actor, item.event);
     const cap = await budgets.create(actor.tenantId, { workspaceId: actor.workspaceId, workflowId: item.workflow, kind: "run_cap", amountMinor: 50, createdBy: actor.userId });
+    const blocked = await real(item.event, preview.confirmationToken);
+    expect(blocked.status).toBe(409); expect(await blocked.json()).toMatchObject({ error_code: "BUDGET_EXCEEDED", retryable: false });
     await expect(replay.replay(actor, item.event, { confirmed: true, confirmationToken: preview.confirmationToken }, uuid())).rejects.toThrow(/exceeded/);
     await store.withTenant(tenant, tx => tx.query("DELETE FROM budgets WHERE id=$1", [cap.id]));
     const holds = new WorkspaceHoldsService(store); await holds.hold(actor.tenantId, actor.workspaceId, actor.userId);

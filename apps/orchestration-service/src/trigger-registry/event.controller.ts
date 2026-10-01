@@ -3,7 +3,9 @@ import { Body, Controller, Get, Headers, HttpException, Param, Post, Query, Req 
 import type { SessionGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { EventReplayService, ReplayConfirmationError, type ReplayActor } from "./event-replay.service";
-import { RunStateConflictError, RunValidationError } from "../runs/run-launcher.service";
+import { RunStartFailedError, RunStateConflictError, RunValidationError, WorkflowNotFoundError } from "../runs/run-launcher.service";
+import { mapRunError } from "../runs/runs.controller";
+import { BudgetExceededError } from "../budgets/budget.service";
 import { BlackboardValidationError } from "../blackboard/blackboard.service";
 import {
   EventNotFoundError,
@@ -83,13 +85,15 @@ function requireTenant(request: SessionGatewayRequest): string {
 }
 
 function mapEventError(error: unknown, url: string | undefined): HttpException {
-  if (error instanceof EventValidationError || error instanceof RunValidationError || error instanceof BlackboardValidationError) {
+  if (error instanceof RunValidationError || error instanceof RunStateConflictError || error instanceof RunStartFailedError ||
+      error instanceof WorkflowNotFoundError || error instanceof BudgetExceededError) return mapRunError(error, url);
+  if (error instanceof EventValidationError || error instanceof BlackboardValidationError) {
     return new HttpException(problem(url, 400, error.message), 400);
   }
   if (error instanceof EventNotFoundError) {
     return new HttpException(problem(url, 404, error.message), 404);
   }
-  if (error instanceof ReplayConfirmationError || error instanceof RunStateConflictError) {
+  if (error instanceof ReplayConfirmationError) {
     return new HttpException(problem(url, 409, error.message), 409);
   }
   return new HttpException(problem(url, 500, "Events could not be listed"), 500);
