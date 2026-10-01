@@ -295,4 +295,5 @@ jobs:
 
       - name: clean nx env fixture
         if: always()
-        run: node -e 'require("node:fs").rmSync(".env.local", { force: true })'
+        run: |
+          node -e 'require("node:fs").rmSync(".env.local", { force: true })'
