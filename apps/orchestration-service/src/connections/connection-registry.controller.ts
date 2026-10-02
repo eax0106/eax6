@@ -1,12 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Body, Controller, Headers, HttpCode, HttpException, Inject, Post } from "@nestjs/common";
-import { Public as BypassSessionGatewayActorAuth } from "@alterx/auth";
+import { Public as InternalConnectionServiceAuth } from "@alterx/auth";
 import { ConnectionRegistrySnapshotSchema } from "@alterx/contracts";
 import { ConnectionRegistryConflictError, ConnectionRegistryService } from "./connection-registry.service";
 
 export const CONNECTION_REGISTRY_TOKEN_HASH = Symbol("CONNECTION_REGISTRY_TOKEN_HASH");
 
-@BypassSessionGatewayActorAuth()
+@InternalConnectionServiceAuth()
 @Controller("internal/connections")
 export class ConnectionRegistryController {
   constructor(private readonly registry: ConnectionRegistryService,

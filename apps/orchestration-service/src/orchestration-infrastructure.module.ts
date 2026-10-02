@@ -18,7 +18,7 @@ import { RunEstimateService, type RunPreviewSource } from "./budgets/run-estimat
 import { WorstCaseRunCostEstimator, type ModelPolicyReader, type RunEstimatesLedger } from "./budgets/worst-case-run-cost-estimator";
 import { COST_CLIENT_PROTO_PATH } from "./registry/nodeexec-grpc.constants";
 
-export interface SessionGatewayEnvironment {
+export interface IdentityTenantGatewayEnvironment {
   readonly auth0Domain: string;
   readonly apiAudience: string;
   readonly actorTokenIssuer: string;
@@ -47,7 +47,7 @@ export interface SessionGatewayEnvironment {
 export class OrchestrationInfrastructureModule {}
 
 export function orchestrationStore(
-  env: SessionGatewayEnvironment,
+  env: IdentityTenantGatewayEnvironment,
   userOverride?: string,
 ): PostgresOrchestrationStoreProvider {
   return new PostgresOrchestrationStoreProvider(
@@ -56,10 +56,10 @@ export function orchestrationStore(
   );
 }
 
-export function sessionGatewayEnvironment(
+export function identityTenantGatewayEnvironment(
   env: NodeJS.ProcessEnv,
-): SessionGatewayEnvironment {
-  assertProductionSessionGatewayConfiguration(env);
+): IdentityTenantGatewayEnvironment {
+  assertProductionIdentityTenantGatewayConfiguration(env);
 
   const base = {
     auth0Domain: requiredEnvironment(env, "AUTH0_DOMAIN"),
@@ -118,13 +118,13 @@ export function resolveDatabaseAuthentication(
   )?.trim();
   if (requested !== undefined && requested !== "" && requested !== "static" && requested !== "iam") {
     throw new Error(
-      "Invalid Session Gateway configuration: DATABASE_AUTHENTICATION must be static or iam",
+      "Invalid Identity & Tenant Gateway configuration: DATABASE_AUTHENTICATION must be static or iam",
     );
   }
   if (env.ALTER_ENV?.trim() === "local") {
     if (requested === "iam") {
       throw new Error(
-        "Invalid Session Gateway configuration: DATABASE_AUTHENTICATION cannot be iam in the local environment",
+        "Invalid Identity & Tenant Gateway configuration: DATABASE_AUTHENTICATION cannot be iam in the local environment",
       );
     }
     return "static";
@@ -144,7 +144,7 @@ export function internalM2mTokenProvider() {
  * fresh-instance rule as orchestrationStore itself.
  */
 export function buildRunOutcomeService(): RunOutcomeService {
-  const dbConfig = sessionGatewayEnvironment(process.env);
+  const dbConfig = identityTenantGatewayEnvironment(process.env);
   const store = orchestrationStore(dbConfig);
   return new RunOutcomeService(store, runVerdictSink(process.env), buildRunBudgetGate(process.env));
 }
@@ -155,7 +155,7 @@ export function buildRunOutcomeService(): RunOutcomeService {
  * billed and a run settles at zero.
  */
 export function buildRunBudgetGate(environment: NodeJS.ProcessEnv): RunBudgetGate {
-  const store = orchestrationStore(sessionGatewayEnvironment(environment));
+  const store = orchestrationStore(identityTenantGatewayEnvironment(environment));
   const baseUrl = environment.COST_LEDGER_BASE_URL?.trim();
   const reader: RunCostReader =
     (environment.RUNTIME_MODE?.trim() || "mock") === "real" && baseUrl
@@ -175,7 +175,7 @@ export function buildWorstCaseEstimator(environment: NodeJS.ProcessEnv): WorstCa
 }
 
 export function buildRunEstimateService(environment: NodeJS.ProcessEnv, source: RunPreviewSource): RunEstimateService {
-  const store = orchestrationStore(sessionGatewayEnvironment(environment));
+  const store = orchestrationStore(identityTenantGatewayEnvironment(environment));
   const [, ledger] = runEstimationPorts(environment);
   return new RunEstimateService(store, source, buildWorstCaseEstimator(environment), ledger);
 }
@@ -228,7 +228,7 @@ export function runVerdictSink(environment: NodeJS.ProcessEnv): RunVerdictSink |
 }
 
 function orchestrationStoreConfig(
-  env: SessionGatewayEnvironment,
+  env: IdentityTenantGatewayEnvironment,
   userOverride?: string,
 ): import("@alterx/adapters").PostgresOrchestrationStoreConfig {
   if (env.databaseAuthentication === "static") {
@@ -249,13 +249,13 @@ function orchestrationStoreConfig(
   };
 }
 
-function assertProductionSessionGatewayConfiguration(
+function assertProductionIdentityTenantGatewayConfiguration(
   env: NodeJS.ProcessEnv,
 ): void {
   if (env.NODE_ENV !== "production") return;
   if (env.INGRESS_SESSION_GATEWAY_CORE_ENABLED !== "true") {
     throw new Error(
-      "Production Session Gateway requires feature flag ingress.sessionGatewayCore",
+      "Production Identity & Tenant Gateway requires the core ingress feature flag",
     );
   }
   if (env.ACTOR_TOKEN_TEST_SIGNER_ENABLED === "true") {
@@ -266,7 +266,7 @@ function assertProductionSessionGatewayConfiguration(
 function requiredEnvironment(env: NodeJS.ProcessEnv, name: string): string {
   const value = env[name]?.trim();
   if (!value) {
-    throw new Error(`Missing required Session Gateway configuration: ${name}`);
+    throw new Error(`Missing required Identity & Tenant Gateway configuration: ${name}`);
   }
   return value;
 }
@@ -275,7 +275,7 @@ function requiredPort(env: NodeJS.ProcessEnv, name: string): number {
   const value = Number(requiredEnvironment(env, name));
   if (!Number.isInteger(value) || value < 1 || value > 65_535) {
     throw new Error(
-      `Invalid Session Gateway configuration: ${name} must be a port`,
+      `Invalid Identity & Tenant Gateway configuration: ${name} must be a port`,
     );
   }
   return value;

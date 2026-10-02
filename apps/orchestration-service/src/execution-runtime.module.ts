@@ -95,7 +95,7 @@ import {
   buildRunOutcomeService,
   internalM2mTokenProvider,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 import { ArtifactModule } from "./artifact.module";
 import { RunLauncherModule } from "./run-launcher.module";
@@ -109,7 +109,7 @@ import { RunLauncherModule } from "./run-launcher.module";
  * the wiring verbatim twice.
  */
 function buildRecoveryPolicyService(): RecoveryPolicyService {
-  const dbConfig = sessionGatewayEnvironment(process.env);
+  const dbConfig = identityTenantGatewayEnvironment(process.env);
   const store = orchestrationStore(dbConfig);
   const modelConfig = loadConversationManagerEnvironment(process.env);
   const modelGateway = new ModelGatewayClient({
@@ -225,7 +225,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: ClarificationsService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const config = loadRunLauncherEnvironment(process.env);
         return new ClarificationsService(orchestrationStore(dbConfig), new TemporalDurableExecutionProvider({
           address: config.temporalAddress, namespace: config.temporalNamespace, taskQueue: config.taskQueue,
@@ -235,27 +235,27 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     },
     {
       provide: WorkspaceHoldsService,
-      useFactory: () => new WorkspaceHoldsService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new WorkspaceHoldsService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       provide: RunRetentionService,
-      useFactory: () => new RunRetentionService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new RunRetentionService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       provide: EngineWorkspaceExportService,
-      useFactory: () => new EngineWorkspaceExportService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new EngineWorkspaceExportService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       provide: DeploymentChangesService,
-      useFactory: () => new DeploymentChangesService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new DeploymentChangesService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       provide: AgentWorkflowsService,
-      useFactory: () => new AgentWorkflowsService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new AgentWorkflowsService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       provide: EngineBudgetService,
-      useFactory: () => new EngineBudgetService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new EngineBudgetService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       // No PostgresOrchestrationStoreProvider here -- the Node Type
@@ -267,7 +267,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: NODEEXEC_HANDLER,
       useFactory: async (artifacts: ArtifactsService) => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const conversationConfig = loadConversationManagerEnvironment(
           process.env,
@@ -418,7 +418,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
         // Own store instance, same reasoning as every other factory here
         // (see the ApprovalsService comment below): not maximally
         // efficient, but correct and isolated.
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const lookup = new RunWorkspaceLookupService(store);
         return {
@@ -444,7 +444,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: NodeExecutionLedgerService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         return new NodeExecutionLedgerService(store);
       },
@@ -452,14 +452,14 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: RunStreamEventService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new RunStreamEventService(orchestrationStore(dbConfig));
       },
     },
     {
       provide: RunObservabilityService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new RunObservabilityService(orchestrationStore(dbConfig));
       },
     },
@@ -479,12 +479,12 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: ApprovalPolicyService,
       inject: [RUN_LEARNING_AUDIT],
-      useFactory: (audit: AuditEventHandler) => new ApprovalPolicyService(orchestrationStore(sessionGatewayEnvironment(process.env)), audit),
+      useFactory: (audit: AuditEventHandler) => new ApprovalPolicyService(orchestrationStore(identityTenantGatewayEnvironment(process.env)), audit),
     },
     {
       provide: ApprovalsService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const runLauncherConfig = loadRunLauncherEnvironment(process.env);
         const durable = new TemporalDurableExecutionProvider({
@@ -501,7 +501,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: EscalationsService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         // Same provider ApprovalsService takes above: resolving an
         // escalation that parked a run has to reach that run's workflow.
@@ -520,7 +520,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     {
       provide: BLACKBOARD_HANDLER,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const cache = new RedisCacheProvider(
           parseRedisHostPort(dbConfig.redisUrl),

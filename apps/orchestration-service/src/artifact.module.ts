@@ -12,7 +12,7 @@ import { ArtifactContentGrpcService } from "./artifacts/artifact-content-grpc.se
 import {
   OrchestrationInfrastructureModule,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 
 @Module({
@@ -22,7 +22,7 @@ import {
     {
       provide: ArtifactsService,
       useFactory: async () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const parameterStore = new AwsSsmParameterProvider({ region: dbConfig.awsRegion });
         try {
