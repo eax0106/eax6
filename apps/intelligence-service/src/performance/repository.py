@@ -13,9 +13,28 @@ from .models import DriftCandidate, PerformanceObservation, PerformanceVerdict
 _SET_TENANT = text("SELECT set_config('app.current_tenant_id', :tenant_id, true)")
 
 
+class AgentTenantMismatchError(Exception):
+    pass
+
+
+class PerformanceAgentNotFoundError(Exception):
+    pass
+
+
 class PerformanceRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+
+    async def _assert_agent_owner(self, tenant_uuid: str, agent_id: str) -> None:
+        owner = (
+            await self._session.execute(
+                text("SELECT public.agent_owner_tenant(:agent_id)"), {"agent_id": agent_id}
+            )
+        ).scalar_one()
+        if owner is None:
+            raise PerformanceAgentNotFoundError("AGENT_NOT_FOUND")
+        if str(owner) != tenant_uuid:
+            raise AgentTenantMismatchError("SERVICE_TENANT_MISMATCH")
 
     async def load_agent_observations(
         self,
@@ -26,6 +45,7 @@ class PerformanceRepository:
         limit: int,
     ) -> tuple[PerformanceObservation, ...]:
         await self._session.execute(_SET_TENANT, {"tenant_id": tenant_uuid})
+        await self._assert_agent_owner(tenant_uuid, agent_id)
         rows = (
             await self._session.scalars(
                 select(PerformanceRecord)
@@ -75,6 +95,7 @@ class PerformanceRepository:
         in the same transaction as the insert, so the count it sees always
         includes the row just written."""
         await self._session.execute(_SET_TENANT, {"tenant_id": tenant_uuid})
+        await self._assert_agent_owner(tenant_uuid, agent_id)
         record_id = new_prefixed_id("perf")
         await self._session.execute(
             insert(PerformanceRecord).values(
