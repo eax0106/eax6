@@ -32,6 +32,7 @@ message ResolveCredentialRequest {
   string tenant_id = 1; // ten_ prefixed UUIDv7
   string integration_id = 2; // itg_ prefixed UUIDv7
   string credential_ref = 3; // reference only, never a secret value
+  optional string run_id = 4; // required for engine connection registry references
 }
 
 message ResolveCredentialResponse {

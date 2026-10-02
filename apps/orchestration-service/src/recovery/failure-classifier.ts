@@ -44,6 +44,9 @@ export function classifyNodeFailure(
   }
 
   for (const code of codes) {
+    if (code === "CREDENTIAL_MISSING") {
+      add(scores, evidence, "credential_missing", 100, `error_code=${code}`);
+    }
     if (/PERMISSION_DENIED|FORBIDDEN|CREDENTIAL.*DENIED/.test(code)) {
       add(scores, evidence, "tool_permission_denial", 100, `error_code=${code}`);
     }

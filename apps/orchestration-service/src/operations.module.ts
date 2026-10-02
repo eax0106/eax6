@@ -12,7 +12,7 @@ import {
   ORCHESTRATION_DELETION_TOKEN_HASH,
 } from "./deletion/deletion.controller";
 import { OrchestrationDeletionService } from "./deletion/deletion.service";
-import { ConnectionRegistryController, CONNECTION_REGISTRY_TOKEN_HASH } from "./connections/connection-registry.controller";
+import { ConnectionRegistryController, CONNECTION_LOOKUP_TOKEN_HASH, CONNECTION_REGISTRY_TOKEN_HASH } from "./connections/connection-registry.controller";
 import { ConnectionRegistryService } from "./connections/connection-registry.service";
 import { DeletionRequestController } from "./deletion/deletion-request.controller";
 import {
@@ -42,6 +42,10 @@ import {
     ConnectionRegistryController,
   ],
   providers: [
+    {
+      provide: CONNECTION_LOOKUP_TOKEN_HASH,
+      useFactory: () => loadServiceTokenFingerprint(process.env, "INTERNAL_SERVICE_TOKEN_SHA256"),
+    },
     {
       provide: CONNECTION_REGISTRY_TOKEN_HASH,
       useFactory: () => loadServiceTokenFingerprint(process.env, "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"),

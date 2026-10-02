@@ -24,6 +24,7 @@ import type {
 } from "@alterx/contracts";
 import {
   TOOLGW_HANDLER,
+  ToolGatewayCredentialMissingError,
   ToolGatewayPermissionError,
   ToolGatewayRateLimitError,
   ToolGatewayValidationError,
@@ -74,6 +75,7 @@ const protoPath = resolve(
 
 const handler: ToolgwHandler = {
   invokeTool: vi.fn(async (request: ToolgwInvokeToolRequest) => {
+    if (request.tool_name === "credential-missing") throw new ToolGatewayCredentialMissingError();
     if (request.tool_name === "invalid") {
       throw new ToolGatewayValidationError("invalid tool request");
     }
@@ -92,6 +94,7 @@ const handler: ToolgwHandler = {
     };
   }),
   resolveCredential: vi.fn(async (request: ToolgwResolveCredentialRequest) => {
+    if (request.credential_ref === "credential-missing") throw new ToolGatewayCredentialMissingError();
     if (request.credential_ref === "invalid") {
       throw new ToolGatewayValidationError("invalid credential request");
     }
@@ -261,6 +264,11 @@ describe("toolgw gRPC transport adapter", () => {
       resolved_reference: "cred_opaque",
       expires_at: "2026-07-24T00:05:00.000Z",
     });
+  });
+
+  it("preserves the exact named credential gap through both real gRPC entry points", async () => {
+    await expect(invokeTool(client, invokeRequest({ tool_name: "credential-missing" }))).rejects.toMatchObject({ code: 9, details: "CREDENTIAL_MISSING" });
+    await expect(resolveCredential(client, resolveRequest({ credential_ref: "credential-missing", run_id: "run_018f47a2-7b11-7b11-8a11-1234567890ab" }))).rejects.toMatchObject({ code: 9, details: "CREDENTIAL_MISSING" });
   });
 
   it("maps validation, permission, and rate-limit failures to canonical gRPC statuses", async () => {

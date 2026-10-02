@@ -8,6 +8,7 @@ import { Client } from "pg";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createMockSecretsProvider } from "@alterx/shared-clients";
+import { ToolGatewayCredentialMissingError } from "../grpc/toolgw-grpc-transport";
 import {
   PostgresToolDatabaseProvider,
   type ToolDatabaseClient,
@@ -138,5 +139,11 @@ describe.sequential("PostgresToolDatabaseProvider", () => {
       }),
     ).rejects.toThrow("query failed");
     expect(end).toHaveBeenCalledOnce();
+  });
+  it.each(["not-a-database-url", "https://example.test/database"])("rejects malformed stored database credentials before creating a client: %s", async value => {
+    const createClient = vi.fn(() => { throw new Error("Invalid credential reached a database client"); });
+    const target = new PostgresToolDatabaseProvider(createMockSecretsProvider({ secrets: { [credentialReference]: value } }), createClient);
+    await expect(target.execute({ credentialReference, databaseId: "db_accounts", operation: "select", statement: "SELECT $1::integer", parameters: [1] })).rejects.toBeInstanceOf(ToolGatewayCredentialMissingError);
+    expect(createClient).not.toHaveBeenCalled();
   });
 });

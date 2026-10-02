@@ -133,3 +133,13 @@ describe("ToolGatewayClient", () => {
     });
   });
 });
+
+
+it.each(["CREDENTIAL_MISSING", "unknown precondition", undefined])("maps only the named credential precondition: %s", async details => {
+  const error = Object.assign(new Error("private provider detail"), { code: status.FAILED_PRECONDITION, details });
+  const client = new ToolGatewayClient({ address: "localhost:1234", protoPath: "unused" }, fakeGrpcClient(() => ({ error })) as never);
+  const failure = await client.invoke(REQUEST).catch((caught: unknown) => caught) as ToolGatewayClientError;
+  expect(failure.kind).toBe(details === "CREDENTIAL_MISSING" ? "credential_missing" : "internal");
+  expect(failure.code).toBe(details === "CREDENTIAL_MISSING" ? "CREDENTIAL_MISSING" : "TOOL_GATEWAY_INTERNAL_ERROR");
+  expect(failure.retryable).toBe(false); expect(failure.message).not.toContain("private provider detail");
+});

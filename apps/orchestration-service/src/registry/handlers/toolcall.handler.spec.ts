@@ -9,6 +9,7 @@ import {
 } from "@alterx/adapters";
 import { describe, expect, it, vi } from "vitest";
 
+import { classifyNodeFailure } from "../../recovery/failure-classifier";
 import { ToolCallHandler } from "./toolcall.handler";
 
 const TENANT_ID = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
@@ -271,4 +272,14 @@ describe("ToolCallHandler", () => {
       expect(JSON.parse(invoke.mock.calls[0]![0].input_json).body).toEqual({ $from: "open", path: "sessionId" });
     });
   });
+});
+
+
+it("keeps a named credential gap through the handler and recovery classifier", async () => {
+  const handler = new ToolCallHandler(gateway(async () => { throw new ToolGatewayClientError("credential_missing", false); }));
+  const result = await handler.execute(context());
+  const details = ProblemDetailsSchema.parse(result.output);
+  expect(details).toMatchObject({ status: 424, error_code: "CREDENTIAL_MISSING", retryable: false });
+  expect(result.metadata).toMatchObject({ execution_status: "failed" });
+  expect(classifyNodeFailure({ nodeType: "ToolCall", attempt: 1, error: { code: details.error_code, detail: details.detail } }, { trace_id: details.trace_id, request_id: details.request_id }).failureClass).toBe("credential_missing");
 });

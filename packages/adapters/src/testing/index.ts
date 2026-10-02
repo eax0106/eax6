@@ -16,3 +16,4 @@ export {
   type PostgresTestClient,
   type PostgresTestPool,
 } from "./postgres-test-connections";
+export { resolveToolGatewayCredential } from "./toolgw-credential-client";

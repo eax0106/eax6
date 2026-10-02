@@ -19,7 +19,7 @@ import type {
   SecretsProvider,
 } from "@alterx/shared-clients";
 
-import { ToolGatewayService } from "./gateway/tool-gateway.service";
+import { ToolGatewayService, type ToolGatewayServiceOptions } from "./gateway/tool-gateway.service";
 import { HealthController } from "./health/health.controller";
 
 @Module({})
@@ -36,6 +36,7 @@ export class AppModule {
     cacheProvider: CacheProvider,
     browserProvider: BrowserAutomationProvider,
     emailProvider: EmailProvider,
+    options: ToolGatewayServiceOptions = {},
   ): DynamicModule {
     return {
       module: AppModule,
@@ -56,6 +57,7 @@ export class AppModule {
             cacheProvider,
             browserProvider,
             emailProvider,
+            options,
           ),
         },
       ],

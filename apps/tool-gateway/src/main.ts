@@ -37,6 +37,7 @@ import { lazyAuth0M2mTokenProviderFromEnvironment } from "@alterx/auth";
 
 import { AppModule } from "./app.module";
 import { loadToolGatewayEnvironment } from "./config/environment";
+import { resolveConnectionCredential } from "./gateway/connection-credential-client";
 import {
   AUDIT_CLIENT_PROTO_PATH,
   TOOLGW_PROTO_PATH,
@@ -184,6 +185,7 @@ async function bootstrap(): Promise<void> {
       cacheProvider,
       browserProvider,
       emailProvider,
+      { resolveConnection: input => resolveConnectionCredential(environment.engineBaseUrl, environment.internalServiceToken, input) },
     ),
     new FastifyAdapter(),
   );

@@ -9,6 +9,8 @@ interface ToolGatewayEnvironmentBase {
   readonly runtimeMode: "real" | "mock";
   readonly httpPort: number;
   readonly grpcBindAddress: string;
+  readonly engineBaseUrl: string;
+  readonly internalServiceToken: string;
 }
 
 export interface ToolGatewayAppConfigEnvironment
@@ -91,7 +93,13 @@ export function loadToolGatewayEnvironment(
     );
   }
 
+  let engineUrl: URL;
+  try { engineUrl = new URL(requireValue(environment, "ENGINE_BASE_URL")); }
+  catch { throw new ToolGatewayConfigurationError("ENGINE_BASE_URL", "an HTTP service URL is required"); }
+  if (!["http:", "https:"].includes(engineUrl.protocol) || engineUrl.username || engineUrl.password || engineUrl.search || engineUrl.hash || engineUrl.pathname !== "/") throw new ToolGatewayConfigurationError("ENGINE_BASE_URL", "an HTTP service origin is required");
   const baseEnvironment: ToolGatewayEnvironmentBase = {
+    engineBaseUrl: engineUrl.origin,
+    internalServiceToken: requireValue(environment, "INTERNAL_SERVICE_TOKEN"),
     alterEnvironment:
       alterEnvironment as ToolGatewayEnvironment["alterEnvironment"],
     serviceName,

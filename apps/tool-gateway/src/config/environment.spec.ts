@@ -14,6 +14,8 @@ function environment(
     ALTER_REGION: "ap-south-1",
     RUNTIME_MODE: "mock",
     ALTER_CONFIG_SOURCE: "local-file",
+    ENGINE_BASE_URL: "http://127.0.0.1:3010",
+    INTERNAL_SERVICE_TOKEN: "runtime-lookup-fixture",
     ...overrides,
   };
   if (overrides.ALTER_CONFIG_SOURCE === "appconfig" && overrides.RUNTIME_MODE === undefined) {
@@ -32,6 +34,8 @@ describe("loadToolGatewayEnvironment", () => {
       configSource: "local-file",
       httpPort: 3024,
       grpcBindAddress: "0.0.0.0:50053",
+      engineBaseUrl: "http://127.0.0.1:3010",
+      internalServiceToken: "runtime-lookup-fixture",
     });
   });
 
@@ -101,6 +105,10 @@ describe("loadToolGatewayEnvironment", () => {
   });
 
   it.each([
+    ["ENGINE_BASE_URL", { ENGINE_BASE_URL: "" }],
+    ["ENGINE_BASE_URL", { ENGINE_BASE_URL: "file:///tmp/engine" }],
+    ["ENGINE_BASE_URL", { ENGINE_BASE_URL: "https://engine.test/private?credential=value" }],
+    ["INTERNAL_SERVICE_TOKEN", { INTERNAL_SERVICE_TOKEN: "" }],
     ["ALTER_ENV", { ALTER_ENV: "qa" }],
     ["ALTER_SERVICE_NAME", { ALTER_SERVICE_NAME: "tool-gw" }],
     ["ALTER_REGION", { ALTER_REGION: "us-east-1" }],
