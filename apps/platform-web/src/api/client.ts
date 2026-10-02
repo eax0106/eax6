@@ -729,7 +729,8 @@ class ApiClient {
   }
 
   // Phase 6: Conversations
-  async getConversations(filters?: any): Promise<Conversation[]> {
+  async getConversations(filters?: { type?: Conversation["type"] }): Promise<Conversation[]> {
+    if (isLiveApi) return live.getConversations(filters)
     await delay(MOCK_DELAY)
     let convs = [...mockConversations]
     if (filters?.type) convs = convs.filter(c => c.type === filters.type)
@@ -737,6 +738,7 @@ class ApiClient {
   }
 
   async getConversation(id: string): Promise<Conversation> {
+    if (isLiveApi) return live.getConversation(id)
     await delay(MOCK_DELAY)
     const conv = mockConversations.find(c => c.id === id)
     if (!conv) throw new Error("Conversation not found")
@@ -744,6 +746,7 @@ class ApiClient {
   }
 
   async createConversation(data: { type: string; title: string; linkedWorkflowId?: string; linkedProjectId?: string; linkedRunId?: string }): Promise<Conversation> {
+    if (isLiveApi) return live.createConversation(data)
     await delay(MOCK_DELAY)
     const conv: Conversation = {
       id: `conv_${Date.now()}`,
@@ -764,11 +767,13 @@ class ApiClient {
   }
 
   async getConversationMessages(id: string): Promise<ConversationMessage[]> {
+    if (isLiveApi) return live.getConversationMessages(id)
     await delay(MOCK_DELAY)
     return mockConversationMessages[id] || []
   }
 
   async sendMessage(id: string, payload: { content: any; kind?: string }): Promise<{ userMessage: ConversationMessage; assistantMessage?: ConversationMessage }> {
+    if (isLiveApi) return live.sendMessage(id, payload)
     await delay(MOCK_DELAY)
     if (!mockConversationMessages[id]) {
       mockConversationMessages[id] = []
@@ -846,9 +851,15 @@ class ApiClient {
   }
 
   async archiveConversation(id: string): Promise<void> {
+    if (isLiveApi) return live.archiveConversation(id)
     await delay(MOCK_DELAY)
     const conv = mockConversations.find(c => c.id === id)
     if (conv) conv.status = "archived"
+  }
+
+  async createConversationDraft(id: string): Promise<Conversation> {
+    if (isLiveApi) return live.createConversationDraft(id)
+    return this.createConversation({ type: "workflow_builder", title: "New workflow" })
   }
 
   // Phase 6: Triggers

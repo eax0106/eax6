@@ -1,3 +1,4 @@
+import type { WorkflowChatMessage, WorkflowChatResource } from "@alterx/contracts"
 import type { CompiledDag } from "@alterx/contracts"
 
 export type WorkflowStatus = "draft" | "active" | "paused" | "archived"
@@ -598,34 +599,12 @@ export interface WorkflowHealth {
 
 // Phase 6 Types
 
-export type ConversationType = "general" | "workflow_builder" | "project_builder" | "run_investigation"
-export type ConversationStatus = "active" | "archived"
-
-export interface Conversation {
-  id: string
-  title: string
-  type: ConversationType
-  status?: ConversationStatus
-  createdAt: string
-  updatedAt: string
-  createdBy: UserSummary
-  linkedWorkflowId?: string
-  linkedProjectId?: string
-  linkedRunId?: string
-  preview?: string
-}
-
-export type ConversationMessageRole = "user" | "assistant" | "system"
-export type ConversationMessageKind = "text" | "clarification" | "workflow" | "project" | "run" | "artifact" | "action"
-
-export interface ConversationMessage {
-  id: string
-  conversationId: string
-  role: ConversationMessageRole
-  kind: ConversationMessageKind
-  createdAt: string
-  content: any
-}
+export type ConversationType = WorkflowChatResource["type"]
+export type ConversationStatus = WorkflowChatResource["status"]
+export type Conversation = WorkflowChatResource & { linkedProjectId?: string; linkedRunId?: string }
+export type ConversationMessageRole = WorkflowChatMessage["role"]
+export type ConversationMessageKind = WorkflowChatMessage["kind"]
+export type ConversationMessage = WorkflowChatMessage
 
 export type TriggerType = "manual" | "webhook" | "schedule" | "event" | "email"
 export type TriggerStatus = "configured" | "needs_configuration" | "error"

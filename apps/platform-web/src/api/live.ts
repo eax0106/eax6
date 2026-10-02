@@ -1,3 +1,4 @@
+import { CreateWorkflowChatRequestSchema, SendWorkflowChatMessageSchema, WorkflowChatResourceSchema, WorkflowChatMessageSchema, WorkflowChatExchangeSchema } from "@alterx/contracts"
 import { apiDelete, apiGet, apiGetWithEtag, apiPatch, apiPost, apiPut, mutationKey } from "./http"
 import { compileDag } from "./compile-dag"
 import type {
@@ -1839,4 +1840,42 @@ export async function getRepositoryPullRequests(id: string): Promise<RepositoryP
       updatedAt: asString(item.updated_at),
     }
   })
+}
+
+export async function getConversations(filters?: { type?: string }) {
+  const query = filters?.type ? `?type=${encodeURIComponent(filters.type)}` : ""
+  const chats = await apiGet<unknown[]>(`/api/v1/conversations${query}`)
+  return chats.map(chat => WorkflowChatResourceSchema.parse(chat))
+}
+
+export async function getConversation(id: string) {
+  return WorkflowChatResourceSchema.parse(await apiGet(`/api/v1/conversations/${encodeURIComponent(id)}`))
+}
+
+export async function createConversation(input: unknown) {
+  const body = CreateWorkflowChatRequestSchema.parse(input)
+  const path = body.type === "workflow_builder" ? "/api/v1/conversations/workflows" : "/api/v1/conversations"
+  return WorkflowChatResourceSchema.parse(await apiPost(path, body, { idempotencyKey: mutationKey("create-chat") }))
+}
+
+export async function getConversationMessages(id: string) {
+  const messages = await apiGet<unknown[]>(`/api/v1/conversations/${encodeURIComponent(id)}/messages`)
+  return messages.map(message => WorkflowChatMessageSchema.parse(message))
+}
+
+export async function sendMessage(id: string, input: unknown) {
+  const body = SendWorkflowChatMessageSchema.parse(input)
+  const chat = await getConversation(id)
+  const path = `/api/v1/conversations/${encodeURIComponent(id)}/${chat.type === "workflow_builder" ? "build" : "messages"}`
+  return WorkflowChatExchangeSchema.parse(await apiPost(path, body, { idempotencyKey: mutationKey("chat-message") }))
+}
+
+export async function archiveConversation(id: string) {
+  const chat = await getConversation(id)
+  const path = `/api/v1/conversations/${encodeURIComponent(id)}/${chat.type === "workflow_builder" ? "workflow-archive" : "archive"}`
+  await apiPost(path, {}, { idempotencyKey: mutationKey("archive-chat") })
+}
+
+export async function createConversationDraft(id: string) {
+  return WorkflowChatResourceSchema.parse(await apiPost(`/api/v1/conversations/${encodeURIComponent(id)}/drafts`, {}, { idempotencyKey: mutationKey("chat-draft") }))
 }

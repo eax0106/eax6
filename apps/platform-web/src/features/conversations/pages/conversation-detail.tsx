@@ -1,25 +1,31 @@
 import * as React from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { ArrowLeft, ExternalLink, Workflow, Folder, Terminal, Loader2 } from "lucide-react"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { Composer } from "@/components/conversation/Composer"
 import { MessageList } from "@/components/conversation/MessageList"
+import { ClarificationQuestions } from "@/components/conversation/clarification-questions"
 import { Button } from "@/components/ui/button"
 
 export function ConversationDetail() {
   const { conversationId } = useParams<{ conversationId: string }>()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const createDraft = useMutation({
+    mutationFn: () => api.createConversationDraft(conversationId!),
+    onSuccess: chat => navigate(`/app/conversations/${chat.id}`),
+  })
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
-  const { data: conversation, isLoading: isLoadingConv } = useQuery({
+  const { data: conversation, isLoading: isLoadingConv, error: conversationError } = useQuery({
     queryKey: queryKeys.conversations.detail(conversationId!),
     queryFn: () => api.getConversation(conversationId!),
     enabled: !!conversationId
   })
 
-  const { data: messages, isLoading: isLoadingMsgs } = useQuery({
+  const { data: messages, isLoading: isLoadingMsgs, error: messagesError } = useQuery({
     queryKey: queryKeys.conversations.messages(conversationId!),
     queryFn: () => api.getConversationMessages(conversationId!),
     enabled: !!conversationId
@@ -27,7 +33,7 @@ export function ConversationDetail() {
 
   const sendMessage = useMutation({
     mutationFn: (content: string) => api.sendMessage(conversationId!, { content }),
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.messages(conversationId!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
     }
@@ -48,6 +54,8 @@ export function ConversationDetail() {
     )
   }
 
+  if (conversationError || messagesError) return <div role="alert" className="p-6 text-destructive">{(conversationError ?? messagesError)?.message}</div>
+
   if (!conversation) {
     return (
       <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -61,13 +69,23 @@ export function ConversationDetail() {
     id: m.id,
     role: m.role as any,
     type: m.kind as any,
-    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    content: typeof m.content === "string" ? m.content : typeof m.content.text === "string" ? m.content.text : JSON.stringify(m.content),
     data: m.content,
     createdAt: m.createdAt
   }))
 
   const renderCustomMessage = (msg: any) => {
     const data = msg.data
+    if (msg.type === "clarification" && Array.isArray(data.questions)) {
+      return <div><p>{msg.content}</p><ClarificationQuestions
+        questions={data.questions.map((question: string) => ({ id: question, question }))}
+        pending={sendMessage.isPending}
+        onSubmit={answers => sendMessage.mutate(Object.entries(answers).map(([question, answer]) => `${question}: ${answer}`).join("\n"))}
+      /></div>
+    }
+    if (msg.type === "workflow" && data.workflowId) {
+      return <div><p>{msg.content}</p><Link to={`/app/workflows/${data.workflowId}`} className="text-primary">Open workflow</Link></div>
+    }
     if (msg.type === "action") {
       return (
         <div className="space-y-3">
@@ -110,6 +128,7 @@ export function ConversationDetail() {
             </Link>
           </Button>
           <div className="font-medium truncate">{conversation.title}</div>
+          {conversation.type === "general" && <Button size="sm" onClick={() => createDraft.mutate()} disabled={createDraft.isPending}>Create draft workflow</Button>}
         </header>
 
         <div className="flex-1 overflow-auto p-4 md:p-6" ref={scrollRef}>
@@ -123,10 +142,11 @@ export function ConversationDetail() {
 
         <div className="shrink-0 p-4 bg-surface-base border-t border-border">
           <div className="mx-auto max-w-3xl">
-            <Composer 
+            {(sendMessage.isError || createDraft.isError) && <p role="alert" className="mb-2 text-sm text-destructive">{(sendMessage.error ?? createDraft.error)?.message}</p>}
+            {conversation.status === "archived" ? <p>Chat archived.</p> : <Composer 
               onSend={(msg) => sendMessage.mutate(msg)} 
               loading={sendMessage.isPending}
-            />
+            />}
           </div>
         </div>
       </div>

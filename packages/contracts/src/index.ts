@@ -89,6 +89,8 @@ export {
   RecoveryActionIdSchema,
   RunIdSchema,
   TenantIdSchema,
+  ConversationIdSchema,
+  UserIdSchema,
   TriggerBindingIdSchema,
   TriggerIdSchema,
   VerificationResultIdSchema,
@@ -439,3 +441,5 @@ export {
   type WorkflowDagCompiled,
   type WorkflowDagDraft,
 } from "./workflow-dag";
+
+export * from "./workflow-chat";

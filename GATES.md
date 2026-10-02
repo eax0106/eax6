@@ -1,20 +1,35 @@
-# Gates: shared Identity & Tenant Gateway request types (C109)
+# Gates: D6 workflow chat and Ask Alter (C110)
 
-OWNS: apps/orchestration-service/src/agent-usage/agent-workflows.controller.ts, apps/orchestration-service/src/approvals/approval-policies.controller.spec.ts, apps/orchestration-service/src/approvals/approval-policies.controller.ts, apps/orchestration-service/src/approvals/approvals.controller.ts, apps/orchestration-service/src/artifacts/artifacts.controller.ts, apps/orchestration-service/src/budgets/budgets.controller.ts, apps/orchestration-service/src/clarifications/clarifications.controller.ts, apps/orchestration-service/src/deletion/deletion-request.controller.spec.ts, apps/orchestration-service/src/deletion/deletion-request.controller.ts, apps/orchestration-service/src/deployment-feed/deployment-changes.controller.ts, apps/orchestration-service/src/escalations/escalations.controller.ts, apps/orchestration-service/src/eval_project_read_http_server.ts, apps/orchestration-service/src/eval_run_visibility_http_server.ts, apps/orchestration-service/src/eval_trigger_binding_http_server.ts, apps/orchestration-service/src/eval_trigger_registry_http_server.ts, apps/orchestration-service/src/eval_workflow_read_http_server.ts, apps/orchestration-service/src/project-read/project-read.controller.ts, apps/orchestration-service/src/run-retention/run-retention.controller.ts, apps/orchestration-service/src/runs/node-executions.controller.ts, apps/orchestration-service/src/runs/recovery-feed.controller.ts, apps/orchestration-service/src/runs/run-learning.controller.ts, apps/orchestration-service/src/runs/run-observability.controller.ts, apps/orchestration-service/src/runs/run-stream.controller.ts, apps/orchestration-service/src/runs/runs.controller.ts, apps/orchestration-service/src/system-principal-audit.interceptor.ts, apps/orchestration-service/src/template-variables/template-variables.controller.ts, apps/orchestration-service/src/trigger-bindings/trigger-binding.controller.ts, apps/orchestration-service/src/trigger-registry/event.controller.ts, apps/orchestration-service/src/trigger-registry/trigger-registry.controller.ts, apps/orchestration-service/src/webhooks/ses-delivery-events.controller.ts, apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.ts, apps/orchestration-service/src/workflow-lifecycle/workflow-deployment.controller.ts, apps/orchestration-service/src/workflow-read/workflow-read.controller.ts, apps/orchestration-service/src/workspace-export/workspace-export.controller.ts, apps/orchestration-service/src/workspace-holds/workspace-holds.controller.ts, packages/auth/session-gateway/src/index.ts, packages/auth/session-gateway/src/prompt-injection.guard.spec.ts, packages/auth/session-gateway/src/prompt-injection.guard.ts, packages/auth/session-gateway/src/rate-limit.guard.spec.ts, packages/auth/session-gateway/src/rate-limit.guard.ts, packages/auth/session-gateway/src/session-gateway.guard.spec.ts, packages/auth/session-gateway/src/session-gateway.guard.ts, packages/auth/session-gateway/src/session-gateway.rls.integration.spec.ts, packages/auth/session-gateway/src/types.ts, packages/auth/session-gateway/src/upload-allowlist.guard.spec.ts, packages/auth/session-gateway/src/upload-allowlist.guard.ts, scripts/gates/baseline.json, docs/work-queue.md
+OWNS: apps/orchestration-service/drizzle/0051_workflow_chat.sql, apps/orchestration-service/drizzle/rollback/0051_restore_workflow_chat.sql, apps/orchestration-service/drizzle/meta/_journal.json, apps/orchestration-service/db/schema/workflows.ts, apps/orchestration-service/db/schema/conversations.ts, apps/orchestration-service/db/schema/conversation_messages.ts, apps/orchestration-service/src/database/migration-files.spec.ts, apps/orchestration-service/src/workflow-chat/**, apps/orchestration-service/src/workflow-read/workflow-read.service.ts, apps/orchestration-service/src/workflow-read/workflow-read.controller.ts, apps/orchestration-service/src/workflow-read/workflow-read.service.spec.ts, apps/orchestration-service/src/workflow-authoring.module.ts, apps/orchestration-service/src/deletion/deletion.service.ts, apps/orchestration-service/src/deletion/deletion.integration.spec.ts, packages/deletion-registry/src/**, packages/contracts/src/workflow-chat.ts, packages/contracts/src/index.ts, apps/platform-api/src/workflow-chat/**, apps/platform-api/src/app.module.ts, apps/platform-api/src/planner-facade/planner-facade.module.ts, apps/platform-api/src/workflows/workflow.service.ts, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/live.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/live-conversations.spec.ts, apps/platform-web/src/features/conversations/**, apps/platform-web/src/components/conversation/**, scripts/gates/baseline.json, docs/work-queue.md
 
-Scope: Rename the existing shared request and response types and every actual consumer without changing fields, guards, authorization or runtime logic. This lets feature work use the primary names directly.
+Scope: One persistent chat per workflow, workflow title, independently archived conversation and atomic workflow/chat creation. Builder messages retain prior context through the existing understand/plan/clarify/compile flow. One Ask Alter assistant per user in the workspace uses only existing caller-scoped reads and costed Model Gateway calls. Its sole workflow action creates an empty draft and hands off to that draft's chat. Wire all six existing web methods plus home and assistant entry points. No project-mode expansion or new dependency.
 
-- [x] G1: Every tracked consumer uses the primary shared request/response exports, and the production source diff contains only the two mechanical identifier replacements
-  CHECK: node .unlazy/verify-source.mjs
-  EXPECT: identity-request-source-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=7688c343594efa1e85416d5bb86653e61df6d18c67ca758265567b9bad2d9306; exit=0; EXPECT=matched; output-sha256=8c02939ac3d74794d62966d840eb479f82dace703abde941260e1023d115d1de; output-bytes=51; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-request-c109; path=b33e9cf43ae9/31 entries
+- [ ] G1: Restricted PostgreSQL and authenticated engine HTTP prove unique workflow chats, atomic creation, stored ordered messages, current workflow title, workspace/user scope, independent archiving, migration rollback and registered tenant/workspace erasure
+  CHECK: node .unlazy/verify-storage.mjs
+  EXPECT: workflow-chat-storage-passed
+  EVIDENCE: pending
 
-- [x] G2: Auth builds, complete native authentication tests and both affected project build/typecheck/lint targets pass with the unchanged request fields and guards
-  CHECK: node .unlazy/verify-runtime.mjs
-  EXPECT: identity-request-runtime-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=2f463282e7f32122275fd6d1eb60a45e73c6f13c2f466b72ce4ab2c87cc31e6d; exit=0; EXPECT=matched; output-sha256=6f45a9c7ef9a7ceb4c2676be0db8369dd6c3f7e37d1a61438df180e8d25ccaea; output-bytes=318; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-request-c109; path=b33e9cf43ae9/31 entries
+- [ ] G2: Native planner/compiler transports reached from the platform chat retain original goal and multiple clarification rounds, return complete connection requirements, save compiled versions and persist replies that describe the actual result
+  CHECK: node .unlazy/verify-builder.mjs
+  EXPECT: workflow-chat-builder-passed
+  EVIDENCE: pending
 
-- [x] G3: The actual CI naming oracle and its native fixtures pass, restoring a retired request name fails that oracle, and architecture checks add zero normalized AST findings
-  CHECK: node .unlazy/verify-gates.mjs
-  EXPECT: identity-request-gates-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=977c80dc6a4eddd5d9f70fe9414be9a4f805f85da709233b4b5f29e13507aa00; exit=0; EXPECT=matched; output-sha256=429b2997d5166d9c597b5ee254a473a9bdf05a785ccc81827a21135fd9519479; output-bytes=133; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-request-c109; path=b33e9cf43ae9/31 entries
+- [ ] G3: Real caller-authenticated read boundaries and actual Model Gateway/cost recording prove Ask Alter sees readable workspace workflows, recent runs, failures, verification and billed spend; it cannot change existing workflows and its only action creates a draft/chat handoff
+  CHECK: node .unlazy/verify-assistant.mjs
+  EXPECT: workflow-chat-assistant-passed
+  EVIDENCE: pending
+
+- [ ] G4: All six web methods use live HTTP; rendered home, workflow chat and Ask Alter use actual returned identities, show clarification/results/errors and route draft handoff without mock fallback
+  CHECK: node .unlazy/verify-web.mjs
+  EXPECT: workflow-chat-web-passed
+  EVIDENCE: pending
+
+- [ ] G5: Removing each consequential scope, ownership, atomicity, context preservation, read-only action, costing or live-route check fails its known-positive native assertion; restored sources pass
+  CHECK: node .unlazy/negative-controls.mjs
+  EXPECT: workflow-chat-negative-passed
+  EVIDENCE: pending
+
+- [ ] G6: Full touched suites including platform folder coverage, build/typecheck/lint, migration/erasure registration, architecture, RBAC, naming and zero added normalized AST findings pass with actual CI discovery
+  CHECK: node .unlazy/verify-final.mjs
+  EXPECT: workflow-chat-final-passed
+  EVIDENCE: pending

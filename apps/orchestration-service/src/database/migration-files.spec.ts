@@ -68,6 +68,7 @@ describe("orchestration migration files", () => {
       "0048_add_recovery_clarifications.sql",
       "0049_add_confirmed_event_replay.sql",
       "0050_create_connection_registry.sql",
+      "0051_workflow_chat.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -125,6 +126,7 @@ describe("orchestration migration files", () => {
       "0048_remove_recovery_clarifications.sql",
       "0049_remove_confirmed_event_replay.sql",
       "0050_drop_connection_registry.sql",
+      "0051_restore_workflow_chat.sql",
     ]);
   });
 
