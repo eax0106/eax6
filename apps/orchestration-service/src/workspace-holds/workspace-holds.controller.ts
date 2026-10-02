@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Delete, HttpCode, HttpException, Param, Put, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import { WorkspaceHoldsService, WorkspaceHoldValidationError } from "./workspace-holds.service";
@@ -18,19 +18,19 @@ export class WorkspaceHoldsController {
 
   @Put(":workspaceId")
   @HttpCode(204)
-  async hold(@Req() request: SessionGatewayRequest, @Param("workspaceId") workspaceId: string): Promise<void> {
+  async hold(@Req() request: IdentityTenantGatewayRequest, @Param("workspaceId") workspaceId: string): Promise<void> {
     const { tenantId, userId } = admin(request);
     await this.run(request, () => this.holds.hold(tenantId, workspaceId, userId));
   }
 
   @Delete(":workspaceId")
   @HttpCode(204)
-  async release(@Req() request: SessionGatewayRequest, @Param("workspaceId") workspaceId: string): Promise<void> {
+  async release(@Req() request: IdentityTenantGatewayRequest, @Param("workspaceId") workspaceId: string): Promise<void> {
     const { tenantId } = admin(request);
     await this.run(request, () => this.holds.release(tenantId, workspaceId));
   }
 
-  private async run(request: SessionGatewayRequest, operation: () => Promise<void>): Promise<void> {
+  private async run(request: IdentityTenantGatewayRequest, operation: () => Promise<void>): Promise<void> {
     try {
       await operation();
     } catch (error: unknown) {
@@ -42,7 +42,7 @@ export class WorkspaceHoldsController {
   }
 }
 
-function admin(request: SessionGatewayRequest): { tenantId: string; userId: string } {
+function admin(request: IdentityTenantGatewayRequest): { tenantId: string; userId: string } {
   const actor = request.actorContext;
   if (actor === undefined) {
     throw new HttpException(problem(request.url, 500, "WORKSPACE_HOLD_INTERNAL", "Missing authenticated tenant context"), 500);

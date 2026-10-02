@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import {
@@ -21,7 +21,7 @@ interface ApprovalsQuery {
   readonly limit?: string;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(internalProblem(request.url, "Missing authenticated tenant context"), 500);
@@ -30,7 +30,7 @@ function requiredTenantId(request: SessionGatewayRequest): string {
 }
 
 /** Strips the usr_ prefix (approvals.decided_by is a native uuid column). */
-function bareDecidedBy(request: SessionGatewayRequest): string | undefined {
+function bareDecidedBy(request: IdentityTenantGatewayRequest): string | undefined {
   const userId = request.actorContext?.user_id;
   if (userId === null || userId === undefined) return undefined;
   return userId.startsWith("usr_") ? userId.slice("usr_".length) : userId;
@@ -59,7 +59,7 @@ export class ApprovalsController {
   constructor(private readonly approvals: ApprovalsService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query() query: ApprovalsQuery) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: ApprovalsQuery) {
     const tenantId = requiredTenantId(request);
     try {
       const page = await this.approvals.list(tenantId, {
@@ -77,7 +77,7 @@ export class ApprovalsController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") approvalId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") approvalId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return toApprovalResponse(await this.approvals.getById(tenantId, approvalId));
@@ -88,7 +88,7 @@ export class ApprovalsController {
 
   @Post(":id/actions/approve")
   async approve(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") approvalId: string,
     @Body() body: DecideApprovalBody,
   ) {
@@ -109,7 +109,7 @@ export class ApprovalsController {
 
   @Post(":id/actions/reject")
   async reject(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") approvalId: string,
     @Body() body: DecideApprovalBody,
   ) {

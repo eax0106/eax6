@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import type { ProblemDetails } from "@alterx/contracts";
 import { PUBLIC_ROUTE_METADATA } from "./public-route";
-import type { SessionGatewayRequest, SessionGatewayResponse } from "./types";
+import type { IdentityTenantGatewayRequest, IdentityTenantGatewayResponse } from "./types";
 
 export interface RateLimitBucket {
   windowStartedAtMs: number;
@@ -54,7 +54,7 @@ export class SessionGatewayRateLimitGuard implements CanActivate {
     }
 
     const http = context.switchToHttp();
-    const request = http.getRequest<SessionGatewayRequest>();
+    const request = http.getRequest<IdentityTenantGatewayRequest>();
     const tenantId = request.actorContext?.tenant_id;
     if (tenantId === undefined) {
       throw new HttpException(
@@ -73,7 +73,7 @@ export class SessionGatewayRateLimitGuard implements CanActivate {
     }
     bucket.count += 1;
     if (bucket.count > this.#limitPerMinute) {
-      const response = http.getResponse<SessionGatewayResponse>();
+      const response = http.getResponse<IdentityTenantGatewayResponse>();
       setProblemContentType(response);
       throw new HttpException(
         rateLimitProblem(
@@ -112,7 +112,7 @@ export class SessionGatewayRateLimitGuard implements CanActivate {
   }
 }
 
-function setProblemContentType(response: SessionGatewayResponse): void {
+function setProblemContentType(response: IdentityTenantGatewayResponse): void {
   if (response.header) {
     response.header("content-type", "application/problem+json");
   } else {

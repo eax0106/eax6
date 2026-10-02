@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, Headers, HttpException, Param, Put, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import {
@@ -23,7 +23,7 @@ export class ApprovalPoliciesController {
   constructor(private readonly policies: ApprovalPolicyService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Param("workflowId") workflowId: string) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Param("workflowId") workflowId: string) {
     const { tenantId, workspaceId } = scope(request);
     const steps = await this.run(request, () => this.policies.list(tenantId, workspaceId, workflowId));
     return { data: steps.map(toResponse) };
@@ -31,7 +31,7 @@ export class ApprovalPoliciesController {
 
   @Put(":nodeKey")
   async set(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("workflowId") workflowId: string,
     @Param("nodeKey") nodeKey: string,
     @Body() body: unknown,
@@ -70,7 +70,7 @@ export class ApprovalPoliciesController {
     return toResponse(step);
   }
 
-  private async run<T>(request: SessionGatewayRequest, operation: () => Promise<T>): Promise<T> {
+  private async run<T>(request: IdentityTenantGatewayRequest, operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error: unknown) {
@@ -110,7 +110,7 @@ function toResponse(step: ApprovalStepPolicy) {
   };
 }
 
-function scope(request: SessionGatewayRequest): { tenantId: string; workspaceId: string } {
+function scope(request: IdentityTenantGatewayRequest): { tenantId: string; workspaceId: string } {
   const actor = request.actorContext;
   if (actor === undefined || actor.workspace_id === null || actor.workspace_id === undefined) {
     throw new HttpException(problem(request.url, 500, "APPROVAL_POLICY_INTERNAL", "Missing authenticated workspace context"), 500);

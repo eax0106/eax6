@@ -13,8 +13,8 @@ import { PUBLIC_ROUTE_METADATA } from "./public-route";
 import {
   SessionGatewayAuthError,
   type SessionGatewayErrorCode,
-  type SessionGatewayRequest,
-  type SessionGatewayResponse,
+  type IdentityTenantGatewayRequest,
+  type IdentityTenantGatewayResponse,
   type TenantDatabaseScope,
 } from "./types";
 
@@ -66,8 +66,8 @@ export class SessionGatewayGuard implements CanActivate {
     }
 
     const http = context.switchToHttp();
-    const request = http.getRequest<SessionGatewayRequest>();
-    const response = http.getResponse<SessionGatewayResponse>();
+    const request = http.getRequest<IdentityTenantGatewayRequest>();
+    const response = http.getResponse<IdentityTenantGatewayResponse>();
 
     try {
       const machine = await this.m2mValidator.validate(
@@ -157,7 +157,7 @@ function databaseTenantId(tenantId: string): string {
   return tenantId.startsWith("ten_") ? tenantId.slice(4) : tenantId;
 }
 
-function setProblemContentType(response: SessionGatewayResponse): void {
+function setProblemContentType(response: IdentityTenantGatewayResponse): void {
   if (response.header) {
     response.header("content-type", "application/problem+json");
   } else {

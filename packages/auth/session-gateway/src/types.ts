@@ -61,7 +61,7 @@ export interface TenantDatabaseScope {
   ): Promise<T>;
 }
 
-export interface SessionGatewayRequest {
+export interface IdentityTenantGatewayRequest {
   readonly headers: Record<string, string | string[] | undefined>;
   readonly method?: string;
   readonly url?: string;
@@ -73,7 +73,7 @@ export interface SessionGatewayRequest {
   ) => Promise<T>;
 }
 
-export interface SessionGatewayResponse {
+export interface IdentityTenantGatewayResponse {
   header?(name: string, value: string): unknown;
   setHeader?(name: string, value: string): unknown;
 }

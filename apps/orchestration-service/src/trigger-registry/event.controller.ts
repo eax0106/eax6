@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, Headers, HttpException, Param, Post, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { EventReplayService, ReplayConfirmationError, type ReplayActor } from "./event-replay.service";
 import { RunStartFailedError, RunStateConflictError, RunValidationError, WorkflowNotFoundError } from "../runs/run-launcher.service";
@@ -26,14 +26,14 @@ export class EventController {
   constructor(private readonly events: EventQueryService, private readonly replay: EventReplayService) {}
 
   @Post(":id/replay")
-  async preview(@Req() request: SessionGatewayRequest, @Param("id") eventId: string) {
+  async preview(@Req() request: IdentityTenantGatewayRequest, @Param("id") eventId: string) {
     const actor = replayActor(request, false);
     try { return await this.replay.preview(actor, eventId); }
     catch (error: unknown) { throw mapEventError(error, request.url); }
   }
 
   @Post(":id/replay-for-real")
-  async replayForReal(@Req() request: SessionGatewayRequest, @Param("id") eventId: string,
+  async replayForReal(@Req() request: IdentityTenantGatewayRequest, @Param("id") eventId: string,
     @Body() body: unknown, @Headers("idempotency-key") key: string | undefined) {
     const actor = replayActor(request, true);
     try { return await this.replay.replay(actor, eventId, body, key); }
@@ -41,7 +41,7 @@ export class EventController {
   }
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query() query: EventListQueryParams) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: EventListQueryParams) {
     const tenantId = requireTenant(request);
     const listQuery: EventListQuery = {
       ...(query.source === undefined ? {} : { source: query.source }),
@@ -57,7 +57,7 @@ export class EventController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") eventId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") eventId: string) {
     const tenantId = requireTenant(request);
     try {
       return await this.events.get(tenantId, eventId);
@@ -67,7 +67,7 @@ export class EventController {
   }
 }
 
-function replayActor(request: SessionGatewayRequest, real: boolean): ReplayActor {
+function replayActor(request: IdentityTenantGatewayRequest, real: boolean): ReplayActor {
   const actor = request.actorContext;
   if (!actor || actor.actor_type !== "user" || !actor.user_id || !actor.workspace_id) throw new HttpException(problem(request.url, 403, "User and workspace context required"), 403);
   const allowed = real ? actor.roles.some(role => ["admin", "editor", "operator"].includes(role)) && actor.permissions.includes("workflows:write")
@@ -76,7 +76,7 @@ function replayActor(request: SessionGatewayRequest, real: boolean): ReplayActor
   return { tenantId: actor.tenant_id, workspaceId: actor.workspace_id, userId: actor.user_id };
 }
 
-function requireTenant(request: SessionGatewayRequest): string {
+function requireTenant(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(problem(request.url, 500, "Missing authenticated tenant context"), 500);

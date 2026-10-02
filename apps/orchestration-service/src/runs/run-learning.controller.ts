@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Controller, Get, HttpException, Inject, Logger, Param, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { AuditEventHandler } from "@alterx/shared-clients";
 import {
@@ -43,7 +43,7 @@ export class RunLearningController {
    */
   @Get(":id/outcome-summary")
   async summary(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") runId: string,
     @Query("tenant_id") requestedTenantId?: string,
   ) {

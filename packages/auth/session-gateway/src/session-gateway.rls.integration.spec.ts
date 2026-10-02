@@ -22,7 +22,7 @@ import { M2mValidator } from "./m2m-validator";
 import { SessionGatewayGuard } from "./session-gateway.guard";
 import type {
   ReplayStore,
-  SessionGatewayRequest,
+  IdentityTenantGatewayRequest,
 } from "./types";
 
 const tenantA = "00000000-0000-7000-8000-000000000001";
@@ -123,7 +123,7 @@ describe.sequential("Session Gateway PostgreSQL RLS integration", () => {
       unusedActorValidator,
       roleProvider,
     );
-    const request: SessionGatewayRequest = {
+    const request: IdentityTenantGatewayRequest = {
       headers: {
         authorization: `Bearer ${mintJwt(
           {
