@@ -13,6 +13,11 @@ depends_on = None
 def upgrade() -> None:
     op.execute(
         sa.text("""
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'intelligence_service') THEN
+    CREATE ROLE intelligence_service NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  END IF;
+END $$;
 GRANT SELECT (id, tenant_id) ON agents TO intelligence_drift_reader;
 CREATE FUNCTION agent_owner_tenant(p_agent_id text)
 RETURNS uuid

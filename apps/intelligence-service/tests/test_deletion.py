@@ -41,10 +41,6 @@ def databases() -> Generator[tuple[sessionmaker[Session], sessionmaker[Session]]
     ) as pg:
         admin_url = pg.get_connection_url()
         admin = sa.create_engine(admin_url)
-        with admin.begin() as connection:
-            connection.execute(
-                sa.text("CREATE ROLE intelligence_service NOLOGIN NOSUPERUSER NOBYPASSRLS")
-            )
         config = AlembicConfig(str(SERVICE_ROOT / "alembic.ini"))
         config.set_main_option("script_location", str(SERVICE_ROOT / "alembic"))
         config.set_main_option("sqlalchemy.url", admin_url)
@@ -179,7 +175,10 @@ def test_erases_one_workspace_scoped_from_the_live_schema(
     provider = IntelligenceDeletionProvider(app, admin)
     _seed(admin, TENANT_WS, WORKSPACE_ERASED, "11")
     with admin.begin() as session:
-        session.execute(sa.text("DELETE FROM capability_registry_versions WHERE owner_tenant_id=:t"), {"t": TENANT_WS})
+        session.execute(
+            sa.text("DELETE FROM capability_registry_versions WHERE owner_tenant_id=:t"),
+            {"t": TENANT_WS},
+        )
     _seed(admin, TENANT_WS, WORKSPACE_KEPT, "12")
     with admin.begin() as session:
         session.execute(

@@ -56,18 +56,19 @@ def database_urls() -> Generator[dict[str, str], None, None]:
         sync_url = postgres.get_connection_url()
         password = secrets.token_hex(24)
         admin = create_engine(sync_url)
-        with admin.begin() as connection:
-            connection.execute(
-                text(
-                    "CREATE ROLE intelligence_service LOGIN NOSUPERUSER NOBYPASSRLS "
-                    f"PASSWORD '{password}'"
-                )
-            )
         alembic_config = AlembicConfig(str(SERVICE_ROOT / "alembic.ini"))
         alembic_config.set_main_option("script_location", str(SERVICE_ROOT / "alembic"))
         alembic_config.set_main_option("sqlalchemy.url", sync_url)
         command.upgrade(alembic_config, "head")
         with admin.begin() as connection:
+            flags = connection.execute(
+                text(
+                    "SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles "
+                    "WHERE rolname='intelligence_service'"
+                )
+            ).one()
+            assert tuple(flags) == (False, False, False)
+            connection.execute(text(f"ALTER ROLE intelligence_service LOGIN PASSWORD '{password}'"))
             connection.execute(text("GRANT USAGE ON SCHEMA public TO intelligence_service"))
             connection.execute(
                 text(
