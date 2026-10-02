@@ -1,20 +1,20 @@
-# Gates: platform runtime function grants (C103)
+# Gates: service-read audit context (C104)
 
-OWNS: deploy/ec2/platform-db-roles.sql, deploy/ec2/check-platform-db-roles.sh, docs/work-queue.md
+OWNS: apps/orchestration-service/src/runs/run-learning.controller.ts, apps/orchestration-service/src/runs/run-learning-audit.integration.spec.ts, apps/audit-service/src/audit/run-learning.fixture.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Apply explicit tenant and staff function grants using the existing runtime-role kit and strengthen its existing CI check. Exercise the complete migration set on a fresh native PostgreSQL instance before and after the role kit. No deployed database or external account is touched.
+Scope: Use the existing allowed audit context for service-asserted run summaries and preserve the caller, asserted tenant, run and result. Prove the actual guarded HTTP, database and authenticated audit gRPC path. Internal performance authentication remains a separate required follow-up.
 
-- [x] G1: Native PostgreSQL applies the production role kit before and after all migrations; the existing check proves tenant, staff, signup and retention behavior twice
-  CHECK: node .unlazy/verify-roles.mjs
-  EXPECT: platform-function-grants-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=164bb3f3e794fdffe14ca1822f4b704e0bba4d237331890bfbe6aec967ec74a1; exit=0; EXPECT=matched; output-sha256=d34261fd3505fb43305a1f104904200a469ef5c4c253146077d64d0bfe2ba4f7; output-bytes=120; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-platform-function-grants-c103; path=b33e9cf43ae9/31 entries
+- [ ] G1: Restricted PostgreSQL and signed HTTP return an owned summary, explicitly refuse a tenant mismatch, and persist successful and denied reads through the actual authenticated audit gRPC service
+  CHECK: node .unlazy/verify-native.mjs
+  EXPECT: run-learning-audit-native-passed
+  EVIDENCE: pending
 
-- [x] G2: Restoring the prior grant behavior makes the strengthened role check fail; restored sources pass again
+- [ ] G2: The original context fails the persisted-audit assertions and restoring the production context passes
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: platform-function-grants-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=d1dc966870eb848934518555fce285246d0a0b0e3f90d69cffa3e2764679787c; exit=0; EXPECT=matched; output-sha256=a17ecc960f582f2835b7b16f628681082184da990b1721d6958c4b2ec85cd14e; output-bytes=94; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-platform-function-grants-c103; path=b33e9cf43ae9/31 entries
+  EXPECT: run-learning-audit-negative-passed
+  EVIDENCE: pending
 
-- [x] G3: Shell syntax, bootstrap configuration, production boot, architecture, rollback pairing and existing CI wiring pass
-  CHECK: node .unlazy/verify-wiring.mjs
-  EXPECT: platform-function-grants-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a249f4177cf1d3b51920bec7b95dc29b3a342a0a6ddd0581e385efa892f91255; exit=0; EXPECT=matched; output-sha256=39e4b26cbdc21db6b2bb6443b906141d84f2328cd70c27ca4831d92145342568; output-bytes=39; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-platform-function-grants-c103; path=b33e9cf43ae9/31 entries
+- [ ] G3: Full engine and audit suites, build, typecheck, lint, architecture, rollback pairing, RBAC and zero added AST findings pass
+  CHECK: node .unlazy/verify-full.mjs
+  EXPECT: run-learning-audit-full-passed
+  EVIDENCE: pending
