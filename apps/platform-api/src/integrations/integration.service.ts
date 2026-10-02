@@ -17,6 +17,7 @@ import {
 import type { NotificationService } from "../notifications/notification.service";
 import { IntegrationHttpError } from "./problem";
 import { SystemIntegrationStore } from "./system-integration-store";
+import { ConnectionRegistryClient } from "../engine/connection-registry-client";
 import {
   INTEGRATION_CONNECTOR_RUNTIME_CONFIG,
   INTEGRATION_OAUTH_HTTP_CLIENT,
@@ -60,6 +61,7 @@ export class IntegrationService {
     private readonly http: OAuthHttpClient,
     @Inject(INTEGRATION_CONNECTOR_RUNTIME_CONFIG)
     private readonly connectorConfig: ConnectorRuntimeConfigMap,
+    private readonly registry: ConnectionRegistryClient,
     private readonly stateTtlSeconds: number = DEFAULT_STATE_TTL_SECONDS,
     private readonly systemStore?: SystemIntegrationStore,
     private readonly notifications?: NotificationService,
@@ -210,9 +212,14 @@ export class IntegrationService {
         connector: definition.id,
         externalAccountId: accountId,
         scopes: tokenResult.grantedScopes ?? definition.scopes.join(" "),
+      }, async connectionId => {
+        if (connectionId !== id) {
+          await this.secrets.putSecret(tokenReference(tenantId, workspaceId, connectionId), await this.secrets.getSecret(secretReference));
+        }
       });
+      if (record.id !== id) await bestEffortDelete(this.secrets, secretReference);
       await this.repository.deleteState(tenantId, input.state);
-      return project(record);
+      return { ...project(record), engine_synced: await this.syncConnection(record) };
     } catch (error) {
       await bestEffortDelete(this.secrets, secretReference);
       throw providerFailure(error, instance);
@@ -328,7 +335,7 @@ export class IntegrationService {
     if (status === "unhealthy" && record.lastHealthStatus !== "unhealthy") {
       await this.notifyConnectionUnhealthy(updated, definition);
     }
-    return project(updated);
+    return { ...project(updated), engine_synced: await this.syncConnection(updated) };
   }
 
   /**
@@ -404,11 +411,15 @@ export class IntegrationService {
         "/internal/integrations/run-health-sweep",
       );
     }
-    const connections = await this.systemStore.listActiveConnections();
+    const connections = await this.systemStore.listConnections();
     let connectionsFailed = 0;
     for (const connection of connections) {
       try {
-        await this.health(connection.tenantId, connection.workspaceId, connection.id, actorId);
+        const record = await this.requireConnection(connection.tenantId, connection.workspaceId, connection.id, "/internal/integrations/run-health-sweep");
+        const synced = record.status === "connected"
+          ? (await this.health(connection.tenantId, connection.workspaceId, connection.id, actorId)).engine_synced
+          : await this.syncConnection(record);
+        if (!synced) connectionsFailed += 1;
       } catch (error) {
         connectionsFailed += 1;
         this.logger.error({
@@ -481,9 +492,26 @@ export class IntegrationService {
     if (!updated) throw notFound(instance);
     return {
       ...project(updated),
+      engine_synced: await this.syncConnection(updated),
       revoked_remotely: revokedRemotely,
       ...(reason ? { revoke_disclosure: reason } : {}),
     };
+  }
+
+  private async syncConnection(record: OAuthConnectionRecord): Promise<boolean> {
+    try {
+      await this.registry.upsert({
+        tenant_id: record.tenantId, workspace_id: record.workspaceId, connection_id: record.id,
+        connector_type: record.connector,
+        status: record.status === "connected" && record.lastHealthStatus === "unhealthy" ? "error" : record.status,
+        secret_ref: tokenReference(record.tenantId, record.workspaceId, record.id), source_revision: record.sourceRevision,
+      });
+      return true;
+    } catch {
+      // The saved connection survives a missed update; the next sweep resends it.
+      this.logger.error({ tenantId: record.tenantId, connectionId: record.id, message: "engine connection synchronization failed" });
+      return false;
+    }
   }
 
   private async readToken(

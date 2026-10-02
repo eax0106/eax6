@@ -220,10 +220,10 @@ describe.skipIf(!databaseUrl)("IntegrationRepository PostgreSQL RLS", () => {
     });
     await expect(
       repository.createConnection(tenantA, {
-        id: randomUUID(),
+        id,
         workspaceId: workspaceA,
         connector: "github",
-        externalAccountId: "duplicate-account",
+        externalAccountId: "different-account-same-id",
         scopes: "read:user",
       }),
     ).rejects.toThrow();

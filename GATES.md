@@ -1,25 +1,37 @@
-# Gates: D17 identity gateway naming (C107)
+# Gates: engine connection registry and lifecycle synchronization (C99)
 
-OWNS: scripts/check-identity-names.sh, scripts/check-identity-names.mjs, scripts/check-identity-names.spec.mjs, scripts/identity-names-baseline.json, .github/workflows/ci.yml, AGENTS.md, docs/work-queue.md
+OWNS: apps/orchestration-service/src/orchestration-infrastructure.module.ts, apps/orchestration-service/src/ingress.module.ts, apps/orchestration-service/src/workflow-authoring.module.ts, apps/orchestration-service/src/security.module.ts, apps/orchestration-service/src/run-launcher.module.ts, apps/orchestration-service/src/app.module.spec.ts, apps/orchestration-service/src/artifact.module.ts, apps/orchestration-service/src/execution-runtime.module.ts, apps/platform-api/src/admin-tenants/admin-tenants.module.spec.ts, apps/platform-api/src/admin-policy/admin-policy.module.spec.ts, apps/orchestration-service/src/connections/**, apps/orchestration-service/src/operations.module.ts, apps/orchestration-service/src/deletion/**, apps/orchestration-service/src/database/migration-files.spec.ts, apps/orchestration-service/db/schema/connection_registry.ts, apps/orchestration-service/drizzle/0050*, apps/orchestration-service/drizzle/rollback/0050*, apps/orchestration-service/drizzle/meta/_journal.json, apps/platform-api/src/integrations/**, apps/platform-api/src/engine/connection-registry-client*, apps/platform-api/src/engine/engine.module.ts, apps/platform-api/src/db/schema/platform.ts, apps/platform-api/src/db/migrations/0032*, apps/platform-api/src/db/migrations/rollback/0032*, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-api/src/db/migration-journal.spec.ts, packages/contracts/src/connection-registry*, packages/contracts/src/index.ts, packages/deletion-registry/src/declaration.ts, deploy/ec2/**, scripts/bootstrap-env-local.sh, apps/platform-api/.env.example, docs/work-queue.md, scripts/gates/baseline.json, .env.local.example, apps/platform-api/src/config/env.schema*, apps/platform-api/src/health/health.controller.spec.ts, apps/orchestration-service/src/health/health.controller.spec.ts
 
-Scope: Block the retired identity gateway phrase and identifier spelling in added source/document lines. Preserve existing occurrences as a measured historical inventory; that inventory never excuses an added occurrence. CI runs the actual shell entry point and the native regression fixtures.
+OWNS: apps/orchestration-service/src/config/service-token-fingerprint.ts, apps/orchestration-service/src/config/service-token-fingerprint.spec.ts
 
-- [x] G1: The actual gate permits unchanged historical occurrences and current names, and refuses newly added retired phrases or identifiers in committed, staged and working changes
-  CHECK: node scripts/check-identity-names.spec.mjs
-  EXPECT: identity-name-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a9067d6f33010e76770dab962444967fd9e060856f42f2894d28dfba07bd21f2; exit=0; EXPECT=matched; output-sha256=ba878eb02f8261d6c1b4467cef74b01fb0798e465f8482bdabfe2cc31e0c88b2; output-bytes=28; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
+Scope: Engine stores tenant/workspace-scoped connection snapshots containing connector, status and reference only. Authenticated platform lifecycle writes and the existing health sweep synchronize every state with ordered source revisions, including lost revoke/health updates. Compiler preflight and Tool Gateway consumption are the next dependent leaf; I11 remains incomplete until those paths are verified.
 
-- [x] G2: Disabling added-line validation makes the native regression fixture fail, and restored source passes
-  CHECK: node .unlazy/negative-control.mjs
-  EXPECT: identity-name-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=7c1c01fcb56bee764cb99c8bbbfd01bdc0bb3884fa8c73a8a3426d4226b38901; exit=0; EXPECT=matched; output-sha256=104798181212444e265005c63183ea98440d23ae28afec51e46bb1482f12703a; output-bytes=30; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
+- [x] G1: Restricted PostgreSQL and authenticated engine HTTP enforce reference-only snapshots, tenant/workspace isolation, ordered idempotent updates and complete tenant/workspace erasure
+  CHECK: node .unlazy/verify-engine.mjs
+  EXPECT: connection-registry-engine-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=254849e0b90089eb04655a7227537cd319ad14f268941d6f2b8c01c0d18d1d79; exit=0; EXPECT=matched; output-sha256=77b5152369fb9b5fa0fcb0f854a90a7ac459374bf87252b41a71ce82d34d82c3; output-bytes=98; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Historical inventory counts are independently measured against the recorded Git revision and CI runs both the actual shell gate and native regression fixtures without a conditional skip
+- [x] G2: Real platform persistence and the production HTTP client synchronize connect, health and revoke; the sweep heals missed updates for every connection state without destroying saved credentials
+  CHECK: node .unlazy/verify-platform.mjs
+  EXPECT: connection-registry-lifecycle-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1ce4c348b408ebd7478799782fc5dd3040732ba7a0e16c843f2732913d28b97b; exit=0; EXPECT=matched; output-sha256=f0accf7bd23f7a923f50b64a5b89e834b219efd6e80671d6741a4318cff8a12d; output-bytes=101; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+
+- [x] G3: Existing connector guards, lifecycle regressions, migration/schema checks and local/EC2 configuration carry the actual synchronization credential consistently
   CHECK: node .unlazy/verify-wiring.mjs
-  EXPECT: identity-name-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=dd5a45a20ba84207e02266e5b86fde88133e37796fc5c4d35b29e157ce23e245; exit=0; EXPECT=matched; output-sha256=755dbdc364a13d982e0a35239c5e874c177698e333e1b231266adcdcabc5fa18; output-bytes=67; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
+  EXPECT: connection-registry-wiring-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b6c25ba09230ef2bd8e1e5a0d68edf55aca0c0536fb725195f5103384ce4a811; exit=0; EXPECT=matched; output-sha256=5572487c21852611038765b4107003060903c952e6823aa40d7f32097a7d4fa2; output-bytes=339; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Current branch naming, shell syntax, architecture, RBAC, rollback pairing and unchanged AST findings pass
-  CHECK: node .unlazy/verify-final.mjs
-  EXPECT: identity-name-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=3ff759ccf1725434409285e8ce64c3726700bb6d11ae0346948160adcc247f45; exit=0; EXPECT=matched; output-sha256=01954bc1248b8b852c39a85a50563079e9c7ebdf944b1d45a6cf2278cc0b60f7; output-bytes=27; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
+- [x] G4: Removed revision checks, reference validation, erasure registration and all-state sweep each fail the corresponding regression assertion and restore their sources
+  CHECK: node .unlazy/negative-controls.mjs
+  EXPECT: connection-registry-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=36e4d54a2d423ce1549df9a48b88dba17f0322cd0eaea90179b8bf39a170fbdf; exit=0; EXPECT=matched; output-sha256=bd61b2ccefe9c1bad16f5cfa75211e3e78cb6611832bcc8814782952020d58e5; output-bytes=504; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+
+- [x] G5: Affected builds, typechecks, lint, full engine and platform coverage, architecture/RBAC, migration rollback pairing and zero added AST findings pass
+  CHECK: node .unlazy/verify-full.mjs
+  EXPECT: connection-registry-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=6080e3169797cbb0f838109cb51cc4cf76f3a72cb7faeca52a13775eb05d8aa7; exit=0; EXPECT=matched; output-sha256=0f492802485fe49b7cc705148855f76858bc80fa7970fd74f4cd0c3f6d36956a; output-bytes=488; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+
+- [x] G6: The complete platform database integration target applies migration SQL repeatedly while preserving its constraints and existing data paths
+  CHECK: node .unlazy/verify-migrations.mjs
+  EXPECT: connection-registry-migrations-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3f666f5aa90dba2aaee989b7615162292873a6ff20004b1fae6e523e69964ab8; exit=0; EXPECT=matched; output-sha256=b5611187ebac4a6af68a548981008cd7af313ea75fcb670b2bd7d305f3add4a1; output-bytes=169; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries

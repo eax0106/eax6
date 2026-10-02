@@ -8,12 +8,12 @@ import {
 describe("SystemIntegrationStore", () => {
   it("throws a real not-configured error when no pool is set", async () => {
     const store = new SystemIntegrationStore(undefined);
-    await expect(store.listActiveConnections()).rejects.toThrow(
+    await expect(store.listConnections()).rejects.toThrow(
       SystemIntegrationStoreNotConfiguredError,
     );
   });
 
-  it("real maps connected-connection rows to camelCase refs", async () => {
+  it("maps every connection state to camelCase refs for resynchronization", async () => {
     const query = vi.fn(async () => ({
       rows: [
         { tenant_id: "ten_1", workspace_id: "ws_1", id: "conn_1" },
@@ -23,10 +23,10 @@ describe("SystemIntegrationStore", () => {
     const pool = { query } as unknown as Pool;
     const store = new SystemIntegrationStore(pool);
 
-    const result = await store.listActiveConnections();
+    const result = await store.listConnections();
 
     expect(query).toHaveBeenCalledWith(
-      expect.stringContaining("status = 'connected'"),
+      "SELECT tenant_id, workspace_id, id FROM oauth_connections",
     );
     expect(result).toEqual([
       { tenantId: "ten_1", workspaceId: "ws_1", id: "conn_1" },

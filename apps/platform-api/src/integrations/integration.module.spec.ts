@@ -19,6 +19,8 @@ afterEach(() => {
 describe("IntegrationModule", () => {
   it("wires real providers with no connectors configured by default", async () => {
     process.env.DATABASE_URL = "postgres://localhost/platform";
+    process.env.ENGINE_BASE_URL = "http://engine.test";
+    process.env.CONNECTION_REGISTRY_SERVICE_TOKEN_REF = "env:CONNECTION_REGISTRY_SERVICE_TOKEN";
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF =
       "env:CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN";
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN = "test-connector-health-sweep-token";
@@ -57,6 +59,8 @@ describe("IntegrationModule", () => {
 
   it("marks a connector configured once both secret refs are set via env", async () => {
     process.env.DATABASE_URL = "postgres://localhost/platform";
+    process.env.ENGINE_BASE_URL = "http://engine.test";
+    process.env.CONNECTION_REGISTRY_SERVICE_TOKEN_REF = "env:CONNECTION_REGISTRY_SERVICE_TOKEN";
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF =
       "env:CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN";
     process.env.CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN = "test-connector-health-sweep-token";

@@ -77,7 +77,7 @@ fi
 # the tokens platform-api presents to orchestration's eval facade and
 # deployment admin routes.
 touch .session.env
-for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN SES_EVENT_WEBHOOK_SECRET; do
+for key in SESSION_COOKIE_SIGNING_KEY EVAL_FACADE_TOKEN DEPLOYMENT_ADMIN_SERVICE_TOKEN CONNECTION_REGISTRY_SERVICE_TOKEN SES_EVENT_WEBHOOK_SECRET; do
   grep -q "^$key=" .session.env || printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" >>.session.env
 done
 # shellcheck disable=SC1091
@@ -171,6 +171,8 @@ expand() {
   printf 'EVAL_FACADE_TOKEN=%s\nEVAL_FACADE_TOKEN_REF=env:EVAL_FACADE_TOKEN\nEVAL_FACADE_TOKEN_SHA256=%s\n' "$EVAL_FACADE_TOKEN" "$(sha256 "$EVAL_FACADE_TOKEN")"
   printf 'DEPLOYMENT_ADMIN_SERVICE_TOKEN=%s\nDEPLOYMENT_ADMIN_SERVICE_TOKEN_REF=env:DEPLOYMENT_ADMIN_SERVICE_TOKEN\n' "$DEPLOYMENT_ADMIN_SERVICE_TOKEN"
   printf 'DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256=%s\n' "$(sha256 "$DEPLOYMENT_ADMIN_SERVICE_TOKEN")"
+  printf 'CONNECTION_REGISTRY_SERVICE_TOKEN=%s\nCONNECTION_REGISTRY_SERVICE_TOKEN_REF=env:CONNECTION_REGISTRY_SERVICE_TOKEN\n' "$CONNECTION_REGISTRY_SERVICE_TOKEN"
+  printf 'CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256=%s\n' "$(sha256 "$CONNECTION_REGISTRY_SERVICE_TOKEN")"
   # audit-service checks its query route against the deletion service token;
   # platform-api reads that secret through Secrets Manager.
   deletion_ref="${seen[DELETION_SERVICE_TOKEN_REF]}"

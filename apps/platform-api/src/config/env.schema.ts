@@ -41,6 +41,7 @@ export const platformApiEnvSchema = z
     COST_LEDGER_BASE_URL: z.string().url().optional(),
     EVAL_FACADE_TOKEN_REF: z.string().min(1).optional(),
     DEPLOYMENT_ADMIN_SERVICE_TOKEN_REF: z.string().min(1).optional(),
+    CONNECTION_REGISTRY_SERVICE_TOKEN_REF: z.string().min(1).optional(),
     AUDIT_SERVICE_BASE_URL: z.string().url().optional(),
     AUDIT_SERVICE_GRPC_ADDRESS: z.string().min(1).optional(),
     AUDIT_QUERY_SERVICE_TOKEN_REF: z.string().min(1).optional(),
@@ -79,6 +80,9 @@ export const platformApiEnvSchema = z
     REGISTRY_SCAN_PROVIDER: z.enum(["sandbox", "mock"]).default("mock"),
   })
   .superRefine((env, context) => {
+    if (env.ENGINE_BASE_URL) {
+      requireFields(env, context, ["CONNECTION_REGISTRY_SERVICE_TOKEN_REF"], "ENGINE_BASE_URL is configured");
+    }
     if (env.RUNTIME_MODE === "real" && (!env.PLATFORM_RETENTION_DATABASE_URL ||
         new URL(env.PLATFORM_RETENTION_DATABASE_URL).username !== "platform_retention")) {
       context.addIssue({ code: "custom", path: ["PLATFORM_RETENTION_DATABASE_URL"],

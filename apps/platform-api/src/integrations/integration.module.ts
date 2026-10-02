@@ -23,6 +23,7 @@ import {
   type ConnectorRuntimeConfigMap,
 } from "./integration.service";
 import { SystemIntegrationStore } from "./system-integration-store";
+import { ConnectionRegistryClient, connectionRegistryClientFromEnvironment } from "../engine/connection-registry-client";
 import {
   INTEGRATION_CONNECTOR_RUNTIME_CONFIG,
   INTEGRATION_OAUTH_HTTP_CLIENT,
@@ -76,6 +77,10 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
   imports: [IdempotencyModule, NotificationModule],
   controllers: [IntegrationController, ConnectorHealthSweepController],
   providers: [
+    {
+      provide: ConnectionRegistryClient,
+      useFactory: connectionRegistryClientFromEnvironment,
+    },
     {
       provide: IntegrationRepository,
       useFactory: () => new IntegrationRepository(sharedPool(process.env.DATABASE_URL), false),
@@ -132,6 +137,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
         INTEGRATION_SECRETS_PROVIDER,
         INTEGRATION_OAUTH_HTTP_CLIENT,
         INTEGRATION_CONNECTOR_RUNTIME_CONFIG,
+        ConnectionRegistryClient,
         SystemIntegrationStore,
         NotificationService,
       ],
@@ -140,6 +146,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
         secrets: MutableSecretsProvider,
         http: OAuthHttpClient,
         connectorConfig: ConnectorRuntimeConfigMap,
+        registry: ConnectionRegistryClient,
         systemStore: SystemIntegrationStore,
         notifications: NotificationService,
       ) =>
@@ -148,6 +155,7 @@ function buildConnectorRuntimeConfig(): ConnectorRuntimeConfigMap {
           secrets,
           http,
           connectorConfig,
+          registry,
           Number(process.env.OAUTH_STATE_TTL_SECONDS ?? 300),
           systemStore,
           notifications,

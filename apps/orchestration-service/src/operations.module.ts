@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AwsSecretsManagerProvider, EvalServiceClient } from "@alterx/adapters";
+import { loadServiceTokenFingerprint } from "./config/service-token-fingerprint";
 
 import {
   DEPLOYMENT_ADMIN_TOKEN_HASH,
@@ -11,6 +12,8 @@ import {
   ORCHESTRATION_DELETION_TOKEN_HASH,
 } from "./deletion/deletion.controller";
 import { OrchestrationDeletionService } from "./deletion/deletion.service";
+import { ConnectionRegistryController, CONNECTION_REGISTRY_TOKEN_HASH } from "./connections/connection-registry.controller";
+import { ConnectionRegistryService } from "./connections/connection-registry.service";
 import { DeletionRequestController } from "./deletion/deletion-request.controller";
 import {
   EVAL_FACADE_CONFIG,
@@ -26,21 +29,8 @@ import { EVAL_PROTO_PATH } from "./eval-facade/grpc.constants";
 import {
   OrchestrationInfrastructureModule,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
-
-/**
- * Requires a 64-char hex SHA-256 fingerprint from the named env var --
- * shared by DEPLOYMENT_ADMIN_TOKEN_HASH and ORCHESTRATION_DELETION_TOKEN_HASH
- * below, the only two callers left after this module's extraction.
- */
-function requireSha256Fingerprint(value: string | undefined, field: string): string {
-  const normalized = value?.trim() ?? "";
-  if (!/^[0-9a-f]{64}$/i.test(normalized)) {
-    throw new Error(`${field} must be a 64-character SHA-256 fingerprint`);
-  }
-  return normalized;
-}
 
 @Module({
   imports: [OrchestrationInfrastructureModule],
@@ -49,8 +39,17 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
     DeletionRequestController,
     EvalFacadeController,
     DeploymentAdminController,
+    ConnectionRegistryController,
   ],
   providers: [
+    {
+      provide: CONNECTION_REGISTRY_TOKEN_HASH,
+      useFactory: () => loadServiceTokenFingerprint(process.env, "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"),
+    },
+    {
+      provide: ConnectionRegistryService,
+      useFactory: () => new ConnectionRegistryService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
+    },
     {
       provide: EVAL_FACADE_CONFIG,
       useFactory: () => loadEvalFacadeEnvironment(process.env),
@@ -76,29 +75,29 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
     EvalFacadeService,
     {
       provide: DEPLOYMENT_ADMIN_TOKEN_HASH,
-      useFactory: () => requireSha256Fingerprint(
-        process.env.DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256,
+      useFactory: () => loadServiceTokenFingerprint(
+        process.env,
         "DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256",
       ),
     },
     {
       provide: DeploymentAdminService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new DeploymentAdminService(orchestrationStore(dbConfig));
       },
     },
     {
       provide: ORCHESTRATION_DELETION_TOKEN_HASH,
-      useFactory: () => requireSha256Fingerprint(
-        process.env.DELETION_SERVICE_TOKEN_SHA256,
+      useFactory: () => loadServiceTokenFingerprint(
+        process.env,
         "DELETION_SERVICE_TOKEN_SHA256",
       ),
     },
     {
       provide: OrchestrationDeletionService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const tenantStore = orchestrationStore(dbConfig);
         const deletionDatabaseUser = process.env.DELETION_DATABASE_USER?.trim();
         if (deletionDatabaseUser === undefined || deletionDatabaseUser.length === 0) {
@@ -114,6 +113,6 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
       },
     },
   ],
-  exports: [EvalFacadeService],
+  exports: [EvalFacadeService, ConnectionRegistryService],
 })
 export class OperationsModule {}

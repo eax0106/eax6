@@ -37,6 +37,7 @@ import {
   IntegrationRepository,
 } from "./integration.repository";
 import { IntegrationService } from "./integration.service";
+import type { ConnectionRegistryClient } from "../engine/connection-registry-client";
 import {
   INTEGRATION_CONNECTOR_RUNTIME_CONFIG,
   INTEGRATION_OAUTH_HTTP_CLIENT,
@@ -139,6 +140,7 @@ class FakeIntegrationRepository {
     const record: OAuthConnectionRecord = {
       tenantId,
       ...input,
+      sourceRevision: 1,
       status: "connected" as const,
       lastHealthStatus: null,
       lastHealthCheckedAt: null,
@@ -335,6 +337,7 @@ describe("Integration OAuth Hub routes", () => {
               secretsProvider,
               http,
               connectorConfig as never,
+              { upsert: async () => undefined } as unknown as ConnectionRegistryClient,
               300,
             ),
         },

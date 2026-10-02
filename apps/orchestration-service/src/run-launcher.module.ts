@@ -13,7 +13,7 @@ import {
   buildRunOutcomeService,
   internalM2mTokenProvider,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 
 /**
@@ -33,7 +33,7 @@ import {
     {
       provide: RunLauncherService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const runLauncherConfig = loadRunLauncherEnvironment(process.env);
         const durable = new TemporalDurableExecutionProvider({

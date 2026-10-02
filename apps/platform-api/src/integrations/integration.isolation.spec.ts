@@ -14,6 +14,7 @@ import type {
   CreateOAuthStateInput,
 } from "./integration.repository";
 import { IntegrationService } from "./integration.service";
+import type { ConnectionRegistryClient } from "../engine/connection-registry-client";
 import type {
   IntegrationActivityQuery,
   OAuthConnectionActivityRecord,
@@ -58,6 +59,7 @@ class FakeIntegrationRepository {
     const record: OAuthConnectionRecord = {
       tenantId: tenant,
       ...input,
+      sourceRevision: 1,
       status: "connected" as const,
       lastHealthStatus: null,
       lastHealthCheckedAt: null,
@@ -130,6 +132,7 @@ describe("Integration OAuth cross-workspace isolation (CONN-ISO)", () => {
       secrets as never,
       http,
       { github: { clientIdSecretRef: "ref", clientSecretSecretRef: "ref", configured: true } } as never,
+      { upsert: async () => undefined } as unknown as ConnectionRegistryClient,
       300,
     );
     return { service, repository, secrets };

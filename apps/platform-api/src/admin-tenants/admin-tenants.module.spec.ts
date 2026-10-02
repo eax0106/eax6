@@ -41,6 +41,7 @@ function setEngineEnvironment(): void {
   process.env.MARKETPLACE_DATABASE_URL = "postgres://localhost/marketplace";
   process.env.SIGNING_KEY_PROVIDER = "mock";
   process.env.ENGINE_BASE_URL = "http://engine.test";
+  process.env.CONNECTION_REGISTRY_SERVICE_TOKEN_REF = "env:CONNECTION_REGISTRY_TOKEN";
   process.env.ADS_CORE_BASE_URL = "http://ads.test";
   process.env.COST_LEDGER_BASE_URL = "http://costs.test";
   process.env.EVAL_FACADE_TOKEN_REF = "env:EVAL_TOKEN";

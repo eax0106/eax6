@@ -6,6 +6,9 @@ import { IntegrationService, type ConnectorRuntimeConfigMap } from "./integratio
 import type { IntegrationRepository } from "./integration.repository";
 import { SystemIntegrationStore } from "./system-integration-store";
 import type { OAuthConnectionRecord } from "./types";
+import type { ConnectionRegistryClient } from "../engine/connection-registry-client";
+
+const registry = { upsert: async () => undefined } as unknown as ConnectionRegistryClient;
 
 const tenantId = "ten_018f47a5-7b2c-7d10-8f11-123456789abc";
 const workspaceId = "ws_018f47a5-7b2c-7d10-8f11-123456789abd";
@@ -16,6 +19,7 @@ function connectionRecord(id: string): OAuthConnectionRecord {
     id,
     workspaceId,
     connector: "github",
+    sourceRevision: 1,
     externalAccountId: "acct-1",
     scopes: "repo",
     status: "connected",
@@ -62,6 +66,7 @@ describe("IntegrationService.runHealthSweep", () => {
       fakeSecrets,
       { fetchAccountId: async () => "acct" } as unknown as OAuthHttpClient,
       connectorConfig,
+      registry,
       300,
       undefined,
     );
@@ -79,7 +84,7 @@ describe("IntegrationService.runHealthSweep", () => {
       // and per-connection health check, not fabricated.
     ]);
     const systemStore = {
-      listActiveConnections: async () => [
+      listConnections: async () => [
         { tenantId, workspaceId, id: "conn-healthy" },
         { tenantId, workspaceId, id: "conn-stale" },
       ],
@@ -90,6 +95,7 @@ describe("IntegrationService.runHealthSweep", () => {
       fakeSecrets,
       { fetchAccountId: async () => "acct" } as unknown as OAuthHttpClient,
       connectorConfig,
+      registry,
       300,
       systemStore,
     );
@@ -124,6 +130,7 @@ describe("IntegrationService.health notifies when a connection turns unhealthy (
         },
       } as unknown as OAuthHttpClient,
       connectorConfig,
+      registry,
       300,
       undefined,
       notifications,
@@ -183,6 +190,7 @@ describe("IntegrationService.accessTokenFor", () => {
       fakeSecrets,
       { fetchAccountId: async () => "acct" } as unknown as OAuthHttpClient,
       connectorConfig,
+      registry,
       300,
       undefined,
     );

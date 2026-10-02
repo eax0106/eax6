@@ -246,6 +246,13 @@
       "when": 1790071200000,
       "tag": "0030_workspace_pending_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1790074800000,
+      "tag": "0032_connection_sync_revision",
+      "breakpoints": true
     }
   ]
 }

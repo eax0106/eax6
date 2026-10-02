@@ -41,7 +41,7 @@ function globalGuardProviders(): readonly GlobalGuardProvider[] {
 const VALID_CONFIG = {
   // Pinned so this test exercises the iam-auth branch regardless of a
   // repo-root .env.local (Vite auto-loads it into every vitest run) --
-  // without this, an ambient ALTER_ENV=local would route sessionGatewayEnvironment()
+  // without this, an ambient ALTER_ENV=local would route identityTenantGatewayEnvironment()
   // into the static-auth branch instead, which needs ORCHESTRATION_DATABASE_URL
   // rather than the HOST/PORT/NAME/USER fields this test actually stubs.
   ALTER_ENV: "dev",
@@ -75,7 +75,7 @@ describe("AppModule Session Gateway registration", () => {
     vi.stubEnv("AUTH0_DOMAIN", "");
     try {
       expect(provider.useFactory).toThrow(
-        "Missing required Session Gateway configuration",
+        "Missing required Identity & Tenant Gateway configuration",
       );
     } finally {
       vi.unstubAllEnvs();
@@ -118,7 +118,7 @@ describe("AppModule Session Gateway registration", () => {
     stubConfig({ NODE_ENV: "production", INGRESS_SESSION_GATEWAY_CORE_ENABLED: "" });
     try {
       expect(globalGuardProviders()[0]!.useFactory).toThrow(
-        "Production Session Gateway requires feature flag ingress.sessionGatewayCore",
+        "Production Identity & Tenant Gateway requires the core ingress feature flag",
       );
     } finally {
       vi.unstubAllEnvs();
@@ -133,7 +133,7 @@ describe("AppModule Session Gateway registration", () => {
     });
     try {
       expect(globalGuardProviders()[0]!.useFactory).toThrow(
-        "Missing required Session Gateway configuration: ACTOR_TOKEN_JWKS_URL",
+        "Missing required Identity & Tenant Gateway configuration: ACTOR_TOKEN_JWKS_URL",
       );
     } finally {
       vi.unstubAllEnvs();
