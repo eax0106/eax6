@@ -1,5 +1,7 @@
 """Registry- and ArchitectureSpec-driven concrete capability binding."""
 
+import re
+
 from src.architecture_synthesizer.registry_client import within_allowed
 from src.capability_registry.models import CapabilityRecord, CapabilitySearch
 from src.capability_registry.repository import CapabilityRegistryRepository
@@ -64,6 +66,15 @@ class ArchitectureBinder:
                     reason="Capability Registry has no active policy-eligible candidate",
                 )
             selected = sorted(eligible, key=lambda candidate: _rank(candidate, request))[0]
+            connector = selected.metadata.get("required_connector")
+            if (connector is not None and (
+                not isinstance(connector, str)
+                or re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", connector) is None
+            )) or (selected.kind == "connector" and connector is None):
+                return BindingBlocked(
+                    source_node_key=node.source_node_key,
+                    reason="Registered connector requirement is missing or invalid",
+                )
             score, factors = _score(selected, request)
             bindings.append(
                 BoundCapability(
@@ -74,6 +85,7 @@ class ArchitectureBinder:
                     rationale="registry capability fit with deterministic policy score",
                     score=score,
                     factors=factors,
+                    required_connector=connector,
                 )
             )
         return BindingDecision(bindings=bindings)

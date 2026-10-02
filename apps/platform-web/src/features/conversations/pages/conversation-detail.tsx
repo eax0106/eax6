@@ -143,7 +143,7 @@ export function ConversationDetail() {
         <div className="shrink-0 p-4 bg-surface-base border-t border-border">
           <div className="mx-auto max-w-3xl">
             {(sendMessage.isError || createDraft.isError) && <p role="alert" className="mb-2 text-sm text-destructive">{(sendMessage.error ?? createDraft.error)?.message}</p>}
-            {conversation.status === "archived" ? <p>Chat archived.</p> : <Composer 
+            {conversation.status === "archived" ? <p>Chat archived.</p> : <Composer
               onSend={(msg) => sendMessage.mutate(msg)} 
               loading={sendMessage.isPending}
             />}

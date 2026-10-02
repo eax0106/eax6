@@ -21,7 +21,7 @@ import { MarketplaceAdminService } from "./services/marketplace-admin"
 import { FeatureFlagsService } from "./services/feature-flags"
 import { SupportAccessService } from "./services/support-access"
 import { isLiveApi } from "./http"
-import { hasExternalSideEffect } from "@alterx/contracts"
+import { ConnectionsRequiredSchema, type ConnectionsRequired, hasExternalSideEffect } from "@alterx/contracts"
 import type {
   AvailableRepository,
   HumanActionFilters,
@@ -345,7 +345,7 @@ class ApiClient {
   // workflowId is how answering a clarification re-plans the workflow that
   // raised it. Without it every answer created another draft and planned it
   // with the answer as the goal, losing the objective the user started from.
-  async compileWorkflow(_data: { goal: string; answers: Record<string, string>; workflowId?: string }): Promise<{ workflow: Workflow, explanation: string, warnings: any[], questions: string[] }> {
+  async compileWorkflow(_data: { goal: string; answers: Record<string, string>; workflowId?: string }): Promise<{ workflow: Workflow, explanation: string, warnings: any[], questions: string[], missingConnections?: ConnectionsRequired["missing_connections"] }> {
     if (isLiveApi) {
       const newWorkflow = _data.workflowId
         ? await live.getWorkflow(_data.workflowId)
@@ -361,6 +361,15 @@ class ApiClient {
         };
       }
       
+      if (planRes.type === "connections_required") {
+        const batch = ConnectionsRequiredSchema.parse(planRes);
+        return {
+          workflow: newWorkflow,
+          explanation: "Connect these accounts, then try planning again.",
+          warnings: [], questions: [], missingConnections: batch.missing_connections,
+        };
+      }
+      if (planRes.type !== "compiled") throw new Error("Planner did not return a compiled workflow.");
       // Successfully compiled - fetch the latest workflow object to get the DAG
       const updatedWorkflow = await live.getWorkflow(newWorkflow.id);
       return {
