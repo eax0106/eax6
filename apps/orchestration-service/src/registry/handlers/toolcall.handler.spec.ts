@@ -43,6 +43,18 @@ function context(
 }
 
 describe("ToolCallHandler", () => {
+  it("routes canonical connection references with the actual execution tenant and run", async () => {
+    const invoke = vi.fn().mockResolvedValue({ output_json: "{}", audit_id: "aud_018f4d6e-2b4a-7a3e-8c1a-1234567890ab" });
+    const handler = new ToolCallHandler(gateway(invoke));
+    const reference = `/alter/integrations/${TENANT_ID.slice(4)}/018f4d6e-2b4a-7a3e-8c1a-000000000001/018f4d6e-2b4a-7a3e-8c1a-000000000002`;
+    const result = await handler.execute(context({ tool_name: "search.web", arguments: { query: "AlterX" }, required_connector: "github", credential_ref: reference }));
+    expect(result).toMatchObject({ output: {} });
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: TENANT_ID, run_id: RUN_ID, credential_ref: reference }));
+    invoke.mockClear();
+    const foreign = reference.replace(TENANT_ID.slice(4), OTHER_TENANT_ID.slice(4));
+    await handler.execute(context({ tool_name: "search.web", arguments: {}, required_connector: "github", credential_ref: foreign }));
+    expect(invoke).not.toHaveBeenCalled();
+  });
   it("invokes Tool Gateway with exact snake_case wire fields", async () => {
     const invoke = vi.fn().mockResolvedValue({
       output_json: JSON.stringify({ results: [{ title: "AlterX" }] }),
