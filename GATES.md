@@ -1,20 +1,25 @@
-# Gates: service-read audit context (C104)
+# Gates: workspace-aware WhatsApp account routes (C102)
 
-OWNS: apps/orchestration-service/src/runs/run-learning.controller.ts, apps/orchestration-service/src/runs/run-learning-audit.integration.spec.ts, apps/audit-service/src/audit/run-learning.fixture.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.ts, apps/orchestration-service/src/webhooks/whatsapp-account-registry.service.ts, apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-account-delete.integration.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-workspace.integration.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp.service.ts, apps/platform-api/src/channels/whatsapp/whatsapp.isolation.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp-test-send.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Use the existing allowed audit context for service-asserted run summaries and preserve the caller, asserted tenant, run and result. Prove the actual guarded HTTP, database and authenticated audit gRPC path. Internal performance authentication remains a separate required follow-up.
+Scope: Carry the authenticated workspace through account creation, listing and configuration SQL. Reuse the existing account lookup and provider operations. Native engine HTTP proof uses signed tokens, Redis replay protection and restricted PostgreSQL; the platform provider edge remains a local fixture. No account creation or external send.
 
-- [x] G1: Restricted PostgreSQL and signed HTTP return an owned summary, explicitly refuse a tenant mismatch, and persist successful and denied reads through the actual authenticated audit gRPC service
-  CHECK: node .unlazy/verify-native.mjs
-  EXPECT: run-learning-audit-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=47e907bc9ee2ff4545c6daf57bf2eb95590737504078b67542145bfba94ce2bb; exit=0; EXPECT=matched; output-sha256=ecf2e05d22a684b7ea1915930169ca01c9187889154b4abe41b6cce52bfb0554; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-run-learning-audit-c104; path=b33e9cf43ae9/31 entries
+- [x] G1: Native signed HTTP and restricted PostgreSQL exercise account registration, listing, configuration and deletion within the authenticated workspace
+  CHECK: node .unlazy/verify-engine.mjs
+  EXPECT: whatsapp-workspace-engine-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=976d8cd9a72ca5d8b282f36b1eb5c88755a3667fb872c0b0a7989faa29a3bb4b; exit=0; EXPECT=matched; output-sha256=049e94db62513cef34e8c8b6384d9dc79bc6ac72731b0fa1d0db5e83c0c02141; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
 
-- [x] G2: The original context fails the persisted-audit assertions and restoring the production context passes
+- [x] G2: Platform account and escalation reads use the caller workspace, with provider/configuration operations denied before any external edge is touched
+  CHECK: node .unlazy/verify-platform.mjs
+  EXPECT: whatsapp-workspace-platform-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=086a521bdabd50f23a04bea876d44a8cc0b01c3501dcfd1489ca7c623afd3b23; exit=0; EXPECT=matched; output-sha256=162e943dfd4cac61e138bcf19951ba1858ab378854c188f68f27d5b9bca53139; output-bytes=89; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+
+- [x] G3: Original route/SQL behavior and removed platform list filtering fail the same assertions; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: run-learning-audit-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=c8997c92b7e69a588b9df1a48531eb275c307ce72477219836e86f2799d5233c; exit=0; EXPECT=matched; output-sha256=acc3480c9978ff2efd668f05ab5da20b33d51d1879e446e8cd60f0825d7e19ef; output-bytes=293; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-run-learning-audit-c104; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-workspace-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=f79b851d7a3422d3a55708dae023fb7bfcbff83ff7388349cc8054a523607910; exit=0; EXPECT=matched; output-sha256=13c5994a38584d5e029311d3268c7c49f26283b3842174ffdd8da97ac81fda88; output-bytes=358; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Full engine and audit suites, build, typecheck, lint, architecture, rollback pairing, RBAC and zero added AST findings pass
+- [x] G4: Full engine and platform suites with coverage, static checks, architecture, RBAC, migration pairing and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: run-learning-audit-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=90cb684a6b666da8881b9d079dc3ed2ef03d75e86fd95db0ad839e05fd968602; exit=0; EXPECT=matched; output-sha256=ad6aad29e37ea4f60acde75403f8ceef38259e2ea817849ab95120b100b597bf; output-bytes=568; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-run-learning-audit-c104; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-workspace-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=d3843c2ce778c46a77bc2fa588e81f160f00bac785ac9c2fdde8c07b6bcea015; exit=0; EXPECT=matched; output-sha256=11e176b7bc19a85d5eb8ed465883af88de0ac87b7d16888030d36d7716551b92; output-bytes=574; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
