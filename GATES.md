@@ -1,25 +1,25 @@
-# Gates: workspace-aware WhatsApp account routes (C102)
+# Gates: D17 identity gateway naming (C107)
 
-OWNS: apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.ts, apps/orchestration-service/src/webhooks/whatsapp-account-registry.service.ts, apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-account-delete.integration.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-workspace.integration.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp.service.ts, apps/platform-api/src/channels/whatsapp/whatsapp.isolation.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp-test-send.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: scripts/check-identity-names.sh, scripts/check-identity-names.mjs, scripts/check-identity-names.spec.mjs, scripts/identity-names-baseline.json, .github/workflows/ci.yml, AGENTS.md, docs/work-queue.md
 
-Scope: Carry the authenticated workspace through account creation, listing and configuration SQL. Reuse the existing account lookup and provider operations. Native engine HTTP proof uses signed tokens, Redis replay protection and restricted PostgreSQL; the platform provider edge remains a local fixture. No account creation or external send.
+Scope: Block the retired identity gateway phrase and identifier spelling in added source/document lines. Preserve existing occurrences as a measured historical inventory; that inventory never excuses an added occurrence. CI runs the actual shell entry point and the native regression fixtures.
 
-- [x] G1: Native signed HTTP and restricted PostgreSQL exercise account registration, listing, configuration and deletion within the authenticated workspace
-  CHECK: node .unlazy/verify-engine.mjs
-  EXPECT: whatsapp-workspace-engine-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=976d8cd9a72ca5d8b282f36b1eb5c88755a3667fb872c0b0a7989faa29a3bb4b; exit=0; EXPECT=matched; output-sha256=049e94db62513cef34e8c8b6384d9dc79bc6ac72731b0fa1d0db5e83c0c02141; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+- [x] G1: The actual gate permits unchanged historical occurrences and current names, and refuses newly added retired phrases or identifiers in committed, staged and working changes
+  CHECK: node scripts/check-identity-names.spec.mjs
+  EXPECT: identity-name-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a9067d6f33010e76770dab962444967fd9e060856f42f2894d28dfba07bd21f2; exit=0; EXPECT=matched; output-sha256=ba878eb02f8261d6c1b4467cef74b01fb0798e465f8482bdabfe2cc31e0c88b2; output-bytes=28; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Platform account and escalation reads use the caller workspace, with provider/configuration operations denied before any external edge is touched
-  CHECK: node .unlazy/verify-platform.mjs
-  EXPECT: whatsapp-workspace-platform-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=086a521bdabd50f23a04bea876d44a8cc0b01c3501dcfd1489ca7c623afd3b23; exit=0; EXPECT=matched; output-sha256=162e943dfd4cac61e138bcf19951ba1858ab378854c188f68f27d5b9bca53139; output-bytes=89; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+- [x] G2: Disabling added-line validation makes the native regression fixture fail, and restored source passes
+  CHECK: node .unlazy/negative-control.mjs
+  EXPECT: identity-name-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=7c1c01fcb56bee764cb99c8bbbfd01bdc0bb3884fa8c73a8a3426d4226b38901; exit=0; EXPECT=matched; output-sha256=104798181212444e265005c63183ea98440d23ae28afec51e46bb1482f12703a; output-bytes=30; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Original route/SQL behavior and removed platform list filtering fail the same assertions; restored sources pass
-  CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: whatsapp-workspace-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=f79b851d7a3422d3a55708dae023fb7bfcbff83ff7388349cc8054a523607910; exit=0; EXPECT=matched; output-sha256=13c5994a38584d5e029311d3268c7c49f26283b3842174ffdd8da97ac81fda88; output-bytes=358; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+- [x] G3: Historical inventory counts are independently measured against the recorded Git revision and CI runs both the actual shell gate and native regression fixtures without a conditional skip
+  CHECK: node .unlazy/verify-wiring.mjs
+  EXPECT: identity-name-wiring-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=dd5a45a20ba84207e02266e5b86fde88133e37796fc5c4d35b29e157ce23e245; exit=0; EXPECT=matched; output-sha256=755dbdc364a13d982e0a35239c5e874c177698e333e1b231266adcdcabc5fa18; output-bytes=67; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Full engine and platform suites with coverage, static checks, architecture, RBAC, migration pairing and zero added AST findings pass
-  CHECK: node .unlazy/verify-full.mjs
-  EXPECT: whatsapp-workspace-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=d3843c2ce778c46a77bc2fa588e81f160f00bac785ac9c2fdde8c07b6bcea015; exit=0; EXPECT=matched; output-sha256=11e176b7bc19a85d5eb8ed465883af88de0ac87b7d16888030d36d7716551b92; output-bytes=574; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+- [x] G4: Current branch naming, shell syntax, architecture, RBAC, rollback pairing and unchanged AST findings pass
+  CHECK: node .unlazy/verify-final.mjs
+  EXPECT: identity-name-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3ff759ccf1725434409285e8ce64c3726700bb6d11ae0346948160adcc247f45; exit=0; EXPECT=matched; output-sha256=01954bc1248b8b852c39a85a50563079e9c7ebdf944b1d45a6cf2278cc0b60f7; output-bytes=27; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
