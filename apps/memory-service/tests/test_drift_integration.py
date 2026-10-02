@@ -58,19 +58,6 @@ DRIFT_READER_PASSWORD = "drift-reader-test-only"
 
 
 
-class _StubTokenProvider:
-    """Stands in for Auth0 without reaching it.
-
-    memory-service now mints its own credential for every outbound call, so
-    these clients need a provider rather than a caller's header. The route
-    under test accepts any non-empty bearer, so a fixed token exercises the
-    same path a real minted one would.
-    """
-
-    def metadata(self) -> tuple[tuple[str, str], ...]:
-        return (("authorization", "Bearer integration-token"),)
-
-
 class _UnexercisedOutcomeClient:
     """This test file covers agent drift only -- model/provider drift has
     its own dedicated coverage. Satisfies CostLedgerOutcomeClient's real
@@ -372,8 +359,8 @@ def test_real_performance_http_projection_computes_and_persists_drift(
         headers={"authorization": "Bearer integration-token"},
         timeout=5,
     )
-    assert cross_tenant.status_code == 200
-    assert cross_tenant.json()["observations"] == []
+    assert cross_tenant.status_code == 403
+    assert cross_tenant.json()["detail"]["error_code"] == "SERVICE_TENANT_MISMATCH"
 
     candidates = httpx.get(
         f"{drift_stack['intelligence_base_url']}/internal/performance/drift-candidates",
@@ -425,7 +412,7 @@ def test_real_performance_http_projection_computes_and_persists_drift(
         client = HttpxIntelligencePerformanceClient(
             drift_stack["intelligence_base_url"],
             timeout_seconds=5,
-            access_token_provider=_StubTokenProvider(),
+            service_token="integration-token",
         )
         detector = DriftDetector(
             client,
@@ -474,7 +461,7 @@ def test_real_performance_http_projection_computes_and_persists_drift(
         client = HttpxIntelligencePerformanceClient(
             drift_stack["intelligence_base_url"],
             timeout_seconds=5,
-            access_token_provider=_StubTokenProvider(),
+            service_token="integration-token",
         )
         detector = DriftDetector(
             client,
@@ -573,7 +560,7 @@ def test_model_and_provider_drift_computes_and_persists_real_rows(
         client = HttpxIntelligencePerformanceClient(
             drift_stack["intelligence_base_url"],
             timeout_seconds=5,
-            access_token_provider=_StubTokenProvider(),
+            service_token="integration-token",
         )
         detector = DriftDetector(
             client,
@@ -637,7 +624,7 @@ def test_model_and_provider_drift_computes_and_persists_real_rows(
                 HttpxIntelligencePerformanceClient(
                     drift_stack["intelligence_base_url"],
                     timeout_seconds=5,
-                    access_token_provider=_StubTokenProvider(),
+                    service_token="integration-token",
                 ),
                 repository,
                 policy_store,

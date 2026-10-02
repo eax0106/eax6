@@ -6,7 +6,6 @@ from urllib.parse import quote
 import httpx
 from pydantic import ValidationError
 
-from ..m2m_auth import AccessTokenProvider, bearer_headers
 from .models import AgentPerformance
 
 
@@ -32,12 +31,12 @@ class HttpxIntelligencePerformanceClient:
         timeout_seconds: float,
         client: httpx.AsyncClient | None = None,
         *,
-        access_token_provider: AccessTokenProvider,
+        service_token: str,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._client = client or httpx.AsyncClient(timeout=timeout_seconds)
         self._owns_client = client is None
-        self._access_token_provider = access_token_provider
+        self._service_token = service_token
 
     async def load_agent_performance(
         self,
@@ -47,6 +46,10 @@ class HttpxIntelligencePerformanceClient:
         task_class: str,
         limit: int,
     ) -> AgentPerformance:
+        if not self._service_token.strip():
+            raise IntelligencePerformanceUnavailableError(
+                "internal service credential is not configured"
+            )
         try:
             response = await self._client.get(
                 f"{self._base_url}/internal/performance/agents/{quote(agent_id, safe='')}",
@@ -55,7 +58,7 @@ class HttpxIntelligencePerformanceClient:
                     "task_class": task_class,
                     "limit": str(limit),
                 },
-                headers=await bearer_headers(self._access_token_provider),
+                headers={"authorization": f"Bearer {self._service_token}"},
             )
         except httpx.HTTPError as error:
             raise IntelligencePerformanceUnavailableError(

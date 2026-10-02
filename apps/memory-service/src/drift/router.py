@@ -53,7 +53,7 @@ async def drift_lifespan(app: FastAPI) -> AsyncIterator[None]:
     _default_client = HttpxIntelligencePerformanceClient(
         str(settings.intelligence_service_base_url),
         settings.intelligence_service_timeout_seconds,
-        access_token_provider=token_provider,
+        service_token=settings.internal_service_token,
     )
     _default_outcome_client = HttpxCostLedgerOutcomeClient(
         str(settings.cost_ledger_service_base_url),

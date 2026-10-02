@@ -40,12 +40,16 @@ def databases() -> Generator[tuple[sessionmaker[Session], sessionmaker[Session]]
         password="testpass",
     ) as pg:
         admin_url = pg.get_connection_url()
+        admin = sa.create_engine(admin_url)
+        with admin.begin() as connection:
+            connection.execute(
+                sa.text("CREATE ROLE intelligence_service NOLOGIN NOSUPERUSER NOBYPASSRLS")
+            )
         config = AlembicConfig(str(SERVICE_ROOT / "alembic.ini"))
         config.set_main_option("script_location", str(SERVICE_ROOT / "alembic"))
         config.set_main_option("sqlalchemy.url", admin_url)
         command.upgrade(config, "head")
 
-        admin = sa.create_engine(admin_url)
         with admin.begin() as connection:
             # A role held to row security, like the service's own.
             connection.execute(sa.text("CREATE ROLE intel_erasure LOGIN PASSWORD 'erase'"))

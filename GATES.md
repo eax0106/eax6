@@ -1,30 +1,25 @@
-# Gates: D11 stored event replay (C97)
+# Gates: internal performance service operations (C105)
 
-OWNS: apps/orchestration-service/src/trigger-registry/**, apps/orchestration-service/src/runs/**, apps/orchestration-service/src/workflow-read/**, apps/orchestration-service/src/blackboard/blackboard.service.ts, apps/orchestration-service/src/ingress.module.ts, apps/orchestration-service/src/run-launcher.module.ts, apps/orchestration-service/db/schema/runs.ts, apps/orchestration-service/drizzle/**, apps/orchestration-service/src/database/**, apps/platform-api/src/events/**, apps/platform-api/src/rbac/param-workspace.resolver*, apps/platform-web/src/api/**, apps/platform-web/src/features/events/**, packages/adapters/src/temporal/workflows/executor-workflow*, packages/adapters/src/postgres/orchestration-store-provider.spec.ts, docs/work-queue.md
+OWNS: apps/intelligence-service/src/performance/router.py, apps/intelligence-service/src/performance/repository.py, apps/intelligence-service/src/performance/audit.py, apps/intelligence-service/src/config.py, apps/intelligence-service/src/main.py, apps/intelligence-service/alembic/versions/0009_agent_owner_tenant.py, apps/intelligence-service/tests/test_performance_router.py, apps/intelligence-service/tests/test_migrations.py, apps/intelligence-service/tests/test_deletion.py, apps/memory-service/src/config.py, apps/memory-service/src/drift/router.py, apps/memory-service/src/drift/intelligence_client.py, apps/memory-service/tests/test_drift_integration.py, apps/audit-service/src/audit/performance.fixture.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Replay defaults to the existing structural Simulate over the stored event. A separate real replay lists canonical outside actions, requires a current confirmation bound to the actual caller/event/version, records who confirmed and the source event, and delivers stored input to the existing executor. Real replay retains run budgets, holds, permissions and idempotency.
+Scope: Apply the established shared service credential to internal performance operations. Check an asserted tenant against the addressed agent, distinguish refusal from absence, and record every validated assertion through the existing audit HTTP service. Keep ordinary RLS and composite foreign keys. Align the memory performance caller with this established credential. Root SC requires both C104 and C105.
 
-- [x] G1: Restricted Postgres and guarded HTTP prove dry replay uses stored payload with no run or outside calls, isolated reads and current confirmation checks
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Postgres|HTTP' && echo event-replay-read-passed
-  EXPECT: event-replay-read-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=212b84e3b1e3f24a29551b3851cf8a1e6f622bebe74d5f2894b26d9beff102a5; exit=0; EXPECT=matched; output-sha256=1f06fd74fa489568a6bca4257ac0447bc9217013bface9cba4d0a29d9e6c6b3b; output-bytes=3191; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+- [x] G1: Native restricted PostgreSQL and the real guarded HTTP/audit service exercise valid records and reads, credential refusals, explicit tenant refusals, missing resources and persisted audit results
+  CHECK: node .unlazy/verify-native.mjs
+  EXPECT: performance-service-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a181c4db12e0520e97e84f1d3fd90cc72185872fb60afbe68e71d7f6753ffc21; exit=0; EXPECT=matched; output-sha256=703f01e110ad12501cc6ecae8d7473c68fb6176b67a0f895cb210b755933f90d; output-bytes=65; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Real Temporal receives the stored input, persisted source and confirmer, one run per request, and existing budget/hold/audit failures roll back
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Temporal|transaction' && echo event-replay-execution-passed
-  EXPECT: event-replay-execution-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a52b8f6a7cbf9ca30822e7aa9be2aee453f3acc7004d6ebe54e4fe0a0f128df9; exit=0; EXPECT=matched; output-sha256=b9d490e065e3a4987798279ebbe512964674fb5fcc73d240ba150a79c870089e; output-bytes=3196; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
-
-- [x] G3: Platform relay preserves real caller and run permission; rendered web defaults to dry replay and names outside actions before confirmed real replay
-  CHECK: node .unlazy/verify-platform.mjs && node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/events apps/platform-web/src/api/live-events.spec.ts && echo event-replay-surfaces-passed
-  EXPECT: event-replay-surfaces-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=00c3af538150186600cc740511019fff48717fd7285fd154cefdd79d1de35a4e; exit=0; EXPECT=matched; output-sha256=58dd8c76344af45e819dbfc260fc7145d1eabeb7d747351634ead78acc905a37; output-bytes=324; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Original-code and mutation controls fail their corresponding assertions and restore sources
+- [x] G2: Removing credential validation, ownership comparison or audit recording fails its corresponding native assertion; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: event-replay-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=621f34e480782315d3aad18b64c50d5256f7a1c8e1e65f6ddb5cb2322e53cf83; exit=0; EXPECT=matched; output-sha256=d8e51a8ba4975fd92aa094e66b6cc8bf016fecf21f218ac0586ee5d548adaac9; output-bytes=349; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EXPECT: performance-service-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1b09e6f58609cc83a5248991dc0a716f81a2e31a3b6bc8c54ef68e14a9c6f896; exit=0; EXPECT=matched; output-sha256=a3e4a2228f17c432c8274d1126a2fff483dc2ce98d1564c1fea746eff9ffad16; output-bytes=1965; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Full affected builds, typechecks, lint, suites, migration pairing, RBAC, architecture and zero added AST findings pass
+- [x] G3: The real memory/intelligence HTTP drift path uses the configured shared credential, retains workspace/tenant RLS, and passes its existing regression suite
+  CHECK: node .unlazy/verify-memory.mjs
+  EXPECT: performance-service-memory-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=6b7d0911aa536c019c7d20f440bdfa42e22eed5dc23948357cc1f3b98f7c6d8c; exit=0; EXPECT=matched; output-sha256=b946a2bd40e10bfcbe36302f8432013bfdd239aa1c2a97c95fe8c89daf0ea8dd; output-bytes=53; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
+
+- [x] G4: Full intelligence, memory and audit suites, Python lint/typechecks/proto checks, audit static checks, migration rollback, architecture, RBAC and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: event-replay-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a75529c8ea4b793a51b3debafbf03a8e9c616001ca1d22d4f324db3ea070b492; exit=0; EXPECT=matched; output-sha256=5667bd28c672c794d18696451398c3659b6e5163d2bb1c6b656f507afacfccdd; output-bytes=475; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EXPECT: performance-service-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a5a80cdf4b12a18d76f312762c4d629fb0230cab086948dc91508e04f8fb88b7; exit=0; EXPECT=matched; output-sha256=8b96b0b157281a34ee91f430c2d5be0eb576b90602950275dcc958b40dce74fc; output-bytes=584; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
