@@ -88,7 +88,7 @@ use FastAPI with `uv`. Node 22 (see `.nvmrc`); Python 3.12.
 | Others | `apps/*` | ads-core, audit, background-workers, cost-ledger, memory, provisioning, sandbox, verification |
 | Contracts | `packages/contracts` | Zod schemas, protos (`proto/`, checked by `buf breaking`), OpenAPI |
 | Adapters | `packages/adapters` | Vendor SDKs (AWS, Temporal, Presidio, gRPC clients) and test harnesses (`@alterx/adapters/testing`) |
-| Auth, tenancy, shared clients | `packages/auth`, `packages/tenancy`, `packages/shared-clients` | Session gateway guard, actor-token validation, provider interfaces |
+| Auth, tenancy, shared clients | `packages/auth`, `packages/tenancy`, `packages/shared-clients` | Identity & Tenant Gateway guard, actor-token validation, provider interfaces |
 
 `docs/local-dev.md` explains how to run each service locally.
 
@@ -202,6 +202,9 @@ fresh tenant each run, or it replays earlier answers.
   exist that are not obvious.
 
 ## Working alongside other agents
+
+Use **Identity & Tenant Gateway** in new code and documents (D17). Rename
+retired occurrences when editing their file; CI checks added lines.
 
 Several agents work on this repository at the same time.
 
