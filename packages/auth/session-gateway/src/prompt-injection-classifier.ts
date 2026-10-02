@@ -93,7 +93,7 @@ interface ModelGatewayOutputEnvelope {
 
 type ParseOutcome =
   | { readonly ok: true; readonly result: PromptInjectionClassificationResult }
-  | { readonly ok: false; readonly detail: string };
+  | { readonly ok: false; readonly detail: string; readonly blocked?: boolean };
 
 /**
  * The Model Gateway hands `input_json` straight to a provider, which parses it
@@ -161,13 +161,18 @@ function parseClassifierOutput(outputJson: string): ParseOutcome {
       return { ok: false, detail: `model text is not JSON: ${messageOf(error)}` };
     }
   }
+  if (
+    candidate === null || typeof candidate !== "object" ||
+    typeof candidate.injection_detected !== "boolean" ||
+    typeof candidate.confidence !== "number" ||
+    !Number.isFinite(candidate.confidence) ||
+    candidate.confidence < 0 || candidate.confidence > 1
+  ) {
+    return { ok: false, detail: "classifier verdict or confidence is invalid",
+      blocked: candidate?.injection_detected === true };
+  }
   const detected = candidate.injection_detected === true;
-  const confidence =
-    typeof candidate.confidence === "number" &&
-    candidate.confidence >= 0 &&
-    candidate.confidence <= 1
-      ? candidate.confidence
-      : 0;
+  const confidence = candidate.confidence;
   return {
     ok: true,
     result: {
@@ -221,6 +226,7 @@ export class PromptInjectionClassifier {
         request,
         "classifier_response_unparseable",
         parsed.detail,
+        parsed.blocked,
       );
     }
     return parsed.result;
@@ -230,6 +236,7 @@ export class PromptInjectionClassifier {
     request: PromptInjectionClassificationRequest,
     cause: PromptInjectionFailOpenCause,
     detail: string,
+    blocked = false,
   ): PromptInjectionClassificationResult {
     // Never log `request.text`: it is untrusted input and may carry the
     // caller's own data.
@@ -243,6 +250,7 @@ export class PromptInjectionClassifier {
         node_execution_id: request.nodeExecutionId,
       }),
     );
-    return { blocked: false, confidence: 0, failOpenCause: cause };
+    // Preserve a positive signal when only its confidence is unreadable.
+    return { blocked, confidence: 0, failOpenCause: cause };
   }
 }
