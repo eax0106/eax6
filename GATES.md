@@ -1,30 +1,25 @@
-# Gates: D15 classifier parity and duplicate-safety enforcement (C106)
+# Gates: D17 identity gateway naming (C107)
 
-OWNS: packages/auth/session-gateway/src/prompt-injection-classifier.ts, packages/auth/session-gateway/src/prompt-injection-classifier.spec.ts, apps/verification-service/src/verification/model_gateway_client.py, apps/verification-service/tests/test_injection_parity.py, scripts/safety/injection-cases.json, scripts/safety/run-injection-cases.mjs, scripts/check-injection-parity.mjs, scripts/gates/safety-duplicate.mjs, scripts/gates/safety-duplicate-python.py, scripts/gates/safety-duplicate.spec.mjs, scripts/gates/probes/**, .github/workflows/ci.yml, docs/architecture/planes.md, docs/architecture/component-contracts.md, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: scripts/check-identity-names.sh, scripts/check-identity-names.mjs, scripts/check-identity-names.spec.mjs, scripts/identity-names-baseline.json, .github/workflows/ci.yml, AGENTS.md, docs/work-queue.md
 
-Scope: Keep one classifier implementation per language. The real TypeScript and Python clients consume one case set through native loopback model gRPC, agree on classification and unavailable outcomes, and retain their existing caller-specific failure policies. CI invokes parity and actual duplicate-safety probes. A deterministic model edge tests contract behavior; paid model detection quality is not claimed.
+Scope: Block the retired identity gateway phrase and identifier spelling in added source/document lines. Preserve existing occurrences as a measured historical inventory; that inventory never excuses an added occurrence. CI runs the actual shell entry point and the native regression fixtures.
 
-- [x] G1: Both actual classifiers agree on every shared case over native model gRPC, preserve input and FAST routing, and use the same classification policy while preserving their existing unavailable handling
-  CHECK: node .unlazy/verify-parity.mjs
-  EXPECT: safety-parity-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5c2dbeceab47d813093b28307decb2907f832d667486e44ee485281143320026; exit=0; EXPECT=matched; output-sha256=9811a07716466d041aca908465cbcd8027269ec9afb082cab8adb2330c0b15ff; output-bytes=149; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+- [x] G1: The actual gate permits unchanged historical occurrences and current names, and refuses newly added retired phrases or identifiers in committed, staged and working changes
+  CHECK: node scripts/check-identity-names.spec.mjs
+  EXPECT: identity-name-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a9067d6f33010e76770dab962444967fd9e060856f42f2894d28dfba07bd21f2; exit=0; EXPECT=matched; output-sha256=ba878eb02f8261d6c1b4467cef74b01fb0798e465f8482bdabfe2cc31e0c88b2; output-bytes=28; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
 
-- [x] G2: The duplicate-safety gate permits ordinary transport and canonical consumers while identifying real duplicate implementation declarations, including renamed copies; the probe is invoked in CI
-  CHECK: node .unlazy/verify-gate.mjs
-  EXPECT: safety-duplicate-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1de83880437595557ae07bbe560d7b6cec99d2d05c02216d6a588b405c925a52; exit=0; EXPECT=matched; output-sha256=b7943a7902742115f80ebee8b9093cf419c6da238fa4baca88899b4f1595bcad; output-bytes=62; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+- [x] G2: Disabling added-line validation makes the native regression fixture fail, and restored source passes
+  CHECK: node .unlazy/negative-control.mjs
+  EXPECT: identity-name-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=7c1c01fcb56bee764cb99c8bbbfd01bdc0bb3884fa8c73a8a3426d4226b38901; exit=0; EXPECT=matched; output-sha256=104798181212444e265005c63183ea98440d23ae28afec51e46bb1482f12703a; output-bytes=30; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Independently changed classifier verdicts and removed duplicate detection fail their corresponding native checks; restored sources pass
-  CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: safety-parity-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=ff14056998334330f0de73c6862b840cd3b65284ab96526e91d1eac233552a49; exit=0; EXPECT=matched; output-sha256=a40c3bd386aca113d4a0dbfb721e8778c055050c046247d22e9e28345b502d91; output-bytes=646; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+- [x] G3: Historical inventory counts are independently measured against the recorded Git revision and CI runs both the actual shell gate and native regression fixtures without a conditional skip
+  CHECK: node .unlazy/verify-wiring.mjs
+  EXPECT: identity-name-wiring-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=dd5a45a20ba84207e02266e5b86fde88133e37796fc5c4d35b29e157ce23e245; exit=0; EXPECT=matched; output-sha256=755dbdc364a13d982e0a35239c5e874c177698e333e1b231266adcdcabc5fa18; output-bytes=67; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Full auth, verification and adapter suites, affected static checks, architecture/RBAC, exact CI wiring and migration rollback pairing pass
-  CHECK: node .unlazy/verify-full.mjs
-  EXPECT: safety-parity-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=4436f905996a11f7a06216a88668bd867ff1a672248c3a63a10e05898d9284e8; exit=0; EXPECT=matched; output-sha256=502d0fda0b2c22bc1d4dbd77d175472a2b8c5b9c95102d9d1f1095ede003c715; output-bytes=426; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
-
-- [x] G5: The regenerated safety baseline is independently measured; all other normalized AST counts add zero entries and final architecture gates pass
-  CHECK: node .unlazy/verify-baseline.mjs
-  EXPECT: safety-parity-baseline-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=d832097c84afad1393ff7eaec1e18cd25767743153f309f4c4c6e3a7956e5c73; exit=0; EXPECT=matched; output-sha256=8e12d4e4cf3c51d3bca9d561b4f99d8edc6e6a4899b3544ea68f25ccf0fad677; output-bytes=114; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+- [x] G4: Current branch naming, shell syntax, architecture, RBAC, rollback pairing and unchanged AST findings pass
+  CHECK: node .unlazy/verify-final.mjs
+  EXPECT: identity-name-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3ff759ccf1725434409285e8ce64c3726700bb6d11ae0346948160adcc247f45; exit=0; EXPECT=matched; output-sha256=01954bc1248b8b852c39a85a50563079e9c7ebdf944b1d45a6cf2278cc0b60f7; output-bytes=27; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-identity-name-gate-c107; path=b33e9cf43ae9/31 entries
