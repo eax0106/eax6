@@ -26,7 +26,7 @@ Scope: Tool Gateway resolves user connection credentials through current engine 
   EXPECT: connection-runtime-negative-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=fe5a4caaacee45555500fb75be1c9a3d60765cdc11b93b779e9942a6ae670305; exit=0; EXPECT=matched; output-sha256=23e1825e12ba0b7cca9f3a7ecff12a93bf8216383032ec05533199c5c55f9b80; output-bytes=6231; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
 
-- [ ] G5: Full engine, Tool Gateway, adapters and contracts suites, build/typecheck/lint, proto compatibility, architecture, RBAC, rollback pairing and zero added normalized AST findings pass
+- [x] G5: Full engine, Tool Gateway, adapters and contracts suites, build/typecheck/lint, proto compatibility, architecture, RBAC, rollback pairing and zero added normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: connection-runtime-final-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=cff5dff110466fce972d37778bdb95b568cb917fc43f8337755552d5e1ef0628; exit=0; EXPECT=matched; output-sha256=e2c43d3ed446a41653c493af400900b647e300ce54f0d8eeb500e7bc3dd13190; output-bytes=948; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
