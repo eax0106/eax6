@@ -239,4 +239,14 @@ describe("WhatsApp cross-workspace isolation (ENGINE-FIX-B7-1)", () => {
       controller.templates(workspaceAAccount.id, sameTenantActorA, undefined),
     ).resolves.toEqual([]);
   });
+
+  it("lists accounts and escalation rules from the requested workspace", async () => {
+    const { controller, engine } = buildController(new WorstCaseTenantOnlyScopedEngineClient());
+    await expect(controller.list(sameTenantActorB, undefined)).resolves.toEqual([]);
+    await expect(controller.escalations(workspaceAAccount.id, sameTenantActorB, undefined)).resolves.toEqual([]);
+    await expect(controller.createEscalation(workspaceAAccount.id, { target: "fixture" }, sameTenantActorB, undefined, "create-b")).rejects.toThrow();
+    await expect(controller.updateEscalation(workspaceAAccount.id, "rule", {}, sameTenantActorB, undefined, "update-b")).rejects.toThrow();
+    await expect(controller.deleteEscalation(workspaceAAccount.id, "rule", sameTenantActorB, undefined, "remove-b")).rejects.toThrow();
+    expect(engine.post).not.toHaveBeenCalled();
+  });
 });

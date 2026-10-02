@@ -5,7 +5,7 @@ import { WhatsappAccountsController } from "./whatsapp-accounts.controller";
 
 const tenant = "11111111-1111-7111-8111-111111111111";
 const workspace = "22222222-2222-7222-8222-222222222222";
-const request = { actorContext: { tenant_id: `ten_${tenant}` } } as unknown as SessionGatewayRequest;
+const request = { actorContext: { tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}` } } as unknown as SessionGatewayRequest;
 
 function stored(): WhatsappAccount {
   return {
@@ -37,8 +37,8 @@ describe("WhatsappAccountsController", () => {
     const updated = await accounts.updateConfiguration(request, "wac_1", { monitoringConfig: { on: true } });
 
     expect(registry.register).toHaveBeenCalledWith(tenant, expect.objectContaining({ workspaceId: workspace }));
-    expect(registry.list).toHaveBeenCalledWith(tenant);
-    expect(registry.updateConfiguration).toHaveBeenCalledWith(tenant, "wac_1", { monitoringConfig: { on: true } });
+    expect(registry.list).toHaveBeenCalledWith(tenant, workspace);
+    expect(registry.updateConfiguration).toHaveBeenCalledWith(tenant, workspace, "wac_1", { monitoringConfig: { on: true } });
     for (const account of [created, listed.accounts[0]!, updated]) {
       expect(account).toMatchObject({ tenantId: `ten_${tenant}`, workspaceId: `ws_${workspace}` });
     }
@@ -70,6 +70,7 @@ describe("WhatsappAccountsController", () => {
     await accounts.remove(scoped, "wac_1");
     expect(registry.remove).toHaveBeenCalledWith(tenant, workspace, "wac_1");
     await expect(accounts.remove(scoped, "wac_unknown")).rejects.toMatchObject({ status: 404 });
-    await expect(accounts.remove(request, "wac_1")).rejects.toMatchObject({ status: 500 });
+    const missing = { actorContext: { tenant_id: `ten_${tenant}` } } as unknown as SessionGatewayRequest;
+    await expect(accounts.remove(missing, "wac_1")).rejects.toMatchObject({ status: 500 });
   });
 });

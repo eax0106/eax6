@@ -22,7 +22,7 @@ export class WhatsappAccountsController {
   @Post()
   async register(@Req() request: SessionGatewayRequest, @Body() body: RegisterAccountBody): Promise<WhatsappAccount> {
     const tenantId = requiredTenantId(request);
-    if (!body.workspaceId || !body.phoneNumberId || !body.wabaId || !body.accessTokenRef) {
+    if (typeof body.workspaceId !== "string" || !body.workspaceId || !body.phoneNumberId || !body.wabaId || !body.accessTokenRef) {
       throw new HttpException("workspaceId, phoneNumberId, wabaId, and accessTokenRef are required", 400);
     }
     // platform-api's actor context carries the bare workspace UUID; a
@@ -31,8 +31,12 @@ export class WhatsappAccountsController {
       body.workspaceId.startsWith("ws_") ? body.workspaceId : `ws_${body.workspaceId}`,
     );
     if (!workspaceId.success) throw new HttpException("workspaceId must be a workspace UUIDv7", 400);
+    const callerWorkspaceId = requiredWorkspaceId(request);
+    if (workspaceId.data.slice("ws_".length) !== callerWorkspaceId) {
+      throw new HttpException("Account workspace must match the authenticated workspace", 403);
+    }
     return toApi(await this.registry.register(tenantId, {
-      workspaceId: workspaceId.data.slice("ws_".length),
+      workspaceId: callerWorkspaceId,
       phoneNumberId: body.phoneNumberId,
       wabaId: body.wabaId,
       accessTokenRef: body.accessTokenRef,
@@ -45,7 +49,7 @@ export class WhatsappAccountsController {
 
   @Get()
   async list(@Req() request: SessionGatewayRequest): Promise<{ readonly accounts: readonly WhatsappAccount[] }> {
-    return { accounts: (await this.registry.list(requiredTenantId(request))).map(toApi) };
+    return { accounts: (await this.registry.list(requiredTenantId(request), requiredWorkspaceId(request))).map(toApi) };
   }
 
   @Delete(":id")
@@ -69,7 +73,12 @@ export class WhatsappAccountsController {
       readonly escalationRules?: readonly Readonly<Record<string, unknown>>[];
     },
   ): Promise<WhatsappAccount> {
-    return toApi(await this.registry.updateConfiguration(requiredTenantId(request), accountId, body));
+    try {
+      return toApi(await this.registry.updateConfiguration(requiredTenantId(request), requiredWorkspaceId(request), accountId, body));
+    } catch (error: unknown) {
+      if (error instanceof WhatsappAccountNotFoundError) throw new HttpException("WhatsApp account not found", 404);
+      throw error;
+    }
   }
 }
 
