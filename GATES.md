@@ -30,3 +30,8 @@ Scope: Engine stores tenant/workspace-scoped connection snapshots containing con
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: connection-registry-full-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=6080e3169797cbb0f838109cb51cc4cf76f3a72cb7faeca52a13775eb05d8aa7; exit=0; EXPECT=matched; output-sha256=ca5515fb5bff1981516794a4291b1137856f18eaded112ba6d4872ee1ab4c815; output-bytes=488; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+
+- [x] G6: The complete platform database integration target applies migration SQL repeatedly while preserving its constraints and existing data paths
+  CHECK: node .unlazy/verify-migrations.mjs
+  EXPECT: connection-registry-migrations-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3f666f5aa90dba2aaee989b7615162292873a6ff20004b1fae6e523e69964ab8; exit=0; EXPECT=matched; output-sha256=b5611187ebac4a6af68a548981008cd7af313ea75fcb670b2bd7d305f3add4a1; output-bytes=169; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
