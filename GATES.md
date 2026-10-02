@@ -1,20 +1,20 @@
-# Gates: full-process finalize retry proof (C101)
+# Gates: platform runtime function grants (C103)
 
-OWNS: apps/orchestration-service/src/registry/finalize-replay.integration.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: deploy/ec2/platform-db-roles.sql, deploy/ec2/check-platform-db-roles.sh, docs/work-queue.md
 
-Scope: Exercise the production Temporal workflow and activities through a separately booted engine and Python verification service, dropping the first successful finalize response. The model edge is a local contract fixture; this proves retry behavior, not model quality or paid-provider readiness. The regression runs in the existing engine test target.
+Scope: Apply explicit tenant and staff function grants using the existing runtime-role kit and strengthen its existing CI check. Exercise the complete migration set on a fresh native PostgreSQL instance before and after the role kit. No deployed database or external account is touched.
 
-- [x] G1: A real Temporal activity retry through the actual engine and verification processes preserves one acceptance row, one classification and one pair of reviewer calls over the actual terminal output
-  CHECK: node .unlazy/verify-behavior.mjs
-  EXPECT: finalize-replay-behavior-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1904bea19d397046c6a3d00125ced9ef73b1a4e5acad3777a3f531d7dd913e49; exit=0; EXPECT=matched; output-sha256=37cf90d61b2ecf41cb9af2f96dfa405530a9df938ec40cfa7c89d2319369aac4; output-bytes=162; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-finalize-replay-c101; path=b33e9cf43ae9/31 entries
+- [x] G1: Native PostgreSQL applies the production role kit before and after all migrations; the existing check proves tenant, staff, signup and retention behavior twice
+  CHECK: node .unlazy/verify-roles.mjs
+  EXPECT: platform-function-grants-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=164bb3f3e794fdffe14ca1822f4b704e0bba4d237331890bfbe6aec967ec74a1; exit=0; EXPECT=matched; output-sha256=d34261fd3505fb43305a1f104904200a469ef5c4c253146077d64d0bfe2ba4f7; output-bytes=120; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-platform-function-grants-c103; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Removing the existing terminal and recorded-verdict guards fails the retry assertions, and restored sources pass through the same full-process check
+- [x] G2: Restoring the prior grant behavior makes the strengthened role check fail; restored sources pass again
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: finalize-replay-negative-control-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a9cbb3951d834ed0e8a3482b5ce5e94e8bfe97d959161b99df0173b24d049f25; exit=0; EXPECT=matched; output-sha256=28d39290f12f3c981387e21c10dab46a419d69a465d130c06a2906249b140f71; output-bytes=392; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-finalize-replay-c101; path=b33e9cf43ae9/31 entries
+  EXPECT: platform-function-grants-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=d1dc966870eb848934518555fce285246d0a0b0e3f90d69cffa3e2764679787c; exit=0; EXPECT=matched; output-sha256=a17ecc960f582f2835b7b16f628681082184da990b1721d6958c4b2ec85cd14e; output-bytes=94; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-platform-function-grants-c103; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Engine build, typecheck, lint, existing acceptance regressions, architecture and zero added AST findings pass; the normal engine test target includes the new regression
-  CHECK: node .unlazy/verify-static.mjs
-  EXPECT: finalize-replay-static-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=791d2290f23cd3308bdb220d9eaf93c8a7e9059849e3462ffa7e88196ab370e0; exit=0; EXPECT=matched; output-sha256=7fc2866b2650bf97cc0aa8b6557fec80e0f584765b6e81feab724e7e817a56e0; output-bytes=221; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-finalize-replay-c101; path=b33e9cf43ae9/31 entries
+- [x] G3: Shell syntax, bootstrap configuration, production boot, architecture, rollback pairing and existing CI wiring pass
+  CHECK: node .unlazy/verify-wiring.mjs
+  EXPECT: platform-function-grants-wiring-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a249f4177cf1d3b51920bec7b95dc29b3a342a0a6ddd0581e385efa892f91255; exit=0; EXPECT=matched; output-sha256=39e4b26cbdc21db6b2bb6443b906141d84f2328cd70c27ca4831d92145342568; output-bytes=39; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-platform-function-grants-c103; path=b33e9cf43ae9/31 entries
