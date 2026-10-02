@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { MetaCloudApiWhatsappProvider } from "@alterx/adapters";
 import type { JsonValue, SecretsProvider } from "@alterx/shared-clients";
 import { EngineClient, type EngineCallerContext } from "../../engine";
@@ -39,6 +39,9 @@ export class WhatsappService {
     context: EngineCallerContext,
     idempotencyKey: string,
   ): Promise<WhatsappAccount> {
+    if (typeof input.workspaceId !== "string" || bareWorkspace(input.workspaceId) !== bareWorkspace(context.workspaceId)) {
+      throw new ForbiddenException("Account workspace must match the authenticated workspace");
+    }
     const response = await this.engine.post<JsonValue, WhatsappAccount>(
       "/api/v1/channels/whatsapp/accounts",
       input as unknown as JsonValue,
@@ -54,7 +57,7 @@ export class WhatsappService {
       "/api/v1/channels/whatsapp/accounts",
       context,
     );
-    return response.body?.accounts ?? [];
+    return (response.body?.accounts ?? []).filter((account) => bareWorkspace(account.workspaceId) === bareWorkspace(context.workspaceId));
   }
 
   async templates(accountId: string, context: EngineCallerContext) {

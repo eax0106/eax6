@@ -68,7 +68,7 @@ describe.sequential("WhatsApp account delete, real Postgres", () => {
 
     await registry().remove(TENANT, WORKSPACE, account.id);
 
-    expect((await registry().list(TENANT)).map((item) => item.id)).not.toContain(account.id);
+    expect((await registry().list(TENANT, WORKSPACE)).map((item) => item.id)).not.toContain(account.id);
     await expect(registry().resolveInbound("phone-own")).rejects.toBeInstanceOf(WhatsappAccountNotFoundError);
     await expect(registry().remove(TENANT, WORKSPACE, account.id)).rejects.toBeInstanceOf(WhatsappAccountNotFoundError);
   });
@@ -80,8 +80,8 @@ describe.sequential("WhatsApp account delete, real Postgres", () => {
     await expect(registry().remove(TENANT, WORKSPACE, otherWorkspace.id)).rejects.toBeInstanceOf(WhatsappAccountNotFoundError);
     await expect(registry().remove(TENANT, WORKSPACE, otherTenant.id)).rejects.toBeInstanceOf(WhatsappAccountNotFoundError);
 
-    expect((await registry().list(TENANT)).map((item) => item.id)).toContain(otherWorkspace.id);
-    expect((await registry().list(OTHER_TENANT)).map((item) => item.id)).toContain(otherTenant.id);
+    expect((await registry().list(TENANT, OTHER_WORKSPACE)).map((item) => item.id)).toContain(otherWorkspace.id);
+    expect((await registry().list(OTHER_TENANT, WORKSPACE)).map((item) => item.id)).toContain(otherTenant.id);
     await expect(registry().resolveInbound("phone-other-ws")).resolves.toMatchObject({ accountId: otherWorkspace.id });
   });
 });

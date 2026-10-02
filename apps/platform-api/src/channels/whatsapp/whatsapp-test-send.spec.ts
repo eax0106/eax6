@@ -120,4 +120,24 @@ describe.skipIf(!databaseUrl)("WhatsApp test-send guarded HTTP and PostgreSQL", 
     expect(retry.statusCode).toBe(201); expect(retry.json()).toEqual({ messageId: "wamid.accepted" });
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+
+  it("uses the actor workspace for account and escalation routes", async () => {
+    const caller = { ...actor, workspace_id: "00000000-0000-7000-8000-000000000003" };
+    const headers = { "x-test-actor": JSON.stringify(caller), "idempotency-key": randomUUID() };
+    const server = app.getHttpAdapter().getInstance();
+    const listed = await server.inject({ method: "GET", url: "/api/v1/channels/whatsapp/accounts", headers });
+    expect(listed.statusCode).toBe(200); expect(listed.json()).toEqual([]);
+    const rules = await server.inject({ method: "GET", url: `/api/v1/channels/whatsapp/accounts/${account.id}/escalations`, headers });
+    expect(rules.statusCode).toBe(200); expect(rules.json()).toEqual([]);
+    for (const method of ["POST", "PATCH", "DELETE"] as const) {
+      const suffix = method === "POST" ? "" : "/fixture-rule";
+      const response = await server.inject({ method, url: `/api/v1/channels/whatsapp/accounts/${account.id}/escalations${suffix}`,
+        headers: { ...headers, "idempotency-key": randomUUID() }, ...(method === "DELETE" ? {} : { payload: { target: "fixture" } }) });
+      expect(response.statusCode).toBe(401);
+    }
+    const registered = await server.inject({ method: "POST", url: "/api/v1/channels/whatsapp/accounts", headers,
+      payload: { workspaceId: workspace, phoneNumberId: "fixture", wabaId: "fixture", accessTokenRef: "env:WA_FIXTURE" } });
+    expect(registered.statusCode).toBe(403);
+    expect(getSecret).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+  });
 });
