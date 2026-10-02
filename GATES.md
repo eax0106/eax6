@@ -1,30 +1,20 @@
-# Gates: D11 stored event replay (C97)
+# Gates: service-read audit context (C104)
 
-OWNS: apps/orchestration-service/src/trigger-registry/**, apps/orchestration-service/src/runs/**, apps/orchestration-service/src/workflow-read/**, apps/orchestration-service/src/blackboard/blackboard.service.ts, apps/orchestration-service/src/ingress.module.ts, apps/orchestration-service/src/run-launcher.module.ts, apps/orchestration-service/db/schema/runs.ts, apps/orchestration-service/drizzle/**, apps/orchestration-service/src/database/**, apps/platform-api/src/events/**, apps/platform-api/src/rbac/param-workspace.resolver*, apps/platform-web/src/api/**, apps/platform-web/src/features/events/**, packages/adapters/src/temporal/workflows/executor-workflow*, packages/adapters/src/postgres/orchestration-store-provider.spec.ts, docs/work-queue.md
+OWNS: apps/orchestration-service/src/runs/run-learning.controller.ts, apps/orchestration-service/src/runs/run-learning-audit.integration.spec.ts, apps/audit-service/src/audit/run-learning.fixture.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Replay defaults to the existing structural Simulate over the stored event. A separate real replay lists canonical outside actions, requires a current confirmation bound to the actual caller/event/version, records who confirmed and the source event, and delivers stored input to the existing executor. Real replay retains run budgets, holds, permissions and idempotency.
+Scope: Use the existing allowed audit context for service-asserted run summaries and preserve the caller, asserted tenant, run and result. Prove the actual guarded HTTP, database and authenticated audit gRPC path. Internal performance authentication remains a separate required follow-up.
 
-- [x] G1: Restricted Postgres and guarded HTTP prove dry replay uses stored payload with no run or outside calls, isolated reads and current confirmation checks
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Postgres|HTTP' && echo event-replay-read-passed
-  EXPECT: event-replay-read-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=212b84e3b1e3f24a29551b3851cf8a1e6f622bebe74d5f2894b26d9beff102a5; exit=0; EXPECT=matched; output-sha256=1f06fd74fa489568a6bca4257ac0447bc9217013bface9cba4d0a29d9e6c6b3b; output-bytes=3191; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+- [x] G1: Restricted PostgreSQL and signed HTTP return an owned summary, explicitly refuse a tenant mismatch, and persist successful and denied reads through the actual authenticated audit gRPC service
+  CHECK: node .unlazy/verify-native.mjs
+  EXPECT: run-learning-audit-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=47e907bc9ee2ff4545c6daf57bf2eb95590737504078b67542145bfba94ce2bb; exit=0; EXPECT=matched; output-sha256=ecf2e05d22a684b7ea1915930169ca01c9187889154b4abe41b6cce52bfb0554; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-run-learning-audit-c104; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Real Temporal receives the stored input, persisted source and confirmer, one run per request, and existing budget/hold/audit failures roll back
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Temporal|transaction' && echo event-replay-execution-passed
-  EXPECT: event-replay-execution-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a52b8f6a7cbf9ca30822e7aa9be2aee453f3acc7004d6ebe54e4fe0a0f128df9; exit=0; EXPECT=matched; output-sha256=b9d490e065e3a4987798279ebbe512964674fb5fcc73d240ba150a79c870089e; output-bytes=3196; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
-
-- [x] G3: Platform relay preserves real caller and run permission; rendered web defaults to dry replay and names outside actions before confirmed real replay
-  CHECK: node .unlazy/verify-platform.mjs && node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/events apps/platform-web/src/api/live-events.spec.ts && echo event-replay-surfaces-passed
-  EXPECT: event-replay-surfaces-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=00c3af538150186600cc740511019fff48717fd7285fd154cefdd79d1de35a4e; exit=0; EXPECT=matched; output-sha256=58dd8c76344af45e819dbfc260fc7145d1eabeb7d747351634ead78acc905a37; output-bytes=324; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Original-code and mutation controls fail their corresponding assertions and restore sources
+- [x] G2: The original context fails the persisted-audit assertions and restoring the production context passes
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: event-replay-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=621f34e480782315d3aad18b64c50d5256f7a1c8e1e65f6ddb5cb2322e53cf83; exit=0; EXPECT=matched; output-sha256=d8e51a8ba4975fd92aa094e66b6cc8bf016fecf21f218ac0586ee5d548adaac9; output-bytes=349; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EXPECT: run-learning-audit-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=c8997c92b7e69a588b9df1a48531eb275c307ce72477219836e86f2799d5233c; exit=0; EXPECT=matched; output-sha256=acc3480c9978ff2efd668f05ab5da20b33d51d1879e446e8cd60f0825d7e19ef; output-bytes=293; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-run-learning-audit-c104; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Full affected builds, typechecks, lint, suites, migration pairing, RBAC, architecture and zero added AST findings pass
+- [x] G3: Full engine and audit suites, build, typecheck, lint, architecture, rollback pairing, RBAC and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: event-replay-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a75529c8ea4b793a51b3debafbf03a8e9c616001ca1d22d4f324db3ea070b492; exit=0; EXPECT=matched; output-sha256=5667bd28c672c794d18696451398c3659b6e5163d2bb1c6b656f507afacfccdd; output-bytes=475; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EXPECT: run-learning-audit-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=90cb684a6b666da8881b9d079dc3ed2ef03d75e86fd95db0ad839e05fd968602; exit=0; EXPECT=matched; output-sha256=ad6aad29e37ea4f60acde75403f8ceef38259e2ea817849ab95120b100b597bf; output-bytes=568; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-run-learning-audit-c104; path=b33e9cf43ae9/31 entries
