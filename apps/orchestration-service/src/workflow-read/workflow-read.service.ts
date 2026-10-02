@@ -466,9 +466,10 @@ export class WorkflowReadService {
     tenantId: string,
     workflowId: string,
     input: Record<string, unknown>,
+    compiledDag?: import("@alterx/contracts").CompiledDag,
   ): Promise<{ readonly trace: readonly { key: string; type: string; status: "simulated"; input: Record<string, unknown> }[] }> {
-    const draftDag = await this.#requireDraftDag(tenantId, workflowId);
-    const parsed = CompiledDagSchema.safeParse(draftDag);
+    const dag = compiledDag ?? await this.#requireDraftDag(tenantId, workflowId);
+    const parsed = CompiledDagSchema.safeParse(dag);
     if (!parsed.success) {
       throw new WorkflowValidationError(
         `Cannot simulate an invalid dag: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,

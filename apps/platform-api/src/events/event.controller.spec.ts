@@ -23,6 +23,7 @@ import {
   type EngineResponse,
 } from "../engine";
 import { RbacModule, type ActorContextType, type RbacRequest } from "../rbac";
+import { PgIdempotencyStore } from "../idempotency";
 import { EventController } from "./event.controller";
 import { EventExceptionFilter } from "./event-exception.filter";
 import { EventService } from "./event.service";
@@ -52,6 +53,7 @@ describe("EventController routes", () => {
         EventService,
         EventExceptionFilter,
         { provide: EngineClient, useValue: engine },
+        { provide: PgIdempotencyStore, useValue: { execute: async (_input: unknown, operation: () => Promise<{ status: number; body: unknown }>) => ({ ...(await operation()), replayed: false }) } },
         { provide: APP_FILTER, useClass: EngineExceptionFilter },
       ],
     }).compile();
@@ -88,6 +90,32 @@ describe("EventController routes", () => {
       "/api/v1/events?source=whatsapp&status=triggered",
       expect.objectContaining({ tenantId: actor.tenant_id, permissions: ["runs:read"] }),
     );
+  });
+
+  it("defaults to dry replay as the actual viewer and preserves caller context", async () => {
+    const response = await app.inject({ method: "POST", url: `/api/v1/events/${eventId}/replay`, headers: { "x-test-actor": JSON.stringify(actor) }, payload: {} });
+    expect(response.statusCode).toBe(200);
+    expect(engine.post).toHaveBeenCalledWith(`/api/v1/events/${eventId}/replay`, {}, expect.objectContaining({ userId: actor.user_id,
+      tenantId: actor.tenant_id, workspaceId: actor.workspace_id, roles: ["viewer"], permissions: ["runs:read"] }),
+    { idempotencyKey: expect.stringMatching(/^event-preview-/) });
+  });
+
+  it("real replay needs the workflow run roles and permission plus confirmation and a request key", async () => {
+    const body = { confirmed: true, confirmationToken: "a".repeat(64) };
+    const url = `/api/v1/events/${eventId}/replay-for-real`;
+    for (const requestActor of [actor, { ...actor, roles: ["operator"], permissions: ["runs:read"] }]) {
+      const denied = await app.inject({ method: "POST", url, headers: { "x-test-actor": JSON.stringify(requestActor), "idempotency-key": "event-replay-fixed-key" }, payload: body });
+      expect(denied.statusCode).toBe(403);
+    }
+    expect(engine.post).not.toHaveBeenCalled();
+    const runner = { ...actor, roles: ["operator"], permissions: ["runs:read", "workflows:write"] };
+    for (const bad of [{}, { confirmed: false, confirmationToken: body.confirmationToken }, { ...body, payload: { forged: true } }]) {
+      expect((await app.inject({ method: "POST", url, headers: { "x-test-actor": JSON.stringify(runner), "idempotency-key": "event-replay-fixed-key" }, payload: bad })).statusCode).toBe(400);
+    }
+    const response = await app.inject({ method: "POST", url, headers: { "x-test-actor": JSON.stringify(runner), "idempotency-key": "event-replay-fixed-key" }, payload: body });
+    expect(response.statusCode).toBe(201);
+    expect(engine.post).toHaveBeenCalledWith(url, body, expect.objectContaining({ userId: actor.user_id, roles: ["operator"], permissions: runner.permissions }), { idempotencyKey: "event-replay-fixed-key" });
+    expect(response.json()).toEqual({ runId: "run_replayed", replayedFrom: eventId });
   });
 
   it("relays a single event unchanged", async () => {
@@ -139,6 +167,11 @@ interface TestResponse {
 
 class EventEngine {
   readonly get = vi.fn(this.getResponse.bind(this));
+  readonly post = vi.fn(async (path: EnginePath, _body: unknown, _context: EngineCallerContext, _options: unknown) => {
+    void _body; void _context; void _options;
+    if (path.endsWith("/replay-for-real")) return { status: 201, body: { runId: "run_replayed", replayedFrom: eventId } };
+    return { status: 200, body: { mode: "dry_run", trace: [], actions: [] } };
+  });
   readonly eventList = page([
     { event_id: eventId, source: "whatsapp", signature_status: "verified" },
   ]);
@@ -148,6 +181,7 @@ class EventEngine {
   reset(): void {
     this.failurePath = undefined;
     this.get.mockClear();
+    this.post.mockClear();
   }
 
   failNext(path: string): void {

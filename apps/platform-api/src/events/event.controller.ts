@@ -1,14 +1,17 @@
 import {
   Controller,
+  Body,
   Get,
   Headers,
   Param,
+  Post,
   Query,
   Res,
   UseFilters,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import type { EngineResponse } from "../engine";
+import { Idempotent } from "../idempotency";
 import {
   ActorContext,
   RequirePermission,
@@ -33,6 +36,24 @@ const readRoles = ["admin", "editor", "operator", "approver", "viewer"] as const
 @UseFilters(EventExceptionFilter)
 export class EventController {
   constructor(private readonly events: EventService) {}
+
+  @Post(":eventId/replay")
+  @RequireWorkspaceRole(...readRoles)
+  @RequirePermission("runs:read")
+  async preview(@Param("eventId") eventId: string, @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined, @Res({ passthrough: true }) reply: FastifyReply): Promise<EngineResource> {
+    return project(await this.events.preview(eventId, requireActor(actor, `/api/v1/events/${eventId}/replay`), traceparent), reply);
+  }
+
+  @Post(":eventId/replay-for-real")
+  @RequireWorkspaceRole("admin", "editor", "operator")
+  @RequirePermission("workflows:write")
+  @Idempotent()
+  async replay(@Param("eventId") eventId: string, @Body() body: unknown, @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined, @Headers("idempotency-key") key: string | undefined,
+    @Res({ passthrough: true }) reply: FastifyReply): Promise<EngineResource> {
+    return project(await this.events.replay(eventId, body, requireActor(actor, `/api/v1/events/${eventId}/replay-for-real`), traceparent, key), reply);
+  }
 
   @Get()
   @RequireWorkspaceRole(...readRoles)
