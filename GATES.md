@@ -1,25 +1,30 @@
-# Gates: internal performance service operations (C105)
+# Gates: D15 classifier parity and duplicate-safety enforcement (C106)
 
-OWNS: apps/intelligence-service/src/performance/router.py, apps/intelligence-service/src/performance/repository.py, apps/intelligence-service/src/performance/audit.py, apps/intelligence-service/src/config.py, apps/intelligence-service/src/main.py, apps/intelligence-service/alembic/versions/0009_agent_owner_tenant.py, apps/intelligence-service/tests/test_performance_router.py, apps/intelligence-service/tests/test_migrations.py, apps/intelligence-service/tests/test_deletion.py, apps/memory-service/src/config.py, apps/memory-service/src/drift/router.py, apps/memory-service/src/drift/intelligence_client.py, apps/memory-service/tests/test_drift_integration.py, apps/audit-service/src/audit/performance.fixture.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: packages/auth/session-gateway/src/prompt-injection-classifier.ts, packages/auth/session-gateway/src/prompt-injection-classifier.spec.ts, apps/verification-service/src/verification/model_gateway_client.py, apps/verification-service/tests/test_injection_parity.py, scripts/safety/injection-cases.json, scripts/safety/run-injection-cases.mjs, scripts/check-injection-parity.mjs, scripts/gates/safety-duplicate.mjs, scripts/gates/safety-duplicate-python.py, scripts/gates/safety-duplicate.spec.mjs, scripts/gates/probes/**, .github/workflows/ci.yml, docs/architecture/planes.md, docs/architecture/component-contracts.md, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Apply the established shared service credential to internal performance operations. Check an asserted tenant against the addressed agent, distinguish refusal from absence, and record every validated assertion through the existing audit HTTP service. Keep ordinary RLS and composite foreign keys. Align the memory performance caller with this established credential. Root SC requires both C104 and C105.
+Scope: Keep one classifier implementation per language. The real TypeScript and Python clients consume one case set through native loopback model gRPC, agree on classification and unavailable outcomes, and retain their existing caller-specific failure policies. CI invokes parity and actual duplicate-safety probes. A deterministic model edge tests contract behavior; paid model detection quality is not claimed.
 
-- [x] G1: Fresh PostgreSQL migrations provision the service role without elevated privileges, preserve an existing runtime role, and the real restricted database and guarded HTTP/audit service exercise valid operations, refusals, absent resources and persisted audit results
-  CHECK: node .unlazy/verify-native.mjs
-  EXPECT: performance-service-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a181c4db12e0520e97e84f1d3fd90cc72185872fb60afbe68e71d7f6753ffc21; exit=0; EXPECT=matched; output-sha256=4e3b6a122b0dd4ca71e1f5780f4ae47d2941349b91cb415d2480da0c8dbd4757; output-bytes=65; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
+- [x] G1: Both actual classifiers agree on every shared case over native model gRPC, preserve input and FAST routing, and use the same classification policy while preserving their existing unavailable handling
+  CHECK: node .unlazy/verify-parity.mjs
+  EXPECT: safety-parity-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5c2dbeceab47d813093b28307decb2907f832d667486e44ee485281143320026; exit=0; EXPECT=matched; output-sha256=9811a07716466d041aca908465cbcd8027269ec9afb082cab8adb2330c0b15ff; output-bytes=149; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Removing role provisioning, credential validation, ownership comparison or audit recording fails its corresponding native check; restored sources pass
+- [x] G2: The duplicate-safety gate permits ordinary transport and canonical consumers while identifying real duplicate implementation declarations, including renamed copies; the probe is invoked in CI
+  CHECK: node .unlazy/verify-gate.mjs
+  EXPECT: safety-duplicate-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1de83880437595557ae07bbe560d7b6cec99d2d05c02216d6a588b405c925a52; exit=0; EXPECT=matched; output-sha256=b7943a7902742115f80ebee8b9093cf419c6da238fa4baca88899b4f1595bcad; output-bytes=62; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+
+- [x] G3: Independently changed classifier verdicts and removed duplicate detection fail their corresponding native checks; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: performance-service-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1b09e6f58609cc83a5248991dc0a716f81a2e31a3b6bc8c54ef68e14a9c6f896; exit=0; EXPECT=matched; output-sha256=3906b97885a90edcecb64418c722cfd930dc8fd76ff89d5a5488b16e09a115be; output-bytes=3072; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
+  EXPECT: safety-parity-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=ff14056998334330f0de73c6862b840cd3b65284ab96526e91d1eac233552a49; exit=0; EXPECT=matched; output-sha256=a40c3bd386aca113d4a0dbfb721e8778c055050c046247d22e9e28345b502d91; output-bytes=646; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
-- [x] G3: The real memory/intelligence HTTP drift path uses the configured shared credential, retains workspace/tenant RLS, and passes its existing regression suite
-  CHECK: node .unlazy/verify-memory.mjs
-  EXPECT: performance-service-memory-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=6b7d0911aa536c019c7d20f440bdfa42e22eed5dc23948357cc1f3b98f7c6d8c; exit=0; EXPECT=matched; output-sha256=102f44de0fda1e1ef8ca416bf4cd8dd6a467d54fe189ee6d77f466c81fd1a973; output-bytes=53; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Full intelligence, memory and audit suites, Python lint/typechecks/proto checks, audit static checks, migration rollback, architecture, RBAC and zero added AST findings pass
+- [x] G4: Full auth, verification and adapter suites, affected static checks, architecture/RBAC, exact CI wiring and migration rollback pairing pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: performance-service-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a5a80cdf4b12a18d76f312762c4d629fb0230cab086948dc91508e04f8fb88b7; exit=0; EXPECT=matched; output-sha256=f489e1ccdadceab2720c298b7b4c8f8af54a5a16fc55718ee5fae66b222521a6; output-bytes=573; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
+  EXPECT: safety-parity-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=4436f905996a11f7a06216a88668bd867ff1a672248c3a63a10e05898d9284e8; exit=0; EXPECT=matched; output-sha256=502d0fda0b2c22bc1d4dbd77d175472a2b8c5b9c95102d9d1f1095ede003c715; output-bytes=426; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+
+- [x] G5: The regenerated safety baseline is independently measured; all other normalized AST counts add zero entries and final architecture gates pass
+  CHECK: node .unlazy/verify-baseline.mjs
+  EXPECT: safety-parity-baseline-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=d832097c84afad1393ff7eaec1e18cd25767743153f309f4c4c6e3a7956e5c73; exit=0; EXPECT=matched; output-sha256=8e12d4e4cf3c51d3bca9d561b4f99d8edc6e6a4899b3544ea68f25ccf0fad677; output-bytes=114; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
