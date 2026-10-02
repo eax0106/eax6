@@ -1,6 +1,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { randomBytes, randomUUID } from "node:crypto";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { PostgresOrchestrationStoreProvider, CompilerServiceClient, CompilerGrpcController, COMPILER_HANDLER, connectCompilerGrpcTransport } from "@alterx/adapters";
@@ -140,11 +142,36 @@ describe.sequential("connection preflight native PostgreSQL and compiler boundar
     expect(await versions()).toBe(0);
   });
   it("passes the actual compiler response through a separately launched platform planner", async () => {
-    const result = await promisify(execFile)(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run", "apps/platform-api/src/planner-facade/planner-facade.service.spec.ts", "--maxWorkers=1"], {
-      env: { ...process.env, CONNECTION_PREFLIGHT_COMPILER_ADDRESS: compilerAddress, CONNECTION_PREFLIGHT_COMPILER_REQUEST: JSON.stringify(architectureRequest()) },
-      timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
-    });
-    expect(result.stdout).toMatch(/Test Files\s+1 passed/); expect(result.stdout).not.toMatch(/skipped/); expect(await versions()).toBe(0);
+    const directory = await mkdtemp(resolve(tmpdir(), "alter-planner-preflight-"));
+    const reportPath = resolve(directory, "report.json");
+    try {
+      await promisify(execFile)(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run", "apps/platform-api/src/planner-facade/planner-facade.service.spec.ts", "--maxWorkers=1", "--reporter=json", `--outputFile=${reportPath}`], {
+        env: { ...process.env, CONNECTION_PREFLIGHT_COMPILER_ADDRESS: compilerAddress, CONNECTION_PREFLIGHT_COMPILER_REQUEST: JSON.stringify(architectureRequest()) },
+        timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+      }).catch((error: unknown) => {
+        const output = error as { stdout?: string; stderr?: string };
+        let detail = `${output.stdout ?? ""}\n${output.stderr ?? ""}`;
+        for (const [name, value] of Object.entries(process.env)) {
+          if (value && /TOKEN|SECRET|PASSWORD|DATABASE_URL/.test(name)) detail = detail.replaceAll(value, "[redacted]");
+        }
+        detail = detail.replace(/(?:\u001b\[|\^\[\[)[0-9;]*m/g, "");
+        console.error("Native platform planner failure:\n" + detail.split("\n").filter(line => /FAIL|AssertionError|Error:|expected|received|Expected|Received|❯/.test(line)).slice(-24).join("\n"));
+        throw error;
+      });
+      const report = JSON.parse(await readFile(reportPath, "utf8")) as {
+        success: boolean;
+        numFailedTests: number;
+        numPendingTests: number;
+        testResults: { assertionResults: { title: string; status: string }[] }[];
+      };
+      expect(report.success).toBe(true);
+      expect(report.numFailedTests).toBe(0);
+      expect(report.numPendingTests).toBe(0);
+      const native = report.testResults.flatMap(file => file.assertionResults)
+        .filter(test => test.title === "keeps the real compiler batch through the actual platform planner");
+      expect(native).toHaveLength(1); expect(native[0]!.status).toBe("passed");
+      expect(await versions()).toBe(0);
+    } finally { await rm(directory, { recursive: true, force: true }); }
   }, 120_000);
   it("returns the same batch from the actual draft compile HTTP entry point", async () => {
     const result = await app.getHttpAdapter().getInstance().inject({ method: "POST", url: `/api/v1/workflows/${workflow}/actions/compile` });
