@@ -15,7 +15,7 @@ import { SystemPrincipalAuditInterceptor } from "./system-principal-audit.interc
 import {
   OrchestrationInfrastructureModule,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 
 /**
@@ -35,7 +35,7 @@ import {
     {
       provide: APP_GUARD,
       useFactory: () => {
-        const config = sessionGatewayEnvironment(process.env);
+        const config = identityTenantGatewayEnvironment(process.env);
         const replayStore = new RedisReplayStore(
           new RedisRespSetClient(config.redisUrl),
         );

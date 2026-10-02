@@ -35,7 +35,7 @@ import {
   OrchestrationInfrastructureModule,
   internalM2mTokenProvider,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 import { RunLauncherModule } from "./run-launcher.module";
 import { ArtifactModule } from "./artifact.module";
@@ -62,7 +62,7 @@ import { OperationsModule } from "./operations.module";
     {
       provide: CONVERSATION_HANDLER,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const conversationConfig = loadConversationManagerEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const modelGateway = new ModelGatewayClient({
@@ -76,7 +76,7 @@ import { OperationsModule } from "./operations.module";
     {
       provide: WorkflowReadService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         return new WorkflowReadService(store);
       },
@@ -84,21 +84,21 @@ import { OperationsModule } from "./operations.module";
     {
       provide: TemplateVariablesService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new TemplateVariablesService(orchestrationStore(dbConfig));
       },
     },
     {
       provide: ClarificationsService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new ClarificationsService(orchestrationStore(dbConfig));
       },
     },
     {
       provide: ProjectReadService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         return new ProjectReadService(store);
       },
@@ -107,7 +107,7 @@ import { OperationsModule } from "./operations.module";
       provide: ProjectDomainService,
       inject: [RunLauncherService, CONVERSATION_HANDLER],
       useFactory: (launcher: RunLauncherService, conversations: import("@alterx/adapters").ConversationHandler) => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const recoveryConfig = loadRecoveryEnvironment(process.env);
         return new ProjectDomainService(
@@ -121,7 +121,7 @@ import { OperationsModule } from "./operations.module";
     {
       provide: COMPILER_HANDLER,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         return new GraphCompilerService(store);
       },
@@ -129,7 +129,7 @@ import { OperationsModule } from "./operations.module";
     {
       provide: WorkflowLifecycleService,
       useFactory: async (artifacts: ArtifactsService, evalFacade: EvalFacadeService) => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const parameterStore = new AwsSsmParameterProvider({
           region: dbConfig.awsRegion,

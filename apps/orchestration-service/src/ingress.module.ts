@@ -36,7 +36,7 @@ import {
   buildRunBudgetGate,
   OrchestrationInfrastructureModule,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 import { RunLauncherModule } from "./run-launcher.module";
 import { EmailDeliveryFailuresController, SesDeliveryEventsController } from "./webhooks/ses-delivery-events.controller";
@@ -63,12 +63,12 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
       provide: EventReplayService,
       inject: [RunLauncherService],
       useFactory: (launcher: RunLauncherService) => new EventReplayService(
-        orchestrationStore(sessionGatewayEnvironment(process.env)), launcher),
+        orchestrationStore(identityTenantGatewayEnvironment(process.env)), launcher),
     },
     {
       provide: SesDeliveryEventsService,
       useFactory: () => {
-        const store = orchestrationStore(sessionGatewayEnvironment(process.env));
+        const store = orchestrationStore(identityTenantGatewayEnvironment(process.env));
         return new SesDeliveryEventsService(
           store,
           new RunStreamEventService(store),
@@ -82,21 +82,21 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
     {
       provide: EventQueryService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new EventQueryService(orchestrationStore(dbConfig));
       },
     },
     {
       provide: WhatsappAccountRegistryService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new WhatsappAccountRegistryService(orchestrationStore(dbConfig));
       },
     },
     {
       provide: TriggerRegistryService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const runLauncherConfig = loadRunLauncherEnvironment(process.env);
         const durable = new TemporalDurableExecutionProvider({
@@ -125,7 +125,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
       // interface, so swapping in another provider is a one-line change.
       provide: TriggerBindingService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const bindingConfig = loadTriggerBindingEnvironment(process.env);
         const dispatchConfig = loadTriggerDispatchEnvironment(process.env);
@@ -150,7 +150,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
       provide: RUNS_DISPATCH_HANDLER,
       inject: [RunLauncherService],
       useFactory: (launcher: RunLauncherService) => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         return new TriggerEventDispatchService(store, launcher, buildRunBudgetGate(process.env));
       },
@@ -158,7 +158,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
     {
       provide: WhatsappWebhookService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const whatsappConfig = loadWhatsappWebhookEnvironment(process.env);
         return new WhatsappWebhookService(
@@ -172,7 +172,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
     {
       provide: ConversationDispatchService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
         const dispatchConfig = loadConversationDispatchEnvironment(process.env);
         const dispatchClient = new ConversationDispatchClient({

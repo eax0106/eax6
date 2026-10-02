@@ -29,7 +29,7 @@ import { EVAL_PROTO_PATH } from "./eval-facade/grpc.constants";
 import {
   OrchestrationInfrastructureModule,
   orchestrationStore,
-  sessionGatewayEnvironment,
+  identityTenantGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 
 @Module({
@@ -48,7 +48,7 @@ import {
     },
     {
       provide: ConnectionRegistryService,
-      useFactory: () => new ConnectionRegistryService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+      useFactory: () => new ConnectionRegistryService(orchestrationStore(identityTenantGatewayEnvironment(process.env))),
     },
     {
       provide: EVAL_FACADE_CONFIG,
@@ -83,7 +83,7 @@ import {
     {
       provide: DeploymentAdminService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         return new DeploymentAdminService(orchestrationStore(dbConfig));
       },
     },
@@ -97,7 +97,7 @@ import {
     {
       provide: OrchestrationDeletionService,
       useFactory: () => {
-        const dbConfig = sessionGatewayEnvironment(process.env);
+        const dbConfig = identityTenantGatewayEnvironment(process.env);
         const tenantStore = orchestrationStore(dbConfig);
         const deletionDatabaseUser = process.env.DELETION_DATABASE_USER?.trim();
         if (deletionDatabaseUser === undefined || deletionDatabaseUser.length === 0) {
