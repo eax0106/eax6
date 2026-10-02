@@ -125,7 +125,7 @@ export class RunLearningController {
         target_ref: runId,
         result,
         reason_code: "",
-        context_json: JSON.stringify({ tenant_asserted_by_service: true }),
+        context_json: JSON.stringify({ scope: "tenant_asserted_by_service" }),
         occurred_at: new Date().toISOString(),
       });
     } catch (error: unknown) {
