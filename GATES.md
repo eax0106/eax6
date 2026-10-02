@@ -19,6 +19,7 @@ Scope: Carry the authenticated workspace through account creation, listing and c
   EXPECT: whatsapp-workspace-negative-controls-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=f79b851d7a3422d3a55708dae023fb7bfcbff83ff7388349cc8054a523607910; exit=0; EXPECT=matched; output-sha256=13c5994a38584d5e029311d3268c7c49f26283b3842174ffdd8da97ac81fda88; output-bytes=358; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
 
-- [ ] G4: Full engine and platform suites with coverage, static checks, architecture, RBAC, migration pairing and zero added AST findings pass
+- [x] G4: Full engine and platform suites with coverage, static checks, architecture, RBAC, migration pairing and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: whatsapp-workspace-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=d3843c2ce778c46a77bc2fa588e81f160f00bac785ac9c2fdde8c07b6bcea015; exit=0; EXPECT=matched; output-sha256=11e176b7bc19a85d5eb8ed465883af88de0ac87b7d16888030d36d7716551b92; output-bytes=574; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
