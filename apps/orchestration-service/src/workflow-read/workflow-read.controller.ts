@@ -1,3 +1,4 @@
+import { CompilerConnectionsRequiredError } from "../connections/connection-preflight";
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import type { SessionGatewayRequest } from "@alterx/auth";
@@ -199,6 +200,7 @@ export class WorkflowReadController {
 }
 
 function mapWorkflowError(error: unknown, requestUrl: string | undefined): HttpException {
+  if (error instanceof CompilerConnectionsRequiredError) return new HttpException(error.result, 409);
   if (error instanceof WorkflowNotFoundError) {
     return new HttpException(notFoundProblem(requestUrl, error.message), 404);
   }

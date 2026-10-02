@@ -1,4 +1,5 @@
 import { z } from "./zod";
+import { ConnectionSecretReferenceSchema, ConnectorTypeSchema } from "./connection-registry";
 import {
   AgentIdSchema,
   ArtifactIdSchema,
@@ -45,6 +46,7 @@ const WaveKeySchema = z
  */
 export const ToolCredentialReferenceSchema = NonEmptyStringSchema.superRefine(
   (reference, context) => {
+    if (ConnectionSecretReferenceSchema.safeParse(reference).success) return;
     const segments = reference.split("/");
     const tenantId = segments[4];
     if (
@@ -78,6 +80,7 @@ export const ToolCallCompiledConfigSchema = z
     tool_name: NonEmptyStringSchema.optional(),
     arguments: z.record(z.string(), z.unknown()).optional(),
     credential_ref: ToolCredentialReferenceSchema.optional(),
+    required_connector: ConnectorTypeSchema.optional(),
     expected_page_state: z
       .object({
         text: NonEmptyStringSchema.optional(),

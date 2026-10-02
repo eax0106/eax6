@@ -1,6 +1,7 @@
 import { Injectable, Inject, Optional } from "@nestjs/common";
 import { PlannerClient, type PlannerHttpClient, type SynthesisConstraints } from "@alterx/adapters";
-import { CompilerServiceClient } from "./compiler-client";
+import type { ConnectionsRequired } from "@alterx/contracts";
+import { CompilerServiceClient, CompilerServiceClientError } from "./compiler-client";
 import { randomUUID } from "node:crypto";
 import { getCompilerProtoPath } from "./compiler-client";
 import { ENGINE_M2M_TOKEN_PROVIDER, type EngineM2mTokenProvider } from "../engine/auth";
@@ -44,7 +45,8 @@ export interface PlanWorkflowInput {
 
 export type PlanWorkflowResult = 
   | { type: "clarification"; questions: readonly string[] }
-  | { type: "compiled"; versionId: string };
+  | { type: "compiled"; versionId: string }
+  | ConnectionsRequired;
 
 /**
  * Where orchestration-service serves the workflow compiler.
@@ -140,6 +142,7 @@ export class PlannerFacadeService {
       constraints: await this.constraints(input),
     });
     if (prepared.status !== "ready") throw new Error("Architecture pipeline blocked compilation");
+    try {
     const compileResponse = await this.compilerClient.compileArchitectureWorkflow({
       tenant_id: tenantId, workspace_id: workspaceId, workflow_id: input.workflowId,
       architecture_json: JSON.stringify(prepared.architecture),
@@ -151,6 +154,10 @@ export class PlannerFacadeService {
       type: "compiled",
       versionId: compileResponse.workflow_version_id,
     };
+    } catch (error: unknown) {
+      if (error instanceof CompilerServiceClientError && error.connectionsRequired) return error.connectionsRequired;
+      throw error;
+    }
   }
 
   /**

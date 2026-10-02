@@ -1,5 +1,6 @@
 import { CompiledDagSchema, TenantIdSchema, WorkflowIdSchema } from "@alterx/contracts";
 import { randomUUID } from "node:crypto";
+import { preflightConnections } from "../connections/connection-preflight";
 
 export class WorkflowNotFoundError extends Error {
   constructor(workflowId: string) {
@@ -398,6 +399,7 @@ export class WorkflowReadService {
     }
     const bareTenant = bareTenantUuid(tenantId);
     return this.store.withTenant(bareTenant, async (tx) => {
+      await preflightConnections(tx, bareTenant, workflowId, parsed.data);
       const nextVersionResult = await tx.query<{ next: number }>(
         `SELECT COALESCE(MAX(version), 0) + 1 AS next FROM workflow_versions WHERE tenant_id = $1 AND workflow_id = $2`,
         [bareTenant, workflowId],
