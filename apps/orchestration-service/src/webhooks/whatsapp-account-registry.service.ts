@@ -65,11 +65,11 @@ export class WhatsappAccountRegistryService {
     return { id, tenantId, ...account };
   }
 
-  async list(tenantId: string): Promise<readonly WhatsappAccount[]> {
+  async list(tenantId: string, workspaceId: string): Promise<readonly WhatsappAccount[]> {
     return this.store.withTenant(tenantId, async (tx) => {
       const result = await tx.query<Record<string, unknown>>(
         `SELECT id, workspace_id, phone_number_id, waba_id, access_token_ref, status, monitoring_config, media_config, escalation_rules
-         FROM whatsapp_accounts WHERE tenant_id = $1 ORDER BY created_at DESC`, [tenantId],
+         FROM whatsapp_accounts WHERE tenant_id = $1 AND workspace_id = $2 ORDER BY created_at DESC`, [tenantId, workspaceId],
       );
       return result.rows.map((row) => fromRow(tenantId, row));
     });
@@ -93,6 +93,7 @@ export class WhatsappAccountRegistryService {
 
   async updateConfiguration(
     tenantId: string,
+    workspaceId: string,
     accountId: string,
     configuration: {
       readonly monitoringConfig?: Readonly<Record<string, unknown>>;
@@ -103,13 +104,13 @@ export class WhatsappAccountRegistryService {
     return this.store.withTenant(tenantId, async (tx) => {
       const result = await tx.query<Record<string, unknown>>(
         `UPDATE whatsapp_accounts
-         SET monitoring_config = COALESCE($3::jsonb, monitoring_config),
-             media_config = COALESCE($4::jsonb, media_config),
-             escalation_rules = COALESCE($5::jsonb, escalation_rules),
+         SET monitoring_config = COALESCE($4::jsonb, monitoring_config),
+             media_config = COALESCE($5::jsonb, media_config),
+             escalation_rules = COALESCE($6::jsonb, escalation_rules),
              updated_at = now()
-         WHERE tenant_id = $1 AND id = $2
+         WHERE tenant_id = $1 AND workspace_id = $2 AND id = $3
          RETURNING id, workspace_id, phone_number_id, waba_id, access_token_ref, status, monitoring_config, media_config, escalation_rules`,
-        [tenantId, accountId,
+        [tenantId, workspaceId, accountId,
           configuration.monitoringConfig === undefined ? null : JSON.stringify(configuration.monitoringConfig),
           configuration.mediaConfig === undefined ? null : JSON.stringify(configuration.mediaConfig),
           configuration.escalationRules === undefined ? null : JSON.stringify(configuration.escalationRules)],

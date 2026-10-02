@@ -1,25 +1,24 @@
-# Gates: WhatsApp test-send form (C98)
+# Gates: workspace-aware WhatsApp account routes (C102)
 
-OWNS: apps/platform-web/src/api/**, apps/platform-web/src/features/connections/pages/whatsapp-channel*, apps/platform-api/src/channels/whatsapp/**, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.ts, apps/orchestration-service/src/webhooks/whatsapp-account-registry.service.ts, apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-account-delete.integration.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-workspace.integration.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp.service.ts, apps/platform-api/src/channels/whatsapp/whatsapp.isolation.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp-test-send.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Existing accounts can send a test template to an explicitly entered recipient through the existing guarded route. The form uses approved templates and their language, keeps one request key across retries, shows actual provider acceptance or errors, and handles accounts without a creation date.
+Scope: Carry the authenticated workspace through account creation, listing and configuration SQL. Reuse the existing account lookup and provider operations. Native engine HTTP proof uses signed tokens, Redis replay protection and restricted PostgreSQL; the platform provider edge remains a local fixture. No account creation or external send.
 
-- [x] G1: Rendered live UI and HTTP adapter prove recipient/template selection, confirmation, provider response, failed retries and permission controls
-  CHECK: node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/api/live-whatsapp.spec.ts apps/platform-web/src/features/connections/pages/whatsapp-channel.spec.tsx && echo whatsapp-test-send-surface-passed
-  EXPECT: whatsapp-test-send-surface-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5c6633fd370dcbeeab464d6a19cc0936d6a17aeef6ce9309eba730ada3f16abc; exit=0; EXPECT=matched; output-sha256=9157a93669b2a924be4570a7a4bcea977ff6b4f1f6457421e6a193e9aa607cd1; output-bytes=276; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
+- [x] G1: Native signed HTTP and restricted PostgreSQL exercise account registration, listing, configuration and deletion within the authenticated workspace
+  CHECK: node .unlazy/verify-engine.mjs
+  EXPECT: whatsapp-workspace-engine-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=976d8cd9a72ca5d8b282f36b1eb5c88755a3667fb872c0b0a7989faa29a3bb4b; exit=0; EXPECT=matched; output-sha256=049e94db62513cef34e8c8b6384d9dc79bc6ac72731b0fa1d0db5e83c0c02141; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Guarded platform HTTP with real PostgreSQL idempotency and the real Meta provider proves validation, caller scope, language and one accepted send per request
+- [x] G2: Platform account and escalation reads use the caller workspace, with provider/configuration operations denied before any external edge is touched
   CHECK: node .unlazy/verify-platform.mjs
-  EXPECT: whatsapp-test-send-platform-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=8fb140193bcbce5c288e8040ccb077d20806ae8f5bcbcfeb8ca68e2998a18a7b; exit=0; EXPECT=matched; output-sha256=7ab1f65527019e3216ba1e1589a4ff7414757f128fa024c95d2e5d3d0969b4ac; output-bytes=213; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-workspace-platform-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=086a521bdabd50f23a04bea876d44a8cc0b01c3501dcfd1489ca7c623afd3b23; exit=0; EXPECT=matched; output-sha256=162e943dfd4cac61e138bcf19951ba1858ab378854c188f68f27d5b9bca53139; output-bytes=89; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Original-code and mutation controls fail their corresponding assertions and restore every source
+- [x] G3: Original route/SQL behavior and removed platform list filtering fail the same assertions; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: whatsapp-test-send-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a14fc89a34eaf1122940b179214a176ee2c2619aacf9b3a35c3270a8f02f4996; exit=0; EXPECT=matched; output-sha256=14868745ffedaaa388b44acf6a66b0e15896d96584b53ba367fd8b19ddf22e2b; output-bytes=264; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-workspace-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=f79b851d7a3422d3a55708dae023fb7bfcbff83ff7388349cc8054a523607910; exit=0; EXPECT=matched; output-sha256=13c5994a38584d5e029311d3268c7c49f26283b3842174ffdd8da97ac81fda88; output-bytes=358; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Affected builds, typechecks, lint, full web and platform coverage, architecture, RBAC and zero added AST findings pass
+- [ ] G4: Full engine and platform suites with coverage, static checks, architecture, RBAC, migration pairing and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: whatsapp-test-send-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=c931887db21ed46600b64a6b9f25da2a185ec651eb7b67a6c8a8bdbcb023912f; exit=0; EXPECT=matched; output-sha256=f6fff9e6f472fff547895d50e9af54fce9afc57f7616b2ab5c68797c69caf62c; output-bytes=303; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-test-c98; path=b33e9cf43ae9/31 entries
+  EXPECT: whatsapp-workspace-full-passed
