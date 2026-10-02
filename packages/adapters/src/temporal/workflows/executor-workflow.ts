@@ -15,6 +15,8 @@ export interface ExecutorWorkflowInput {
   readonly tenantId: string; // ten_ prefixed UUIDv7
   readonly runId: string; // run_ prefixed UUIDv7
   readonly compiledDagJson: string;
+  /** Stored event checkpoint for entry nodes of a confirmed replay. */
+  readonly initialInputKey?: string;
   /** Defaults to NODE_RECOVERY_TIMEOUT_MS; overridable for tests. */
   readonly nodeRecoveryTimeoutMs?: number;
 }
@@ -345,7 +347,8 @@ export async function executorWorkflow(
           const output = await executeNodeWithRecovery(
             input,
             node,
-            directPredecessorKeys(dag, nodeKey),
+            directPredecessorKeys(dag, nodeKey).length === 0 && input.initialInputKey
+              ? [input.initialInputKey] : directPredecessorKeys(dag, nodeKey),
             approvalDecisions,
             nodeRetryDecisions,
           );

@@ -13,6 +13,7 @@ import { TriggerRegistryService } from "./trigger-registry/trigger-registry.serv
 import { TriggerEventDispatchService } from "./trigger-registry/trigger-event-dispatch.service";
 import { EventController } from "./trigger-registry/event.controller";
 import { EventQueryService } from "./trigger-registry/event-query.service";
+import { EventReplayService } from "./trigger-registry/event-replay.service";
 import { loadTriggerDispatchEnvironment } from "./config/trigger-dispatch-environment";
 import {
   IntegrationWebhookController,
@@ -58,6 +59,12 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
     EmailDeliveryFailuresController,
   ],
   providers: [
+    {
+      provide: EventReplayService,
+      inject: [RunLauncherService],
+      useFactory: (launcher: RunLauncherService) => new EventReplayService(
+        orchestrationStore(sessionGatewayEnvironment(process.env)), launcher),
+    },
     {
       provide: SesDeliveryEventsService,
       useFactory: () => {
