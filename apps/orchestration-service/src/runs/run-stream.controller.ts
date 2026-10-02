@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, Headers, HttpException, Param, Req, Res } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { RunStreamEventService, type StreamPage } from "./run-stream-event.service";
@@ -13,7 +13,7 @@ export class RunStreamController {
 
   @Get("runs/:id/stream")
   async stream(
-    @Req() request: FastifyRequest & SessionGatewayRequest,
+    @Req() request: FastifyRequest & IdentityTenantGatewayRequest,
     @Res() reply: FastifyReply,
     @Param("id") runId: string,
     @Headers("last-event-id") lastEventId: string | undefined,
@@ -31,7 +31,7 @@ export class RunStreamController {
 
   @Get("projects/:projectId/builds/:runId/stream")
   async terminal(
-    @Req() request: FastifyRequest & SessionGatewayRequest,
+    @Req() request: FastifyRequest & IdentityTenantGatewayRequest,
     @Res() reply: FastifyReply,
     @Param("projectId") projectId: string,
     @Param("runId") runId: string,
@@ -49,7 +49,7 @@ export class RunStreamController {
   }
 
   private async openStream(
-    request: FastifyRequest & SessionGatewayRequest,
+    request: FastifyRequest & IdentityTenantGatewayRequest,
     reply: FastifyReply,
     runId: string,
     lastEventId: string | undefined,

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { randomUUID } from "node:crypto";
 import {
@@ -19,7 +19,7 @@ interface AssignClarificationBody {
   readonly assignee_user_id?: string | null;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(problem(request.url, 500, "CLARIFICATIONS_INTERNAL_ERROR", "Missing authenticated tenant context"), 500);
@@ -53,7 +53,7 @@ export class ClarificationsController {
   constructor(private readonly clarifications: ClarificationsService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query() query: ClarificationsQuery) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: ClarificationsQuery) {
     try {
       const page = await this.clarifications.list(requiredTenantId(request), {
         ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
@@ -66,7 +66,7 @@ export class ClarificationsController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") clarificationId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") clarificationId: string) {
     try {
       return response(
         await this.clarifications.getById(requiredTenantId(request), clarificationId),
@@ -78,7 +78,7 @@ export class ClarificationsController {
 
   @Post(":id/actions/assign")
   async assign(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") clarificationId: string,
     @Body() body: AssignClarificationBody,
   ) {
@@ -104,7 +104,7 @@ export class RecoveryClarificationController {
   constructor(private readonly clarifications: ClarificationsService) {}
 
   @Post(":runId/clarifications/:clarificationId/answer")
-  async answer(@Req() request: SessionGatewayRequest, @Param("runId") runId: string,
+  async answer(@Req() request: IdentityTenantGatewayRequest, @Param("runId") runId: string,
     @Param("clarificationId") clarificationId: string, @Body() body: { readonly note?: unknown }) {
     try {
       return response(await this.clarifications.answerRecovery(requiredTenantId(request), runId, clarificationId, body?.note));

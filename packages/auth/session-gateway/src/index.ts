@@ -46,7 +46,7 @@ export {
 export type {
   ActorContext,
   ReplayStore,
-  SessionGatewayRequest,
+  IdentityTenantGatewayRequest,
   TenantDatabaseScope,
   TenantTransaction,
 } from "./types";

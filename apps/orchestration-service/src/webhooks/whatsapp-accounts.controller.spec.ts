@@ -1,11 +1,11 @@
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import { describe, expect, it, vi } from "vitest";
 import { WhatsappAccountNotFoundError, type WhatsappAccount, type WhatsappAccountRegistryService } from "./whatsapp-account-registry.service";
 import { WhatsappAccountsController } from "./whatsapp-accounts.controller";
 
 const tenant = "11111111-1111-7111-8111-111111111111";
 const workspace = "22222222-2222-7222-8222-222222222222";
-const request = { actorContext: { tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}` } } as unknown as SessionGatewayRequest;
+const request = { actorContext: { tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}` } } as unknown as IdentityTenantGatewayRequest;
 
 function stored(): WhatsappAccount {
   return {
@@ -65,12 +65,12 @@ describe("WhatsappAccountsController", () => {
 
   it("deletes within the caller's workspace and answers 404 for an unknown account", async () => {
     const { registry, controller: accounts } = controller();
-    const scoped = { actorContext: { tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}` } } as unknown as SessionGatewayRequest;
+    const scoped = { actorContext: { tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}` } } as unknown as IdentityTenantGatewayRequest;
 
     await accounts.remove(scoped, "wac_1");
     expect(registry.remove).toHaveBeenCalledWith(tenant, workspace, "wac_1");
     await expect(accounts.remove(scoped, "wac_unknown")).rejects.toMatchObject({ status: 404 });
-    const missing = { actorContext: { tenant_id: `ten_${tenant}` } } as unknown as SessionGatewayRequest;
+    const missing = { actorContext: { tenant_id: `ten_${tenant}` } } as unknown as IdentityTenantGatewayRequest;
     await expect(accounts.remove(missing, "wac_1")).rejects.toMatchObject({ status: 500 });
   });
 });

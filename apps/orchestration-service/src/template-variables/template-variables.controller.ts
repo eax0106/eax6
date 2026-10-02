@@ -1,5 +1,5 @@
 import { Body, Controller, Get, HttpException, Param, Put, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { randomUUID } from "node:crypto";
 import {
@@ -18,7 +18,7 @@ interface SetValueBody {
   readonly value?: unknown;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(problem(request.url, 500, "TEMPLATE_VARIABLES_INTERNAL_ERROR", "Missing authenticated tenant context"), 500);
@@ -31,7 +31,7 @@ export class TemplateVariablesController {
   constructor(private readonly templates: TemplateVariablesService) {}
 
   @Get(":workflowId/template-variables")
-  async list(@Req() request: SessionGatewayRequest, @Param("workflowId") workflowId: string) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Param("workflowId") workflowId: string) {
     try {
       return { data: await this.templates.list(requiredTenantId(request), workflowId) };
     } catch (error: unknown) {
@@ -41,7 +41,7 @@ export class TemplateVariablesController {
 
   @Put(":workflowId/template-variables")
   async replace(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("workflowId") workflowId: string,
     @Body() body: ReplaceDefinitionsBody,
   ) {
@@ -63,7 +63,7 @@ export class TemplateVariablesController {
 
   @Put(":workflowId/template-variables/:name/value")
   async setValue(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("workflowId") workflowId: string,
     @Param("name") name: string,
     @Body() body: SetValueBody,

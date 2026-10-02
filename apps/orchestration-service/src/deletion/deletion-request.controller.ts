@@ -1,12 +1,12 @@
 import { randomBytes } from "node:crypto";
 
 import { Controller, HttpException, Post, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails, RetentionSweepResult, VerificationResult } from "@alterx/contracts";
 
 import { OrchestrationDeletionService } from "./deletion.service";
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(
@@ -22,7 +22,7 @@ export class DeletionRequestController {
   constructor(private readonly service: OrchestrationDeletionService) {}
 
   @Post()
-  async deleteAndVerify(@Req() request: SessionGatewayRequest): Promise<VerificationResult> {
+  async deleteAndVerify(@Req() request: IdentityTenantGatewayRequest): Promise<VerificationResult> {
     const tenantId = requiredTenantId(request);
     const manifestId = `del_${uuidV7()}`;
     try {
@@ -34,7 +34,7 @@ export class DeletionRequestController {
   }
 
   @Post("retention")
-  async retention(@Req() request: SessionGatewayRequest): Promise<RetentionSweepResult> {
+  async retention(@Req() request: IdentityTenantGatewayRequest): Promise<RetentionSweepResult> {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.applyTenantRetentionPolicy(tenantId);

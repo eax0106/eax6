@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Param, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import {
   RunObservabilityRunNotFoundError,
@@ -15,22 +15,22 @@ export class RunObservabilityController {
   constructor(private readonly observability: RunObservabilityService) {}
 
   @Get(":id/verification-results")
-  verification(@Req() request: SessionGatewayRequest, @Param("id") runId: string, @Query() query: PageQuery) {
+  verification(@Req() request: IdentityTenantGatewayRequest, @Param("id") runId: string, @Query() query: PageQuery) {
     return this.run(request, runId, query, (tenantId, page) => this.observability.verificationResults(tenantId, runId, page));
   }
 
   @Get(":id/recovery-actions")
-  recovery(@Req() request: SessionGatewayRequest, @Param("id") runId: string, @Query() query: PageQuery) {
+  recovery(@Req() request: IdentityTenantGatewayRequest, @Param("id") runId: string, @Query() query: PageQuery) {
     return this.run(request, runId, query, (tenantId, page) => this.observability.recoveryActions(tenantId, runId, page));
   }
 
   @Get(":id/quality-gates")
-  qualityGates(@Req() request: SessionGatewayRequest, @Param("id") runId: string, @Query() query: PageQuery) {
+  qualityGates(@Req() request: IdentityTenantGatewayRequest, @Param("id") runId: string, @Query() query: PageQuery) {
     return this.run(request, runId, query, (tenantId, page) => this.observability.qualityGates(tenantId, runId, page));
   }
 
   private async run(
-    request: SessionGatewayRequest,
+    request: IdentityTenantGatewayRequest,
     runId: string,
     query: PageQuery,
     operation: (tenantId: string, page: { cursor?: string; limit?: number }) => Promise<unknown>,

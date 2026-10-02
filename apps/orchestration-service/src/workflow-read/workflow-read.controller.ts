@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Patch, Post, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import {
   WorkflowNotFoundError,
@@ -23,7 +23,7 @@ interface CreateWorkflowBody {
   readonly goal?: string;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(
@@ -34,7 +34,7 @@ function requiredTenantId(request: SessionGatewayRequest): string {
   return tenantId;
 }
 
-function requiredWorkspaceId(request: SessionGatewayRequest): string {
+function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
   const workspaceId = request.actorContext?.workspace_id;
   if (workspaceId === null || workspaceId === undefined) {
     throw new HttpException(
@@ -50,7 +50,7 @@ export class WorkflowReadController {
   constructor(private readonly service: WorkflowReadService) {}
 
   @Post()
-  async create(@Req() request: SessionGatewayRequest, @Body() body: CreateWorkflowBody) {
+  async create(@Req() request: IdentityTenantGatewayRequest, @Body() body: CreateWorkflowBody) {
     const tenantId = requiredTenantId(request);
     const workspaceId = requiredWorkspaceId(request);
     try {
@@ -66,7 +66,7 @@ export class WorkflowReadController {
 
   @Get()
   async list(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Query("cursor") cursor?: string,
     @Query("limit") rawLimit?: string,
     @Query("q") query?: string,
@@ -85,7 +85,7 @@ export class WorkflowReadController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") workflowId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.getWorkflow(tenantId, workflowId);
@@ -96,7 +96,7 @@ export class WorkflowReadController {
 
   @Get(":id/versions")
   async versions(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") workflowId: string,
     @Query("cursor") cursor?: string,
     @Query("limit") rawLimit?: string,
@@ -115,7 +115,7 @@ export class WorkflowReadController {
 
   @Patch(":id")
   async update(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") workflowId: string,
     @Body() body: UpdateWorkflowBody,
   ) {
@@ -134,7 +134,7 @@ export class WorkflowReadController {
   }
 
   @Post(":id/actions/validate")
-  async validate(@Req() request: SessionGatewayRequest, @Param("id") workflowId: string) {
+  async validate(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.validateDraft(tenantId, workflowId);
@@ -144,7 +144,7 @@ export class WorkflowReadController {
   }
 
   @Post(":id/actions/compile")
-  async compile(@Req() request: SessionGatewayRequest, @Param("id") workflowId: string) {
+  async compile(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.compileWorkflow(tenantId, workflowId);
@@ -155,7 +155,7 @@ export class WorkflowReadController {
 
   @Post(":id/actions/simulate")
   async simulate(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") workflowId: string,
     @Body() body: SimulateWorkflowBody,
   ) {
@@ -168,7 +168,7 @@ export class WorkflowReadController {
   }
 
   @Post(":id/actions/activate")
-  async activate(@Req() request: SessionGatewayRequest, @Param("id") workflowId: string) {
+  async activate(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.activateWorkflow(tenantId, workflowId);
@@ -178,7 +178,7 @@ export class WorkflowReadController {
   }
 
   @Post(":id/actions/pause")
-  async pause(@Req() request: SessionGatewayRequest, @Param("id") workflowId: string) {
+  async pause(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.pauseWorkflow(tenantId, workflowId);
@@ -188,7 +188,7 @@ export class WorkflowReadController {
   }
 
   @Post(":id/actions/resume")
-  async resume(@Req() request: SessionGatewayRequest, @Param("id") workflowId: string) {
+  async resume(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.resumeWorkflow(tenantId, workflowId);

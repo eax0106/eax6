@@ -9,7 +9,7 @@ import {
   Post,
   Req,
 } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type {
   RotateWebhookSecretResult,
   TriggerBinding,
@@ -35,7 +35,7 @@ export class TriggerBindingController {
   @Post(":id/bindings")
   @HttpCode(201)
   async bind(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
     @Body() body: unknown,
   ): Promise<TriggerBinding> {
@@ -55,7 +55,7 @@ export class TriggerBindingController {
 
   @Get(":id/bindings")
   async list(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
   ): Promise<{ readonly bindings: readonly TriggerBinding[] }> {
     try {
@@ -70,7 +70,7 @@ export class TriggerBindingController {
 
   @Delete(":id/bindings/:bindingId")
   async disable(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
     @Param("bindingId") bindingId: string,
   ): Promise<TriggerBinding> {
@@ -92,7 +92,7 @@ export class WebhookEndpointController {
 
   @Get("integrations/:integrationId/webhook-endpoint")
   async getEndpoint(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("integrationId") integrationId: string,
   ): Promise<WebhookEndpoint> {
     try {
@@ -114,7 +114,7 @@ export class WebhookEndpointController {
   @Post("webhook-endpoints/:endpointId/actions/rotate-secret")
   @HttpCode(200)
   async rotate(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("endpointId") endpointId: string,
   ): Promise<RotateWebhookSecretResult> {
     try {
@@ -128,7 +128,7 @@ export class WebhookEndpointController {
   }
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined || tenantId === null) {
     throw new HttpException(
@@ -139,7 +139,7 @@ function requiredTenantId(request: SessionGatewayRequest): string {
   return tenantId;
 }
 
-function requiredWorkspaceId(request: SessionGatewayRequest): string {
+function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
   const workspaceId = request.actorContext?.workspace_id;
   if (workspaceId === undefined || workspaceId === null) {
     throw new HttpException(

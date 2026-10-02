@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import type { ProblemDetails } from "@alterx/contracts";
 import { PUBLIC_ROUTE_METADATA } from "./public-route";
-import type { SessionGatewayRequest, SessionGatewayResponse } from "./types";
+import type { IdentityTenantGatewayRequest, IdentityTenantGatewayResponse } from "./types";
 
 export interface SessionGatewayUploadAllowlistOptions {
   readonly allowedContentTypes?: readonly string[];
@@ -24,8 +24,8 @@ const DEFAULT_ALLOWED_CONTENT_TYPES: readonly string[] = [
 
 const DEFAULT_MAX_CONTENT_LENGTH_BYTES = 25 * 1024 * 1024;
 
-interface UploadRequest extends SessionGatewayRequest {
-  readonly headers: SessionGatewayRequest["headers"] & {
+interface UploadRequest extends IdentityTenantGatewayRequest {
+  readonly headers: IdentityTenantGatewayRequest["headers"] & {
     readonly "content-type"?: string;
     readonly "content-length"?: string;
     readonly "transfer-encoding"?: string;
@@ -67,7 +67,7 @@ export class SessionGatewayUploadAllowlistGuard implements CanActivate {
 
     if (hasBody(request) && contentType === undefined) {
       this.#reject(
-        http.getResponse<SessionGatewayResponse>(),
+        http.getResponse<IdentityTenantGatewayResponse>(),
         request.url,
         "Content-Type is required for requests with a body.",
       );
@@ -80,7 +80,7 @@ export class SessionGatewayUploadAllowlistGuard implements CanActivate {
         !this.#allowedContentTypes.includes(baseType)
       ) {
         this.#reject(
-          http.getResponse<SessionGatewayResponse>(),
+          http.getResponse<IdentityTenantGatewayResponse>(),
           request.url,
           `Content-Type "${contentType}" is not permitted for uploads.`,
         );
@@ -96,7 +96,7 @@ export class SessionGatewayUploadAllowlistGuard implements CanActivate {
         contentLength > this.#maxContentLengthBytes
       ) {
         this.#reject(
-          http.getResponse<SessionGatewayResponse>(),
+          http.getResponse<IdentityTenantGatewayResponse>(),
           request.url,
           `Upload of ${contentLength} bytes exceeds the maximum of ${this.#maxContentLengthBytes} bytes.`,
         );
@@ -107,7 +107,7 @@ export class SessionGatewayUploadAllowlistGuard implements CanActivate {
   }
 
   #reject(
-    response: SessionGatewayResponse,
+    response: IdentityTenantGatewayResponse,
     requestUrl: string | undefined,
     detail: string,
   ): never {
@@ -131,7 +131,7 @@ function hasBody(request: UploadRequest): boolean {
   );
 }
 
-function setProblemContentType(response: SessionGatewayResponse): void {
+function setProblemContentType(response: IdentityTenantGatewayResponse): void {
   if (response.header) {
     response.header("content-type", "application/problem+json");
   } else {

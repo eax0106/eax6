@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { PromptInjectionClassifier } from "./prompt-injection-classifier";
 import { SessionGatewayPromptInjectionGuard } from "./prompt-injection.guard";
 import { PUBLIC_ROUTE_METADATA } from "./public-route";
-import type { ActorContext, SessionGatewayRequest } from "./types";
+import type { ActorContext, IdentityTenantGatewayRequest } from "./types";
 
 const ACTOR: ActorContext = {
   actor_type: "user",
@@ -16,7 +16,7 @@ const ACTOR: ActorContext = {
   jti: null,
 };
 
-interface TestRequest extends SessionGatewayRequest {
+interface TestRequest extends IdentityTenantGatewayRequest {
   readonly body?: Readonly<Record<string, unknown>>;
 }
 

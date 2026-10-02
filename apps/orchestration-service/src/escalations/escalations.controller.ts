@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import {
@@ -21,7 +21,7 @@ interface EscalationsQuery {
   readonly limit?: string;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(internalProblem(request.url, "Missing authenticated tenant context"), 500);
@@ -30,7 +30,7 @@ function requiredTenantId(request: SessionGatewayRequest): string {
 }
 
 /** Strips the usr_ prefix (escalations.claimed_by/resolved_by are native uuid columns). */
-function bareActorUserId(request: SessionGatewayRequest): string | undefined {
+function bareActorUserId(request: IdentityTenantGatewayRequest): string | undefined {
   const userId = request.actorContext?.user_id;
   if (userId === null || userId === undefined) return undefined;
   return userId.startsWith("usr_") ? userId.slice("usr_".length) : userId;
@@ -61,7 +61,7 @@ export class EscalationsController {
   constructor(private readonly escalations: EscalationsService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query() query: EscalationsQuery) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: EscalationsQuery) {
     const tenantId = requiredTenantId(request);
     try {
       const page = await this.escalations.list(tenantId, {
@@ -79,7 +79,7 @@ export class EscalationsController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") escalationId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") escalationId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return toEscalationResponse(await this.escalations.getById(tenantId, escalationId));
@@ -90,7 +90,7 @@ export class EscalationsController {
 
   @Post(":id/actions/claim")
   async claim(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") escalationId: string,
   ) {
     const tenantId = requiredTenantId(request);
@@ -104,7 +104,7 @@ export class EscalationsController {
 
   @Post(":id/actions/resolve")
   async resolve(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") escalationId: string,
     @Body() body: ResolveEscalationBody,
   ) {

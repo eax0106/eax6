@@ -11,7 +11,7 @@ import {
   Req,
   Res,
 } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply } from "fastify";
 
@@ -60,7 +60,7 @@ interface RunEstimateQuery {
   readonly workflow_version_id?: string;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(internalProblem(request.url, "Missing authenticated tenant context"), 500);
@@ -112,7 +112,7 @@ export class RunsController {
 
   /** D4: what a run of this workflow would cost, shown before it starts. */
   @Get("estimate")
-  async estimate(@Req() request: SessionGatewayRequest, @Query() query: RunEstimateQuery) {
+  async estimate(@Req() request: IdentityTenantGatewayRequest, @Query() query: RunEstimateQuery) {
     const tenantId = requiredTenantId(request);
     const workspaceId = request.actorContext?.workspace_id;
     if (workspaceId === null || workspaceId === undefined) {
@@ -131,7 +131,7 @@ export class RunsController {
   @Post()
   @HttpCode(201)
   async create(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
     @Body() body: CreateRunBody,
   ) {
@@ -155,7 +155,7 @@ export class RunsController {
   }
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query() query: RunsQuery) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: RunsQuery) {
     const tenantId = requiredTenantId(request);
     try {
       const page = await this.launcher.listRuns(tenantId, {
@@ -175,7 +175,7 @@ export class RunsController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") runId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") runId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return toRunResponse(await this.launcher.getRun(tenantId, runId));
@@ -185,7 +185,7 @@ export class RunsController {
   }
 
   @Get(":id/outcome")
-  async outcome(@Req() request: SessionGatewayRequest, @Param("id") runId: string) {
+  async outcome(@Req() request: IdentityTenantGatewayRequest, @Param("id") runId: string) {
     const tenantId = requiredTenantId(request);
     try {
       const row = await this.outcomes.getByRunId(tenantId, runId);
@@ -208,7 +208,7 @@ export class RunsController {
   // could see: these tests call the method, not the route.
   @Post(":id/actions/cancel")
   @HttpCode(200)
-  async cancel(@Req() request: SessionGatewayRequest, @Param("id") runId: string) {
+  async cancel(@Req() request: IdentityTenantGatewayRequest, @Param("id") runId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return toRunResponse(await this.launcher.cancelRun(tenantId, runId));
@@ -220,7 +220,7 @@ export class RunsController {
   @Post(":id/actions/retry-node")
   @HttpCode(200)
   async retryNode(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") runId: string,
     @Body() body: RetryNodeBody,
   ) {
@@ -238,7 +238,7 @@ export class RunsController {
   @Post(":id/actions/retry-signal")
   @HttpCode(204)
   async retrySignal(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") runId: string,
     @Body() body: RetrySignalBody,
   ) {

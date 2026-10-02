@@ -5,7 +5,7 @@ import {
   Logger,
   NestInterceptor,
 } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { AuditEventHandler } from "@alterx/shared-clients";
 import { tap, type Observable } from "rxjs";
 
@@ -26,7 +26,7 @@ export class SystemPrincipalAuditInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     if (context.getType() !== "http") return next.handle();
     const request = context.switchToHttp().getRequest<
-      SessionGatewayRequest & { routeOptions?: { url?: string } }
+      IdentityTenantGatewayRequest & { routeOptions?: { url?: string } }
     >();
     const actor = request.actorContext;
     if (actor?.actor_type !== "system") return next.handle();

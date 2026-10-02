@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Param, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import { AgentWorkflowsService, AgentWorkflowsValidationError } from "./agent-workflows.service";
@@ -16,7 +16,7 @@ export class AgentWorkflowsController {
   constructor(private readonly agents: AgentWorkflowsService) {}
 
   @Get(":agentId/workflows")
-  async list(@Req() request: SessionGatewayRequest, @Param("agentId") agentId: string) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Param("agentId") agentId: string) {
     const actor = request.actorContext;
     if (actor === undefined) {
       throw new HttpException(problem(request.url, 500, "AGENT_WORKFLOWS_INTERNAL", "Missing authenticated tenant context"), 500);

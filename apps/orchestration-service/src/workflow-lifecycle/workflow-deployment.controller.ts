@@ -1,5 +1,5 @@
 import { Body, Controller, HttpException, Param, Post, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { randomUUID } from "node:crypto";
 import {
@@ -19,7 +19,7 @@ interface CanaryBody extends VersionBody {
   readonly trafficPercent?: number;
 }
 
-function tenantId(request: SessionGatewayRequest): string {
+function tenantId(request: IdentityTenantGatewayRequest): string {
   const value = request.actorContext?.tenant_id;
   if (value === undefined) {
     throw new HttpException(
@@ -40,7 +40,7 @@ export class WorkflowDeploymentController {
   constructor(private readonly deployments: WorkflowLifecycleService) {}
 
   @Post(":workflowId/actions/test-version")
-  async testVersion(@Req() request: SessionGatewayRequest, @Param("workflowId") workflowId: string, @Body() body: VersionBody) {
+  async testVersion(@Req() request: IdentityTenantGatewayRequest, @Param("workflowId") workflowId: string, @Body() body: VersionBody) {
     try {
       if (typeof body?.workflowVersionId !== "string") throw new DeploymentValidationError("workflowVersionId is required");
       return await this.deployments.testVersion({ tenant_id: tenantId(request), workflow_id: workflowId, workflow_version_id: body.workflowVersionId });
@@ -49,7 +49,7 @@ export class WorkflowDeploymentController {
 
   @Post(":workflowId/actions/promote-version")
   async promote(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("workflowId") workflowId: string,
     @Body() body: VersionBody,
   ) {
@@ -70,7 +70,7 @@ export class WorkflowDeploymentController {
 
   @Post(":workflowId/actions/start-canary")
   async startCanary(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("workflowId") workflowId: string,
     @Body() body: CanaryBody,
   ) {
@@ -95,7 +95,7 @@ export class WorkflowDeploymentController {
 
   @Post(":workflowId/actions/rollback")
   async rollback(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("workflowId") workflowId: string,
     @Body() body: VersionBody,
   ) {

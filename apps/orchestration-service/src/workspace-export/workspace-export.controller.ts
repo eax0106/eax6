@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, Header, HttpException, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { EngineWorkspaceExportService, EngineWorkspaceExportValidationError } from "./workspace-export.service";
 
@@ -10,7 +10,7 @@ export class EngineWorkspaceExportController {
 
   @Get()
   @Header("Cache-Control", "no-store")
-  async page(@Req() request: SessionGatewayRequest, @Query() query: unknown) {
+  async page(@Req() request: IdentityTenantGatewayRequest, @Query() query: unknown) {
     const actor = request.actorContext;
     if (!actor) throw problem(request.url, 500, "WORKSPACE_EXPORT_INTERNAL", "Missing authenticated context");
     if (actor.actor_type !== "system" || !actor.permissions.includes("workflows:read") || !actor.permissions.includes("runs:read")) {
