@@ -61,7 +61,11 @@
         }
       ],
       "options": {
-        "command": "vitest run apps/orchestration-service/src/*.spec.ts apps/orchestration-service/src/**/*.spec.ts apps/orchestration-service/src/registry/handlers/toolcall.integration.spec.ts"
+        "commands": [
+          "node scripts/check-engine-test-discovery.mjs",
+          "vitest run apps/orchestration-service/src"
+        ],
+        "parallel": false
       }
     }
   },
