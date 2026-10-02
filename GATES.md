@@ -19,13 +19,14 @@ Scope: Engine stores tenant/workspace-scoped connection snapshots containing con
 - [x] G3: Existing connector guards, lifecycle regressions, migration/schema checks and local/EC2 configuration carry the actual synchronization credential consistently
   CHECK: node .unlazy/verify-wiring.mjs
   EXPECT: connection-registry-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b6c25ba09230ef2bd8e1e5a0d68edf55aca0c0536fb725195f5103384ce4a811; exit=0; EXPECT=matched; output-sha256=dd7ed47bb087f78486e606fe7cbfcb489b80e8ae0832f6465dcc128ab2041221; output-bytes=339; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b6c25ba09230ef2bd8e1e5a0d68edf55aca0c0536fb725195f5103384ce4a811; exit=0; EXPECT=matched; output-sha256=5572487c21852611038765b4107003060903c952e6823aa40d7f32097a7d4fa2; output-bytes=339; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
 - [x] G4: Removed revision checks, reference validation, erasure registration and all-state sweep each fail the corresponding regression assertion and restore their sources
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: connection-registry-negative-controls-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=36e4d54a2d423ce1549df9a48b88dba17f0322cd0eaea90179b8bf39a170fbdf; exit=0; EXPECT=matched; output-sha256=bd61b2ccefe9c1bad16f5cfa75211e3e78cb6611832bcc8814782952020d58e5; output-bytes=504; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
-- [ ] G5: Affected builds, typechecks, lint, full engine and platform coverage, architecture/RBAC, migration rollback pairing and zero added AST findings pass
+- [x] G5: Affected builds, typechecks, lint, full engine and platform coverage, architecture/RBAC, migration rollback pairing and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: connection-registry-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=6080e3169797cbb0f838109cb51cc4cf76f3a72cb7faeca52a13775eb05d8aa7; exit=0; EXPECT=matched; output-sha256=ca5515fb5bff1981516794a4291b1137856f18eaded112ba6d4872ee1ab4c815; output-bytes=488; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
