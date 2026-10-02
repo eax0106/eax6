@@ -1486,9 +1486,9 @@ Conflating these two classes is how a tenant's agent would leak into another ten
 
 *Shared in-process library — SSRF guard, prompt-injection classification, PII redaction, upload rules, risk classification.*
 
-**A library, not a service** (design log Section 11). Safety checks fire constantly — every tool call, every model call, every node output — so a network hop per check would add real latency to the hottest paths and create a new single point of failure. One package, imported and run in-process by **26. Model Gateway**, **27. Tool Gateway**, **28. Sandbox**, **29. Verification**, and **49. Public Surface**.
+**A library, not a service** (design log Section 11). Safety checks fire constantly — every tool call, every model call, every node output — so a network hop per check would add real latency to the hottest paths and create a new single point of failure. Under D15, each language has one implementation, imported and run in-process by **26. Model Gateway**, **27. Tool Gateway**, **28. Sandbox**, **29. Verification**, and **49. Public Surface**.
 
-**Single source of truth, deliberately.** The old build reimplemented the same fetcher protection in two places and they drifted — Sandbox passed a 1 MB response bound, Tool Gateway passed none. One package eliminates that class of divergence.
+**Single source of truth within each language, deliberately (D15).** The old build reimplemented the same fetcher protection in two places and they drifted — Sandbox passed a 1 MB response bound, Tool Gateway passed none. Consumers reuse their canonical implementation; shared-case CI parity keeps the TypeScript and Python classifiers aligned.
 
 **Carries forward the old build's genuinely strong work:** DNS-pinned SSRF defense (resolve, validate, force the socket to the validated IP, revalidate per redirect hop, block private ranges / CGNAT / link-local / IPv6 ULA / cloud metadata / the IPv4-mapped-IPv6 trap), and a real injection classifier making genuine calls rather than a mock loop.
 
@@ -1502,7 +1502,7 @@ Conflating these two classes is how a tenant's agent would leak into another ten
 
 **NON-RESPONSIBILITIES**
 - Must not be bypassable by any caller, including internal ones.
-- Must not be reimplemented anywhere — one package only.
+- Must not be duplicated within a language (D15). TypeScript consumers reuse the canonical auth/adapters implementations; Python consumers use the Python implementation. A shared-case CI check keeps both classifiers aligned.
 - Must not silently downgrade a check it cannot perform.
 
 **DONE GATE**

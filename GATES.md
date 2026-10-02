@@ -1,30 +1,30 @@
-# Gates: D11 stored event replay (C97)
+# Gates: D15 classifier parity and duplicate-safety enforcement (C106)
 
-OWNS: apps/orchestration-service/src/trigger-registry/**, apps/orchestration-service/src/runs/**, apps/orchestration-service/src/workflow-read/**, apps/orchestration-service/src/blackboard/blackboard.service.ts, apps/orchestration-service/src/ingress.module.ts, apps/orchestration-service/src/run-launcher.module.ts, apps/orchestration-service/db/schema/runs.ts, apps/orchestration-service/drizzle/**, apps/orchestration-service/src/database/**, apps/platform-api/src/events/**, apps/platform-api/src/rbac/param-workspace.resolver*, apps/platform-web/src/api/**, apps/platform-web/src/features/events/**, packages/adapters/src/temporal/workflows/executor-workflow*, packages/adapters/src/postgres/orchestration-store-provider.spec.ts, docs/work-queue.md
+OWNS: packages/auth/session-gateway/src/prompt-injection-classifier.ts, packages/auth/session-gateway/src/prompt-injection-classifier.spec.ts, apps/verification-service/src/verification/model_gateway_client.py, apps/verification-service/tests/test_injection_parity.py, scripts/safety/injection-cases.json, scripts/safety/run-injection-cases.mjs, scripts/check-injection-parity.mjs, scripts/gates/safety-duplicate.mjs, scripts/gates/safety-duplicate-python.py, scripts/gates/safety-duplicate.spec.mjs, scripts/gates/probes/**, .github/workflows/ci.yml, docs/architecture/planes.md, docs/architecture/component-contracts.md, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Replay defaults to the existing structural Simulate over the stored event. A separate real replay lists canonical outside actions, requires a current confirmation bound to the actual caller/event/version, records who confirmed and the source event, and delivers stored input to the existing executor. Real replay retains run budgets, holds, permissions and idempotency.
+Scope: Keep one classifier implementation per language. The real TypeScript and Python clients consume one case set through native loopback model gRPC, agree on classification and unavailable outcomes, and retain their existing caller-specific failure policies. CI invokes parity and actual duplicate-safety probes. A deterministic model edge tests contract behavior; paid model detection quality is not claimed.
 
-- [x] G1: Restricted Postgres and guarded HTTP prove dry replay uses stored payload with no run or outside calls, isolated reads and current confirmation checks
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Postgres|HTTP' && echo event-replay-read-passed
-  EXPECT: event-replay-read-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=212b84e3b1e3f24a29551b3851cf8a1e6f622bebe74d5f2894b26d9beff102a5; exit=0; EXPECT=matched; output-sha256=1f06fd74fa489568a6bca4257ac0447bc9217013bface9cba4d0a29d9e6c6b3b; output-bytes=3191; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+- [x] G1: Both actual classifiers agree on every shared case over native model gRPC, preserve input and FAST routing, and use the same classification policy while preserving their existing unavailable handling
+  CHECK: node .unlazy/verify-parity.mjs
+  EXPECT: safety-parity-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5c2dbeceab47d813093b28307decb2907f832d667486e44ee485281143320026; exit=0; EXPECT=matched; output-sha256=b21909a2c067490c81b0dfaefc24157a06b699a561a28fd70bf3ffe906e6d36e; output-bytes=149; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Real Temporal receives the stored input, persisted source and confirmer, one run per request, and existing budget/hold/audit failures roll back
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Temporal|transaction' && echo event-replay-execution-passed
-  EXPECT: event-replay-execution-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a52b8f6a7cbf9ca30822e7aa9be2aee453f3acc7004d6ebe54e4fe0a0f128df9; exit=0; EXPECT=matched; output-sha256=b9d490e065e3a4987798279ebbe512964674fb5fcc73d240ba150a79c870089e; output-bytes=3196; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+- [x] G2: The duplicate-safety gate permits ordinary transport and canonical consumers while identifying real duplicate implementation declarations, including renamed copies; the probe is invoked in CI
+  CHECK: node .unlazy/verify-gate.mjs
+  EXPECT: safety-duplicate-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1de83880437595557ae07bbe560d7b6cec99d2d05c02216d6a588b405c925a52; exit=0; EXPECT=matched; output-sha256=b7943a7902742115f80ebee8b9093cf419c6da238fa4baca88899b4f1595bcad; output-bytes=62; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Platform relay preserves real caller and run permission; rendered web defaults to dry replay and names outside actions before confirmed real replay
-  CHECK: node .unlazy/verify-platform.mjs && node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/events apps/platform-web/src/api/live-events.spec.ts && echo event-replay-surfaces-passed
-  EXPECT: event-replay-surfaces-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=00c3af538150186600cc740511019fff48717fd7285fd154cefdd79d1de35a4e; exit=0; EXPECT=matched; output-sha256=58dd8c76344af45e819dbfc260fc7145d1eabeb7d747351634ead78acc905a37; output-bytes=324; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Original-code and mutation controls fail their corresponding assertions and restore sources
+- [x] G3: Independently changed classifier verdicts and removed duplicate detection fail their corresponding native checks; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: event-replay-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=621f34e480782315d3aad18b64c50d5256f7a1c8e1e65f6ddb5cb2322e53cf83; exit=0; EXPECT=matched; output-sha256=d8e51a8ba4975fd92aa094e66b6cc8bf016fecf21f218ac0586ee5d548adaac9; output-bytes=349; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EXPECT: safety-parity-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=ff14056998334330f0de73c6862b840cd3b65284ab96526e91d1eac233552a49; exit=0; EXPECT=matched; output-sha256=587aad9cf2e30c2e4d10b65710d382063a29c9b40ed6166f113fa4565c8090c5; output-bytes=646; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Full affected builds, typechecks, lint, suites, migration pairing, RBAC, architecture and zero added AST findings pass
+- [x] G4: Full auth, verification and adapter suites, affected static checks, architecture/RBAC, exact CI wiring and migration rollback pairing pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: event-replay-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a75529c8ea4b793a51b3debafbf03a8e9c616001ca1d22d4f324db3ea070b492; exit=0; EXPECT=matched; output-sha256=5667bd28c672c794d18696451398c3659b6e5163d2bb1c6b656f507afacfccdd; output-bytes=475; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EXPECT: safety-parity-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=4436f905996a11f7a06216a88668bd867ff1a672248c3a63a10e05898d9284e8; exit=0; EXPECT=matched; output-sha256=3e762e185199189ff59d406e4b2ba15617d4f328efc20fa9e386cb823dccc1d9; output-bytes=426; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+
+- [x] G5: The regenerated safety baseline is independently measured; all other normalized AST counts add zero entries and final architecture gates pass
+  CHECK: node .unlazy/verify-baseline.mjs
+  EXPECT: safety-parity-baseline-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=d832097c84afad1393ff7eaec1e18cd25767743153f309f4c4c6e3a7956e5c73; exit=0; EXPECT=matched; output-sha256=8e12d4e4cf3c51d3bca9d561b4f99d8edc6e6a4899b3544ea68f25ccf0fad677; output-bytes=114; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
