@@ -7,17 +7,17 @@ Scope: Replay defaults to the existing structural Simulate over the stored event
 - [x] G1: Restricted Postgres and guarded HTTP prove dry replay uses stored payload with no run or outside calls, isolated reads and current confirmation checks
   CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Postgres|HTTP' && echo event-replay-read-passed
   EXPECT: event-replay-read-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=212b84e3b1e3f24a29551b3851cf8a1e6f622bebe74d5f2894b26d9beff102a5; exit=0; EXPECT=matched; output-sha256=5fd87e9c7bbe3c8ef74e21af36e0492f9b659ae52048d50fe8422dc4572678c1; output-bytes=3997; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=212b84e3b1e3f24a29551b3851cf8a1e6f622bebe74d5f2894b26d9beff102a5; exit=0; EXPECT=matched; output-sha256=1f06fd74fa489568a6bca4257ac0447bc9217013bface9cba4d0a29d9e6c6b3b; output-bytes=3191; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
 
 - [x] G2: Real Temporal receives the stored input, persisted source and confirmer, one run per request, and existing budget/hold/audit failures roll back
   CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/trigger-registry/event-replay.integration.spec.ts -t 'Temporal|transaction' && echo event-replay-execution-passed
   EXPECT: event-replay-execution-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a52b8f6a7cbf9ca30822e7aa9be2aee453f3acc7004d6ebe54e4fe0a0f128df9; exit=0; EXPECT=matched; output-sha256=1194e6c79db2b79a42e86c1b4d1865ee67fa43aef71c862058b519c68012fd85; output-bytes=3196; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a52b8f6a7cbf9ca30822e7aa9be2aee453f3acc7004d6ebe54e4fe0a0f128df9; exit=0; EXPECT=matched; output-sha256=b9d490e065e3a4987798279ebbe512964674fb5fcc73d240ba150a79c870089e; output-bytes=3196; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
 
 - [x] G3: Platform relay preserves real caller and run permission; rendered web defaults to dry replay and names outside actions before confirmed real replay
   CHECK: node .unlazy/verify-platform.mjs && node_modules/.bin/vitest run --config apps/platform-web/vitest.config.ts apps/platform-web/src/features/events apps/platform-web/src/api/live-events.spec.ts && echo event-replay-surfaces-passed
   EXPECT: event-replay-surfaces-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=00c3af538150186600cc740511019fff48717fd7285fd154cefdd79d1de35a4e; exit=0; EXPECT=matched; output-sha256=6e2e02690638783350722a98c35c4e94e0a38e1e966311e8f41986b5d2927e79; output-bytes=324; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=00c3af538150186600cc740511019fff48717fd7285fd154cefdd79d1de35a4e; exit=0; EXPECT=matched; output-sha256=58dd8c76344af45e819dbfc260fc7145d1eabeb7d747351634ead78acc905a37; output-bytes=324; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
 
 - [x] G4: Original-code and mutation controls fail their corresponding assertions and restore sources
   CHECK: node .unlazy/negative-controls.mjs
@@ -27,4 +27,4 @@ Scope: Replay defaults to the existing structural Simulate over the stored event
 - [x] G5: Full affected builds, typechecks, lint, suites, migration pairing, RBAC, architecture and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: event-replay-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a75529c8ea4b793a51b3debafbf03a8e9c616001ca1d22d4f324db3ea070b492; exit=0; EXPECT=matched; output-sha256=c322651d16e3cc1e600a95da50c5ad216c75aae70269bdce4b541910d1a2ea77; output-bytes=475; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a75529c8ea4b793a51b3debafbf03a8e9c616001ca1d22d4f324db3ea070b492; exit=0; EXPECT=matched; output-sha256=5667bd28c672c794d18696451398c3659b6e5163d2bb1c6b656f507afacfccdd; output-bytes=475; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-event-replay-c97; path=b33e9cf43ae9/31 entries
