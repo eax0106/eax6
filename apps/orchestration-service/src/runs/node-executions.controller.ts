@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { Controller, Get, HttpException, Param, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import {
   ProblemDetailsSchema,
   type ProblemDetails,
@@ -23,7 +23,7 @@ export class NodeExecutionsController {
 
   @Get(":id/node-executions")
   async list(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") runId: string,
     @Query() query: NodeExecutionsQuery,
   ) {

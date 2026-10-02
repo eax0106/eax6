@@ -5,7 +5,7 @@ import { Module, type DynamicModule } from "@nestjs/common";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 
 import { PostgresOrchestrationStoreProvider } from "@alterx/adapters";
-import type { ActorContext, SessionGatewayRequest } from "@alterx/auth";
+import type { ActorContext, IdentityTenantGatewayRequest } from "@alterx/auth";
 
 import { NodeExecutionsController } from "./runs/node-executions.controller";
 import { NodeExecutionLedgerService } from "./runs/node-execution-ledger.service";
@@ -91,7 +91,7 @@ async function bootstrap(): Promise<void> {
   const actorContext = evalAuthActorContext(tenantId);
   app.getHttpAdapter().getInstance().addHook(
     "onRequest",
-    (request: SessionGatewayRequest, _reply: unknown, done: () => void) => {
+    (request: IdentityTenantGatewayRequest, _reply: unknown, done: () => void) => {
       request.actorContext = actorContext;
       done();
     },

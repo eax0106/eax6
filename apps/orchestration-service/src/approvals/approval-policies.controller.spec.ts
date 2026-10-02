@@ -1,4 +1,4 @@
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import { HttpException } from "@nestjs/common";
 import { describe, expect, it, vi } from "vitest";
 import { ApprovalPoliciesController } from "./approval-policies.controller";
@@ -8,7 +8,7 @@ const tenant = "018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
 const workspace = "018f4d6e-2b4a-7a3e-8c1a-1234567890a2";
 const workflow = `wf_${tenant}`;
 const body = { mode: "ask", skip_on_timeout: false, timeout_seconds: null };
-function request(overrides: Partial<NonNullable<SessionGatewayRequest["actorContext"]>> = {}): SessionGatewayRequest {
+function request(overrides: Partial<NonNullable<IdentityTenantGatewayRequest["actorContext"]>> = {}): IdentityTenantGatewayRequest {
   return { headers: {}, url: `/api/v1/workflows/${workflow}/approval-policies/check`, actorContext: {
     tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}`, user_id: `usr_${tenant}`,
     actor_type: "user", roles: ["admin"], session_id: "session", jti: "request", permissions: ["approvals:decide"], ...overrides,

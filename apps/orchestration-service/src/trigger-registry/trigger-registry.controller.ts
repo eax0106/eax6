@@ -10,7 +10,7 @@ import {
   Query,
   Req,
 } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { InvalidCronExpressionError } from "./cron-validator";
 import { InvalidDlqPolicyError } from "./dlq-policy";
@@ -43,7 +43,7 @@ interface SetTriggerStatusBody {
   readonly status: TriggerStatus;
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(
@@ -60,7 +60,7 @@ export class TriggerRegistryController {
 
   @Post()
   async register(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Body() body: RegisterTriggerBody,
   ) {
     const tenantId = requiredTenantId(request);
@@ -85,7 +85,7 @@ export class TriggerRegistryController {
 
   @Post(":id/versions")
   async createVersion(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
     @Body() body: CreateTriggerVersionBody,
   ) {
@@ -106,7 +106,7 @@ export class TriggerRegistryController {
 
   @Patch(":id/status")
   async setStatus(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
     @Body() body: SetTriggerStatusBody,
   ) {
@@ -123,7 +123,7 @@ export class TriggerRegistryController {
   }
 
   @Post(":id/actions/enable")
-  async enable(@Req() request: SessionGatewayRequest, @Param("id") triggerId: string) {
+  async enable(@Req() request: IdentityTenantGatewayRequest, @Param("id") triggerId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.setTriggerStatus(tenantId, triggerId, "enabled");
@@ -133,7 +133,7 @@ export class TriggerRegistryController {
   }
 
   @Post(":id/actions/test")
-  async test(@Req() request: SessionGatewayRequest, @Param("id") triggerId: string) {
+  async test(@Req() request: IdentityTenantGatewayRequest, @Param("id") triggerId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.testTrigger(tenantId, triggerId);
@@ -144,7 +144,7 @@ export class TriggerRegistryController {
 
   @Post(":id/actions/rotate-webhook-secret")
   async rotateWebhookSecret(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
   ) {
     const tenantId = requiredTenantId(request);
@@ -156,7 +156,7 @@ export class TriggerRegistryController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") triggerId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") triggerId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.getTrigger(tenantId, triggerId);
@@ -167,7 +167,7 @@ export class TriggerRegistryController {
 
   @Get()
   async list(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Query("workflowId") workflowId?: string,
   ) {
     const tenantId = requiredTenantId(request);

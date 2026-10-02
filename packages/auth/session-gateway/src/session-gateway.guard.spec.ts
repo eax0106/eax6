@@ -7,7 +7,7 @@ import { SessionGatewayGuard } from "./session-gateway.guard";
 import {
   SessionGatewayAuthError,
   type ActorContext,
-  type SessionGatewayRequest,
+  type IdentityTenantGatewayRequest,
   type TenantDatabaseScope,
 } from "./types";
 
@@ -72,7 +72,7 @@ function setup(options: {
       }),
     ),
   };
-  const request: SessionGatewayRequest = {
+  const request: IdentityTenantGatewayRequest = {
     headers: {
       authorization: "Bearer machine",
       "x-alter-actor-token": "actor",

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, Headers, HttpException, Put, Query, Req, Res } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply } from "fastify";
 
@@ -23,7 +23,7 @@ export class RunRetentionController {
   constructor(private readonly retention: RunRetentionService) {}
 
   @Get()
-  async get(@Req() request: SessionGatewayRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     const { tenantId, workspaceId } = scope(request);
     const setting = await this.run(request, () => this.retention.get(tenantId, workspaceId));
     reply.header("ETag", setting.etag);
@@ -31,7 +31,7 @@ export class RunRetentionController {
   }
 
   @Get("preview")
-  async preview(@Req() request: SessionGatewayRequest, @Query("retention_days") retentionDays?: string) {
+  async preview(@Req() request: IdentityTenantGatewayRequest, @Query("retention_days") retentionDays?: string) {
     const { tenantId, workspaceId } = scope(request);
     const days = wholeNumber(retentionDays, request.url);
     const runsToDelete = await this.run(request, () => this.retention.preview(tenantId, workspaceId, days));
@@ -40,7 +40,7 @@ export class RunRetentionController {
 
   @Put()
   async set(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Body() body: unknown,
     @Res({ passthrough: true }) reply: FastifyReply,
     @Headers("if-match") ifMatch?: string,
@@ -70,7 +70,7 @@ export class RunRetentionController {
     return toResponse(setting);
   }
 
-  private async run<T>(request: SessionGatewayRequest, operation: () => Promise<T>): Promise<T> {
+  private async run<T>(request: IdentityTenantGatewayRequest, operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error: unknown) {
@@ -100,7 +100,7 @@ function toResponse(setting: RunRetentionSetting) {
   };
 }
 
-function scope(request: SessionGatewayRequest): { tenantId: string; workspaceId: string } {
+function scope(request: IdentityTenantGatewayRequest): { tenantId: string; workspaceId: string } {
   const actor = request.actorContext;
   if (actor === undefined || actor.workspace_id === null || actor.workspace_id === undefined) {
     throw new HttpException(problem(request.url, 500, "RUN_RETENTION_INTERNAL", "Missing authenticated workspace context"), 500);
@@ -109,7 +109,7 @@ function scope(request: SessionGatewayRequest): { tenantId: string; workspaceId:
 }
 
 /** Changing retention needs a person holding runs:retention:write; the platform checks the role, this checks the grant again. */
-function writer(request: SessionGatewayRequest): { tenantId: string; workspaceId: string; userId: string } {
+function writer(request: IdentityTenantGatewayRequest): { tenantId: string; workspaceId: string; userId: string } {
   const { tenantId, workspaceId } = scope(request);
   const actor = request.actorContext!;
   if (actor.actor_type !== "user" || actor.user_id === null || !actor.permissions.includes(RUN_RETENTION_WRITE)) {

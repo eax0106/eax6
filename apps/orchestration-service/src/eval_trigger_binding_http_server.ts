@@ -6,7 +6,7 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 
 import { PostgresOrchestrationStoreProvider } from "@alterx/adapters";
 import { createMockMutableSecretsProvider } from "@alterx/shared-clients";
-import type { ActorContext, SessionGatewayRequest } from "@alterx/auth";
+import type { ActorContext, IdentityTenantGatewayRequest } from "@alterx/auth";
 
 import {
   IntegrationWebhookController,
@@ -113,7 +113,7 @@ async function bootstrap(): Promise<void> {
   const actorContext = evalAuthActorContext(tenantId, workspaceId);
   app.getHttpAdapter().getInstance().addHook(
     "onRequest",
-    (request: SessionGatewayRequest, _reply: unknown, done: () => void) => {
+    (request: IdentityTenantGatewayRequest, _reply: unknown, done: () => void) => {
       request.actorContext = actorContext;
       done();
     },

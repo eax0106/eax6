@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpException, Param, Post, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import { TenantIdSchema, WorkspaceIdSchema } from "@alterx/contracts";
 import type { WhatsappAccount } from "./whatsapp-account-registry.service";
 import { WhatsappAccountNotFoundError, WhatsappAccountRegistryService } from "./whatsapp-account-registry.service";
@@ -20,7 +20,7 @@ export class WhatsappAccountsController {
   constructor(private readonly registry: WhatsappAccountRegistryService) {}
 
   @Post()
-  async register(@Req() request: SessionGatewayRequest, @Body() body: RegisterAccountBody): Promise<WhatsappAccount> {
+  async register(@Req() request: IdentityTenantGatewayRequest, @Body() body: RegisterAccountBody): Promise<WhatsappAccount> {
     const tenantId = requiredTenantId(request);
     if (typeof body.workspaceId !== "string" || !body.workspaceId || !body.phoneNumberId || !body.wabaId || !body.accessTokenRef) {
       throw new HttpException("workspaceId, phoneNumberId, wabaId, and accessTokenRef are required", 400);
@@ -48,13 +48,13 @@ export class WhatsappAccountsController {
   }
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest): Promise<{ readonly accounts: readonly WhatsappAccount[] }> {
+  async list(@Req() request: IdentityTenantGatewayRequest): Promise<{ readonly accounts: readonly WhatsappAccount[] }> {
     return { accounts: (await this.registry.list(requiredTenantId(request), requiredWorkspaceId(request))).map(toApi) };
   }
 
   @Delete(":id")
   @HttpCode(204)
-  async remove(@Req() request: SessionGatewayRequest, @Param("id") accountId: string): Promise<void> {
+  async remove(@Req() request: IdentityTenantGatewayRequest, @Param("id") accountId: string): Promise<void> {
     try {
       await this.registry.remove(requiredTenantId(request), requiredWorkspaceId(request), accountId);
     } catch (error: unknown) {
@@ -65,7 +65,7 @@ export class WhatsappAccountsController {
 
   @Post(":id/configuration")
   async updateConfiguration(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") accountId: string,
     @Body() body: {
       readonly monitoringConfig?: Readonly<Record<string, unknown>>;
@@ -85,13 +85,13 @@ export class WhatsappAccountsController {
 // The registry works in database form (bare UUIDs); the API speaks prefixed
 // ids like every other route, and platform-api compares an account's
 // workspaceId with the caller's ws_ id before any by-id operation.
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = TenantIdSchema.safeParse(request.actorContext?.tenant_id);
   if (!tenantId.success) throw new HttpException("Missing authenticated tenant context", 500);
   return tenantId.data.slice("ten_".length);
 }
 
-function requiredWorkspaceId(request: SessionGatewayRequest): string {
+function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
   const workspaceId = WorkspaceIdSchema.safeParse(request.actorContext?.workspace_id);
   if (!workspaceId.success) throw new HttpException("Missing authenticated workspace context", 500);
   return workspaceId.data.slice("ws_".length);

@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import {
   RunObservabilityService,
@@ -24,7 +24,7 @@ export class RecoveryFeedController {
   constructor(private readonly observability: RunObservabilityService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query() query: FeedQuery) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: FeedQuery) {
     const actor = request.actorContext;
     if (actor === undefined) {
       throw new HttpException(problem(request.url, 500, "RECOVERY_FEED_INTERNAL", "Missing authenticated tenant context"), 500);

@@ -8,7 +8,7 @@ import {
 import type { ProblemDetails } from "@alterx/contracts";
 import { PromptInjectionClassifier } from "./prompt-injection-classifier";
 import { PUBLIC_ROUTE_METADATA } from "./public-route";
-import type { SessionGatewayRequest, SessionGatewayResponse } from "./types";
+import type { IdentityTenantGatewayRequest, IdentityTenantGatewayResponse } from "./types";
 
 export interface SessionGatewayPromptInjectionOptions {
   readonly textFieldPath?: string;
@@ -16,7 +16,7 @@ export interface SessionGatewayPromptInjectionOptions {
 
 const DEFAULT_TEXT_FIELD_PATH = "utterance";
 
-interface PromptInjectionRequest extends SessionGatewayRequest {
+interface PromptInjectionRequest extends IdentityTenantGatewayRequest {
   readonly body?: Readonly<Record<string, unknown>>;
 }
 
@@ -88,7 +88,7 @@ export class SessionGatewayPromptInjectionGuard implements CanActivate {
       return true;
     }
 
-    const response = http.getResponse<SessionGatewayResponse>();
+    const response = http.getResponse<IdentityTenantGatewayResponse>();
     setProblemContentType(response);
     throw new HttpException(
       promptInjectionProblem(request.url, result),
@@ -97,7 +97,7 @@ export class SessionGatewayPromptInjectionGuard implements CanActivate {
   }
 }
 
-function setProblemContentType(response: SessionGatewayResponse): void {
+function setProblemContentType(response: IdentityTenantGatewayResponse): void {
   if (response.header) {
     response.header("content-type", "application/problem+json");
   } else {

@@ -12,7 +12,7 @@ import {
   Post,
   Req,
 } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import {
@@ -43,7 +43,7 @@ export class BudgetsController {
   constructor(private readonly budgets: EngineBudgetService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest) {
+  async list(@Req() request: IdentityTenantGatewayRequest) {
     const { tenantId, workspaceId } = scope(request);
     return { data: (await this.run(request, () => this.budgets.list(tenantId, workspaceId))).map(toResponse) };
   }
@@ -54,7 +54,7 @@ export class BudgetsController {
    * the system principal only.
    */
   @Get("threshold-feed")
-  async thresholdFeed(@Req() request: SessionGatewayRequest) {
+  async thresholdFeed(@Req() request: IdentityTenantGatewayRequest) {
     const actor = request.actorContext;
     if (actor === undefined) {
       throw new HttpException(problem(request.url, 500, "BUDGETS_INTERNAL", "Missing authenticated tenant context"), 500);
@@ -79,7 +79,7 @@ export class BudgetsController {
 
   @Post()
   @HttpCode(201)
-  async create(@Req() request: SessionGatewayRequest, @Body() body: unknown) {
+  async create(@Req() request: IdentityTenantGatewayRequest, @Body() body: unknown) {
     const { tenantId, workspaceId, userId } = writer(request);
     const input = record(body, request.url);
     allowOnly(input, ["kind", "workflow_id", "period", "amount_minor", "mode"], request.url);
@@ -100,7 +100,7 @@ export class BudgetsController {
 
   @Patch(":budgetId")
   async update(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("budgetId") budgetId: string,
     @Body() body: unknown,
     @Headers("if-match") ifMatch?: string,
@@ -128,7 +128,7 @@ export class BudgetsController {
 
   @Delete(":budgetId")
   @HttpCode(204)
-  async remove(@Req() request: SessionGatewayRequest, @Param("budgetId") budgetId: string): Promise<void> {
+  async remove(@Req() request: IdentityTenantGatewayRequest, @Param("budgetId") budgetId: string): Promise<void> {
     const { tenantId, workspaceId } = writer(request);
     const listed = await this.run(request, () => this.budgets.list(tenantId, workspaceId));
     if (!listed.some((budget) => budget.id === budgetId)) {
@@ -137,7 +137,7 @@ export class BudgetsController {
     await this.run(request, () => this.budgets.delete(tenantId, workspaceId, budgetId));
   }
 
-  private async run<T>(request: SessionGatewayRequest, operation: () => Promise<T>): Promise<T> {
+  private async run<T>(request: IdentityTenantGatewayRequest, operation: () => Promise<T>): Promise<T> {
     try {
       return await operation();
     } catch (error: unknown) {
@@ -170,7 +170,7 @@ function toResponse(budget: BudgetWithUsage) {
   };
 }
 
-function scope(request: SessionGatewayRequest): { tenantId: string; workspaceId: string } {
+function scope(request: IdentityTenantGatewayRequest): { tenantId: string; workspaceId: string } {
   const actor = request.actorContext;
   if (actor === undefined || actor.workspace_id === null || actor.workspace_id === undefined) {
     throw new HttpException(problem(request.url, 500, "BUDGETS_INTERNAL", "Missing authenticated workspace context"), 500);
@@ -179,7 +179,7 @@ function scope(request: SessionGatewayRequest): { tenantId: string; workspaceId:
 }
 
 /** Writing a budget needs a person holding budgets:write; the platform checks the role, this checks the grant again. */
-function writer(request: SessionGatewayRequest): { tenantId: string; workspaceId: string; userId: string } {
+function writer(request: IdentityTenantGatewayRequest): { tenantId: string; workspaceId: string; userId: string } {
   const { tenantId, workspaceId } = scope(request);
   const actor = request.actorContext!;
   if (actor.user_id === null || !actor.permissions.includes(BUDGETS_WRITE)) {
