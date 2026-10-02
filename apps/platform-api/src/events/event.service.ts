@@ -10,6 +10,25 @@ import { parseEventId, parseEventListQuery, parseTraceparent, serializeQuery } f
 export class EventService {
   constructor(private readonly engine: EngineClient) {}
 
+  preview(eventId: string, actor: ActorContext, traceparent: string | undefined): Promise<EngineResponse<EngineResource>> {
+    const instance = `/api/v1/events/${eventId}/replay`;
+    const id = parseEventId(eventId, instance);
+    return this.engine.post(`/api/v1/events/${encodeURIComponent(id)}/replay`, {}, callerContext(actor, traceparent, instance), { idempotencyKey: `event-preview-${randomBytes(16).toString("hex")}` });
+  }
+
+  replay(eventId: string, body: unknown, actor: ActorContext, traceparent: string | undefined, key: string | undefined): Promise<EngineResponse<EngineResource>> {
+    const instance = `/api/v1/events/${eventId}/replay-for-real`;
+    const id = parseEventId(eventId, instance);
+    const input = body as Record<string, unknown> | null;
+    if (!input || Array.isArray(input) || input["confirmed"] !== true || typeof input["confirmationToken"] !== "string" ||
+        !/^[0-9a-f]{64}$/.test(input["confirmationToken"]) || Object.keys(input).some(name => !["confirmed", "confirmationToken"].includes(name))) {
+      throw new EventHttpError(400, "INVALID_EVENT_REQUEST", "Confirm the previewed outside actions before real replay", instance);
+    }
+    if (!key || !/^[A-Za-z0-9_-]{16,128}$/.test(key)) throw new EventHttpError(400, "INVALID_EVENT_REQUEST", "A valid Idempotency-Key is required", instance);
+    return this.engine.post(`/api/v1/events/${encodeURIComponent(id)}/replay-for-real`,
+      { confirmed: true, confirmationToken: input["confirmationToken"] }, callerContext(actor, traceparent, instance), { idempotencyKey: key });
+  }
+
   list(
     input: unknown,
     actor: ActorContext,

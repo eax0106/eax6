@@ -86,11 +86,12 @@ export class DurableRunQueue {
       readonly priority?: number;
       readonly alreadyRunning?: boolean;
     },
+    transaction?: OrchestrationTransactionLike,
   ): Promise<void> {
     const priority = input.priority ?? 0;
     requirePriority(priority);
     const queueId = randomUUID();
-    await this.store.withTenant(tenantId, async (tx) => {
+    const insert = async (tx: OrchestrationTransactionLike) => {
       await tx.query(
         `INSERT INTO run_dispatch_queue
            (id, tenant_id, run_id, priority, compiled_dag, already_running)
@@ -105,7 +106,9 @@ export class DurableRunQueue {
           input.alreadyRunning ?? false,
         ],
       );
-    });
+    };
+    if (transaction) await insert(transaction);
+    else await this.store.withTenant(tenantId, insert);
   }
 
   async claimNext(

@@ -282,6 +282,7 @@ export function defaultWorkspaceResolutionRules(deps: {
     // artifacts response, unlike runs'/workflows', was never snake_cased.
     { paramNames: ["artifactId", "artifact_id"], lookup: engine((id) => `/api/v1/artifacts/${id}`, "workspaceId") },
     { paramNames: ["triggerId", "trigger_id"], lookup: engine((id) => `/api/v1/triggers/${id}`, "workspaceId") },
+    { paramNames: ["eventId", "event_id"], lookup: engine((id) => `/api/v1/events/${id}`, "workspace_id") },
     // The Action Centre addresses an item of any family by its own id; the
     // prefix says which engine collection owns it.
     {
