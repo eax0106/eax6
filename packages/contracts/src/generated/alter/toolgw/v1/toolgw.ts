@@ -34,6 +34,8 @@ export interface ResolveCredentialRequest {
   integration_id: string;
   /** reference only, never a secret value */
   credential_ref: string;
+  /** required for engine connection registry references */
+  run_id?: string | undefined;
 }
 
 export interface ResolveCredentialResponse {

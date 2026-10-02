@@ -59,6 +59,8 @@ async function main(): Promise<void> {
   const { identityTenantGatewayEnvironment, buildWorstCaseEstimator } = await import(
     "../../apps/orchestration-service/src/orchestration-infrastructure.module"
   );
+  const { loadToolGatewayEnvironment } = await import("../../apps/tool-gateway/src/config/environment");
+  await check("tool-gateway", "environment", () => loadToolGatewayEnvironment(process.env));
 
   await check("platform-api", "environment", () => validatePlatformApiEnv(process.env));
   for (const value of [undefined, "postgresql://platform_app:fixture@localhost/platform_db"]) {
@@ -112,7 +114,9 @@ async function main(): Promise<void> {
     ["platform-api", "DEPLOYMENT_ADMIN_SERVICE_TOKEN", "orchestration-service", "DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256"],
     ["platform-api", "CONNECTION_REGISTRY_SERVICE_TOKEN", "orchestration-service", "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"],
     ["platform-api", "INTERNAL_SERVICE_TOKEN", "ads-core", "INTERNAL_SERVICE_TOKEN_SHA256"],
+    ["tool-gateway", "INTERNAL_SERVICE_TOKEN", "orchestration-service", "INTERNAL_SERVICE_TOKEN_SHA256"],
   ];
+  if (env("tool-gateway", "ENGINE_BASE_URL") !== `http://127.0.0.1:${env("orchestration-service", "ORCHESTRATION_PORT")}`) failures.push("tool-gateway ENGINE_BASE_URL must use orchestration-service's host-network port");
   for (const [caller, tokenKey, receiver, hashKey] of pairs) {
     const token = env(caller, tokenKey);
     const hash = env(receiver, hashKey);

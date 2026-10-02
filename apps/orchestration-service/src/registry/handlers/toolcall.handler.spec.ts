@@ -9,6 +9,7 @@ import {
 } from "@alterx/adapters";
 import { describe, expect, it, vi } from "vitest";
 
+import { classifyNodeFailure } from "../../recovery/failure-classifier";
 import { ToolCallHandler } from "./toolcall.handler";
 
 const TENANT_ID = "ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab";
@@ -42,6 +43,18 @@ function context(
 }
 
 describe("ToolCallHandler", () => {
+  it("routes canonical connection references with the actual execution tenant and run", async () => {
+    const invoke = vi.fn().mockResolvedValue({ output_json: "{}", audit_id: "aud_018f4d6e-2b4a-7a3e-8c1a-1234567890ab" });
+    const handler = new ToolCallHandler(gateway(invoke));
+    const reference = `/alter/integrations/${TENANT_ID.slice(4)}/018f4d6e-2b4a-7a3e-8c1a-000000000001/018f4d6e-2b4a-7a3e-8c1a-000000000002`;
+    const result = await handler.execute(context({ tool_name: "search.web", arguments: { query: "AlterX" }, required_connector: "github", credential_ref: reference }));
+    expect(result).toMatchObject({ output: {} });
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({ tenant_id: TENANT_ID, run_id: RUN_ID, credential_ref: reference }));
+    invoke.mockClear();
+    const foreign = reference.replace(TENANT_ID.slice(4), OTHER_TENANT_ID.slice(4));
+    await handler.execute(context({ tool_name: "search.web", arguments: {}, required_connector: "github", credential_ref: foreign }));
+    expect(invoke).not.toHaveBeenCalled();
+  });
   it("invokes Tool Gateway with exact snake_case wire fields", async () => {
     const invoke = vi.fn().mockResolvedValue({
       output_json: JSON.stringify({ results: [{ title: "AlterX" }] }),
@@ -271,4 +284,14 @@ describe("ToolCallHandler", () => {
       expect(JSON.parse(invoke.mock.calls[0]![0].input_json).body).toEqual({ $from: "open", path: "sessionId" });
     });
   });
+});
+
+
+it("keeps a named credential gap through the handler and recovery classifier", async () => {
+  const handler = new ToolCallHandler(gateway(async () => { throw new ToolGatewayClientError("credential_missing", false); }));
+  const result = await handler.execute(context());
+  const details = ProblemDetailsSchema.parse(result.output);
+  expect(details).toMatchObject({ status: 424, error_code: "CREDENTIAL_MISSING", retryable: false });
+  expect(result.metadata).toMatchObject({ execution_status: "failed" });
+  expect(classifyNodeFailure({ nodeType: "ToolCall", attempt: 1, error: { code: details.error_code, detail: details.detail } }, { trace_id: details.trace_id, request_id: details.request_id }).failureClass).toBe("credential_missing");
 });

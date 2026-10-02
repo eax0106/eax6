@@ -29,14 +29,16 @@ class InvokeToolResponse(_message.Message):
     def __init__(self, output_json: _Optional[str] = ..., audit_id: _Optional[str] = ...) -> None: ...
 
 class ResolveCredentialRequest(_message.Message):
-    __slots__ = ("tenant_id", "integration_id", "credential_ref")
+    __slots__ = ("tenant_id", "integration_id", "credential_ref", "run_id")
     TENANT_ID_FIELD_NUMBER: _ClassVar[int]
     INTEGRATION_ID_FIELD_NUMBER: _ClassVar[int]
     CREDENTIAL_REF_FIELD_NUMBER: _ClassVar[int]
+    RUN_ID_FIELD_NUMBER: _ClassVar[int]
     tenant_id: str
     integration_id: str
     credential_ref: str
-    def __init__(self, tenant_id: _Optional[str] = ..., integration_id: _Optional[str] = ..., credential_ref: _Optional[str] = ...) -> None: ...
+    run_id: str
+    def __init__(self, tenant_id: _Optional[str] = ..., integration_id: _Optional[str] = ..., credential_ref: _Optional[str] = ..., run_id: _Optional[str] = ...) -> None: ...
 
 class ResolveCredentialResponse(_message.Message):
     __slots__ = ("resolved_reference", "expires_at")

@@ -1,6 +1,7 @@
 import { Client } from "pg";
 
 import type { JsonValue, SecretsProvider } from "@alterx/shared-clients";
+import { ToolGatewayCredentialMissingError } from "../grpc/toolgw-grpc-transport";
 
 export type DatabaseOperation = "select" | "insert" | "update" | "delete";
 const DATABASE_OPERATIONS = new Set<DatabaseOperation>([
@@ -123,9 +124,13 @@ export class PostgresToolDatabaseProvider
     const connectionString = await this.#secrets.getSecret(
       request.credentialReference,
     );
+    let protocol: string;
+    try { protocol = new URL(connectionString).protocol; }
+    catch { throw new ToolGatewayCredentialMissingError(); }
+    if (protocol !== "postgres:" && protocol !== "postgresql:") throw new ToolGatewayCredentialMissingError();
     const client = this.#clientFactory(connectionString);
-    await client.connect();
     try {
+      await client.connect();
       const result = await client.query({
         text: request.statement,
         values: request.parameters.map(pgValue),
@@ -134,6 +139,9 @@ export class PostgresToolDatabaseProvider
         rowCount: result.rowCount ?? result.rows.length,
         rows: jsonRows(result.rows),
       };
+    } catch (error) {
+      if (typeof error === "object" && error !== null && "code" in error && (error.code === "28P01" || error.code === "28000")) throw new ToolGatewayCredentialMissingError();
+      throw error;
     } finally {
       await client.end();
     }

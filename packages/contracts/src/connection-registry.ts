@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { TenantIdSchema, RunIdSchema } from "./ids";
 
 export const ConnectorTypeSchema = z.string().regex(/^[a-z][a-z0-9._-]{0,63}$/);
 const uuid = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
@@ -37,3 +38,10 @@ export const ConnectionRegistrySnapshotSchema = z.object({
 });
 
 export type ConnectionRegistrySnapshot = z.infer<typeof ConnectionRegistrySnapshotSchema>;
+
+export const ConnectionCredentialLookupSchema = z.object({
+  tenant_id: TenantIdSchema,
+  run_id: RunIdSchema,
+  credential_ref: ConnectionSecretReferenceSchema,
+}).strict();
+export type ConnectionCredentialLookup = z.infer<typeof ConnectionCredentialLookupSchema>;

@@ -221,6 +221,7 @@ export {
   ToolGatewayNotImplementedError,
   ToolGatewayPermissionError,
   ToolGatewayRateLimitError,
+  ToolGatewayCredentialMissingError,
   ToolGatewayValidationError,
   ToolgwGrpcController,
   startToolgwGrpcTransport,

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x61lter/toolgw/v1/toolgw.proto\x12\x0f\x61lter.toolgw.v1\"\x97\x01\n\x11InvokeToolRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x19\n\x11node_execution_id\x18\x03 \x01(\t\x12\x11\n\ttool_name\x18\x04 \x01(\t\x12\x12\n\ninput_json\x18\x05 \x01(\t\x12\x16\n\x0e\x63redential_ref\x18\x06 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"B\n\x12InvokeToolResponse\x12\x13\n\x0boutput_json\x18\x01 \x01(\t\x12\x10\n\x08\x61udit_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"d\n\x18ResolveCredentialRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x16\n\x0eintegration_id\x18\x02 \x01(\t\x12\x16\n\x0e\x63redential_ref\x18\x03 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"R\n\x19ResolveCredentialResponse\x12\x1a\n\x12resolved_reference\x18\x01 \x01(\t\x12\x12\n\nexpires_at\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\x80\x01\n\x0f\x46\x65tchUrlRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x19\n\x11node_execution_id\x18\x03 \x01(\t\x12\x0b\n\x03url\x18\x04 \x01(\t\x12\x1b\n\x13network_policy_json\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"K\n\x10\x46\x65tchUrlResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\r\x12\x1b\n\x13\x63ontent_artifact_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\x32\xa3\x02\n\rToolgwService\x12U\n\nInvokeTool\x12\".alter.toolgw.v1.InvokeToolRequest\x1a#.alter.toolgw.v1.InvokeToolResponse\x12j\n\x11ResolveCredential\x12).alter.toolgw.v1.ResolveCredentialRequest\x1a*.alter.toolgw.v1.ResolveCredentialResponse\x12O\n\x08\x46\x65tchUrl\x12 .alter.toolgw.v1.FetchUrlRequest\x1a!.alter.toolgw.v1.FetchUrlResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x61lter/toolgw/v1/toolgw.proto\x12\x0f\x61lter.toolgw.v1\"\x97\x01\n\x11InvokeToolRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x19\n\x11node_execution_id\x18\x03 \x01(\t\x12\x11\n\ttool_name\x18\x04 \x01(\t\x12\x12\n\ninput_json\x18\x05 \x01(\t\x12\x16\n\x0e\x63redential_ref\x18\x06 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"B\n\x12InvokeToolResponse\x12\x13\n\x0boutput_json\x18\x01 \x01(\t\x12\x10\n\x08\x61udit_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\x84\x01\n\x18ResolveCredentialRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x16\n\x0eintegration_id\x18\x02 \x01(\t\x12\x16\n\x0e\x63redential_ref\x18\x03 \x01(\t\x12\x13\n\x06run_id\x18\x04 \x01(\tH\x00\x88\x01\x01\x42\t\n\x07_run_idJ\x05\x08\x64\x10\xc8\x01\"R\n\x19ResolveCredentialResponse\x12\x1a\n\x12resolved_reference\x18\x01 \x01(\t\x12\x12\n\nexpires_at\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\x80\x01\n\x0f\x46\x65tchUrlRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x0e\n\x06run_id\x18\x02 \x01(\t\x12\x19\n\x11node_execution_id\x18\x03 \x01(\t\x12\x0b\n\x03url\x18\x04 \x01(\t\x12\x1b\n\x13network_policy_json\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"K\n\x10\x46\x65tchUrlResponse\x12\x13\n\x0bstatus_code\x18\x01 \x01(\r\x12\x1b\n\x13\x63ontent_artifact_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\x32\xa3\x02\n\rToolgwService\x12U\n\nInvokeTool\x12\".alter.toolgw.v1.InvokeToolRequest\x1a#.alter.toolgw.v1.InvokeToolResponse\x12j\n\x11ResolveCredential\x12).alter.toolgw.v1.ResolveCredentialRequest\x1a*.alter.toolgw.v1.ResolveCredentialResponse\x12O\n\x08\x46\x65tchUrl\x12 .alter.toolgw.v1.FetchUrlRequest\x1a!.alter.toolgw.v1.FetchUrlResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -35,14 +35,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_INVOKETOOLREQUEST']._serialized_end=201
   _globals['_INVOKETOOLRESPONSE']._serialized_start=203
   _globals['_INVOKETOOLRESPONSE']._serialized_end=269
-  _globals['_RESOLVECREDENTIALREQUEST']._serialized_start=271
-  _globals['_RESOLVECREDENTIALREQUEST']._serialized_end=371
-  _globals['_RESOLVECREDENTIALRESPONSE']._serialized_start=373
-  _globals['_RESOLVECREDENTIALRESPONSE']._serialized_end=455
-  _globals['_FETCHURLREQUEST']._serialized_start=458
-  _globals['_FETCHURLREQUEST']._serialized_end=586
-  _globals['_FETCHURLRESPONSE']._serialized_start=588
-  _globals['_FETCHURLRESPONSE']._serialized_end=663
-  _globals['_TOOLGWSERVICE']._serialized_start=666
-  _globals['_TOOLGWSERVICE']._serialized_end=957
+  _globals['_RESOLVECREDENTIALREQUEST']._serialized_start=272
+  _globals['_RESOLVECREDENTIALREQUEST']._serialized_end=404
+  _globals['_RESOLVECREDENTIALRESPONSE']._serialized_start=406
+  _globals['_RESOLVECREDENTIALRESPONSE']._serialized_end=488
+  _globals['_FETCHURLREQUEST']._serialized_start=491
+  _globals['_FETCHURLREQUEST']._serialized_end=619
+  _globals['_FETCHURLRESPONSE']._serialized_start=621
+  _globals['_FETCHURLRESPONSE']._serialized_end=696
+  _globals['_TOOLGWSERVICE']._serialized_start=699
+  _globals['_TOOLGWSERVICE']._serialized_end=990
 # @@protoc_insertion_point(module_scope)
