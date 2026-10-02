@@ -21,7 +21,7 @@ Scope: Tool Gateway resolves user connection credentials through current engine 
   EXPECT: connection-runtime-wiring-passed
   EVIDENCE: pending
 
-- [ ] G4: Disabling scope/status, opaque revalidation, lookup authentication or named gRPC error mapping fails the relevant native assertion; restored sources pass
+- [ ] G4: Disabling scope/status, opaque revalidation, lookup authentication, database authentication classification or named gRPC error mapping fails the relevant native assertion; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: connection-runtime-negative-passed
   EVIDENCE: pending
