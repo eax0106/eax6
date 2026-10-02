@@ -814,6 +814,18 @@ export interface WhatsAppChannel {
   createdAt: string
 }
 
+export interface WhatsAppTemplate {
+  name: string
+  language: string
+  status: string
+}
+
+export interface WhatsAppTestMessage {
+  to: string
+  templateName: string
+  languageCode: string
+}
+
 
 
 
