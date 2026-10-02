@@ -11,6 +11,8 @@ import {
   ORCHESTRATION_DELETION_TOKEN_HASH,
 } from "./deletion/deletion.controller";
 import { OrchestrationDeletionService } from "./deletion/deletion.service";
+import { ConnectionRegistryController, CONNECTION_REGISTRY_TOKEN_HASH } from "./connections/connection-registry.controller";
+import { ConnectionRegistryService } from "./connections/connection-registry.service";
 import { DeletionRequestController } from "./deletion/deletion-request.controller";
 import {
   EVAL_FACADE_CONFIG,
@@ -49,8 +51,17 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
     DeletionRequestController,
     EvalFacadeController,
     DeploymentAdminController,
+    ConnectionRegistryController,
   ],
   providers: [
+    {
+      provide: CONNECTION_REGISTRY_TOKEN_HASH,
+      useFactory: () => requireSha256Fingerprint(process.env.CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256, "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"),
+    },
+    {
+      provide: ConnectionRegistryService,
+      useFactory: () => new ConnectionRegistryService(orchestrationStore(sessionGatewayEnvironment(process.env))),
+    },
     {
       provide: EVAL_FACADE_CONFIG,
       useFactory: () => loadEvalFacadeEnvironment(process.env),
@@ -114,6 +125,6 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
       },
     },
   ],
-  exports: [EvalFacadeService],
+  exports: [EvalFacadeService, ConnectionRegistryService],
 })
 export class OperationsModule {}

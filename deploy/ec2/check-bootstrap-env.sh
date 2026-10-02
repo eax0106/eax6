@@ -32,7 +32,8 @@ docker run --rm -v "$work:/repo" -w /repo/deploy/ec2 -e PATH="/repo/stub:/usr/lo
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   bash:5 bash -c 'apk add --no-cache openssl python3 >/dev/null; bash bootstrap.sh --env-only;
     cp .db-roles.env .db-roles.first; bash bootstrap.sh --env-only;
-    chown "$HOST_UID:$HOST_GID" .env .env.base .db-roles.env .db-roles.first .session.env' >/dev/null
+    cp .session.env .session.first; bash bootstrap.sh --env-only;
+    chown "$HOST_UID:$HOST_GID" .env .env.base .db-roles.env .db-roles.first .session.env .session.first' >/dev/null
 
 env_file="$work/deploy/ec2/.env"
 fail() { echo "FAIL $*"; exit 1; }
@@ -70,6 +71,10 @@ for job in NOTIFICATION_DIGEST_SYSTEM_DATABASE_URL CONNECTOR_HEALTH_SWEEP_SYSTEM
 done
 grep -q "$(awk -F= '$1=="PLATFORM_APP_DB_PASSWORD"{print $2}' "$roles_file")" <<<"$(value DATABASE_URL)" || fail "DATABASE_URL does not carry the generated role password"
 cmp -s "$roles_file" "$work/deploy/ec2/.db-roles.first" || fail "role passwords changed on a re-run"
+cmp -s "$work/deploy/ec2/.session.env" "$work/deploy/ec2/.session.first" || fail "service tokens changed on a re-run"
+[[ "$(value CONNECTION_REGISTRY_SERVICE_TOKEN_REF)" == env:CONNECTION_REGISTRY_SERVICE_TOKEN ]] || fail "registry token reference differs"
+registry_hash="$(printf %s "$(value CONNECTION_REGISTRY_SERVICE_TOKEN)" | openssl dgst -sha256 -r | cut -d' ' -f1)"
+[[ "$(value CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256)" == "$registry_hash" ]] || fail "registry token fingerprint differs"
 [[ "$(stat -c %a "$roles_file" 2>/dev/null || stat -f %Lp "$roles_file")" == 600 ]] || fail ".db-roles.env is not 0600"
 # KEEP_ENV_AT=<path>: leave a copy of the generated .env for
 # check-production-config.ts (task 6.1d), which needs the repository's

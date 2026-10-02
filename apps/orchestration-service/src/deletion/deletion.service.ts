@@ -38,6 +38,7 @@ const WEBHOOK_SECRETS_LOCATION = "secrets:alter/webhook-endpoints";
 // real, production array against a live schema -- not a hand-copied
 // duplicate of it that could itself silently drift from this one.
 export const TABLES = [
+  "connection_registry",
   "trigger_webhook_secrets",
   "workflow_template_variable_values", "workflow_template_variable_definitions",
   "workflows", "workflow_versions", "triggers", "trigger_versions", "clarifications", "conversations",
@@ -69,6 +70,7 @@ export const TABLES = [
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
+  "connection_registry",
   "workspace_holds", "workspace_run_retention", "approval_step_policies", "budget_reservations", "budget_usage", "budgets", "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
   "deployments", "artifacts", "escalations", "project_plans", "recovery_actions",
   "run_dispatch_queue", "run_outcomes", "run_stream_events", "side_effects", "trigger_integration_bindings",
@@ -259,6 +261,7 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
            UNION SELECT tenant_id FROM workflow_template_variable_definitions
            UNION SELECT tenant_id FROM workflow_template_variable_values
            UNION SELECT tenant_id FROM clarifications
+           UNION SELECT tenant_id FROM connection_registry
            UNION SELECT tenant_id FROM triggers UNION SELECT tenant_id FROM trigger_versions
            UNION SELECT tenant_id FROM conversations UNION SELECT tenant_id FROM conversation_goal_states
            UNION SELECT tenant_id FROM events UNION SELECT tenant_id FROM runs

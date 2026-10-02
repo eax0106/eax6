@@ -52,6 +52,7 @@ export interface OAuthConnectionRecord {
   readonly id: string;
   readonly workspaceId: string;
   readonly connector: ConnectorId;
+  readonly sourceRevision: number;
   readonly externalAccountId: string;
   readonly scopes: string;
   readonly status: OAuthConnectionStatus;
@@ -73,6 +74,7 @@ export interface OAuthConnectionView {
   readonly last_health_checked_at: string | null;
   readonly created_at: string;
   readonly version: string;
+  readonly engine_synced?: boolean;
 }
 
 export interface OAuthRevokeView extends OAuthConnectionView {

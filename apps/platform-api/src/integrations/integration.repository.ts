@@ -37,6 +37,7 @@ interface OAuthConnectionRow {
   id: string;
   workspace_id: string;
   connector: string;
+  source_revision: number;
   external_account_id: string;
   scopes: string;
   status: string;
@@ -174,12 +175,17 @@ export class IntegrationRepository implements OnModuleDestroy {
   createConnection(
     tenantId: string,
     input: CreateOAuthConnectionInput,
+    persistReference?: (connectionId: string) => Promise<void>,
   ): Promise<OAuthConnectionRecord> {
     return this.withTenant(tenantId, async (client) => {
       const result = await client.query<OAuthConnectionRow>(
         `INSERT INTO oauth_connections
            (tenant_id, id, workspace_id, connector, external_account_id, scopes)
          VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (tenant_id, workspace_id, connector, external_account_id) DO UPDATE SET
+           scopes=EXCLUDED.scopes, status='connected', last_health_status=NULL,
+           last_health_checked_at=NULL, revoked_at=NULL, updated_at=clock_timestamp(),
+           source_revision=oauth_connections.source_revision+1
          RETURNING *`,
         [
           tenantId,
@@ -190,7 +196,10 @@ export class IntegrationRepository implements OnModuleDestroy {
           input.scopes,
         ],
       );
-      return mapConnectionRow(result.rows[0]!);
+      const record = mapConnectionRow(result.rows[0]!);
+      // The account's unique row serializes reconnects through secret persistence.
+      await persistReference?.(record.id);
+      return record;
     });
   }
 
@@ -236,6 +245,7 @@ export class IntegrationRepository implements OnModuleDestroy {
         `UPDATE oauth_connections
          SET last_health_status = $4,
              last_health_checked_at = $5,
+             source_revision = source_revision + 1,
              updated_at = clock_timestamp()
          WHERE tenant_id = $1 AND workspace_id = $2 AND id = $3
          RETURNING *`,
@@ -255,6 +265,7 @@ export class IntegrationRepository implements OnModuleDestroy {
         `UPDATE oauth_connections
          SET status = 'revoked',
              revoked_at = clock_timestamp(),
+             source_revision = source_revision + 1,
              updated_at = clock_timestamp()
          WHERE tenant_id = $1 AND workspace_id = $2 AND id = $3
          RETURNING *`,
@@ -396,6 +407,7 @@ function mapConnectionRow(row: OAuthConnectionRow): OAuthConnectionRecord {
     id: row.id,
     workspaceId: row.workspace_id,
     connector: row.connector as ConnectorId,
+    sourceRevision: row.source_revision,
     externalAccountId: row.external_account_id,
     scopes: row.scopes,
     status: row.status as OAuthConnectionRecord["status"],

@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-export interface ActiveConnectionRef {
+export interface ConnectionRef {
   readonly tenantId: string;
   readonly workspaceId: string;
   readonly id: string;
@@ -21,7 +21,7 @@ export interface ActiveConnectionRef {
 export class SystemIntegrationStore {
   constructor(private readonly pool: Pool | undefined) {}
 
-  async listActiveConnections(): Promise<ActiveConnectionRef[]> {
+  async listConnections(): Promise<ConnectionRef[]> {
     if (!this.pool) {
       throw new SystemIntegrationStoreNotConfiguredError();
     }
@@ -29,7 +29,7 @@ export class SystemIntegrationStore {
       tenant_id: string;
       workspace_id: string;
       id: string;
-    }>(`SELECT tenant_id, workspace_id, id FROM oauth_connections WHERE status = 'connected'`);
+    }>(`SELECT tenant_id, workspace_id, id FROM oauth_connections`);
     return result.rows.map((row) => ({
       tenantId: row.tenant_id,
       workspaceId: row.workspace_id,

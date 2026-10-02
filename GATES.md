@@ -1,30 +1,28 @@
-# Gates: D13 recovery clarification routes (C95)
+# Gates: engine connection registry and lifecycle synchronization (C99)
 
-OWNS: apps/orchestration-service/src/recovery/**, apps/orchestration-service/src/registry/**, apps/orchestration-service/src/clarifications/**, apps/orchestration-service/src/execution-runtime.module.ts, apps/orchestration-service/db/schema/clarifications.ts, apps/orchestration-service/drizzle/**, apps/orchestration-service/src/database/**, apps/orchestration-service/src/deletion/**, apps/platform-web/src/api/**, packages/adapters/src/grpc/nodeexec-grpc-transport*, packages/adapters/src/temporal/activities/executor-activities*, docs/work-queue.md
+OWNS: apps/orchestration-service/src/connections/**, apps/orchestration-service/src/operations.module.ts, apps/orchestration-service/src/deletion/**, apps/orchestration-service/src/database/migration-files.spec.ts, apps/orchestration-service/db/schema/connection_registry.ts, apps/orchestration-service/drizzle/0050*, apps/orchestration-service/drizzle/rollback/0050*, apps/orchestration-service/drizzle/meta/_journal.json, apps/platform-api/src/integrations/**, apps/platform-api/src/engine/connection-registry-client*, apps/platform-api/src/engine/engine.module.ts, apps/platform-api/src/db/schema/platform.ts, apps/platform-api/src/db/migrations/0032*, apps/platform-api/src/db/migrations/rollback/0032*, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-api/src/db/migration-journal.spec.ts, packages/contracts/src/connection-registry*, packages/contracts/src/index.ts, packages/deletion-registry/src/declaration.ts, deploy/ec2/**, scripts/bootstrap-env-local.sh, apps/platform-api/.env.example, docs/work-queue.md, scripts/gates/baseline.json, .env.local.example, apps/platform-api/src/config/env.schema*, apps/platform-api/src/health/health.controller.spec.ts, apps/orchestration-service/src/health/health.controller.spec.ts
 
-Scope: Missing targets produce a redirect/recreate question. Ambiguous side effects require clarification without retry or swap, including promoted policies and repeated recovery. Existing tenant-scoped clarification and D1 notice routes carry the request.
+Scope: Engine stores tenant/workspace-scoped connection snapshots containing connector, status and reference only. Authenticated platform lifecycle writes and the existing health sweep synchronize every state with ordered source revisions, including lost revoke/health updates. Compiler preflight and Tool Gateway consumption are the next dependent leaf; I11 remains incomplete until those paths are verified.
 
-- [x] G1: Recovery dispatch persists real tenant-scoped clarifications with the correct questions and never retries ambiguous side effects
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/recovery/recovery-clarification.integration.spec.ts apps/orchestration-service/src/recovery/recovery-dispatch.service.spec.ts -t 'Postgres|HTTP|RecoveryDispatch' && echo recovery-clarification-passed
-  EXPECT: recovery-clarification-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b0f94b0f36247f172dfc55c4ef55b857bc6d4c9389395f7cf4296711e1b9e98c; exit=0; EXPECT=matched; output-sha256=701d242cbdcf1fe221044a4f48878644ac9ca6a370f5d775c93b4d4757a23ee7; output-bytes=665; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+- [x] G1: Restricted PostgreSQL and authenticated engine HTTP enforce reference-only snapshots, tenant/workspace isolation, ordered idempotent updates and complete tenant/workspace erasure
+  CHECK: node .unlazy/verify-engine.mjs
+  EXPECT: connection-registry-engine-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=254849e0b90089eb04655a7227537cd319ad14f268941d6f2b8c01c0d18d1d79; exit=0; EXPECT=matched; output-sha256=77b5152369fb9b5fa0fcb0f854a90a7ac459374bf87252b41a71ce82d34d82c3; output-bytes=98; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Actual tool and node producers emit missing-target and ambiguous-outcome observations, and policy routing stays clarification only
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/registry/nodeexec.service.spec.ts apps/orchestration-service/src/recovery/failure-classifier.spec.ts apps/orchestration-service/src/recovery/recovery-strategy-table.spec.ts packages/adapters/src/grpc/nodeexec-grpc-transport.spec.ts packages/adapters/src/temporal/activities/executor-activities.spec.ts && echo recovery-producers-passed
-  EXPECT: recovery-producers-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=e479e61c4a543d50ec30fb3925773ec7ffbb7d8fb9302d21109881493d15dc73; exit=0; EXPECT=matched; output-sha256=72911532ad4a1e8abb00f4bcfaba701a4c66d0fae34bfe11fb877ad334090b4c; output-bytes=2228; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+- [x] G2: Real platform persistence and the production HTTP client synchronize connect, health and revoke; the sweep heals missed updates for every connection state without destroying saved credentials
+  CHECK: node .unlazy/verify-platform.mjs
+  EXPECT: connection-registry-lifecycle-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1ce4c348b408ebd7478799782fc5dd3040732ba7a0e16c843f2732913d28b97b; exit=0; EXPECT=matched; output-sha256=f0accf7bd23f7a923f50b64a5b89e834b219efd6e80671d6741a4318cff8a12d; output-bytes=101; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Real Temporal executor parks for clarification and resumes or terminates without replaying uncertain side effects
-  CHECK: node_modules/.bin/vitest run apps/orchestration-service/src/recovery/recovery-clarification.integration.spec.ts -t Temporal && echo recovery-executor-passed
-  EXPECT: recovery-executor-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=7de6882700d9b20af2c6c38afd60db3c81c63b2776152eada381220e5f38e7c2; exit=0; EXPECT=matched; output-sha256=0c9375235e0ab4c2ef73d51b8927cd1e6979eda75667fc2d1d6abf72df5d6bc8; output-bytes=14518; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+- [ ] G3: Existing connector guards, lifecycle regressions, migration/schema checks and local/EC2 configuration carry the actual synchronization credential consistently
+  CHECK: node .unlazy/verify-wiring.mjs
+  EXPECT: connection-registry-wiring-passed
 
-- [x] G4: Original-code and mutation controls fail the behavior checks and restore sources
+- [x] G4: Removed revision checks, reference validation, erasure registration and all-state sweep each fail the corresponding regression assertion and restore their sources
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: recovery-clarification-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1dd6961e3fb5ede88c4cfe95679ddfce1cd5287faa6996da972e90b0ba9ba266; exit=0; EXPECT=matched; output-sha256=e1425edcc980d991f3c7c375895613f7b9b5acb653f2a292389964c5c9fc57b5; output-bytes=620; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+  EXPECT: connection-registry-negative-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=36e4d54a2d423ce1549df9a48b88dba17f0322cd0eaea90179b8bf39a170fbdf; exit=0; EXPECT=matched; output-sha256=bd61b2ccefe9c1bad16f5cfa75211e3e78cb6611832bcc8814782952020d58e5; output-bytes=504; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Builds, typecheck, lint, full affected suites, architecture and zero new AST entries pass
+- [ ] G5: Affected builds, typechecks, lint, full engine and platform coverage, architecture/RBAC, migration rollback pairing and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: recovery-clarification-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b5dc47c3f7c6d9efd82e00770981a78e065e83499578487376c836fe07ddff7f; exit=0; EXPECT=matched; output-sha256=697f2e67cf4eccc6fa6c6e4c46e05c6611c687dd5279cdc1aa447a8445e837a0; output-bytes=483; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-recovery-dispatch-c95; path=b33e9cf43ae9/31 entries
+  EXPECT: connection-registry-full-passed
