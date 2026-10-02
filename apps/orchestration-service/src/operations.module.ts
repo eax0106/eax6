@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { AwsSecretsManagerProvider, EvalServiceClient } from "@alterx/adapters";
+import { loadServiceTokenFingerprint } from "./config/service-token-fingerprint";
 
 import {
   DEPLOYMENT_ADMIN_TOKEN_HASH,
@@ -31,19 +32,6 @@ import {
   sessionGatewayEnvironment,
 } from "./orchestration-infrastructure.module";
 
-/**
- * Requires a 64-char hex SHA-256 fingerprint from the named env var --
- * shared by DEPLOYMENT_ADMIN_TOKEN_HASH and ORCHESTRATION_DELETION_TOKEN_HASH
- * below, the only two callers left after this module's extraction.
- */
-function requireSha256Fingerprint(value: string | undefined, field: string): string {
-  const normalized = value?.trim() ?? "";
-  if (!/^[0-9a-f]{64}$/i.test(normalized)) {
-    throw new Error(`${field} must be a 64-character SHA-256 fingerprint`);
-  }
-  return normalized;
-}
-
 @Module({
   imports: [OrchestrationInfrastructureModule],
   controllers: [
@@ -56,7 +44,7 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
   providers: [
     {
       provide: CONNECTION_REGISTRY_TOKEN_HASH,
-      useFactory: () => requireSha256Fingerprint(process.env.CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256, "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"),
+      useFactory: () => loadServiceTokenFingerprint(process.env, "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"),
     },
     {
       provide: ConnectionRegistryService,
@@ -87,8 +75,8 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
     EvalFacadeService,
     {
       provide: DEPLOYMENT_ADMIN_TOKEN_HASH,
-      useFactory: () => requireSha256Fingerprint(
-        process.env.DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256,
+      useFactory: () => loadServiceTokenFingerprint(
+        process.env,
         "DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256",
       ),
     },
@@ -101,8 +89,8 @@ function requireSha256Fingerprint(value: string | undefined, field: string): str
     },
     {
       provide: ORCHESTRATION_DELETION_TOKEN_HASH,
-      useFactory: () => requireSha256Fingerprint(
-        process.env.DELETION_SERVICE_TOKEN_SHA256,
+      useFactory: () => loadServiceTokenFingerprint(
+        process.env,
         "DELETION_SERVICE_TOKEN_SHA256",
       ),
     },

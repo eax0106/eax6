@@ -2,6 +2,8 @@
 
 OWNS: apps/platform-api/src/admin-tenants/admin-tenants.module.spec.ts, apps/platform-api/src/admin-policy/admin-policy.module.spec.ts, apps/orchestration-service/src/connections/**, apps/orchestration-service/src/operations.module.ts, apps/orchestration-service/src/deletion/**, apps/orchestration-service/src/database/migration-files.spec.ts, apps/orchestration-service/db/schema/connection_registry.ts, apps/orchestration-service/drizzle/0050*, apps/orchestration-service/drizzle/rollback/0050*, apps/orchestration-service/drizzle/meta/_journal.json, apps/platform-api/src/integrations/**, apps/platform-api/src/engine/connection-registry-client*, apps/platform-api/src/engine/engine.module.ts, apps/platform-api/src/db/schema/platform.ts, apps/platform-api/src/db/migrations/0032*, apps/platform-api/src/db/migrations/rollback/0032*, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-api/src/db/migration-journal.spec.ts, packages/contracts/src/connection-registry*, packages/contracts/src/index.ts, packages/deletion-registry/src/declaration.ts, deploy/ec2/**, scripts/bootstrap-env-local.sh, apps/platform-api/.env.example, docs/work-queue.md, scripts/gates/baseline.json, .env.local.example, apps/platform-api/src/config/env.schema*, apps/platform-api/src/health/health.controller.spec.ts, apps/orchestration-service/src/health/health.controller.spec.ts
 
+OWNS: apps/orchestration-service/src/config/service-token-fingerprint.ts, apps/orchestration-service/src/config/service-token-fingerprint.spec.ts
+
 Scope: Engine stores tenant/workspace-scoped connection snapshots containing connector, status and reference only. Authenticated platform lifecycle writes and the existing health sweep synchronize every state with ordered source revisions, including lost revoke/health updates. Compiler preflight and Tool Gateway consumption are the next dependent leaf; I11 remains incomplete until those paths are verified.
 
 - [x] G1: Restricted PostgreSQL and authenticated engine HTTP enforce reference-only snapshots, tenant/workspace isolation, ordered idempotent updates and complete tenant/workspace erasure
@@ -17,7 +19,7 @@ Scope: Engine stores tenant/workspace-scoped connection snapshots containing con
 - [x] G3: Existing connector guards, lifecycle regressions, migration/schema checks and local/EC2 configuration carry the actual synchronization credential consistently
   CHECK: node .unlazy/verify-wiring.mjs
   EXPECT: connection-registry-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b6c25ba09230ef2bd8e1e5a0d68edf55aca0c0536fb725195f5103384ce4a811; exit=0; EXPECT=matched; output-sha256=b6bdff5ef58810050fad1de56c725b533998ee7e7753009fdb2af21feb2132a8; output-bytes=418; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b6c25ba09230ef2bd8e1e5a0d68edf55aca0c0536fb725195f5103384ce4a811; exit=0; EXPECT=matched; output-sha256=dd7ed47bb087f78486e606fe7cbfcb489b80e8ae0832f6465dcc128ab2041221; output-bytes=339; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
 - [x] G4: Removed revision checks, reference validation, erasure registration and all-state sweep each fail the corresponding regression assertion and restore their sources
   CHECK: node .unlazy/negative-controls.mjs
