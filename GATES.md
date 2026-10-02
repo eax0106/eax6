@@ -29,7 +29,7 @@ Scope: Engine stores tenant/workspace-scoped connection snapshots containing con
 - [x] G5: Affected builds, typechecks, lint, full engine and platform coverage, architecture/RBAC, migration rollback pairing and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: connection-registry-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=6080e3169797cbb0f838109cb51cc4cf76f3a72cb7faeca52a13775eb05d8aa7; exit=0; EXPECT=matched; output-sha256=ca5515fb5bff1981516794a4291b1137856f18eaded112ba6d4872ee1ab4c815; output-bytes=488; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=6080e3169797cbb0f838109cb51cc4cf76f3a72cb7faeca52a13775eb05d8aa7; exit=0; EXPECT=matched; output-sha256=0f492802485fe49b7cc705148855f76858bc80fa7970fd74f4cd0c3f6d36956a; output-bytes=488; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
 
 - [x] G6: The complete platform database integration target applies migration SQL repeatedly while preserving its constraints and existing data paths
   CHECK: node .unlazy/verify-migrations.mjs
