@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     auth0_m2m_client_secret: str = ""
     memory_service_base_url: str = "http://localhost:8002"
     internal_service_token: str = ""
+    audit_service_base_url: str = "http://127.0.0.1:3021"
     # SHA-256 of the shared deletion service token audit-service presents to erasure providers.
     deletion_service_token_sha256: str = ""
     # A role that may list every tenant (deletion-ledger replay); empty disables that route.

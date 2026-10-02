@@ -1,25 +1,25 @@
-# Gates: workspace-aware WhatsApp account routes (C102)
+# Gates: internal performance service operations (C105)
 
-OWNS: apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.ts, apps/orchestration-service/src/webhooks/whatsapp-account-registry.service.ts, apps/orchestration-service/src/webhooks/whatsapp-accounts.controller.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-account-delete.integration.spec.ts, apps/orchestration-service/src/webhooks/whatsapp-workspace.integration.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp.service.ts, apps/platform-api/src/channels/whatsapp/whatsapp.isolation.spec.ts, apps/platform-api/src/channels/whatsapp/whatsapp-test-send.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: apps/intelligence-service/src/performance/router.py, apps/intelligence-service/src/performance/repository.py, apps/intelligence-service/src/performance/audit.py, apps/intelligence-service/src/config.py, apps/intelligence-service/src/main.py, apps/intelligence-service/alembic/versions/0009_agent_owner_tenant.py, apps/intelligence-service/tests/test_performance_router.py, apps/intelligence-service/tests/test_migrations.py, apps/intelligence-service/tests/test_deletion.py, apps/memory-service/src/config.py, apps/memory-service/src/drift/router.py, apps/memory-service/src/drift/intelligence_client.py, apps/memory-service/tests/test_drift_integration.py, apps/audit-service/src/audit/performance.fixture.spec.ts, docs/work-queue.md, scripts/gates/baseline.json
 
-Scope: Carry the authenticated workspace through account creation, listing and configuration SQL. Reuse the existing account lookup and provider operations. Native engine HTTP proof uses signed tokens, Redis replay protection and restricted PostgreSQL; the platform provider edge remains a local fixture. No account creation or external send.
+Scope: Apply the established shared service credential to internal performance operations. Check an asserted tenant against the addressed agent, distinguish refusal from absence, and record every validated assertion through the existing audit HTTP service. Keep ordinary RLS and composite foreign keys. Align the memory performance caller with this established credential. Root SC requires both C104 and C105.
 
-- [x] G1: Native signed HTTP and restricted PostgreSQL exercise account registration, listing, configuration and deletion within the authenticated workspace
-  CHECK: node .unlazy/verify-engine.mjs
-  EXPECT: whatsapp-workspace-engine-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=976d8cd9a72ca5d8b282f36b1eb5c88755a3667fb872c0b0a7989faa29a3bb4b; exit=0; EXPECT=matched; output-sha256=049e94db62513cef34e8c8b6384d9dc79bc6ac72731b0fa1d0db5e83c0c02141; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+- [x] G1: Fresh PostgreSQL migrations provision the service role without elevated privileges, preserve an existing runtime role, and the real restricted database and guarded HTTP/audit service exercise valid operations, refusals, absent resources and persisted audit results
+  CHECK: node .unlazy/verify-native.mjs
+  EXPECT: performance-service-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a181c4db12e0520e97e84f1d3fd90cc72185872fb60afbe68e71d7f6753ffc21; exit=0; EXPECT=matched; output-sha256=4e3b6a122b0dd4ca71e1f5780f4ae47d2941349b91cb415d2480da0c8dbd4757; output-bytes=65; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Platform account and escalation reads use the caller workspace, with provider/configuration operations denied before any external edge is touched
-  CHECK: node .unlazy/verify-platform.mjs
-  EXPECT: whatsapp-workspace-platform-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=086a521bdabd50f23a04bea876d44a8cc0b01c3501dcfd1489ca7c623afd3b23; exit=0; EXPECT=matched; output-sha256=162e943dfd4cac61e138bcf19951ba1858ab378854c188f68f27d5b9bca53139; output-bytes=89; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
-
-- [x] G3: Original route/SQL behavior and removed platform list filtering fail the same assertions; restored sources pass
+- [x] G2: Removing role provisioning, credential validation, ownership comparison or audit recording fails its corresponding native check; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: whatsapp-workspace-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=f79b851d7a3422d3a55708dae023fb7bfcbff83ff7388349cc8054a523607910; exit=0; EXPECT=matched; output-sha256=13c5994a38584d5e029311d3268c7c49f26283b3842174ffdd8da97ac81fda88; output-bytes=358; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+  EXPECT: performance-service-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1b09e6f58609cc83a5248991dc0a716f81a2e31a3b6bc8c54ef68e14a9c6f896; exit=0; EXPECT=matched; output-sha256=3906b97885a90edcecb64418c722cfd930dc8fd76ff89d5a5488b16e09a115be; output-bytes=3072; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Full engine and platform suites with coverage, static checks, architecture, RBAC, migration pairing and zero added AST findings pass
+- [x] G3: The real memory/intelligence HTTP drift path uses the configured shared credential, retains workspace/tenant RLS, and passes its existing regression suite
+  CHECK: node .unlazy/verify-memory.mjs
+  EXPECT: performance-service-memory-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=6b7d0911aa536c019c7d20f440bdfa42e22eed5dc23948357cc1f3b98f7c6d8c; exit=0; EXPECT=matched; output-sha256=102f44de0fda1e1ef8ca416bf4cd8dd6a467d54fe189ee6d77f466c81fd1a973; output-bytes=53; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
+
+- [x] G4: Full intelligence, memory and audit suites, Python lint/typechecks/proto checks, audit static checks, migration rollback, architecture, RBAC and zero added AST findings pass
   CHECK: node .unlazy/verify-full.mjs
-  EXPECT: whatsapp-workspace-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=d3843c2ce778c46a77bc2fa588e81f160f00bac785ac9c2fdde8c07b6bcea015; exit=0; EXPECT=matched; output-sha256=11e176b7bc19a85d5eb8ed465883af88de0ac87b7d16888030d36d7716551b92; output-bytes=574; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-whatsapp-scope-c102; path=b33e9cf43ae9/31 entries
+  EXPECT: performance-service-full-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a5a80cdf4b12a18d76f312762c4d629fb0230cab086948dc91508e04f8fb88b7; exit=0; EXPECT=matched; output-sha256=f489e1ccdadceab2720c298b7b4c8f8af54a5a16fc55718ee5fae66b222521a6; output-bytes=573; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-performance-scope-c105; path=b33e9cf43ae9/31 entries
