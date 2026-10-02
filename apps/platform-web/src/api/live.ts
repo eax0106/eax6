@@ -49,6 +49,8 @@ import type {
   IntegrationCategory,
   Connection,
   WhatsAppChannel,
+  WhatsAppTemplate,
+  WhatsAppTestMessage,
 } from "./types"
 
 type AnyRecord = Record<string, any>
@@ -1232,6 +1234,14 @@ function mapConnectionStatus(status: string, healthStatus: unknown): Connection[
 export async function getWhatsAppChannels(): Promise<WhatsAppChannel[]> {
   const body = await apiGet<unknown>("/api/v1/channels/whatsapp/accounts")
   return asArray(body, "accounts").map(mapWhatsAppChannel)
+}
+
+export function getWhatsAppTemplates(id: string): Promise<WhatsAppTemplate[]> {
+  return apiGet(`/api/v1/channels/whatsapp/accounts/${encodeURIComponent(id)}/templates`)
+}
+
+export function testWhatsAppChannel(id: string, message: WhatsAppTestMessage, requestKey: string): Promise<{ messageId: string }> {
+  return apiPost(`/api/v1/channels/whatsapp/accounts/${encodeURIComponent(id)}/test-send`, message, { idempotencyKey: requestKey })
 }
 
 // The real create body (CreateWhatsappAccountInput: workspaceId,
