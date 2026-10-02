@@ -212,3 +212,34 @@ def test_zero_score_weights_are_rejected_at_route_boundary() -> None:
     payload["policy"] = {"reliability_weight": 0, "latency_weight": 0, "cost_weight": 0}
     response = TestClient(app).post("/selection-binding/bind-architecture", json=payload)
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_binding_preserves_registered_connection_requirement() -> None:
+    registered = CapabilityRecord.model_validate(
+        record("connected-model").model_dump() | {"metadata": {"required_connector": "github"}}
+    )
+    outcome = await ArchitectureBinder(Registry([registered])).bind(request())  # type: ignore[arg-type]
+    assert isinstance(outcome, BindingDecision)
+    assert outcome.bindings[0].required_connector == "github"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("declaration", ["Github", "", "../github", 1, True])
+async def test_invalid_registered_connection_requirement_blocks(declaration: object) -> None:
+    registered = CapabilityRecord.model_validate(
+        record("invalid-requirement").model_dump()
+        | {"metadata": {"required_connector": declaration}}
+    )
+    outcome = await ArchitectureBinder(Registry([registered])).bind(request())  # type: ignore[arg-type]
+    assert isinstance(outcome, BindingBlocked)
+    assert outcome.reason == "Registered connector requirement is missing or invalid"
+
+
+@pytest.mark.asyncio
+async def test_connector_record_without_declared_connection_blocks() -> None:
+    registered = CapabilityRecord.model_validate(
+        record("undeclared").model_dump() | {"kind": "connector"}
+    )
+    outcome = await ArchitectureBinder(Registry([registered])).bind(request())  # type: ignore[arg-type]
+    assert isinstance(outcome, BindingBlocked)

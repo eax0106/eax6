@@ -6,7 +6,7 @@ export {
   type ActorTokenClaims,
   type SystemActorTokenClaims,
 } from "./actor-token";
-export { ConnectionRegistrySnapshotSchema, type ConnectionRegistrySnapshot } from "./connection-registry";
+export { ConnectionRegistrySnapshotSchema, ConnectorTypeSchema, ConnectionSecretReferenceSchema, parseConnectionSecretReference, MissingConnectionSchema, ConnectionsRequiredSchema, type ConnectionRegistrySnapshot, type ConnectionsRequired } from "./connection-registry";
 export {
   TriggerStatusSchema,
   TriggerTypeSchema,

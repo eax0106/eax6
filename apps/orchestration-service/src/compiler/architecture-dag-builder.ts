@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CompiledDagSchema, type CompiledDag, type NodeType } from "@alterx/contracts";
+import { ConnectorTypeSchema, CompiledDagSchema, type CompiledDag, type NodeType } from "@alterx/contracts";
 
 import { CompilerValidationError, computeWaves, extractGateConditions, validateGateConditionCoverage } from "./dag-builder";
 
@@ -47,6 +47,7 @@ const BindingDecision = z.object({
   bindings: z.array(z.object({
     record_id: z.string().min(1), version: z.number().int().positive(), kind: CapabilityKind,
     source_node_key: NodeKey, rationale: z.string().min(1), score: z.number().min(0).max(1), factors: z.record(z.string(), z.number()),
+    required_connector: ConnectorTypeSchema.nullish(),
   }).strict()),
 }).strict();
 
@@ -113,7 +114,11 @@ export function compileArchitectureToDag(raw: ArchitectureCompileInput): Compile
     // The node's own configuration first, then the binding's identifiers on
     // top -- binding metadata is chosen here and must win over anything a
     // skeleton happened to carry under the same keys.
-    const bindingConfig = binding === undefined ? {} : { capability_record_id: binding.record_id, capability_version: binding.version };
+    if (binding?.kind === "connector" && binding.required_connector == null) throw new CompilerValidationError(`connector binding needs required_connector: ${node.source_node_key}`);
+    const bindingConfig = binding === undefined ? {} : {
+      capability_record_id: binding.record_id, capability_version: binding.version,
+      ...(binding.required_connector == null ? {} : { required_connector: binding.required_connector }),
+    };
     return {
       key: node.source_node_key,
       type: nodeType(node, binding),

@@ -1,37 +1,35 @@
-# Gates: engine connection registry and lifecycle synchronization (C99)
+# Gates: D19 connection compile preflight (C100)
 
-OWNS: apps/platform-api/src/admin-tenants/admin-tenants.module.spec.ts, apps/platform-api/src/admin-policy/admin-policy.module.spec.ts, apps/orchestration-service/src/connections/**, apps/orchestration-service/src/operations.module.ts, apps/orchestration-service/src/deletion/**, apps/orchestration-service/src/database/migration-files.spec.ts, apps/orchestration-service/db/schema/connection_registry.ts, apps/orchestration-service/drizzle/0050*, apps/orchestration-service/drizzle/rollback/0050*, apps/orchestration-service/drizzle/meta/_journal.json, apps/platform-api/src/integrations/**, apps/platform-api/src/engine/connection-registry-client*, apps/platform-api/src/engine/engine.module.ts, apps/platform-api/src/db/schema/platform.ts, apps/platform-api/src/db/migrations/0032*, apps/platform-api/src/db/migrations/rollback/0032*, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-api/src/db/migration-journal.spec.ts, packages/contracts/src/connection-registry*, packages/contracts/src/index.ts, packages/deletion-registry/src/declaration.ts, deploy/ec2/**, scripts/bootstrap-env-local.sh, apps/platform-api/.env.example, docs/work-queue.md, scripts/gates/baseline.json, .env.local.example, apps/platform-api/src/config/env.schema*, apps/platform-api/src/health/health.controller.spec.ts, apps/orchestration-service/src/health/health.controller.spec.ts
+OWNS: packages/contracts/src/index.ts, packages/contracts/src/connection-registry.ts, packages/contracts/src/workflow-dag.ts, apps/intelligence-service/src/selection_binding/**, apps/intelligence-service/tests/test_architecture_binding.py, apps/orchestration-service/src/compiler/**, apps/orchestration-service/src/connections/connection-preflight*, apps/orchestration-service/src/workflow-read/**, packages/adapters/src/index.ts, packages/adapters/src/grpc/compiler*, apps/platform-api/src/planner-facade/**, apps/platform-web/src/api/**, apps/platform-web/src/features/workflows/pages/workflow-create*, docs/work-queue.md, scripts/gates/baseline.json
 
-OWNS: apps/orchestration-service/src/config/service-token-fingerprint.ts, apps/orchestration-service/src/config/service-token-fingerprint.spec.ts
+Scope: Preserve explicit registered connector requirements and preflight every compile entry point against engine workspace records, returning one complete batch to the actual planner and web retry flow before any version is saved. Registry lifecycle is C99; runtime credential consumption remains the separately required next slice of I11.
 
-Scope: Engine stores tenant/workspace-scoped connection snapshots containing connector, status and reference only. Authenticated platform lifecycle writes and the existing health sweep synchronize every state with ordered source revisions, including lost revoke/health updates. Compiler preflight and Tool Gateway consumption are the next dependent leaf; I11 remains incomplete until those paths are verified.
+- [x] G1: Real restricted PostgreSQL and native compiler transport exercise all three compile entry points, complete missing batches, connected references, tenant/workspace scope, revocation and zero inserted versions on gaps
+  CHECK: node .unlazy/verify-native.mjs
+  EXPECT: connection-preflight-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=8d0c0caf2994df74b3e0cf857e90f7cba311feaf2e669ec276b8a9c3d29bb501; exit=0; EXPECT=matched; output-sha256=6ac22f5d59e3babbcbc043b5deacc810ebf1896a7716cb8fa48253aded8110c1; output-bytes=411; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-consumption-c100; path=b33e9cf43ae9/31 entries
 
-- [x] G1: Restricted PostgreSQL and authenticated engine HTTP enforce reference-only snapshots, tenant/workspace isolation, ordered idempotent updates and complete tenant/workspace erasure
-  CHECK: node .unlazy/verify-engine.mjs
-  EXPECT: connection-registry-engine-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=254849e0b90089eb04655a7227537cd319ad14f268941d6f2b8c01c0d18d1d79; exit=0; EXPECT=matched; output-sha256=77b5152369fb9b5fa0fcb0f854a90a7ac459374bf87252b41a71ce82d34d82c3; output-bytes=98; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+- [x] G2: Registry binding preserves declared connector requirements and rejects invalid declarations; existing capability selection and intelligence checks pass
+  CHECK: node .unlazy/verify-binding.mjs
+  EXPECT: connection-preflight-binding-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=838f1394a5a1ed5a7f32e4c3071dbbb894530001e7ce61f5c62b107c8f08d42b; exit=0; EXPECT=matched; output-sha256=78924dcfaa1ace79b32caf8da432475470ae72b855fffade4f5458553aebbc22; output-bytes=36; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-consumption-c100; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Real platform persistence and the production HTTP client synchronize connect, health and revoke; the sweep heals missed updates for every connection state without destroying saved credentials
-  CHECK: node .unlazy/verify-platform.mjs
-  EXPECT: connection-registry-lifecycle-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1ce4c348b408ebd7478799782fc5dd3040732ba7a0e16c843f2732913d28b97b; exit=0; EXPECT=matched; output-sha256=f0accf7bd23f7a923f50b64a5b89e834b219efd6e80671d6741a4318cff8a12d; output-bytes=101; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+- [x] G3: Native compiler response reaches the platform planner and live web flow as one complete batch; connect and retry preserve original goal, answers and workflow identity without reporting compilation early
+  CHECK: node .unlazy/verify-flow.mjs
+  EXPECT: connection-preflight-flow-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=fb68748269881880a75552b0b3beb63e837df198a0d8695f272e5b7ea2bc8c5f; exit=0; EXPECT=matched; output-sha256=27d35d9c1207999ee617a20af91922f3f5db8b25e3fbacfc3a2f24323db9aa82; output-bytes=784; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-consumption-c100; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Existing connector guards, lifecycle regressions, migration/schema checks and local/EC2 configuration carry the actual synchronization credential consistently
-  CHECK: node .unlazy/verify-wiring.mjs
-  EXPECT: connection-registry-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b6c25ba09230ef2bd8e1e5a0d68edf55aca0c0536fb725195f5103384ce4a811; exit=0; EXPECT=matched; output-sha256=5572487c21852611038765b4107003060903c952e6823aa40d7f32097a7d4fa2; output-bytes=339; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Removed revision checks, reference validation, erasure registration and all-state sweep each fail the corresponding regression assertion and restore their sources
+- [x] G4: Disabling registry status/scope checks, batching, binding propagation or web handling causes the relevant native assertion to fail; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: connection-registry-negative-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=36e4d54a2d423ce1549df9a48b88dba17f0322cd0eaea90179b8bf39a170fbdf; exit=0; EXPECT=matched; output-sha256=bd61b2ccefe9c1bad16f5cfa75211e3e78cb6611832bcc8814782952020d58e5; output-bytes=504; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+  EXPECT: connection-preflight-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=4db1de1b4efc93e0e4f2291b8ac3db78440bd32456d008a136fb6e4b9f615f1f; exit=0; EXPECT=matched; output-sha256=c3027cf358fcaa81fa46788d5b2c27703aec99088ede311fa70cc49f3a9497da; output-bytes=27682; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-consumption-c100; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Affected builds, typechecks, lint, full engine and platform coverage, architecture/RBAC, migration rollback pairing and zero added AST findings pass
-  CHECK: node .unlazy/verify-full.mjs
-  EXPECT: connection-registry-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=6080e3169797cbb0f838109cb51cc4cf76f3a72cb7faeca52a13775eb05d8aa7; exit=0; EXPECT=matched; output-sha256=0f492802485fe49b7cc705148855f76858bc80fa7970fd74f4cd0c3f6d36956a; output-bytes=488; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+- [x] G5: Full touched engine, adapters, platform coverage and web suites pass alongside additive contract compatibility
+  CHECK: node .unlazy/verify-regression.mjs
+  EXPECT: connection-preflight-regression-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=214dc5309b53de66037765d998d29e86c6e9fecc68017e27ee30a592b32222be; exit=0; EXPECT=matched; output-sha256=e2b6ade9f9b58e34ff62fdb8aa0cd80bb4c8f82f181bd69a8daf7610a8e2dac3; output-bytes=272596; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-consumption-c100; path=b33e9cf43ae9/31 entries
 
-- [x] G6: The complete platform database integration target applies migration SQL repeatedly while preserving its constraints and existing data paths
-  CHECK: node .unlazy/verify-migrations.mjs
-  EXPECT: connection-registry-migrations-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=3f666f5aa90dba2aaee989b7615162292873a6ff20004b1fae6e523e69964ab8; exit=0; EXPECT=matched; output-sha256=b5611187ebac4a6af68a548981008cd7af313ea75fcb670b2bd7d305f3add4a1; output-bytes=169; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connections-c99; path=b33e9cf43ae9/31 entries
+- [x] G6: Build, typecheck, lint, actual CI registration, architecture, RBAC, rollback pairing and zero added normalized AST findings pass
+  CHECK: node .unlazy/verify-final.mjs
+  EXPECT: connection-preflight-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=031a6fd8ced1fbf542b559331ab95f68badc3d2b21b27425ea2e5eb60e636a5c; exit=0; EXPECT=matched; output-sha256=b8ffa15ce9fff0091e9ed7c3f5e435aa16c84eb11dd4820b135bcf5f2c21aa83; output-bytes=34; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-consumption-c100; path=b33e9cf43ae9/31 entries

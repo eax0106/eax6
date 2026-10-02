@@ -1,8 +1,8 @@
 """Typed homes for PLAN-7 binding inputs, outputs, and no-match signals."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from src.agent_contracts.types import NoAgentMatch as NoAgentMatch
 
@@ -83,6 +83,9 @@ class BoundCapability(_StrictFrozenModel):
     rationale: NonEmptyString
     score: float = Field(ge=0, le=1)
     factors: dict[NonEmptyString, float] = Field(min_length=1)
+    required_connector: (
+        Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{0,63}$")] | None
+    ) = None
 
 
 class BindingDecision(_StrictFrozenModel):

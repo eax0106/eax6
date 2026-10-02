@@ -8,6 +8,8 @@ import { SuggestionCard } from "@/components/conversation/SuggestionCard"
 import { StructuredArtifactMessage } from "@/components/conversation/StructuredArtifactMessage"
 import { useMutation } from "@tanstack/react-query"
 import { api } from "@/api/client"
+import type { ConnectionsRequired } from "@alterx/contracts";
+import { Button } from "@/components/ui/button";
 import { type ChatMessage } from "@/api/types"
 
 export function WorkflowCreate() {
@@ -18,6 +20,7 @@ export function WorkflowCreate() {
   // the original objective back with the answers attached. The workflow id
   // keeps those re-plans on the draft that raised the questions.
   const [objective, setObjective] = React.useState("")
+  const [answers, setAnswers] = React.useState<Record<string, string>>({})
   const [workflowId, setWorkflowId] = React.useState<string | undefined>(undefined)
 
   const compileMutation = useMutation({
@@ -26,7 +29,16 @@ export function WorkflowCreate() {
       setWorkflowId(data.workflow.id)
       setMessages(prev => [
         ...prev,
-        data.questions.length > 0
+        data.missingConnections
+          ? {
+              id: `msg_${Date.now()}`,
+              role: "assistant" as const,
+              type: "connections_required" as const,
+              content: data.explanation,
+              data: data.missingConnections,
+              createdAt: new Date().toISOString()
+            }
+          : data.questions.length > 0
           ? {
               id: `msg_${Date.now()}`,
               role: "assistant" as const,
@@ -67,17 +79,20 @@ export function WorkflowCreate() {
     ])
 
     setObjective(text)
+    setAnswers({})
     compileMutation.mutate({ goal: text, answers: {} })
   }
 
-  const handleAnswers = (answers: Record<string, string>) => {
+  const handleAnswers = (newAnswers: Record<string, string>) => {
+    const accumulatedAnswers = { ...answers, ...newAnswers }
+    setAnswers(accumulatedAnswers)
     setMessages(prev => [
       ...prev,
       {
         id: `msg_u_${Date.now()}`,
         role: "user",
         type: "text",
-        content: Object.entries(answers)
+        content: Object.entries(newAnswers)
           .map(([question, answer]) => `${question} ${answer}`)
           .join("\n"),
         createdAt: new Date().toISOString()
@@ -85,7 +100,7 @@ export function WorkflowCreate() {
     ])
     // The same objective and the same draft, now with the answers attached:
     // the planner asked about this goal, not about a new one.
-    compileMutation.mutate({ goal: objective, answers, workflowId })
+    compileMutation.mutate({ goal: objective, answers: accumulatedAnswers, workflowId })
   }
 
   return (
@@ -138,6 +153,22 @@ export function WorkflowCreate() {
                     </div>
                   )
                 }
+                if (msg.type === "connections_required") {
+                  const batch = msg.data as ConnectionsRequired["missing_connections"]
+                  const latest = messages.indexOf(msg) === messages.length - 1
+                  return (
+                    <div className="space-y-3">
+                      <p>{msg.content}</p>
+                      <ul className="list-disc pl-5">
+                        {batch.map(gap => <li key={gap.connector_type}>{gap.connector_type} — {gap.reason === "unavailable" ? "Reconnect account" : "Connect account"}</li>)}
+                      </ul>
+                      {latest && <div className="flex items-center gap-4">
+                        <a className="text-primary underline" href="/app/connections" target="_blank" rel="noreferrer">Open connections in new tab</a>
+                        <Button disabled={compileMutation.isPending} onClick={() => compileMutation.mutate({ goal: objective, answers, workflowId })}>Check connections and plan again</Button>
+                      </div>}
+                    </div>
+                  )
+                }
                 if (msg.type === "workflow_draft") {
                   return (
                     <div className="space-y-2">
@@ -167,6 +198,7 @@ export function WorkflowCreate() {
             />
           )}
 
+          {compileMutation.isError && <p role="alert">{compileMutation.error.message}</p>}
           {compileMutation.isPending && (
             <div className="flex items-center gap-3 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -181,7 +213,7 @@ export function WorkflowCreate() {
           <Composer 
             onSend={handleSend} 
             loading={compileMutation.isPending} 
-            disabled={messages[messages.length - 1]?.type === "clarification" || messages[messages.length - 1]?.type === "workflow_draft"}
+            disabled={messages[messages.length - 1]?.type === "connections_required" || messages[messages.length - 1]?.type === "clarification" || messages[messages.length - 1]?.type === "workflow_draft"}
           />
         </div>
       </div>
