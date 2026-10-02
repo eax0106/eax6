@@ -2,11 +2,13 @@ import {
   check,
   foreignKey,
   index,
+  jsonb,
   pgTable,
   sql,
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "@alterx/adapters";
 import { conversations } from "./conversations";
@@ -29,6 +31,12 @@ export const runs = pgTable(
     conversationId: text("conversation_id"),
     triggerId: text("trigger_id"),
     triggeringEventId: text("triggering_event_id"),
+    replayedFrom: text("replayed_from"),
+    replayConfirmedBy: uuid("replay_confirmed_by"),
+    replayConfirmedAt: timestamp("replay_confirmed_at", { withTimezone: true }),
+    replayActions: jsonb("replay_actions"),
+    replayRequestKey: text("replay_request_key"),
+    replayConfirmationToken: text("replay_confirmation_token"),
     provisioningSessionId: text("provisioning_session_id"),
     provisioningCycleId: text("provisioning_cycle_id"),
     provisioningTemplateId: text("provisioning_template_id"),
@@ -52,6 +60,16 @@ export const runs = pgTable(
       sql`${table.status} IN ('pending', 'running', 'paused', 'completed', 'failed', 'cancelled')`,
     ),
     unique("runs_tenant_id_id_unique").on(table.tenantId, table.id),
+    uniqueIndex("runs_replay_request_unique").on(table.tenantId, table.replayRequestKey),
+    check("runs_replay_confirmation_check", sql`
+      (${table.replayedFrom} IS NULL AND ${table.replayConfirmedBy} IS NULL AND ${table.replayConfirmedAt} IS NULL
+        AND ${table.replayActions} IS NULL AND ${table.replayRequestKey} IS NULL AND ${table.replayConfirmationToken} IS NULL)
+      OR (${table.replayedFrom} IS NOT NULL AND ${table.replayedFrom} = ${table.triggeringEventId}
+        AND ${table.replayConfirmedBy} IS NOT NULL AND ${table.replayConfirmedAt} IS NOT NULL
+        AND ${table.replayActions} IS NOT NULL AND jsonb_typeof(${table.replayActions}) = 'array'
+        AND ${table.replayRequestKey} IS NOT NULL AND ${table.replayConfirmationToken} IS NOT NULL)`),
+    foreignKey({ name: "runs_replay_event_tenant_fk", columns: [table.tenantId, table.replayedFrom],
+      foreignColumns: [events.tenantId, events.eventId] }),
     foreignKey({
       name: "runs_workflow_tenant_fk",
       columns: [table.tenantId, table.workflowId],

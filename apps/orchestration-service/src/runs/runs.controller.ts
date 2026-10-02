@@ -255,7 +255,7 @@ export class RunsController {
   }
 }
 
-function mapRunError(error: unknown, requestUrl: string | undefined): HttpException {
+export function mapRunError(error: unknown, requestUrl: string | undefined): HttpException {
 
   if (error instanceof HttpException) return error;
   if (error instanceof RunValidationError) {

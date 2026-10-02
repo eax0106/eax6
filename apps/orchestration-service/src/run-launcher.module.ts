@@ -6,6 +6,7 @@ import { DurableRunQueue } from "./runs/durable-run-queue.service";
 import { ProjectRunProvisioningService } from "./runs/project-run-provisioning.service";
 import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.constants";
 import { loadRunLauncherEnvironment } from "./config/run-launcher-environment";
+import { runLearningAuditClient } from "./runs/run-learning-audit";
 import {
   OrchestrationInfrastructureModule,
   buildRunBudgetGate,
@@ -57,6 +58,7 @@ import {
           ),
           new DurableRunQueue(store),
           buildRunBudgetGate(process.env),
+          runLearningAuditClient(process.env),
         );
       },
     },
