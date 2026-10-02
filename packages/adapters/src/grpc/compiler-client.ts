@@ -1,6 +1,8 @@
 import { credentials, loadPackageDefinition, status, type Client } from "@grpc/grpc-js";
 import { loadSync } from "@grpc/proto-loader";
 
+import { ConnectionsRequiredSchema, type ConnectionsRequired } from "@alterx/contracts";
+
 import type {
   CompilerCompileWorkflowRequest,
   CompilerCompileArchitectureWorkflowRequest,
@@ -34,7 +36,7 @@ type CompilerServiceErrorCode =
   | "upstream";
 
 export class CompilerServiceClientError extends Error {
-  constructor(readonly code: CompilerServiceErrorCode) {
+  constructor(readonly code: CompilerServiceErrorCode, readonly connectionsRequired?: ConnectionsRequired) {
     super("Compiler Service request failed");
   }
 }
@@ -116,7 +118,15 @@ export class CompilerServiceClient implements CompilerServiceHandlerClient {
     return new Promise<TResponse>((resolve, reject) => {
       call(new Date(Date.now() + this.#timeoutMs), (error, response) => {
         if (error !== null) {
-          reject(new CompilerServiceClientError(errorCode(error)));
+          let connectionsRequired: ConnectionsRequired | undefined;
+          const details = (error as Error & { details?: unknown }).details;
+          if (errorCode(error) === "failed_precondition" && typeof details === "string" && details.length <= 262_144) {
+            try {
+              const parsed = ConnectionsRequiredSchema.safeParse(JSON.parse(details));
+              if (parsed.success) connectionsRequired = parsed.data;
+            } catch { /* Unrecognized upstream details remain an ordinary failure. */ }
+          }
+          reject(new CompilerServiceClientError(errorCode(error), connectionsRequired));
           return;
         }
         if (response === undefined) {

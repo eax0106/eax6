@@ -120,3 +120,27 @@ describe("project clarifications", () => {
     expect(result.clarifications).toEqual([])
   })
 })
+
+describe("a workflow plan that needs connections", () => {
+  const batch = { type: "connections_required", missing_connections: [
+    { connector_type: "github", node_keys: ["fetch", "publish"], reason: "missing" },
+    { connector_type: "slack", node_keys: ["notify"], reason: "unavailable" },
+  ] }
+  it("returns the complete batch without claiming compilation or fetching another draft", async () => {
+    vi.mocked(apiGet).mockResolvedValue({ id: workflowId, name: "Triage", status: "draft" })
+    vi.mocked(apiPost).mockResolvedValue(batch)
+    const result = await api.compileWorkflow({ goal: "Triage support mail", answers: { inbox: "support" }, workflowId })
+    expect(result.missingConnections).toEqual(batch.missing_connections)
+    expect(result.questions).toEqual([])
+    expect(result.explanation).not.toContain("successfully")
+    expect(apiGet).toHaveBeenCalledTimes(1)
+    expect(apiPost).toHaveBeenCalledWith(`/api/v1/workflows/${workflowId}/actions/plan`, { goal: "Triage support mail", answers: { inbox: "support" } }, expect.anything())
+  })
+  it("refuses an invalid batch or unrecognized plan result", async () => {
+    vi.mocked(apiGet).mockResolvedValue({ id: workflowId, name: "Triage", status: "draft" })
+    vi.mocked(apiPost).mockResolvedValue({ ...batch, missing_connections: [] })
+    await expect(api.compileWorkflow({ goal: "Triage", answers: {}, workflowId })).rejects.toThrow()
+    vi.mocked(apiPost).mockResolvedValue({ type: "unknown" })
+    await expect(api.compileWorkflow({ goal: "Triage", answers: {}, workflowId })).rejects.toThrow("Planner did not return a compiled workflow.")
+  })
+})

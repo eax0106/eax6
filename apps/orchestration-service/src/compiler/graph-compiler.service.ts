@@ -14,7 +14,11 @@ import {
   compileTaskSkeletonToDag,
   parseTaskSkeleton,
 } from "./dag-builder";
+import { preflightConnections } from "../connections/connection-preflight";
 import { compileArchitectureToDag, type ArchitectureCompileInput } from "./architecture-dag-builder";
+import type { OrchestrationTenantStore } from "../project-read/project-read.service";
+
+export type { OrchestrationTenantStore } from "../project-read/project-read.service";
 
 export { CompilerValidationError } from "./dag-builder";
 
@@ -32,20 +36,6 @@ const WORKFLOW_ID_PATTERN =
   /^wf_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const UNIQUE_VIOLATION = "23505";
 const FOREIGN_KEY_VIOLATION = "23503";
-
-interface OrchestrationTransactionLike {
-  query<TRow extends Record<string, unknown> = Record<string, unknown>>(
-    statement: string,
-    values?: readonly unknown[],
-  ): Promise<{ readonly rowCount: number; readonly rows: readonly TRow[] }>;
-}
-
-export interface OrchestrationTenantStore {
-  withTenant<T>(
-    tenantId: string,
-    operation: (tx: OrchestrationTransactionLike) => Promise<T>,
-  ): Promise<T>;
-}
 
 function bareTenantUuid(tenantId: string): string {
   if (!TENANT_ID_PATTERN.test(tenantId)) {
@@ -93,6 +83,7 @@ export class GraphCompilerService {
     const workflowVersionId = prefixedUuidV7("wfv");
 
     await this.store.withTenant(bareTenant, async (tx) => {
+      await preflightConnections(tx, bareTenant, request.workflow_id, compiledDag);
       const nextVersionResult = await tx.query<{ next_version: number }>(
         `SELECT COALESCE(MAX(version), 0) + 1 AS next_version
          FROM workflow_versions
@@ -183,6 +174,7 @@ export class GraphCompilerService {
       if (workflow.rowCount !== 1) {
         throw new CompilerValidationError("workflow is not visible in the supplied tenant/workspace");
       }
+      await preflightConnections(tx, bareTenant, input.workflow_id, compiledDag, input.workspace_id.slice("ws_".length));
       const version = await tx.query<{ next_version: number }>("SELECT COALESCE(MAX(version), 0) + 1 AS next_version FROM workflow_versions WHERE tenant_id = $1 AND workflow_id = $2", [bareTenant, input.workflow_id]);
       // task_skeleton is deliberately absent from this insert. This path
       // compiles an architecture, not a TaskSkeleton, so there is no skeleton

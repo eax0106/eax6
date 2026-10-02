@@ -14,6 +14,7 @@ import type {
   CompilerValidateWorkflowDagRequest,
   CompilerValidateWorkflowDagResponse,
 } from "@alterx/contracts";
+import { ConnectionsRequiredSchema } from "@alterx/contracts";
 import { internalError } from "./internal-error";
 
 export const COMPILER_HANDLER = Symbol("COMPILER_HANDLER");
@@ -96,6 +97,12 @@ export function connectCompilerGrpcTransport(
 }
 
 function mapCompilerError(error: unknown, fallbackMessage: string): RpcException {
+  if (isNamedError(error, "CompilerConnectionsRequiredError")) {
+    let body: unknown;
+    try { body = JSON.parse(error.message); } catch { return internalError(error, fallbackMessage); }
+    const parsed = ConnectionsRequiredSchema.safeParse(body);
+    if (parsed.success) return new RpcException({ code: status.FAILED_PRECONDITION, message: JSON.stringify(parsed.data) });
+  }
   if (isNamedError(error, "CompilerValidationError")) {
     return new RpcException({
       code: status.INVALID_ARGUMENT,
