@@ -2093,6 +2093,8 @@ def tool_gateway_server_target(
             "ALTER_REGION": "ap-south-1",
             "PORT": str(http_port),
             "GRPC_BIND_ADDRESS": f"127.0.0.1:{port}",
+            "ENGINE_BASE_URL": "http://127.0.0.1:3010",
+            "INTERNAL_SERVICE_TOKEN": _EVAL_INTERNAL_SERVICE_TOKEN,
             **local_m2m_issuer.environment(),
         },
     )
