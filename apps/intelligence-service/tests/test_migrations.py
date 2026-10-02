@@ -43,6 +43,7 @@ class TestMigrationFileStructure:
             "0006_agent_auto_creation_key.py",
             "0007_capability_side_effects.py",
             "0008_register_canonical_tools.py",
+            "0009_agent_owner_tenant.py",
         ]
 
     def test_all_tables_defined(self) -> None:

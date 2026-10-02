@@ -40,12 +40,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 # NOTE: intelligence-service's HTTP app is its public API (planner,
-# problem-understanding, selection-binding, performance, capability-registry,
+# problem-understanding, selection-binding, capability-registry,
 # architecture-synthesizer) and is reached by the platform/frontend without a
 # service credential, so it is intentionally NOT behind the internal
-# service-to-service token. The service-to-service boundary for intelligence is
-# its gRPC surface (capability_resolver), which is protected by
-# ServiceAuthInterceptor in capability_resolver/grpc_server.py.
+# service-to-service token. Internal performance routes validate the shared
+# service credential, as the capability resolver gRPC surface already does.
 app = FastAPI(
     lifespan=lifespan,
 )

@@ -6,13 +6,19 @@ reads, drift-candidate discovery, and the future draft-agent promotion
 logic) was reading a table nothing ever populated.
 """
 
+import json
+import os
+import secrets
+import subprocess
+import time
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
+import httpx
 import pytest
 from alembic.config import Config as AlembicConfig
 from fastapi.testclient import TestClient
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -22,6 +28,7 @@ from sqlalchemy.ext.asyncio import (
 from testcontainers.community.postgres import PostgresContainer
 
 from alembic import command
+from src.config import get_settings
 from src.db.session import get_db_session
 from src.main import app
 
@@ -39,23 +46,85 @@ def raw_id(prefixed_id: str) -> str:
 
 
 @pytest.fixture(scope="module")
-def postgres_url() -> Generator[str, None, None]:
+def database_urls() -> Generator[dict[str, str], None, None]:
     with PostgresContainer(
         image=PGVECTOR_IMAGE,
         dbname="intelligence_db",
-        username="intelligence_service",
-        password="testpass",
+        username="postgres",
+        password=secrets.token_hex(24),
     ) as postgres:
         sync_url = postgres.get_connection_url()
+        password = secrets.token_hex(24)
+        admin = create_engine(sync_url)
         alembic_config = AlembicConfig(str(SERVICE_ROOT / "alembic.ini"))
         alembic_config.set_main_option("script_location", str(SERVICE_ROOT / "alembic"))
         alembic_config.set_main_option("sqlalchemy.url", sync_url)
         command.upgrade(alembic_config, "head")
-        yield sync_url
+        with admin.begin() as connection:
+            flags = connection.execute(
+                text(
+                    "SELECT rolcanlogin,rolsuper,rolbypassrls FROM pg_roles "
+                    "WHERE rolname='intelligence_service'"
+                )
+            ).one()
+            assert tuple(flags) == (False, False, False)
+            connection.execute(text(f"ALTER ROLE intelligence_service LOGIN PASSWORD '{password}'"))
+            connection.execute(text("GRANT USAGE ON SCHEMA public TO intelligence_service"))
+            connection.execute(
+                text(
+                    "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public "
+                    "TO intelligence_service"
+                )
+            )
+        runtime_url = make_url(sync_url).set(username="intelligence_service", password=password)
+        yield {"admin": sync_url, "runtime": runtime_url.render_as_string(hide_password=False)}
+        admin.dispose()
+
+
+@pytest.fixture(scope="module")
+def postgres_url(database_urls: dict[str, str]) -> str:
+    return database_urls["runtime"]
+
+
+@pytest.fixture(scope="module")
+def audit_url(tmp_path_factory: pytest.TempPathFactory) -> Generator[str, None, None]:
+    directory = tmp_path_factory.mktemp("performance-audit")
+    root = SERVICE_ROOT.parent.parent
+    with (directory / "output.log").open("w+") as output:
+        process = subprocess.Popen(
+            [
+                "node",
+                "node_modules/vitest/vitest.mjs",
+                "run",
+                "apps/audit-service/src/audit/performance.fixture.spec.ts",
+                "--maxWorkers=1",
+            ],
+            cwd=root,
+            env={**os.environ, "PERFORMANCE_AUDIT_FIXTURE_DIRECTORY": str(directory)},
+            stdout=output,
+            stderr=subprocess.STDOUT,
+        )
+        try:
+            deadline = time.monotonic() + 120
+            while not (directory / "ready.json").exists():
+                assert process.poll() is None, "Native audit HTTP fixture did not start"
+                assert time.monotonic() < deadline, "Native audit HTTP fixture timed out"
+                time.sleep(0.05)
+            yield str(json.loads((directory / "ready.json").read_text())["baseUrl"])
+            (directory / "done").write_text("done")
+            assert process.wait(timeout=30) == 0, "Native audit chain verification must pass"
+        finally:
+            (directory / "done").write_text("done")
+            if process.poll() is None:
+                process.terminate()
+                process.wait(timeout=30)
 
 
 async def seed_agent(session: AsyncSession) -> None:
     tenant_uuid = raw_id(TENANT_A)
+    await session.execute(
+        text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": tenant_uuid}
+    )
     await session.execute(
         text(
             """
@@ -72,6 +141,9 @@ ON CONFLICT (id) DO NOTHING
 
 async def _seed_draft_agent(session: AsyncSession, agent_id: str) -> None:
     tenant_uuid = raw_id(TENANT_A)
+    await session.execute(
+        text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": tenant_uuid}
+    )
     await session.execute(
         text(
             """
@@ -132,6 +204,10 @@ def read_agent_status(postgres_url: str, agent_id: str) -> str:
         engine = create_async_engine(async_url)
         factory = async_sessionmaker(engine, expire_on_commit=False)
         async with factory() as session:
+            await session.execute(
+                text("SELECT set_config('app.current_tenant_id', :tenant, true)"),
+                {"tenant": raw_id(TENANT_A)},
+            )
             result = await session.execute(
                 text("SELECT status FROM agents WHERE id = :agent_id"),
                 {"agent_id": agent_id},
@@ -144,7 +220,12 @@ def read_agent_status(postgres_url: str, agent_id: str) -> str:
 
 
 @pytest.fixture
-def client(postgres_url: str) -> Generator[TestClient, None, None]:
+def client(
+    postgres_url: str, audit_url: str, monkeypatch: pytest.MonkeyPatch
+) -> Generator[TestClient, None, None]:
+    monkeypatch.setenv("AUDIT_SERVICE_BASE_URL", audit_url)
+    monkeypatch.setenv("INTERNAL_SERVICE_TOKEN", "integration-token")
+    get_settings.cache_clear()
     async_url = make_url(postgres_url).set(drivername="postgresql+asyncpg")
 
     async def override_session() -> AsyncGenerator[AsyncSession, None]:
@@ -158,6 +239,7 @@ def client(postgres_url: str) -> Generator[TestClient, None, None]:
     with TestClient(app, headers={"authorization": "Bearer integration-token"}) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+    get_settings.cache_clear()
 
 
 def request_body(**overrides: object) -> dict[str, object]:
@@ -183,7 +265,7 @@ class TestRecordAgentPerformanceRoute:
         response = client.post(
             f"/internal/performance/agents/{AGENT_A}/records",
             json=request_body(),
-            headers={"Authorization": "Bearer test-token"},
+            headers={"Authorization": "Bearer integration-token"},
         )
 
         assert response.status_code == 201
@@ -193,7 +275,7 @@ class TestRecordAgentPerformanceRoute:
         read = client.get(
             f"/internal/performance/agents/{AGENT_A}",
             params={"tenant_id": TENANT_A, "task_class": "analysis"},
-            headers={"Authorization": "Bearer test-token"},
+            headers={"Authorization": "Bearer integration-token"},
         )
         assert read.status_code == 200
         observations = read.json()["observations"]
@@ -210,7 +292,7 @@ class TestRecordAgentPerformanceRoute:
         response = client.post(
             "/internal/performance/agents/agt_018f47a5-7b2c-7d10-8f11-99999999999a/records",
             json=request_body(),
-            headers={"Authorization": "Bearer test-token"},
+            headers={"Authorization": "Bearer integration-token"},
         )
 
         assert response.status_code == 404
@@ -234,7 +316,7 @@ class TestRecordAgentPerformanceRoute:
         response = client.post(
             f"/internal/performance/agents/{AGENT_A}/records",
             json=request_body(tenant_id="not-a-real-tenant-id"),
-            headers={"Authorization": "Bearer test-token"},
+            headers={"Authorization": "Bearer integration-token"},
         )
 
         assert response.status_code == 422
@@ -245,7 +327,7 @@ class TestRecordAgentPerformanceRoute:
         response = client.post(
             f"/internal/performance/agents/{AGENT_A}/records",
             json=request_body(verdict="not_a_real_verdict"),
-            headers={"Authorization": "Bearer test-token"},
+            headers={"Authorization": "Bearer integration-token"},
         )
 
         assert response.status_code == 422
@@ -268,7 +350,7 @@ class TestDraftAgentPromotion:
             response = client.post(
                 f"/internal/performance/agents/{agent_id}/records",
                 json=request_body(),
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": "Bearer integration-token"},
             )
             assert response.status_code == 201
 
@@ -284,7 +366,7 @@ class TestDraftAgentPromotion:
             client.post(
                 f"/internal/performance/agents/{agent_id}/records",
                 json=request_body(),
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": "Bearer integration-token"},
             )
 
         assert read_agent_status(postgres_url, agent_id) == "draft"
@@ -299,7 +381,168 @@ class TestDraftAgentPromotion:
             client.post(
                 f"/internal/performance/agents/{agent_id}/records",
                 json=request_body(verdict="failure"),
-                headers={"Authorization": "Bearer test-token"},
+                headers={"Authorization": "Bearer integration-token"},
             )
 
         assert read_agent_status(postgres_url, agent_id) == "draft"
+
+
+def test_rejects_invalid_service_credentials(postgres_url: str, client: TestClient) -> None:
+    seed(postgres_url)
+    for authorization in ["", "Bearer wrong-service-token", "Bearer integration-token-extra"]:
+        headers = {"Authorization": authorization}
+        write = client.post(
+            f"/internal/performance/agents/{AGENT_A}/records", json=request_body(), headers=headers
+        )
+        assert write.status_code == 401
+        read = client.get(
+            f"/internal/performance/agents/{AGENT_A}",
+            params={"tenant_id": TENANT_A, "task_class": "analysis"},
+            headers=headers,
+        )
+        assert read.status_code == 401
+        drift = client.get(
+            "/internal/performance/drift-candidates",
+            params={"minimum_observations": 4},
+            headers=headers,
+        )
+        assert drift.status_code == 401
+
+
+def test_persists_service_assertion_results(
+    postgres_url: str, client: TestClient, audit_url: str
+) -> None:
+    agent = "agt_018f47a5-7b2c-7d10-8f11-5555555555a5"
+    seed_draft_agent(postgres_url, agent)
+    other = "ten_018f47a5-7b2c-7d10-8f11-123456789ab2"
+    missing = "agt_018f47a5-7b2c-7d10-8f11-6666666666a6"
+    assert (
+        client.post(
+            f"/internal/performance/agents/{agent}/records", json=request_body()
+        ).status_code
+        == 201
+    )
+    read = client.get(
+        f"/internal/performance/agents/{agent}",
+        params={"tenant_id": TENANT_A, "task_class": "analysis"},
+    )
+    assert read.status_code == 200
+    assert len(read.json()["observations"]) == 1
+    for response in [
+        client.get(
+            f"/internal/performance/agents/{agent}",
+            params={"tenant_id": other, "task_class": "analysis"},
+        ),
+        client.post(
+            f"/internal/performance/agents/{agent}/records", json=request_body(tenant_id=other)
+        ),
+    ]:
+        assert response.status_code == 403
+        assert response.json()["detail"]["error_code"] == "SERVICE_TENANT_MISMATCH"
+    missing_read = client.get(
+        f"/internal/performance/agents/{missing}",
+        params={"tenant_id": TENANT_A, "task_class": "analysis"},
+    )
+    assert missing_read.status_code == 404
+    assert missing_read.json()["detail"]["error_code"] == "AGENT_NOT_FOUND"
+    assert httpx.get(audit_url + "/internal/audit-events", timeout=5).status_code == 401
+    records: list[dict[str, object]] = []
+    for tenant in [TENANT_A, other]:
+        response = httpx.get(
+            audit_url + "/internal/audit-events",
+            params={
+                "tenant_id": tenant,
+                "limit": 200,
+            },
+            headers={"authorization": "Bearer integration-token"},
+            timeout=5,
+        )
+        assert response.status_code == 200
+        records.extend(
+            event for event in response.json()["events"] if event["target_ref"] in {agent, missing}
+        )
+    assert len(records) == 5, "Every valid service assertion must persist an audit event"
+    assert sorted((event["action"], event["result"]) for event in records) == [
+        ("agent.performance.read", "denied"),
+        ("agent.performance.read", "error"),
+        ("agent.performance.read", "success"),
+        ("agent.performance.record", "denied"),
+        ("agent.performance.record", "success"),
+    ]
+    assert all(event["actor_ref"] == "service:alter-service" for event in records)
+    assert all(
+        json.loads(str(event["context_json"])) == {"scope": "tenant_asserted_by_service"}
+        for event in records
+    )
+
+
+def test_agent_owner_lookup_migration_reverses_and_restores(
+    database_urls: dict[str, str], postgres_url: str
+) -> None:
+    seed(postgres_url)
+    runtime = create_engine(postgres_url)
+    admin = create_engine(database_urls["admin"])
+    try:
+        with runtime.begin() as connection:
+            role = connection.execute(
+                text("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")
+            ).one()
+            assert tuple(role) == (False, False)
+            connection.execute(
+                text("SELECT set_config('app.current_tenant_id', :tenant, true)"),
+                {"tenant": "018f47a5-7b2c-7d10-8f11-123456789ab2"},
+            )
+            assert (
+                connection.execute(
+                    text("SELECT id FROM agents WHERE id=:id"), {"id": AGENT_A}
+                ).all()
+                == []
+            )
+            assert str(
+                connection.execute(
+                    text("SELECT agent_owner_tenant(:id)"), {"id": AGENT_A}
+                ).scalar_one()
+            ) == raw_id(TENANT_A)
+        with admin.begin() as connection:
+            connection.execute(text("CREATE ROLE performance_fixture_ordinary NOLOGIN"))
+            assert (
+                connection.execute(
+                    text(
+                        "SELECT has_function_privilege('performance_fixture_ordinary', "
+                        "'agent_owner_tenant(text)', 'EXECUTE')"
+                    )
+                ).scalar_one()
+                is False
+            )
+            assert (
+                connection.execute(
+                    text(
+                        "SELECT has_column_privilege('intelligence_drift_reader', "
+                        "'agents', 'name', 'SELECT')"
+                    )
+                ).scalar_one()
+                is False
+            )
+        config = AlembicConfig(str(SERVICE_ROOT / "alembic.ini"))
+        config.set_main_option("script_location", str(SERVICE_ROOT / "alembic"))
+        config.set_main_option("sqlalchemy.url", database_urls["admin"])
+        try:
+            command.downgrade(config, "0008")
+            with admin.connect() as connection:
+                assert (
+                    connection.execute(
+                        text("SELECT to_regprocedure('agent_owner_tenant(text)')")
+                    ).scalar_one()
+                    is None
+                )
+        finally:
+            command.upgrade(config, "head")
+        with runtime.connect() as connection:
+            assert str(
+                connection.execute(
+                    text("SELECT agent_owner_tenant(:id)"), {"id": AGENT_A}
+                ).scalar_one()
+            ) == raw_id(TENANT_A)
+    finally:
+        runtime.dispose()
+        admin.dispose()
