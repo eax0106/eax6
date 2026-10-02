@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Param, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { ArtifactNotFoundError, ArtifactsService, ArtifactValidationError } from "./artifacts.service";
 
@@ -10,7 +10,7 @@ export class ArtifactsController {
 
   @Get()
   async list(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Query("run_id") runId: string | undefined,
     @Query("cursor") cursor: string | undefined,
     @Query("limit") rawLimit: string | undefined,
@@ -31,7 +31,7 @@ export class ArtifactsController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") artifactId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") artifactId: string) {
     try {
       return await this.artifacts.get(requiredTenantId(request), artifactId);
     } catch (error: unknown) {
@@ -40,7 +40,7 @@ export class ArtifactsController {
   }
 
   @Get(":id/download")
-  async download(@Req() request: SessionGatewayRequest, @Param("id") artifactId: string) {
+  async download(@Req() request: IdentityTenantGatewayRequest, @Param("id") artifactId: string) {
     try {
       return await this.artifacts.download(requiredTenantId(request), artifactId);
     } catch (error: unknown) {
@@ -49,13 +49,13 @@ export class ArtifactsController {
   }
 }
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) throw new HttpException(problem(request.url, 500, "ARTIFACTS_INTERNAL", "Missing authenticated tenant context"), 500);
   return tenantId;
 }
 
-function requiredWorkspaceId(request: SessionGatewayRequest): string {
+function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
   const workspaceId = request.actorContext?.workspace_id;
   if (workspaceId === null || workspaceId === undefined) {
     throw new HttpException(problem(request.url, 500, "ARTIFACTS_INTERNAL", "Missing authenticated workspace context"), 500);

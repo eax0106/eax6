@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import { DeploymentChangesService, DeploymentChangesValidationError } from "./deployment-changes.service";
@@ -15,7 +15,7 @@ export class DeploymentChangesController {
   constructor(private readonly changes: DeploymentChangesService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query("changed_after") changedAfter?: string) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query("changed_after") changedAfter?: string) {
     const actor = request.actorContext;
     if (actor === undefined) {
       throw new HttpException(problem(request.url, 500, "DEPLOYMENT_CHANGES_INTERNAL", "Missing authenticated tenant context"), 500);

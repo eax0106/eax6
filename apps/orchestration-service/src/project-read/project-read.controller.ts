@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 
 import { WorkspacePendingDeletionError } from "../runs/run-launcher.service";
@@ -14,7 +14,7 @@ import {
   ProjectStateConflictError,
 } from "./project-domain.service";
 
-function requiredTenantId(request: SessionGatewayRequest): string {
+function requiredTenantId(request: IdentityTenantGatewayRequest): string {
   const tenantId = request.actorContext?.tenant_id;
   if (tenantId === undefined) {
     throw new HttpException(
@@ -25,7 +25,7 @@ function requiredTenantId(request: SessionGatewayRequest): string {
   return tenantId;
 }
 
-function requiredWorkspaceId(request: SessionGatewayRequest): string {
+function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
   const workspaceId = request.actorContext?.workspace_id;
   if (workspaceId === undefined || workspaceId === null) {
     throw new HttpException(
@@ -54,7 +54,7 @@ export class ProjectReadController {
   ) {}
 
   @Post()
-  async create(@Req() request: SessionGatewayRequest, @Body() body: unknown) {
+  async create(@Req() request: IdentityTenantGatewayRequest, @Body() body: unknown) {
     try {
       return await this.projects.create(
         requiredTenantId(request),
@@ -68,7 +68,7 @@ export class ProjectReadController {
 
   @Get()
   async list(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Query("cursor") cursor?: string,
     @Query("limit") rawLimit?: string,
     @Query("q") query?: string,
@@ -87,7 +87,7 @@ export class ProjectReadController {
   }
 
   @Get(":id")
-  async get(@Req() request: SessionGatewayRequest, @Param("id") projectId: string) {
+  async get(@Req() request: IdentityTenantGatewayRequest, @Param("id") projectId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.getProject(tenantId, projectId);
@@ -97,7 +97,7 @@ export class ProjectReadController {
   }
 
   @Post(":id/actions/deploy")
-  async deploy(@Req() request: SessionGatewayRequest, @Param("id") projectId: string) {
+  async deploy(@Req() request: IdentityTenantGatewayRequest, @Param("id") projectId: string) {
     const tenantId = requiredTenantId(request);
     try {
       return await this.service.createDeployment(tenantId, projectId);
@@ -107,7 +107,7 @@ export class ProjectReadController {
   }
 
   @Get(":id/clarifications")
-  async clarifications(@Req() request: SessionGatewayRequest, @Param("id") projectId: string) {
+  async clarifications(@Req() request: IdentityTenantGatewayRequest, @Param("id") projectId: string) {
     try {
       return await this.projects.clarifications(requiredTenantId(request), projectId);
     } catch (error: unknown) {
@@ -117,7 +117,7 @@ export class ProjectReadController {
 
   @Post(":id/clarifications/:clarificationId/answer")
   async answerClarification(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") projectId: string,
     @Param("clarificationId") clarificationId: string,
     @Body() body: unknown,
@@ -135,7 +135,7 @@ export class ProjectReadController {
   }
 
   @Get(":id/plan")
-  async plan(@Req() request: SessionGatewayRequest, @Param("id") projectId: string) {
+  async plan(@Req() request: IdentityTenantGatewayRequest, @Param("id") projectId: string) {
     try {
       return await this.projects.plan(requiredTenantId(request), projectId);
     } catch (error: unknown) {
@@ -145,7 +145,7 @@ export class ProjectReadController {
 
   @Post(":id/plan/actions/:action")
   async reviewPlan(
-    @Req() request: SessionGatewayRequest,
+    @Req() request: IdentityTenantGatewayRequest,
     @Param("id") projectId: string,
     @Param("action") action: string,
   ) {
@@ -160,7 +160,7 @@ export class ProjectReadController {
   }
 
   @Post(":id/builds")
-  async startBuild(@Req() request: SessionGatewayRequest, @Param("id") projectId: string) {
+  async startBuild(@Req() request: IdentityTenantGatewayRequest, @Param("id") projectId: string) {
     try {
       return await this.projects.startBuild(requiredTenantId(request), projectId);
     } catch (error: unknown) {

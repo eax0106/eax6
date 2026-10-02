@@ -2,14 +2,14 @@ import { HttpException, type ExecutionContext } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
 import { PUBLIC_ROUTE_METADATA } from "./public-route";
 import { SessionGatewayUploadAllowlistGuard } from "./upload-allowlist.guard";
-import type { SessionGatewayRequest } from "./types";
+import type { IdentityTenantGatewayRequest } from "./types";
 
 function contextFor(
   headers: Record<string, string | string[] | undefined>,
   publicRoute = false,
   method = "POST",
 ): ExecutionContext {
-  const request: SessionGatewayRequest = {
+  const request: IdentityTenantGatewayRequest = {
     headers,
     method,
     url: "/v1/upload",

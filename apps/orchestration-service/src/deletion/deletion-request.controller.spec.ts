@@ -1,5 +1,5 @@
 import { HttpException } from "@nestjs/common";
-import type { SessionGatewayRequest } from "@alterx/auth";
+import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import { ProblemDetailsSchema } from "@alterx/contracts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -110,7 +110,7 @@ describe("DeletionRequestController", () => {
 function actorRequest(
   tenantId: string,
   untrustedBody?: Record<string, unknown>,
-): SessionGatewayRequest & { readonly body?: Record<string, unknown> } {
+): IdentityTenantGatewayRequest & { readonly body?: Record<string, unknown> } {
   return {
     url: "/api/v1/deletion-requests",
     headers: {},

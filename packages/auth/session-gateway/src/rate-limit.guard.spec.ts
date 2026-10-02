@@ -2,7 +2,7 @@ import { HttpException, type ExecutionContext } from "@nestjs/common";
 import { describe, expect, it } from "vitest";
 import { PUBLIC_ROUTE_METADATA } from "./public-route";
 import { SessionGatewayRateLimitGuard } from "./rate-limit.guard";
-import type { ActorContext, SessionGatewayRequest } from "./types";
+import type { ActorContext, IdentityTenantGatewayRequest } from "./types";
 
 const ACTOR_A: ActorContext = {
   actor_type: "user",
@@ -16,7 +16,7 @@ const ACTOR_A: ActorContext = {
 };
 
 function contextFor(
-  request: SessionGatewayRequest,
+  request: IdentityTenantGatewayRequest,
   publicRoute = false,
 ): ExecutionContext {
   const handler = () => undefined;
@@ -36,7 +36,7 @@ function contextFor(
 describe("SessionGatewayRateLimitGuard", () => {
   it("bypasses rate limiting for public routes", () => {
     const guard = new SessionGatewayRateLimitGuard({ limitPerMinute: 1 });
-    const request: SessionGatewayRequest = { headers: {}, url: "/v1/x" };
+    const request: IdentityTenantGatewayRequest = { headers: {}, url: "/v1/x" };
 
     expect(guard.canActivate(contextFor(request, true))).toBe(true);
     expect(guard.canActivate(contextFor(request, true))).toBe(true);
@@ -44,7 +44,7 @@ describe("SessionGatewayRateLimitGuard", () => {
 
   it("fails closed with 500 when actorContext is missing (guard ordering violated)", () => {
     const guard = new SessionGatewayRateLimitGuard();
-    const request: SessionGatewayRequest = { headers: {}, url: "/v1/x" };
+    const request: IdentityTenantGatewayRequest = { headers: {}, url: "/v1/x" };
 
     expect(() => guard.canActivate(contextFor(request))).toThrow(
       HttpException,
@@ -58,7 +58,7 @@ describe("SessionGatewayRateLimitGuard", () => {
 
   it("allows requests under the limit and rejects the one that exceeds it", () => {
     const guard = new SessionGatewayRateLimitGuard({ limitPerMinute: 2 });
-    const request: SessionGatewayRequest = {
+    const request: IdentityTenantGatewayRequest = {
       headers: {},
       url: "/v1/x",
       actorContext: ACTOR_A,
@@ -77,12 +77,12 @@ describe("SessionGatewayRateLimitGuard", () => {
 
   it("scopes limits independently per tenant", () => {
     const guard = new SessionGatewayRateLimitGuard({ limitPerMinute: 1 });
-    const requestA: SessionGatewayRequest = {
+    const requestA: IdentityTenantGatewayRequest = {
       headers: {},
       url: "/v1/x",
       actorContext: ACTOR_A,
     };
-    const requestB: SessionGatewayRequest = {
+    const requestB: IdentityTenantGatewayRequest = {
       headers: {},
       url: "/v1/x",
       actorContext: { ...ACTOR_A, tenant_id: "ten_b" },
@@ -101,7 +101,7 @@ describe("SessionGatewayRateLimitGuard", () => {
       limitPerMinute: 1,
       now: () => new Date(nowMs),
     });
-    const request: SessionGatewayRequest = {
+    const request: IdentityTenantGatewayRequest = {
       headers: {},
       url: "/v1/x",
       actorContext: ACTOR_A,
@@ -121,7 +121,7 @@ describe("SessionGatewayRateLimitGuard", () => {
       maxTrackedTenants: 2,
       now: () => new Date(nowMs),
     });
-    const requestFor = (tenantId: string): SessionGatewayRequest => ({
+    const requestFor = (tenantId: string): IdentityTenantGatewayRequest => ({
       headers: {},
       url: "/v1/x",
       actorContext: { ...ACTOR_A, tenant_id: tenantId },

@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { Body, Controller, Get, Headers, HttpException, Inject, Post, Query, Req } from "@nestjs/common";
-import { Public, type SessionGatewayRequest } from "@alterx/auth";
+import { Public, type IdentityTenantGatewayRequest } from "@alterx/auth";
 import { SES_DELIVERY_ENVIRONMENT, type SesDeliveryEnvironment } from "../config/ses-delivery-environment";
 import { EmailReadbackPendingError, parseSesDeliveryEvent, SesDeliveryEventsService } from "./ses-delivery-events.service";
 
@@ -37,12 +37,12 @@ export class EmailDeliveryFailuresController {
   constructor(private readonly service: SesDeliveryEventsService) {}
 
   @Get()
-  async list(@Req() request: SessionGatewayRequest, @Query("cursor") cursor?: string) {
+  async list(@Req() request: IdentityTenantGatewayRequest, @Query("cursor") cursor?: string) {
     if (cursor !== undefined && cursor.length > 250) throw new HttpException("Invalid cursor", 400);
     return this.service.failures(this.systemTenant(request), cursor);
   }
 
-  private systemTenant(request: SessionGatewayRequest): string {
+  private systemTenant(request: IdentityTenantGatewayRequest): string {
     if (request.actorContext?.actor_type !== "system") {
       throw new HttpException({ status: 403, error_code: "EMAIL_DELIVERY_SYSTEM_ONLY", detail: "This feed is for platform background jobs" }, 403);
     }
