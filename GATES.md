@@ -7,7 +7,7 @@ Scope: Keep one classifier implementation per language. The real TypeScript and 
 - [x] G1: Both actual classifiers agree on every shared case over native model gRPC, preserve input and FAST routing, and use the same classification policy while preserving their existing unavailable handling
   CHECK: node .unlazy/verify-parity.mjs
   EXPECT: safety-parity-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5c2dbeceab47d813093b28307decb2907f832d667486e44ee485281143320026; exit=0; EXPECT=matched; output-sha256=b21909a2c067490c81b0dfaefc24157a06b699a561a28fd70bf3ffe906e6d36e; output-bytes=149; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5c2dbeceab47d813093b28307decb2907f832d667486e44ee485281143320026; exit=0; EXPECT=matched; output-sha256=9811a07716466d041aca908465cbcd8027269ec9afb082cab8adb2330c0b15ff; output-bytes=149; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
 - [x] G2: The duplicate-safety gate permits ordinary transport and canonical consumers while identifying real duplicate implementation declarations, including renamed copies; the probe is invoked in CI
   CHECK: node .unlazy/verify-gate.mjs
@@ -17,12 +17,12 @@ Scope: Keep one classifier implementation per language. The real TypeScript and 
 - [x] G3: Independently changed classifier verdicts and removed duplicate detection fail their corresponding native checks; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: safety-parity-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=ff14056998334330f0de73c6862b840cd3b65284ab96526e91d1eac233552a49; exit=0; EXPECT=matched; output-sha256=587aad9cf2e30c2e4d10b65710d382063a29c9b40ed6166f113fa4565c8090c5; output-bytes=646; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=ff14056998334330f0de73c6862b840cd3b65284ab96526e91d1eac233552a49; exit=0; EXPECT=matched; output-sha256=a40c3bd386aca113d4a0dbfb721e8778c055050c046247d22e9e28345b502d91; output-bytes=646; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
 - [x] G4: Full auth, verification and adapter suites, affected static checks, architecture/RBAC, exact CI wiring and migration rollback pairing pass
   CHECK: node .unlazy/verify-full.mjs
   EXPECT: safety-parity-full-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=4436f905996a11f7a06216a88668bd867ff1a672248c3a63a10e05898d9284e8; exit=0; EXPECT=matched; output-sha256=3e762e185199189ff59d406e4b2ba15617d4f328efc20fa9e386cb823dccc1d9; output-bytes=426; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=4436f905996a11f7a06216a88668bd867ff1a672248c3a63a10e05898d9284e8; exit=0; EXPECT=matched; output-sha256=502d0fda0b2c22bc1d4dbd77d175472a2b8c5b9c95102d9d1f1095ede003c715; output-bytes=426; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-safety-parity-c106; path=b33e9cf43ae9/31 entries
 
 - [x] G5: The regenerated safety baseline is independently measured; all other normalized AST counts add zero entries and final architecture gates pass
   CHECK: node .unlazy/verify-baseline.mjs
