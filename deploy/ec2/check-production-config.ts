@@ -2,7 +2,7 @@
 // the services start with NODE_ENV=production. Several components refuse a
 // mock in production and only find out at boot: platform-api's identity,
 // email and media providers, its environment schema, and orchestration's
-// Session Gateway. This runs each one's own selection code -- not a copy --
+// Identity & Tenant Gateway. This runs each one's own selection code -- not a copy --
 // against each container's own environment, as `docker compose config`
 // resolves it from the generated .env and compose.yml (env_file plus any
 // per-service overrides). Clients are only constructed; nothing is called.
@@ -56,7 +56,7 @@ async function main(): Promise<void> {
   const { createIdentityProvider } = await import("../../apps/platform-api/src/identity/identity.module");
   const { InMemorySessionStore } = await import("../../apps/platform-api/src/identity/session-store");
   const { InMemorySsoConfigStore } = await import("../../apps/platform-api/src/identity/sso-config-store");
-  const { sessionGatewayEnvironment, buildWorstCaseEstimator } = await import(
+  const { identityTenantGatewayEnvironment, buildWorstCaseEstimator } = await import(
     "../../apps/orchestration-service/src/orchestration-infrastructure.module"
   );
 
@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     resolveTextToSpeechProvider(objects);
     resolveSpeechToTextProvider(objects);
   });
-  await check("orchestration-service", "Session Gateway", () => sessionGatewayEnvironment(process.env));
+  await check("orchestration-service", "Identity & Tenant Gateway", () => identityTenantGatewayEnvironment(process.env));
   await check("orchestration-service", "pre-run estimation", () => buildWorstCaseEstimator(process.env));
   const { runLearningAuditClient } = await import(
     "../../apps/orchestration-service/src/runs/run-learning-audit"
