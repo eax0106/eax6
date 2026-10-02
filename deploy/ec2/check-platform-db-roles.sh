@@ -48,15 +48,18 @@ fi
 tenant_a="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 tenant_b="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+workspace_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 cleanup() {
   # Only this check's generated fixture IDs, in the migration-owner transaction.
-  psql_as "$url" -c "BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM tenant_members WHERE user_id = '$user_id'; DELETE FROM users WHERE id = '$user_id'; DELETE FROM tenants WHERE id IN ('$tenant_a', '$tenant_b'); COMMIT;" >/dev/null 2>&1 || true
+  psql_as "$url" -c "BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM workspace_members WHERE user_id = '$user_id'; DELETE FROM tenant_members WHERE user_id = '$user_id'; DELETE FROM workspaces WHERE id = '$workspace_id'; DELETE FROM users WHERE id = '$user_id'; DELETE FROM tenants WHERE id IN ('$tenant_a', '$tenant_b'); COMMIT;" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 psql_as "$url" -c "
   INSERT INTO tenants (id, name, status) VALUES ('$tenant_a', 'roles-check-a', 'active'), ('$tenant_b', 'roles-check-b', 'active');
   INSERT INTO users (id, identity_ref, email, status) VALUES ('$user_id', 'check|$user_id', 'roles-check@example.test', 'active');
-  INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES (gen_random_uuid(), '$tenant_a', '$user_id', 'owner'), (gen_random_uuid(), '$tenant_b', '$user_id', 'member');" >/dev/null
+  INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES (gen_random_uuid(), '$tenant_a', '$user_id', 'owner'), (gen_random_uuid(), '$tenant_b', '$user_id', 'member');
+  INSERT INTO workspaces (id, tenant_id, name, status) VALUES ('$workspace_id', '$tenant_a', 'roles-check', 'active');
+  INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES (gen_random_uuid(), '$tenant_a', '$workspace_id', '$user_id', 'admin');" >/dev/null
 
 members="tenant_members WHERE user_id = '$user_id'"
 [[ "$(psql_as "$app" -c "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")" == f ]] \
@@ -65,8 +68,24 @@ members="tenant_members WHERE user_id = '$user_id'"
   || fail "platform_app read tenant rows with no tenant context (RLS not applied)"
 [[ "$(psql_as "$app" -c "SELECT set_config('app.current_tenant_id', '$tenant_a', false)" -c "SELECT count(*) FROM $members" | tail -1)" == 1 ]] \
   || fail "platform_app did not see exactly its own tenant's row"
-[[ "$(psql_as "$app" -c "SELECT count(*) FROM admin_list_users('$user_id')")" == 1 ]] \
-  || fail "platform_app cannot use the staff definer functions"
+[[ "$(psql_as "$app" -c "SELECT set_config('app.current_tenant_id', '$tenant_a', false)" -c "UPDATE workspaces SET name='roles-check-edited' WHERE id='$workspace_id' RETURNING name" | tail -1)" == roles-check-edited ]] \
+  || fail "tenant data update unavailable"
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_signup('check|$user_id', '$tenant_a') WHERE \"userId\" = '$user_id' AND \"workspaceId\" = '$workspace_id'")" == 1 ]] \
+  || fail "tenant signup lookup unavailable"
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND p.oid <> 'resolve_existing_signup(text,uuid)'::regprocedure AND has_function_privilege(current_user,p.oid,'EXECUTE')")" == 0 ]] \
+  || fail "tenant function grant check failed"
+for call in 'admin_list_tenants()' "admin_list_users('$user_id')" "admin_revoke_user_sessions('$user_id')" 'admin_list_billing_issues()'; do
+  if psql_as "$app" -c "SELECT $call" >/dev/null 2>&1; then
+    fail "tenant and staff function grants must differ"
+  fi
+done
+[[ "$(psql_as "$ops" -c "SELECT count(*) FROM admin_list_users('$user_id')")" == 1 ]] \
+  || fail "staff user lookup unavailable"
+[[ "$(psql_as "$ops" -c "SELECT count(*) FROM admin_list_tenants() WHERE id IN ('$tenant_a','$tenant_b')")" == 2 ]] \
+  || fail "staff tenant lookup unavailable"
+psql_as "$ops" -c 'SELECT count(*) FROM admin_list_billing_issues()' >/dev/null
+[[ "$(psql_as "$ops" -c "SELECT admin_revoke_user_sessions('$user_id')")" == 0 ]] \
+  || fail "staff session operation unavailable"
 [[ "$(psql_as "$ops" -c "SELECT count(*) FROM $members")" == 2 ]] \
   || fail "platform_operations does not read across tenants"
 for role_target in "$app" "$ops"; do

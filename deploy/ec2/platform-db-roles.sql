@@ -36,18 +36,28 @@ BEGIN
 END
 $roles$;
 
--- Definer functions are granted to platform_api by the migrations; the app role
--- acts as platform_api for them.
+-- Runtime function grants are explicit: signup uses the tenant plane and
+-- administrative functions use the staff plane.
 DO $grants$
 DECLARE
   target text;
+  signature text;
 BEGIN
   FOREACH target IN ARRAY ARRAY['platform_app', 'platform_operations'] LOOP
     EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I', current_database(), target);
     EXECUTE format('GRANT USAGE ON SCHEMA public TO %I', target);
     EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %I', target);
     EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', target);
-    EXECUTE format('GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO %I', target);
+    EXECUTE format('REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM %I', target);
+    FOREACH signature IN ARRAY CASE WHEN target = 'platform_app'
+      THEN ARRAY['public.resolve_existing_signup(text,uuid)']
+      ELSE ARRAY['public.admin_list_tenants()', 'public.admin_list_users(uuid)',
+                 'public.admin_revoke_user_sessions(uuid)', 'public.admin_list_billing_issues()']
+    END LOOP
+      IF to_regprocedure(signature) IS NOT NULL THEN
+        EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I', signature, target);
+      END IF;
+    END LOOP;
   END LOOP;
 END
 $grants$;
