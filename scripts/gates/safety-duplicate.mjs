@@ -1,136 +1,68 @@
 import ts from 'typescript';
-import { finding, sourceFiles, readLines } from './lib.mjs';
+import { execFileSync } from 'node:child_process';
+import { join } from 'node:path';
+import { finding, REPO_ROOT, sourceFiles } from './lib.mjs';
+import { lineOf, parse, walk } from './ast.mjs';
 
-/**
- * Gate: Safety checks have one canonical implementation.
- *
- * Contract 37 forbids every caller from rebuilding SSRF, redaction, or
- * injection screening. This uses TypeScript's AST so aliases and formatting
- * cannot hide a direct DNS/socket/fetch import.
- */
 export const name = 'safety-duplicate';
-export const closes = 'Contract 37 — Safety checks have one canonical package';
+export const closes = 'D15 — one safety implementation per language';
 
-const CANONICAL_PREFIX = 'packages/safety/';
-const NETWORK_IMPORTS = new Map([
-  ['node:dns', new Set(['lookup', 'resolve', 'resolve4', 'resolve6'])],
-  ['node:dns/promises', new Set(['lookup', 'resolve', 'resolve4', 'resolve6'])],
-  ['node:http', new Set(['get', 'request'])],
-  ['node:https', new Set(['get', 'request'])],
-  ['node:net', new Set(['connect', 'createConnection'])],
-  ['node:tls', new Set(['connect'])],
+const CANONICAL = new Map([
+  ['packages/adapters/src/http/ssrf-guard.ts', new Set(['isBlockedIpLiteral', 'isBlockedIpv4', 'isBlockedIpv6', 'assertUrlSchemeAllowed', 'assertHostnameNotLiteralBlockedIp', 'assertResolvedAddressesNotBlocked'])],
+  ['packages/adapters/src/http/ssrf-guarded-fetcher.ts', new Set(['SsrfGuardedFetcher'])],
+  ['packages/adapters/src/presidio/presidio-pii-redaction-provider.ts', new Set(['PresidioPIIRedactionProvider'])],
+  ['packages/auth/session-gateway/src/prompt-injection-classifier.ts', new Set(['PromptInjectionClassifier', 'parseClassifierOutput'])],
 ]);
-const SAFETY_DECLARATIONS = new Set([
-  'classifyInjection',
-  'createSsrfGuard',
-  'fetchSafe',
-  'redact',
-  'screenInjection',
-  'validateSsrfTarget',
+const PRIMITIVES = new Set([
+  ...[...CANONICAL.values()].flatMap(names => [...names]),
+  'classifyInjection', 'createSsrfGuard', 'fetchSafe', 'redact', 'screenInjection', 'validateSsrfTarget',
 ]);
+
+function implementations(source) {
+  const found = [];
+  walk(source, node => {
+    const body = ts.isClassDeclaration(node) && node.members.length > 0 ? node
+      : ts.isFunctionDeclaration(node) ? node.body
+      : ts.isVariableDeclaration(node) && node.initializer &&
+        (ts.isArrowFunction(node.initializer) || ts.isFunctionExpression(node.initializer))
+        ? node.initializer.body : undefined;
+    if (body && node.name && ts.isIdentifier(node.name)) found.push({ node, body, symbol: node.name.text });
+  });
+  return found;
+}
+
+// Identifier renames and formatting cannot hide a copied implementation.
+// Small expressions are excluded: matching a trivial wrapper proves no duplication.
+function signature(body) {
+  const parts = [];
+  walk(body, node => {
+    parts.push(String(node.kind));
+    if (ts.isStringLiteralLike(node) || ts.isNumericLiteral(node)) parts.push(JSON.stringify(node.text));
+  });
+  return parts.length >= 60 ? parts.join(':') : undefined;
+}
 
 export async function run() {
-  const findings = [];
-
-  for (const file of await sourceFiles({ includeTests: false })) {
-    if (file.startsWith(CANONICAL_PREFIX)) continue;
-    let text;
-    try {
-      text = (await readLines(file)).join('\n');
-    } catch {
-      // A structural-test probe may have been removed after enumeration.
-      continue;
+  const signatures = new Set();
+  for (const [file, symbols] of CANONICAL) {
+    const { source } = await parse(file);
+    for (const entry of implementations(source)) {
+      if (!symbols.has(entry.symbol)) continue;
+      const value = signature(entry.body);
+      if (value) signatures.add(value);
     }
-    const source = ts.createSourceFile(file, text, ts.ScriptTarget.ES2023, true);
-
-    walk(source, (node) => {
-      if (ts.isImportDeclaration(node)) {
-        inspectImport(node, file, findings);
-      }
-      if (ts.isCallExpression(node)) {
-        inspectNetworkCall(node, file, findings);
-      }
-      if (isNamedDeclaration(node) && SAFETY_DECLARATIONS.has(node.name.text)) {
-        findings.push(
-          finding({
-            file,
-            line: source.getLineAndCharacterOfPosition(node.name.getStart(source)).line + 1,
-            message: `Safety primitive "${node.name.text}" must live in packages/safety`,
-          }),
-        );
-      }
-    });
   }
-
-  return findings;
-}
-
-function walk(node, visit) {
-  visit(node);
-  ts.forEachChild(node, (child) => walk(child, visit));
-}
-
-function inspectImport(node, file, findings) {
-  if (!ts.isStringLiteral(node.moduleSpecifier)) return;
-  const protectedNames = NETWORK_IMPORTS.get(node.moduleSpecifier.text);
-  if (protectedNames === undefined || node.importClause === undefined) return;
-
-  const bindings = node.importClause.namedBindings;
-  if (bindings === undefined || !ts.isNamedImports(bindings)) return;
-  for (const imported of bindings.elements) {
-    const importedName = imported.propertyName?.text ?? imported.name.text;
-    if (!protectedNames.has(importedName)) continue;
-    findings.push(
-      finding({
-        file,
-        line: lineOf(node, node.getSourceFile()),
-        message: `${networkLabel(importedName)} belongs only in packages/safety`,
-      }),
-    );
+  const findings = [];
+  for (const file of await sourceFiles({ includeTests: false })) {
+    const { source } = await parse(file);
+    for (const entry of implementations(source)) {
+      if (CANONICAL.get(file)?.has(entry.symbol)) continue;
+      if (!PRIMITIVES.has(entry.symbol) && !signatures.has(signature(entry.body))) continue;
+      findings.push(finding({ file, line: lineOf(source, entry.node),
+        message: `Safety implementation "${entry.symbol}" must reuse its canonical implementation` }));
+    }
   }
-}
-
-function inspectNetworkCall(node, file, findings) {
-  if (ts.isIdentifier(node.expression) && node.expression.text === 'fetch') {
-    findings.push(
-      finding({
-        file,
-        line: lineOf(node, node.getSourceFile()),
-        message: 'Direct fetch bypasses packages/safety',
-      }),
-    );
-  }
-  if (
-    ts.isPropertyAccessExpression(node.expression) &&
-    ts.isIdentifier(node.expression.expression) &&
-    node.expression.expression.text === 'globalThis' &&
-    node.expression.name.text === 'fetch'
-  ) {
-    findings.push(
-      finding({
-        file,
-        line: lineOf(node, node.getSourceFile()),
-        message: 'Direct globalThis.fetch bypasses packages/safety',
-      }),
-    );
-  }
-}
-
-function isNamedDeclaration(node) {
-  return (
-    (ts.isClassDeclaration(node) || ts.isFunctionDeclaration(node) || ts.isInterfaceDeclaration(node) ||
-      ts.isTypeAliasDeclaration(node) || ts.isVariableDeclaration(node)) &&
-    node.name !== undefined &&
-    ts.isIdentifier(node.name)
-  );
-}
-
-function lineOf(node, source) {
-  return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
-}
-
-function networkLabel(name) {
-  if (name === 'lookup' || name.startsWith('resolve')) return 'DNS resolution';
-  if (name === 'connect' || name === 'createConnection') return 'Socket creation';
-  return 'HTTP request';
+  return findings.concat(JSON.parse(execFileSync('python3', [
+    join(REPO_ROOT, 'scripts/gates/safety-duplicate-python.py'), REPO_ROOT,
+  ], { encoding: 'utf8' })));
 }

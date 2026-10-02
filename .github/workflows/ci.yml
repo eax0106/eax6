@@ -249,6 +249,11 @@ jobs:
       - name: build all projects
         run: pnpm exec nx run-many -t build --all --parallel=2
 
+      - name: safety classifier parity and duplicate implementation probes
+        run: |
+          node scripts/check-injection-parity.mjs
+          node scripts/gates/safety-duplicate.spec.mjs
+
       # platform-api:test needs a migrated DATABASE_URL (real Postgres-backed
       # specs, e.g. entitlement/credential guards) -- excluded here so it
       # only runs once, correctly, after "migrate platform db" below. Every
