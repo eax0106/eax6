@@ -143,6 +143,15 @@ describe.sequential("connection preflight native PostgreSQL and compiler boundar
     const result = await promisify(execFile)(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run", "apps/platform-api/src/planner-facade/planner-facade.service.spec.ts", "--maxWorkers=1"], {
       env: { ...process.env, CONNECTION_PREFLIGHT_COMPILER_ADDRESS: compilerAddress, CONNECTION_PREFLIGHT_COMPILER_REQUEST: JSON.stringify(architectureRequest()) },
       timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+    }).catch((error: unknown) => {
+      const output = error as { stdout?: string; stderr?: string };
+      let detail = `${output.stdout ?? ""}\n${output.stderr ?? ""}`;
+      for (const [name, value] of Object.entries(process.env)) {
+        if (value && /TOKEN|SECRET|PASSWORD|DATABASE_URL/.test(name)) detail = detail.replaceAll(value, "[redacted]");
+      }
+      detail = detail.replace(/(?:\u001b\[|\^\[\[)[0-9;]*m/g, "");
+      console.error("Native platform planner failure:\n" + detail.split("\n").filter(line => /FAIL|AssertionError|Error:|expected|received|Expected|Received|❯/.test(line)).slice(-24).join("\n"));
+      throw error;
     });
     expect(result.stdout).toMatch(/Test Files\s+1 passed/); expect(result.stdout).not.toMatch(/skipped/); expect(await versions()).toBe(0);
   }, 120_000);
