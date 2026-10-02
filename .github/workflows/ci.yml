@@ -71,6 +71,8 @@ jobs:
       - uses: astral-sh/setup-uv@v5
 
       - name: identity gateway naming
+        env:
+          IDENTITY_NAMES_BASE: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
         run: |
           bash scripts/check-identity-names.sh
           node scripts/check-identity-names.spec.mjs
