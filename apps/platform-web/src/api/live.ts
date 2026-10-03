@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiGetWithEtag, apiPatch, apiPost, apiPut, mutationKey } from "./http"
 import { compileDag } from "./compile-dag"
+import { WorkflowHealthResourceSchema, WorkflowHealthPageSchema } from "@alterx/contracts"
 import type {
   AvailableRepository,
   RepositoryBinding,
@@ -26,6 +27,8 @@ import type {
   RunCostEstimate,
   WorkflowSafeguards,
   WorkflowVersion,
+  WorkflowHealth,
+  WorkflowHealthCollection,
   Workspace,
   PendingDeletionWorkspace,
   WorkspaceRole,
@@ -54,6 +57,16 @@ import type {
 } from "./types"
 
 type AnyRecord = Record<string, any>
+
+export async function getWorkflowHealths(cursor?: string): Promise<WorkflowHealthCollection> {
+  const query = new URLSearchParams({ limit: "50" })
+  if (cursor) query.set("cursor", cursor)
+  return WorkflowHealthPageSchema.parse(await apiGet<unknown>(`/api/v1/workflows/health?${query}`)) as WorkflowHealthCollection
+}
+
+export async function getWorkflowHealth(workflowId: string): Promise<WorkflowHealth> {
+  return WorkflowHealthResourceSchema.parse(await apiGet<unknown>(`/api/v1/workflows/${encodeURIComponent(workflowId)}/health`)) as WorkflowHealth
+}
 
 export async function getDashboardSummary(fallback: DashboardSummary): Promise<DashboardSummary> {
   const [workflows, runs] = await Promise.all([
