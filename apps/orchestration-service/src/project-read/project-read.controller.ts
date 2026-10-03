@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
@@ -108,8 +109,9 @@ export class ProjectReadController {
 
   @Get(":id/clarifications")
   async clarifications(@Req() request: IdentityTenantGatewayRequest, @Param("id") projectId: string) {
+    const scope = workspaceReadScope(request);
     try {
-      return await this.projects.clarifications(requiredTenantId(request), projectId);
+      return await this.projects.clarifications(requiredTenantId(request), projectId, scope.workspaceId);
     } catch (error: unknown) {
       throw mapProjectError(error, request.url);
     }

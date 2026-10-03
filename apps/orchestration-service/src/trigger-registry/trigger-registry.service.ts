@@ -617,10 +617,15 @@ export class TriggerRegistryService {
   async listTriggers(
     tenantIdInput: string,
     workflowId?: string,
+    workspaceId?: string,
   ): Promise<readonly Trigger[]> {
     requireNonEmpty("tenantId", tenantIdInput);
     const tenantId = bareTenantUuid(tenantIdInput);
 
+    const conditions = ["tenant_id = $1"];
+    const values: unknown[] = [tenantId];
+    if (workflowId !== undefined) { values.push(workflowId); conditions.push(`workflow_id = $${values.length}`); }
+    if (workspaceId !== undefined) { values.push(workspaceId); conditions.push(`workspace_id = $${values.length}`); }
     return this.store.withTenant(tenantId, async (tx) => {
       const result = await tx.query<{
         id: string;
@@ -631,12 +636,9 @@ export class TriggerRegistryService {
         status: TriggerStatus;
         provider: string | null;
       }>(
-        workflowId === undefined
-          ? `SELECT id, workspace_id, workflow_id, name, type, status, provider
-             FROM triggers WHERE tenant_id = $1 ORDER BY created_at DESC`
-          : `SELECT id, workspace_id, workflow_id, name, type, status, provider
-             FROM triggers WHERE tenant_id = $1 AND workflow_id = $2 ORDER BY created_at DESC`,
-        workflowId === undefined ? [tenantId] : [tenantId, workflowId],
+        `SELECT id, workspace_id, workflow_id, name, type, status, provider
+         FROM triggers WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC`,
+        values,
       );
       return result.rows.map((row) => ({
         id: row.id,

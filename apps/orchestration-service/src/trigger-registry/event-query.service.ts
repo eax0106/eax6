@@ -47,9 +47,9 @@ export class EventNotFoundError extends Error {
 // matches the frontend's own workflowId?/runId? being optional.
 const fromClause =
   "FROM events e " +
-  "LEFT JOIN triggers t ON t.tenant_id = e.tenant_id AND t.id = e.trigger_id " +
+  "LEFT JOIN triggers t ON t.tenant_id = e.tenant_id AND t.id = e.trigger_id AND t.workspace_id = e.workspace_id " +
   "LEFT JOIN LATERAL (SELECT id FROM runs WHERE tenant_id = e.tenant_id AND triggering_event_id = e.event_id " +
-  "AND replayed_from IS NULL ORDER BY created_at, id LIMIT 1) r ON true";
+  "AND workspace_id = e.workspace_id AND replayed_from IS NULL ORDER BY created_at, id LIMIT 1) r ON true";
 const fields =
   "e.event_id, e.event_type, e.tenant_id, e.workspace_id, e.source, e.source_account_id, " +
   "e.trigger_id, e.trigger_version, e.occurred_at::text, e.received_at::text, e.signature_status, " +
@@ -107,6 +107,7 @@ function normalizeLimit(limit: number | undefined): number {
 }
 
 export interface EventListQuery {
+  readonly workspaceId?: string;
   readonly source?: string;
   readonly status?: string;
   readonly cursor?: string;
@@ -131,8 +132,8 @@ export class EventQueryService {
       let cursorReceivedAt: string | undefined;
       if (query.cursor !== undefined) {
         const cursor = await tx.query<{ readonly received_at: string }>(
-          "SELECT received_at::text FROM events WHERE tenant_id = $1 AND event_id = $2",
-          [tenantId, query.cursor],
+          "SELECT received_at::text FROM events WHERE tenant_id = $1 AND event_id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+          [tenantId, query.cursor, query.workspaceId ?? null],
         );
         cursorReceivedAt = cursor.rows[0]?.received_at;
         if (cursorReceivedAt === undefined) {
@@ -142,6 +143,10 @@ export class EventQueryService {
 
       const conditions = ["e.tenant_id = $1"];
       const values: unknown[] = [tenantId];
+      if (query.workspaceId !== undefined) {
+        values.push(query.workspaceId);
+        conditions.push(`e.workspace_id = $${values.length}`);
+      }
       if (query.source !== undefined) {
         values.push(query.source);
         conditions.push(`e.source = $${values.length}`);

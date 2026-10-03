@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import {
   Body,
@@ -171,7 +172,7 @@ export class TriggerRegistryController {
     @Query("workflowId") workflowId?: string,
   ) {
     const tenantId = requiredTenantId(request);
-    const triggers = await this.service.listTriggers(tenantId, workflowId);
+    const triggers = await this.service.listTriggers(tenantId, workflowId, workspaceReadScope(request).workspaceId);
     return { triggers };
   }
 }

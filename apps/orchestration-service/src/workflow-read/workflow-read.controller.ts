@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { CompilerConnectionsRequiredError } from "../connections/connection-preflight";
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, HttpException, Inject, Optional, Param, Patch, Post, Query, Req } from "@nestjs/common";
@@ -112,12 +113,14 @@ export class WorkflowReadController {
     @Query("cursor") cursor?: string,
     @Query("limit") rawLimit?: string,
   ) {
+    const scope = workspaceReadScope(request);
     try {
       return await this.service.listVersions(
         requiredTenantId(request),
         workflowId,
         cursor,
         rawLimit === undefined ? 50 : Number(rawLimit),
+        scope.workspaceId,
       );
     } catch (error: unknown) {
       throw mapWorkflowError(error, request.url);

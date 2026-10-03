@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import {
   Body,
   Controller,
@@ -58,10 +59,12 @@ export class TriggerBindingController {
     @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
   ): Promise<{ readonly bindings: readonly TriggerBinding[] }> {
+    const scope = workspaceReadScope(request);
     try {
       return await this.service.listBindings(
         requiredTenantId(request),
         triggerId,
+        scope.workspaceId,
       );
     } catch (error: unknown) {
       throw mapBindingError(error, request.url);

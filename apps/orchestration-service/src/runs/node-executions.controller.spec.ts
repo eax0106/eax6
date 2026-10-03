@@ -20,7 +20,7 @@ function ledger(): NodeExecutionLedgerService {
 }
 
 function request(tenantId = TENANT) {
-  return { actorContext: { tenant_id: tenantId }, url: `/api/v1/runs/${RUN}/node-executions` };
+  return { actorContext: { tenant_id: tenantId, workspace_id: "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ac" }, url: `/api/v1/runs/${RUN}/node-executions` };
 }
 
 describe("NodeExecutionsController", () => {
@@ -35,7 +35,7 @@ describe("NodeExecutionsController", () => {
       data: [],
       page: { next_cursor: null, has_more: false, limit: 50 },
     });
-    expect(store.list).toHaveBeenCalledWith(TENANT, RUN, { limit: 200 });
+    expect(store.list).toHaveBeenCalledWith(TENANT, RUN, { limit: 200, workspaceId: "018f4d6e-2b4a-7a3e-8c1a-1234567890ac" });
   });
 
   it("returns real ProblemDetails identifiers on missing tenant", async () => {

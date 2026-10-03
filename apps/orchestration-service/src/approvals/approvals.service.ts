@@ -224,16 +224,20 @@ export class ApprovalsService {
 
   async list(
     tenantIdInput: string,
-    query: { readonly status?: string; readonly cursor?: string; readonly limit?: number } = {},
+    query: { readonly workspaceId?: string; readonly status?: string; readonly cursor?: string; readonly limit?: number } = {},
   ): Promise<ApprovalPage> {
     const tenantId = bareTenantUuid(tenantIdInput);
     const limit = normalizeLimit(query.limit);
 
     return this.store.withTenant(tenantId, async (tx) => {
-      await this.#expirePastDue(tx, tenantId);
+      await this.#expirePastDue(tx, tenantId, query.workspaceId);
 
       const conditions: string[] = ["tenant_id = $1"];
       const values: unknown[] = [tenantId];
+      if (query.workspaceId !== undefined) {
+        values.push(query.workspaceId);
+        conditions.push(`workspace_id = $${values.length}`);
+      }
       if (query.status !== undefined) {
         values.push(query.status);
         conditions.push(`status = $${values.length}`);
@@ -243,8 +247,8 @@ export class ApprovalsService {
           throw new ApprovalValidationError("cursor must be an apr_ prefixed UUIDv7");
         }
         const cursorRow = await tx.query<{ readonly requested_at: string }>(
-          "SELECT requested_at::text FROM approvals WHERE tenant_id = $1 AND id = $2",
-          [tenantId, query.cursor],
+          "SELECT requested_at::text FROM approvals WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+          [tenantId, query.cursor, query.workspaceId ?? null],
         );
         const requestedAt = cursorRow.rows[0]?.requested_at;
         if (requestedAt === undefined) {
@@ -364,13 +368,13 @@ export class ApprovalsService {
     return current.rows[0];
   }
 
-  /** Bulk-expires every past-due pending row for this tenant before a list read. */
-  async #expirePastDue(tx: OrchestrationTransactionLike, tenantId: string): Promise<void> {
+  /** Expires pending rows in the selected read scope before a list read. */
+  async #expirePastDue(tx: OrchestrationTransactionLike, tenantId: string, workspaceId?: string): Promise<void> {
     await tx.query(
       `UPDATE approvals
        SET status = 'expired'
-       WHERE tenant_id = $1 AND status = 'pending' AND expiry_at < clock_timestamp()`,
-      [tenantId],
+       WHERE tenant_id = $1 AND status = 'pending' AND expiry_at < clock_timestamp() AND ($2::uuid IS NULL OR workspace_id = $2)`,
+      [tenantId, workspaceId ?? null],
     );
   }
 }

@@ -42,7 +42,7 @@ function approvalRow(overrides: Record<string, unknown> = {}) {
 
 function request(tenantId: string | undefined = TENANT, userId: string | null = USER_ID) {
   return {
-    actorContext: tenantId === undefined ? undefined : { tenant_id: tenantId, user_id: userId },
+    actorContext: tenantId === undefined ? undefined : { tenant_id: tenantId, user_id: userId, workspace_id: "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ac" },
     url: "/api/v1/approvals",
   };
 }
@@ -59,7 +59,7 @@ describe("ApprovalsController.list/get", () => {
       status: "pending",
     });
 
-    expect(service.list).toHaveBeenCalledWith(TENANT, { status: "pending" });
+    expect(service.list).toHaveBeenCalledWith(TENANT, { status: "pending", workspaceId: "018f4d6e-2b4a-7a3e-8c1a-1234567890ac" });
     expect(response.data).toHaveLength(1);
   });
 

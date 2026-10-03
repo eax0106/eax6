@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Param, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
@@ -33,12 +34,14 @@ export class RunObservabilityController {
     request: IdentityTenantGatewayRequest,
     runId: string,
     query: PageQuery,
-    operation: (tenantId: string, page: { cursor?: string; limit?: number }) => Promise<unknown>,
+    operation: (tenantId: string, page: { workspaceId?: string; cursor?: string; limit?: number }) => Promise<unknown>,
   ) {
+    const scope = workspaceReadScope(request);
     const tenantId = request.actorContext?.tenant_id;
     if (tenantId === undefined) throw new HttpException(problem(request.url, 500, "Missing authenticated tenant context"), 500);
     try {
       return await operation(tenantId, {
+        ...scope,
         ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
         ...(query.limit === undefined ? {} : { limit: Number(query.limit) }),
       });

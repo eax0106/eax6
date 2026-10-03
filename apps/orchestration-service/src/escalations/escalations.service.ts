@@ -167,7 +167,7 @@ export class EscalationsService {
 
   async list(
     tenantIdInput: string,
-    query: { readonly status?: string; readonly cursor?: string; readonly limit?: number } = {},
+    query: { readonly workspaceId?: string; readonly status?: string; readonly cursor?: string; readonly limit?: number } = {},
   ): Promise<EscalationPage> {
     const tenantId = bareTenantUuid(tenantIdInput);
     const limit = normalizeLimit(query.limit);
@@ -175,6 +175,10 @@ export class EscalationsService {
     return this.store.withTenant(tenantId, async (tx) => {
       const conditions: string[] = ["tenant_id = $1"];
       const values: unknown[] = [tenantId];
+      if (query.workspaceId !== undefined) {
+        values.push(query.workspaceId);
+        conditions.push(`workspace_id = $${values.length}`);
+      }
       if (query.status !== undefined) {
         values.push(query.status);
         conditions.push(`status = $${values.length}`);
@@ -182,8 +186,8 @@ export class EscalationsService {
       if (query.cursor !== undefined) {
         requireEscalationId(query.cursor);
         const cursorRow = await tx.query<{ readonly created_at: string }>(
-          "SELECT created_at::text FROM escalations WHERE tenant_id = $1 AND id = $2",
-          [tenantId, query.cursor],
+          "SELECT created_at::text FROM escalations WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+          [tenantId, query.cursor, query.workspaceId ?? null],
         );
         const createdAt = cursorRow.rows[0]?.created_at;
         if (createdAt === undefined) {

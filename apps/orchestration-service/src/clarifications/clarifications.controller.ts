@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { Body, Controller, Get, HttpException, Param, Post, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
@@ -54,8 +55,10 @@ export class ClarificationsController {
 
   @Get()
   async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: ClarificationsQuery) {
+    const scope = workspaceReadScope(request);
     try {
       const page = await this.clarifications.list(requiredTenantId(request), {
+        ...scope,
         ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
         ...(query.limit === undefined ? {} : { limit: Number(query.limit) }),
       });

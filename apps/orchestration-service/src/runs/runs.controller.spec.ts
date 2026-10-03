@@ -176,6 +176,7 @@ describe("RunsController.list/get", () => {
     expect(service.listRuns).toHaveBeenCalledWith(TENANT, {
       workflowId: WORKFLOW,
       status: "running",
+      workspaceId: WORKSPACE.slice(3),
     });
     expect(response.data).toHaveLength(1);
   });
