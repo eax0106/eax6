@@ -29,5 +29,6 @@ export const workflows = pgTable(
       sql`${table.status} IN ('draft', 'active', 'archived')`,
     ),
     unique("workflows_tenant_id_id_unique").on(table.tenantId, table.id),
+    unique("workflows_tenant_workspace_id_unique").on(table.tenantId, table.workspaceId, table.id),
   ],
 );

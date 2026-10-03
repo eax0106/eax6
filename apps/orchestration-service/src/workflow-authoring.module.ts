@@ -17,8 +17,11 @@ import { ConversationManagerService } from "./conversation/conversation-manager.
 import { GraphCompilerService } from "./compiler/graph-compiler.service";
 import { WorkflowLifecycleService } from "./workflow-lifecycle/workflow-lifecycle.service";
 import { WorkflowDeploymentController } from "./workflow-lifecycle/workflow-deployment.controller";
+import { WorkflowChatController } from "./workflow-chat/workflow-chat.controller";
+import { WorkflowChatService } from "./workflow-chat/workflow-chat.service";
 import { WorkflowReadController } from "./workflow-read/workflow-read.controller";
 import { WorkflowReadService } from "./workflow-read/workflow-read.service";
+import { WorkflowHealthService } from "./workflow-health/workflow-health.service";
 import { TemplateVariablesController } from "./template-variables/template-variables.controller";
 import { TemplateVariablesService } from "./template-variables/template-variables.service";
 import { ClarificationsController } from "./clarifications/clarifications.controller";
@@ -53,12 +56,24 @@ import { OperationsModule } from "./operations.module";
     CompilerGrpcController,
     DeployctlGrpcController,
     WorkflowReadController,
+    WorkflowChatController,
     WorkflowDeploymentController,
     TemplateVariablesController,
     ClarificationsController,
     ProjectReadController,
   ],
   providers: [
+    { provide: WorkflowHealthService, useFactory: () => new WorkflowHealthService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
+    {
+      provide: WorkflowChatService,
+      useFactory: () => {
+        const config = identityTenantGatewayEnvironment(process.env);
+        const conversation = loadConversationManagerEnvironment(process.env);
+        return new WorkflowChatService(orchestrationStore(config), new ModelGatewayClient({
+          address: conversation.modelGatewayAddress, protoPath: MODELGW_CLIENT_PROTO_PATH, accessTokenProvider: internalM2mTokenProvider(),
+        }));
+      },
+    },
     {
       provide: CONVERSATION_HANDLER,
       useFactory: () => {

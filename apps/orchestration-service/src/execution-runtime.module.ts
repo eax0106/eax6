@@ -423,8 +423,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
         const lookup = new RunWorkspaceLookupService(store);
         return {
           getRunWorkspace: async (request: { tenant_id: string; run_id: string }) => {
-            const run = await lookup.getRunWorkspace(request.tenant_id, request.run_id);
-            return { workspace_id: run.workspaceId, workflow_id: run.workflowId };
+            return lookup.getRunWorkspaceResponse(request.tenant_id, request.run_id);
           },
           getNodeExecutionRecoveryInfo: async (request: {
             tenant_id: string;

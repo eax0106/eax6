@@ -7,6 +7,7 @@ export {
   type SystemActorTokenClaims,
 } from "./actor-token";
 export { ConnectionRegistrySnapshotSchema, ConnectorTypeSchema, ConnectionSecretReferenceSchema, parseConnectionSecretReference, ConnectionCredentialLookupSchema, MissingConnectionSchema, ConnectionsRequiredSchema, type ConnectionRegistrySnapshot, type ConnectionCredentialLookup, type ConnectionsRequired } from "./connection-registry";
+export { WorkflowHealthResourceSchema, WorkflowHealthPageSchema, WorkflowHealthDimensionSchema, WorkflowHealthStatusSchema, type WorkflowHealthResource, type WorkflowHealthPage, type WorkflowHealthDimension } from "./workflow-health";
 export {
   TriggerStatusSchema,
   TriggerTypeSchema,
@@ -89,6 +90,8 @@ export {
   RecoveryActionIdSchema,
   RunIdSchema,
   TenantIdSchema,
+  ConversationIdSchema,
+  UserIdSchema,
   TriggerBindingIdSchema,
   TriggerIdSchema,
   VerificationResultIdSchema,
@@ -442,3 +445,4 @@ export {
 
 export * from "./memory-settings";
 export { UserIdSchema } from "./ids";
+export * from "./workflow-chat";

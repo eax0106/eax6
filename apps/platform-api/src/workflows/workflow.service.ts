@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { CompiledDagSchema } from "@alterx/contracts";
+import { CompiledDagSchema, WorkflowHealthResourceSchema, WorkflowHealthPageSchema } from "@alterx/contracts";
 import { Injectable } from "@nestjs/common";
 import type { JsonValue } from "@alterx/shared-clients";
 import {
@@ -86,6 +86,18 @@ export class WorkflowService {
       `/api/v1/workflows/${encodeURIComponent(id)}`,
       callerContext(actor, traceparent, instance),
     );
+  }
+
+  async health(workflowId: string, actor: ActorContext, traceparent?: string) {
+    const id = parseWorkflowId(workflowId, `/api/v1/workflows/${workflowId}/health`);
+    const path = `/api/v1/workflows/${encodeURIComponent(id)}/health` as const;
+    return WorkflowHealthResourceSchema.parse((await this.engine.get(path, callerContext(actor, traceparent, path))).body);
+  }
+
+  async healths(cursor: string | undefined, limit: string | undefined, actor: ActorContext, traceparent?: string) {
+    const workflows = (await this.list(cursor, limit, actor, traceparent)).body;
+    const data = await Promise.all(workflows.data.map(workflow => this.health(String(workflow.id), actor, traceparent)));
+    return WorkflowHealthPageSchema.parse({ data, page: workflows.page });
   }
 
   approvalPolicies(
@@ -306,6 +318,8 @@ function callerContext(
     traceparent: parseTraceparent(traceparent, instance) ?? newTraceparent(),
   };
 }
+
+export { callerContext as workflowCallerContext };
 
 function jsonBody(value: unknown): EngineRequestBody {
   return value as JsonValue;

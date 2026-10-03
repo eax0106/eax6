@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/common/status-badge"
 import { RequirePermission } from "@/features/permissions/components/require-permission"
 import { TriggerList } from "@/features/triggers/components/trigger-list"
 import { WorkflowVector } from "@/components/vectors/WorkflowVector"
+import { HealthCard } from "./workflow-health"
 
 export function WorkflowDetail() {
   const { workflowId } = useParams()
@@ -23,6 +24,12 @@ export function WorkflowDetail() {
   const { data: costEstimate } = useQuery({
     queryKey: queryKeys.costEstimate.workflow(workflowId!),
     queryFn: () => (api as any).costEstimates.forWorkflow(workflowId!),
+    enabled: !!workflowId,
+  })
+
+  const health = useQuery({
+    queryKey: queryKeys.workflowHealth.detail(workflowId!),
+    queryFn: () => api.getWorkflowHealth(workflowId!),
     enabled: !!workflowId,
   })
 
@@ -93,6 +100,13 @@ export function WorkflowDetail() {
           </p>
         </div>
       </div>
+
+      <section aria-label="Workflow health" className="space-y-3">
+        <h2 className="text-xl font-semibold">Workflow health</h2>
+        {health.isLoading && <p>Loading workflow health…</p>}
+        {health.isError && <div role="alert">Failed to load workflow health. <Button onClick={() => health.refetch()}>Try Again</Button></div>}
+        {health.data && <HealthCard health={health.data} />}
+      </section>
 
       <div className="mt-8 border-t border-border pt-8">
         <TriggerList workflowId={workflow.id} />

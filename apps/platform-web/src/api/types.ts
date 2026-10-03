@@ -1,3 +1,4 @@
+import type { WorkflowChatMessage, WorkflowChatResource } from "@alterx/contracts"
 import type { CompiledDag } from "@alterx/contracts"
 
 export type WorkflowStatus = "draft" | "active" | "paused" | "archived"
@@ -575,16 +576,18 @@ export interface NodeVerification {
 }
 
 export interface HealthDimension {
-  score: number
-  status: "healthy" | "warning" | "critical"
+  score: number | null
+  status: "healthy" | "warning" | "critical" | "not_enough_data"
   summary: string
+  observations?: number
+  passed?: number
   issues?: { id: string; message: string }[]
 }
 
 export interface WorkflowHealth {
   workflowId: string
-  overallScore: number
-  status: "healthy" | "warning" | "critical"
+  overallScore: number | null
+  status: HealthDimension["status"]
   dimensions: {
     validation: HealthDimension
     availability: HealthDimension
@@ -594,38 +597,21 @@ export interface WorkflowHealth {
   recentFailures: number
   degradedRuns: number
   lastEvaluatedAt: string
+  window?: { startAt: string; endAt: string; maximumRuns: 20; sampledRuns: number }
+}
+
+export type WorkflowHealthCollection = Pick<import("@alterx/contracts").WorkflowHealthPage, "page"> & {
+  data: WorkflowHealth[]
 }
 
 // Phase 6 Types
 
-export type ConversationType = "general" | "workflow_builder" | "project_builder" | "run_investigation"
-export type ConversationStatus = "active" | "archived"
-
-export interface Conversation {
-  id: string
-  title: string
-  type: ConversationType
-  status?: ConversationStatus
-  createdAt: string
-  updatedAt: string
-  createdBy: UserSummary
-  linkedWorkflowId?: string
-  linkedProjectId?: string
-  linkedRunId?: string
-  preview?: string
-}
-
-export type ConversationMessageRole = "user" | "assistant" | "system"
-export type ConversationMessageKind = "text" | "clarification" | "workflow" | "project" | "run" | "artifact" | "action"
-
-export interface ConversationMessage {
-  id: string
-  conversationId: string
-  role: ConversationMessageRole
-  kind: ConversationMessageKind
-  createdAt: string
-  content: any
-}
+export type ConversationType = WorkflowChatResource["type"]
+export type ConversationStatus = WorkflowChatResource["status"]
+export type Conversation = WorkflowChatResource & { linkedProjectId?: string; linkedRunId?: string }
+export type ConversationMessageRole = WorkflowChatMessage["role"]
+export type ConversationMessageKind = WorkflowChatMessage["kind"]
+export type ConversationMessage = WorkflowChatMessage
 
 export type TriggerType = "manual" | "webhook" | "schedule" | "event" | "email"
 export type TriggerStatus = "configured" | "needs_configuration" | "error"

@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { PlatformWorkflowChatModule } from "./workflow-chat/platform-workflow-chat.module";
 import { DbModule } from "./db/db.module";
 import { AbuseModule } from "./abuse/abuse.module";
 import { EntitlementsModule } from "./entitlements/entitlements.module";
@@ -75,6 +76,7 @@ import { MemorySettingsModule } from "./memory-settings/memory-settings.module";
     IdempotencyModule,
     StreamingModule,
     WorkflowModule,
+    PlatformWorkflowChatModule,
     ProjectModule,
     RunModule,
     EventModule,

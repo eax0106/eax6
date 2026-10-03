@@ -35,6 +35,11 @@ export class NodeExecutionNotFoundError extends Error {
 export class RunWorkspaceLookupService {
   constructor(private readonly store: OrchestrationTenantStore) {}
 
+  async getRunWorkspaceResponse(tenantId: string, runId: string) {
+    const row = await this.getRunWorkspace(tenantId, runId);
+    return { workspace_id: row.workspaceId.startsWith("ws_") ? row.workspaceId : `ws_${row.workspaceId}`, workflow_id: row.workflowId };
+  }
+
   async getWorkspaceId(tenantIdInput: string, runIdInput: string): Promise<string> {
     return (await this.getRunWorkspace(tenantIdInput, runIdInput)).workspaceId;
   }
@@ -54,7 +59,14 @@ export class RunWorkspaceLookupService {
         [tenantId, runId],
       );
       const row = result.rows[0];
-      if (row === undefined) throw new RunNotFoundError(runId);
+      if (row === undefined) {
+        const call = await tx.query<{ workspace_id: string; workflow_id: string | null }>(
+          `SELECT m.workspace_id,c.workflow_id FROM conversation_messages m JOIN conversations c
+           ON c.tenant_id=m.tenant_id AND c.workspace_id=m.workspace_id AND c.id=m.conversation_id
+           WHERE m.tenant_id=$1 AND m.model_run_id=$2 AND c.chat_type='general'`, [tenantId,runId]);
+        if (!call.rows[0]) throw new RunNotFoundError(runId);
+        return { workspaceId: call.rows[0].workspace_id, workflowId: call.rows[0].workflow_id ?? "" };
+      }
       if (row.workflow_id === null || row.workflow_id === "") {
         throw new RunNotFoundError(runId);
       }
@@ -83,7 +95,13 @@ export class RunWorkspaceLookupService {
         [tenantId, runId, nodeExecutionId],
       );
       const nodeRow = nodeResult.rows[0];
-      if (nodeRow === undefined) throw new NodeExecutionNotFoundError(nodeExecutionId);
+      if (nodeRow === undefined) {
+        const call = await tx.query(`SELECT m.id FROM conversation_messages m JOIN conversations c
+          ON c.tenant_id=m.tenant_id AND c.workspace_id=m.workspace_id AND c.id=m.conversation_id
+          WHERE m.tenant_id=$1 AND m.model_run_id=$2 AND m.model_node_execution_id=$3 AND c.chat_type='general'`,[tenantId,runId,nodeExecutionId]);
+        if (!call.rows[0]) throw new NodeExecutionNotFoundError(nodeExecutionId);
+        return { isRetry: false, isRecovery: false };
+      }
 
       const recoveryResult = await tx.query<{ readonly exists: boolean }>(
         `SELECT EXISTS(
