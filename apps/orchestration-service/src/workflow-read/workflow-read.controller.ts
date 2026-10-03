@@ -1,9 +1,10 @@
 import { workspaceReadScope } from "../workspace-read-scope";
 import { CompilerConnectionsRequiredError } from "../connections/connection-preflight";
 import { randomUUID } from "node:crypto";
-import { Body, Controller, Get, HttpException, Param, Patch, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, HttpException, Inject, Optional, Param, Patch, Post, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
+import { WorkflowHealthService } from "../workflow-health/workflow-health.service";
 import {
   WorkflowNotFoundError,
   WorkflowReadService,
@@ -49,7 +50,15 @@ function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
 
 @Controller("api/v1/workflows")
 export class WorkflowReadController {
-  constructor(private readonly service: WorkflowReadService) {}
+  constructor(private readonly service: WorkflowReadService, @Optional() @Inject(WorkflowHealthService) private readonly healthService?: WorkflowHealthService) {}
+
+  @Get(":id/health")
+  async health(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
+    try {
+      if (!this.healthService) throw new Error("Workflow health read is not configured");
+      return await this.healthService.get(requiredTenantId(request), requiredWorkspaceId(request), workflowId);
+    } catch (error: unknown) { throw mapWorkflowError(error, request.url); }
+  }
 
   @Post()
   async create(@Req() request: IdentityTenantGatewayRequest, @Body() body: CreateWorkflowBody) {

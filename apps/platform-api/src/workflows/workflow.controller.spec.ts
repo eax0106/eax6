@@ -148,6 +148,24 @@ describe("WorkflowController routes", () => {
     expect(engine.patch).toHaveBeenCalledOnce();
   });
 
+  it("lets all five workspace read roles read health and rejects unscoped callers", async () => {
+    const dimension = { score: null, status: "not_enough_data", summary: "No recorded evidence", observations: 0, passed: 0 };
+    const health = { workflowId, overallScore: null, status: "not_enough_data", dimensions: { validation: dimension, availability: dimension, correctness: dimension, reliability: dimension }, recentFailures: 0, degradedRuns: 0, lastEvaluatedAt: "2026-10-03T12:00:00.000Z", window: { startAt: "2026-09-26T12:00:00.000Z", endAt: "2026-10-03T12:00:00.000Z", maximumRuns: 20, sampledRuns: 0 } };
+    const page = { next_cursor: "next", has_more: true, limit: 1 };
+    engine.get.mockImplementation(async path => ({ status: 200, body: path.includes("/health") ? health : { data: [{ id: workflowId }], page } }));
+    for (const role of ["admin", "editor", "operator", "approver", "viewer"]) {
+      expect((await request("GET", `/api/v1/workflows/${workflowId}/health`, { actor: { ...viewer, roles: [role] } })).json()).toEqual(health);
+    }
+    const list = await request("GET", "/api/v1/workflows/health?limit=1&cursor=prior", { actor: viewer });
+    expect(list.statusCode).toBe(200); expect(list.json()).toEqual({ data: [health], page });
+    expect((await request("GET", `/api/v1/workflows/${workflowId}/health`, { actor: { ...viewer, roles: [] } })).statusCode).toBe(403);
+    const unscoped = { ...viewer }; delete unscoped.workspace_id;
+    expect((await request("GET", `/api/v1/workflows/${workflowId}/health`, { actor: unscoped })).statusCode).toBe(403);
+    expect((await request("GET", `/api/v1/workflows/${workflowId}/health`, {})).statusCode).toBe(403);
+    expect((await request("GET", "/api/v1/workflows/invalid/health", { actor: viewer })).statusCode).toBe(400);
+    engine.reset();
+  });
+
   it("keeps direct controller calls default-deny without actor context", async () => {
     const controller = new WorkflowController(
       { get: vi.fn() } as unknown as WorkflowService,
@@ -532,7 +550,7 @@ class StatefulEngine {
   reset(): void {
     this.draft = initialDraft();
     this.failure = undefined;
-    this.get.mockClear();
+    this.get.mockReset().mockImplementation(this.getResponse.bind(this));
     this.post.mockClear();
     this.patch.mockClear();
     this.put.mockClear();

@@ -50,7 +50,7 @@ import {
   type Profile, type Session,
   type Project, type ProjectBrief, type ProjectClarification, type NodeTypeDefinition,
   type Artifact, type ProjectFile, type TestResult,
-  type HumanAction, type HumanActionType, type HumanAnnotation, type RecoveryEvent, type WorkflowHealth, type NodeVerification,
+  type HumanAction, type HumanActionType, type HumanAnnotation, type RecoveryEvent, type WorkflowHealth, type WorkflowHealthCollection, type NodeVerification,
   type Conversation, type ConversationMessage, type Trigger, type WebhookEndpoint, type IncomingEvent, type DashboardOverview,
   type KnowledgeSource, type KnowledgeDocument, type IntegrationDefinition, type Connection,
   type Credential, type WhatsAppChannel, type WhatsAppTemplate, type WhatsAppTestMessage, type MemoryConfiguration, type RetrievalResult
@@ -702,12 +702,14 @@ class ApiClient {
   }
 
   // Workflow Health
-  async getWorkflowHealths(): Promise<WorkflowHealth[]> {
+  async getWorkflowHealths(cursor?: string): Promise<WorkflowHealthCollection> {
+    if (isLiveApi) return live.getWorkflowHealths(cursor)
     await delay(MOCK_DELAY)
-    return mockWorkflowHealth
+    return { data: mockWorkflowHealth, page: { next_cursor: null, has_more: false, limit: 50 } }
   }
 
   async getWorkflowHealth(workflowId: string): Promise<WorkflowHealth> {
+    if (isLiveApi) return live.getWorkflowHealth(workflowId)
     await delay(MOCK_DELAY)
     const health = mockWorkflowHealth.find(h => h.workflowId === workflowId)
     if (!health) throw new Error("Workflow health not found")
