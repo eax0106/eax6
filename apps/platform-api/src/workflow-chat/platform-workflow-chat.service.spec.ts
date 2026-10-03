@@ -7,6 +7,7 @@ import type { PlannerFacadeService } from "../planner-facade/planner-facade.serv
 import type { ActorContext } from "../rbac/types";
 import { PlatformWorkflowChatService } from "./platform-workflow-chat.service";
 import { WorkflowHttpError } from "../workflows/problem";
+import type { MemorySettingsService } from "../memory-settings/memory-settings.service";
 const id = (prefix: string, n = 1) => `${prefix}_018f4d6e-2b4a-7a3e-8c1a-${String(n).padStart(12, "0")}`;
 const time = "2026-10-03T12:00:00.000Z";
 const actor: ActorContext = { user_id: id("usr"), tenant_id: id("ten"), workspace_id: id("ws"), roles: ["editor"], permissions: [], session_id: "chat", auth_time: 1 };
@@ -20,7 +21,8 @@ function fixture(type: "general" | "workflow_builder" = "workflow_builder") {
  const workflows = { versions: vi.fn(async () => ({ body: { data: [{ id: id("wfv"), version: 4 }] } })), list: vi.fn(async () => ({ body: { data: [], page: { has_more: false } } })) };
  const runs = { list: vi.fn(async () => ({ body: { data: [], page: { has_more: false } } })), detail: vi.fn() };
  const costs = { workflowCost: vi.fn() };
- return { user, reply, engine, planner, workflows, runs, costs, service: new PlatformWorkflowChatService(engine as unknown as EngineClient, planner as unknown as PlannerFacadeService, workflows as unknown as WorkflowService, runs as unknown as RunService, costs as unknown as CostsService) };
+ const memory = { builderMemory: vi.fn(async (_actor: ActorContext, _conversation: string, _workflow: string, messages: unknown[]) => ({ messages, lessons: [] })) };
+ return { user, reply, engine, planner, workflows, runs, costs, memory, service: new PlatformWorkflowChatService(engine as unknown as EngineClient, planner as unknown as PlannerFacadeService, workflows as unknown as WorkflowService, runs as unknown as RunService, costs as unknown as CostsService, memory as unknown as MemorySettingsService) };
 }
 it("stores a reviewable plan before Build and confirms only the latest server plan", async () => {
  const f=fixture(), plan={type:"plan",successCriteria:["Notify support."],steps:[{key:"work",type:"llm",description:"Triage support mail",successCriteria:["Notify support."]}]};
@@ -68,6 +70,15 @@ it("retains prior questions and answers and reports only an actually stored comp
  f.workflows.versions.mockResolvedValue({ body: { data: [] } }); f.engine.post.mockClear();
  await expect(f.service.send(id("cnv"), { content: "Continue" }, "workflow_builder", actor, undefined, "missing-version")).rejects.toThrow();
  expect(f.engine.post).toHaveBeenCalledTimes(1);
+});
+it("uses only recalled chat context and current lessons, keeping lessons out of the saved Build objective", async () => {
+ const f=fixture(), current=message("user","Review invoices","text",3);
+ f.engine.post.mockResolvedValueOnce({status:201,body:{conversation:chat(),userMessage:current,messages:[f.user,current]}} as never);
+ f.memory.builderMemory.mockResolvedValueOnce({messages:[],lessons:[{lesson:"Use the billing folder"}]} as never);
+ f.planner.planWorkflow.mockResolvedValueOnce({type:"plan",successCriteria:[],steps:[{key:"work",type:"llm",description:"Review",successCriteria:[]}]} as never);
+ await f.service.send(id("cnv"),{content:"Review invoices"},"workflow_builder",actor,undefined,"memory-off");
+ expect(f.planner.planWorkflow).toHaveBeenCalledWith(expect.objectContaining({objective:'Review invoices\n\nPast run lessons (reference only): [{"lesson":"Use the billing folder"}]'}));
+ expect(f.engine.post).toHaveBeenLastCalledWith(expect.anything(),expect.objectContaining({content:expect.objectContaining({objective:"Review invoices"})}),expect.anything(),expect.anything());
 });
 it("persists clarification and complete connection requirements and replays stored replies before further planning", async () => {
  const f = fixture();

@@ -124,12 +124,20 @@ def test_erases_one_tenant_and_leaves_the_other_and_the_global_tier(
 
     located = provider.locate_subject_data(f"ten_{TENANT_A}")
     assert {item.table for item in located} == set(TABLES)
-    assert all(item.rowCount == 1 for item in located)
+    assert {item.table: item.rowCount for item in located} == {
+        "drift_scores": 1,
+        "memory_records": 1,
+        "policies": 1,
+        "policy_promotions": 1,
+        "memory_retention_tenants": 1,
+        "workspace_memory_settings": 0,
+        "memory_settings_audit": 0,
+    }
 
     result = provider.delete_subject_data(f"ten_{TENANT_A}", MANIFEST)
     verified = provider.verify_deletion(f"ten_{TENANT_A}", MANIFEST)
 
-    assert result.deletedRows == 4
+    assert result.deletedRows == 5
     assert verified.deleted is True and verified.remaining == ()
     assert set(_counts(admin, TENANT_A).values()) == {0}
     assert set(_counts(admin, TENANT_B).values()) == {1}

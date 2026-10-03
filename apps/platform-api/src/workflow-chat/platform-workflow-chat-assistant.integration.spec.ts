@@ -17,6 +17,7 @@ import { RunService } from "../runs/run.service";
 import { CostsService } from "../costs/costs.service";
 import type { PlannerFacadeService } from "../planner-facade/planner-facade.service";
 import { PlatformWorkflowChatService } from "./platform-workflow-chat.service";
+import { MemorySettingsService } from "../memory-settings/memory-settings.service";
 import { PlatformWorkflowChatController } from "./platform-workflow-chat.controller";
 
 // Always launched by the engine's native Model Gateway child. Only the public
@@ -48,7 +49,7 @@ it.runIf(Boolean(process.env.WORKFLOW_CHAT_NATIVE_PUBLIC_ASSISTANT))("grounds th
       ENGINE_M2M_TOKEN_URL: `${fixture.baseUrl}/token`, ENGINE_M2M_AUDIENCE: "alter-engine", ENGINE_M2M_CLIENT_ID: "native", ENGINE_M2M_CLIENT_SECRET_REF: "native" });
     const engine = new EngineClient(config, authorization), ledger = new CostLedgerClient(config, authorization), workflows = new WorkflowService(engine);
     const chats = new PlatformWorkflowChatService(engine, { planWorkflow: async () => { throw Error("Assistant must not invoke builder"); } } as unknown as PlannerFacadeService,
-      workflows, new RunService(engine, ledger), new CostsService(ledger, engine));
+      workflows, new RunService(engine, ledger), new CostsService(ledger, engine), new MemorySettingsService());
     const module = await Test.createTestingModule({ imports: [RbacModule], controllers: [PlatformWorkflowChatController], providers: [
       { provide: PlatformWorkflowChatService, useValue: chats }, IdempotencyInterceptor, IdempotencyExceptionFilter,
       { provide: PgIdempotencyStore, useValue: new PgIdempotencyStore(pool, 60000) },

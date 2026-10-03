@@ -126,6 +126,17 @@ const PASS_QUALITY: readonly VerificationResultRecord[] = [
 ];
 
 describe("PostgresRunFinalizationMemoryWriter.writeVerifiedOutputMemory", () => {
+  it("reports disabled workflow memory as skipped", async () => {
+    const writer = new PostgresRunFinalizationMemoryWriter(
+      fakeStore({
+        run: { workspace_id: WORKSPACE_ID, workflow_id: "wf_018f47a5-7b2c-7d10-8f11-123456789abc", workflow_version_id: WORKFLOW_VERSION_ID },
+        compiledDag: singleNodeDag(), succeededNodes: [{ id: "node_exec_a", dag_node_id: "node_a" }],
+        checkpoint: { value_json: { answer: "verified" } },
+      }), fakeVerificationReader(PASS_QUALITY), fakeArtifacts(),
+      { proposeWriteback: vi.fn().mockResolvedValue({ memory_id: "", candidate_json: "{}", skipped: true }) },
+    );
+    await expect(writer.writeVerifiedOutputMemory(TENANT_ID, RUN_ID)).resolves.toEqual({ written: false, reason: "memory_disabled" });
+  });
   it("writes memory for a single verified terminal node", async () => {
     const db: FakeDb = {
       run: { workspace_id: WORKSPACE_ID, workflow_id: "wf_abc", workflow_version_id: WORKFLOW_VERSION_ID },

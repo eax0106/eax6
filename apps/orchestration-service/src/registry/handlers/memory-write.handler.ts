@@ -45,7 +45,9 @@ export class MemoryWriteHandler implements NodeHandler {
         verified_output_artifact_id: artifactId,
         namespace,
       });
-      return { output: { memory_id: response.memory_id, candidate_json: response.candidate_json } };
+      return response.skipped
+        ? { output: { skipped: true, reason: "memory_disabled" } }
+        : { output: { memory_id: response.memory_id, candidate_json: response.candidate_json } };
     } catch (error: unknown) {
       if (error instanceof MemoryServiceClientError) {
         throw new NodeHandlerValidationError(

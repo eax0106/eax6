@@ -123,9 +123,9 @@ export const mockKnowledgeChunks: KnowledgeChunk[] = [
 export const mockMemoryConfig: MemoryConfiguration = {
   conversationMemoryEnabled: true,
   workflowMemoryEnabled: true,
-  workspaceMemoryEnabled: false,
-  retentionDays: 30,
-  allowSensitiveData: false,
+  workspaceMemoryEnabled: true,
+  retentionDays: 90,
+  etag: '"memory-0"',
 }
 
 export const mockIntegrationDefinitions: IntegrationDefinition[] = [

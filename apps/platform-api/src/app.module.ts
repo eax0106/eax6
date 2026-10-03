@@ -56,9 +56,11 @@ import { IncidentModule } from "./incidents";
 import { AdminControlsModule } from "./admin-controls";
 import { MarketplaceGovernanceModule } from "./marketplace-governance";
 import { AdminDeploymentModule } from "./admin-deployments";
+import { MemorySettingsModule } from "./memory-settings/memory-settings.module";
 
 @Module({
   imports: [
+    MemorySettingsModule,
     DbModule,
     IdentityModule,
     IdentityBrokerModule,

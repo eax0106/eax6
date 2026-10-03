@@ -12,7 +12,16 @@ export interface ProposeWritebackRequest {
 export interface ProposeWritebackResponse {
   readonly memory_id: string;
   readonly candidate_json: string;
+  readonly skipped?: boolean;
 }
+
+type WorkspaceRequest = Pick<ProposeWritebackRequest, "tenant_id" | "workspace_id">;
+type SettingsResponse = { readonly settings_json: string };
+type RecallResponse = { readonly memory_json: string };
+type Unary<Request, Response> = (
+  request: Request, metadata: Metadata, options: { readonly deadline: Date },
+  callback: (error: Error | null, response?: Response) => void,
+) => void;
 
 export interface MemoryServiceClientConfig {
   readonly address: string;
@@ -25,7 +34,7 @@ export interface MemoryWritebackHandler {
   proposeWriteback(request: ProposeWritebackRequest): Promise<ProposeWritebackResponse>;
 }
 
-type MemoryServiceErrorCode = "invalid_argument" | "not_found" | "deadline_exceeded" | "upstream";
+type MemoryServiceErrorCode = "invalid_argument" | "not_found" | "deadline_exceeded" | "precondition_required" | "conflict" | "upstream";
 
 export class MemoryServiceClientError extends Error {
   constructor(readonly code: MemoryServiceErrorCode) {
@@ -34,12 +43,12 @@ export class MemoryServiceClientError extends Error {
 }
 
 interface MemoryGrpcClient extends Client {
-  proposeWriteback(
-    request: ProposeWritebackRequest,
-    metadata: Metadata,
-    options: { readonly deadline: Date },
-    callback: (error: Error | null, response?: ProposeWritebackResponse) => void,
-  ): void;
+  proposeWriteback: Unary<ProposeWritebackRequest, ProposeWritebackResponse>;
+  getMemorySettings: Unary<WorkspaceRequest, SettingsResponse>;
+  updateMemorySettings: Unary<WorkspaceRequest & { readonly actor_id: string; readonly settings_json: string; readonly if_match: string }, SettingsResponse>;
+  memoryAccess: Unary<WorkspaceRequest & { readonly kind: "chat" | "workflow" | "workspace" }, { readonly allowed: boolean; readonly retention_days: number }>;
+  recallChat: Unary<WorkspaceRequest & { readonly conversation_id: string; readonly messages_json: string }, RecallResponse>;
+  recallWorkflow: Unary<WorkspaceRequest & { readonly workflow_id: string }, RecallResponse>;
 }
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -69,8 +78,35 @@ export class MemoryServiceClient implements MemoryWritebackHandler {
   }
 
   proposeWriteback(request: ProposeWritebackRequest): Promise<ProposeWritebackResponse> {
+    return this.#unary(this.#client.proposeWriteback, request);
+  }
+
+  getMemorySettings(request: WorkspaceRequest): Promise<SettingsResponse> {
+    return this.#unary(this.#client.getMemorySettings, request);
+  }
+
+  updateMemorySettings(request: Parameters<MemoryGrpcClient["updateMemorySettings"]>[0]): Promise<SettingsResponse> {
+    return this.#unary(this.#client.updateMemorySettings, request);
+  }
+
+  memoryAccess(request: Parameters<MemoryGrpcClient["memoryAccess"]>[0]) {
+    return this.#unary(this.#client.memoryAccess, request);
+  }
+
+  recallChat(request: Parameters<MemoryGrpcClient["recallChat"]>[0]): Promise<RecallResponse> {
+    return this.#unary(this.#client.recallChat, request);
+  }
+
+  recallWorkflow(request: Parameters<MemoryGrpcClient["recallWorkflow"]>[0]): Promise<RecallResponse> {
+    return this.#unary(this.#client.recallWorkflow, request);
+  }
+
+  close(): void { this.#client.close(); }
+
+  #unary<Request, Response>(method: Unary<Request, Response>, request: Request): Promise<Response> {
     return new Promise((resolve, reject) => {
-      this.#client.proposeWriteback(
+      method.call(
+        this.#client,
         request,
         this.#metadata,
         { deadline: new Date(Date.now() + this.#timeoutMs) },
@@ -93,5 +129,7 @@ function errorCode(error: Error): MemoryServiceErrorCode {
   if (code === status.INVALID_ARGUMENT) return "invalid_argument";
   if (code === status.NOT_FOUND) return "not_found";
   if (code === status.DEADLINE_EXCEEDED) return "deadline_exceeded";
+  if (code === status.FAILED_PRECONDITION) return "precondition_required";
+  if (code === status.ABORTED) return "conflict";
   return "upstream";
 }

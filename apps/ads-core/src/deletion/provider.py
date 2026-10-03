@@ -8,6 +8,7 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.db.ids import validate_prefixed_id
+from src.memory_namespace.client import MemoryAccess
 
 from .models import DeletionResult, RetentionSweepResult, SubjectDataLocation, VerificationResult
 from .workspace_scope import plan_workspace_scope
@@ -67,10 +68,13 @@ class AdsDeletionProvider:
         sessions: sessionmaker[Session],
         objects: ObjectStorageLike,
         system_sessions: sessionmaker[Session] | None = None,
+        *,
+        memory_access: MemoryAccess | None = None,
     ) -> None:
         self._sessions = sessions
         self._objects = objects
         self._system_sessions = system_sessions
+        self._memory_access = memory_access
 
     def locate_subject_data(self, tenant_id: str) -> tuple[SubjectDataLocation, ...]:
         tenant_uuid = _tenant_uuid(tenant_id)
@@ -235,6 +239,31 @@ class AdsDeletionProvider:
                     )
                 )
             )
+        if self._memory_access is not None:
+            with self._system_sessions.begin() as session:
+                workspaces = session.execute(
+                    text(
+                        "SELECT DISTINCT s.tenant_id::text,s.workspace_id::text "
+                        "FROM scopes s JOIN memory_namespace m "
+                        "ON m.scope_id=s.id AND m.tenant_id=s.tenant_id"
+                    )
+                ).all()
+            for tenant, workspace in workspaces:
+                _, days = self._memory_access(f"ten_{tenant}", f"ws_{workspace}")
+                with self._sessions.begin() as session:
+                    _set_tenant(session, tenant)
+                    deleted += _rowcount(
+                        session.execute(
+                            text(
+                                "DELETE FROM memory_namespace m USING scopes s "
+                                "WHERE m.scope_id=s.id AND m.tenant_id=s.tenant_id "
+                                "AND m.tenant_id=CAST(:tenant AS uuid) "
+                                "AND s.workspace_id=CAST(:workspace AS uuid) "
+                                "AND m.created_at < now() - make_interval(days => :days)"
+                            ),
+                            {"tenant": tenant, "workspace": workspace, "days": days},
+                        )
+                    )
         return RetentionSweepResult(
             store=STORE,
             deletedRows=deleted,

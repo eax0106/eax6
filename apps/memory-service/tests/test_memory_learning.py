@@ -23,6 +23,12 @@ RUN_ID = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890ad"
 ARTIFACT_ID = "art_018f4d6e-2b4a-7a3e-8c1a-1234567890ae"
 
 
+async def fixture_redact(tenant_id: str, content: str) -> str:
+    # Unit edge: these fixed run summaries contain no personal text.
+    assert tenant_id == TENANT_ID
+    return content
+
+
 def request() -> ProposeWritebackRequest:
     return ProposeWritebackRequest(
         tenant_id=TENANT_ID,
@@ -113,6 +119,11 @@ class FakeOrchestrationClient:
 @dataclass
 class FakeRepository:
     call: dict[str, object] | None = None
+    enabled: bool = True
+
+    def workflow_enabled(self, tenant_id: str, workspace_id: str) -> bool:
+        assert tenant_id == TENANT_ID and workspace_id == WORKSPACE_ID
+        return self.enabled
 
     def propose(self, **values: object) -> StoredCandidate:
         self.call = values
@@ -126,7 +137,7 @@ def test_extracts_real_failure_data_and_writes_candidate() -> None:
     orchestration = FakeOrchestrationClient(summary())
     repository = FakeRepository()
     response = asyncio.run(
-        MemoryLearningKernel(orchestration, repository).propose_writeback(
+        MemoryLearningKernel(orchestration, repository, fixture_redact).propose_writeback(
             request(), "Bearer tenant-service-token"
         )
     )
@@ -154,9 +165,7 @@ def test_extracts_real_failure_data_and_writes_candidate() -> None:
         "workspace_id": WORKSPACE_ID,
         "verified_output_artifact_id": ARTIFACT_ID,
         "namespace": "project/learning",
-        "source_summary": (
-            "verdict=failed; failed_nodes=1; recovery_count=2; strategies=ask_user"
-        ),
+        "source_summary": ("verdict=failed; failed_nodes=1; recovery_count=2; strategies=ask_user"),
     }
     assert orchestration.calls == [
         {
@@ -175,6 +184,7 @@ def test_successful_outcomes_without_safety_signal_use_project_scope(
         MemoryLearningKernel(
             FakeOrchestrationClient(summary(verdict=verdict, failure_class=None)),
             repository,
+            fixture_redact,
         ).propose_writeback(request(), "Bearer token")
     )
     assert repository.call is not None
@@ -185,10 +195,9 @@ def test_safety_violation_takes_precedence_over_rescued_verdict() -> None:
     repository = FakeRepository()
     asyncio.run(
         MemoryLearningKernel(
-            FakeOrchestrationClient(
-                summary(verdict="rescued", failure_class="safety_violation")
-            ),
+            FakeOrchestrationClient(summary(verdict="rescued", failure_class="safety_violation")),
             repository,
+            fixture_redact,
         ).propose_writeback(request(), "Bearer token")
     )
     assert repository.call is not None
@@ -207,6 +216,7 @@ def test_blocked_node_without_safety_violation_remains_failure() -> None:
                 )
             ),
             repository,
+            fixture_redact,
         ).propose_writeback(request(), "Bearer token")
     )
     assert repository.call is not None
@@ -219,11 +229,10 @@ def test_rejects_cross_workspace_summary_before_write() -> None:
         asyncio.run(
             MemoryLearningKernel(
                 FakeOrchestrationClient(
-                    summary(
-                        workspace_id="ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ff"
-                    )
+                    summary(workspace_id="ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ff")
                 ),
                 repository,
+                fixture_redact,
             ).propose_writeback(request(), "Bearer token")
         )
     assert repository.call is None
@@ -235,11 +244,10 @@ def test_rejects_bearer_tenant_mismatch_before_write() -> None:
         asyncio.run(
             MemoryLearningKernel(
                 FakeOrchestrationClient(
-                    summary(
-                        tenant_id="ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ff"
-                    )
+                    summary(tenant_id="ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ff")
                 ),
                 repository,
+                fixture_redact,
             ).propose_writeback(request(), "Bearer token-for-other-tenant")
         )
     assert repository.call is None
@@ -249,8 +257,73 @@ def test_requires_bearer_before_cross_service_call() -> None:
     orchestration = FakeOrchestrationClient(summary())
     with pytest.raises(MemoryLearningValidationError, match="bearer"):
         asyncio.run(
-            MemoryLearningKernel(orchestration, FakeRepository()).propose_writeback(
+            MemoryLearningKernel(orchestration, FakeRepository(), fixture_redact).propose_writeback(
                 request(), "not-bearer"
             )
         )
     assert orchestration.calls == []
+
+
+@pytest.mark.asyncio
+async def test_writeback_without_redaction_cannot_store_content() -> None:
+    from src.memory_settings.redaction import MemoryRedactionUnavailableError
+
+    repository = FakeRepository()
+    failure: Exception | None = None
+    try:
+        await MemoryLearningKernel(
+            FakeOrchestrationClient(summary()), repository
+        ).propose_writeback(request(), "Bearer fixture-token")
+    except MemoryRedactionUnavailableError as error:
+        failure = error
+    assert isinstance(failure, MemoryRedactionUnavailableError)
+    assert repository.call is None
+
+
+@pytest.mark.asyncio
+async def test_workflow_switch_skips_writeback_without_contacting_redaction() -> None:
+    repository = FakeRepository(enabled=False)
+    result = await MemoryLearningKernel(
+        FakeOrchestrationClient(summary()), repository
+    ).propose_writeback(request(), "Bearer fixture-token")
+    assert result.model_dump() == {"memory_id": "", "candidate_json": "{}", "skipped": True}
+    assert repository.call is None
+
+
+@pytest.mark.asyncio
+async def test_writeback_stores_only_redacted_content_and_provenance() -> None:
+    repository = FakeRepository()
+    calls: list[str] = []
+    personal = "person@example.invalid"
+    private_request = request().model_copy(update={"namespace": personal})
+
+    async def redact(tenant_id: str, content: str) -> str:
+        assert tenant_id == TENANT_ID
+        calls.append(content)
+        return content.replace(personal, "<EMAIL_ADDRESS>")
+
+    result = await MemoryLearningKernel(
+        FakeOrchestrationClient(summary()), repository, redact
+    ).propose_writeback(private_request, "Bearer fixture-token")
+    assert len(calls) == 1 and personal in calls[0]
+    assert personal not in result.candidate_json
+    assert json.loads(result.candidate_json)["namespace"] == "<EMAIL_ADDRESS>"
+    assert repository.call is not None
+    assert personal not in json.dumps(repository.call["provenance"])
+
+
+@pytest.mark.asyncio
+async def test_invalid_redaction_response_stores_nothing() -> None:
+    from src.memory_settings.redaction import MemoryRedactionUnavailableError
+
+    repository = FakeRepository()
+
+    async def redact(tenant_id: str, content: str) -> str:
+        del tenant_id, content
+        return "invalid-json"
+
+    with pytest.raises(MemoryRedactionUnavailableError):
+        await MemoryLearningKernel(
+            FakeOrchestrationClient(summary()), repository, redact
+        ).propose_writeback(request(), "Bearer fixture-token")
+    assert repository.call is None

@@ -8,7 +8,7 @@ Scope: Both active workflow builders show steps and editable criteria before com
   CHECK: node .unlazy/verify-planner.mjs
   EXPECT: criteria-planner-passed
 
-- [ ] G2: Actual public builder routes and persisted chats require explicit Build, preserve edited criteria and scope, bind the latest plan, retain questions and replay without duplicate compilation
+- [ ] G2: Actual public builder routes and persisted chats require explicit Build, preserve edited criteria and scope, bind the latest plan, retain only recalled context/current lessons and questions, and replay without duplicate compilation
   CHECK: node .unlazy/verify-public.mjs
   EXPECT: criteria-public-passed
 
@@ -20,7 +20,7 @@ Scope: Both active workflow builders show steps and editable criteria before com
   CHECK: node .unlazy/verify-web.mjs
   EXPECT: criteria-web-passed
 
-- [ ] G5: Known-positive controls fail when confirmation, authoritative criteria, uncovered-criterion handling, latest-chat-plan binding, live request fields or canvas criteria carry/prompt are removed, then pass after restoration
+- [ ] G5: Known-positive controls fail when confirmation, authoritative criteria, uncovered-criterion handling, latest-chat-plan binding, recalled context, live request fields or canvas criteria carry/prompt are removed, then pass after restoration
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: criteria-controls-passed
 

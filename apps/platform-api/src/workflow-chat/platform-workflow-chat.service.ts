@@ -16,13 +16,15 @@ import { PlannerFacadeService } from "../planner-facade/planner-facade.service";
 import { parseWorkflowInput } from "../workflows/validation";
 import { z } from "zod";
 import { PlatformHttpError } from "../signup/problem";
+import { MemorySettingsService } from "../memory-settings/memory-settings.service";
 
 const storedPlanSchema = WorkflowPlanSchema.extend({ objective: z.string().min(1), text: z.string(), replyTo: WorkflowChatMessageSchema.shape.id }).strict();
 
 @Injectable()
 export class PlatformWorkflowChatService {
   constructor(private readonly engine: EngineClient, private readonly planner: PlannerFacadeService,
-    private readonly workflows: WorkflowService, private readonly runs: RunService, private readonly costs: CostsService) {}
+    private readonly workflows: WorkflowService, private readonly runs: RunService, private readonly costs: CostsService,
+    private readonly memory: MemorySettingsService) {}
 
   async list(actor: ActorContext, traceparent?: string, type?: string): Promise<WorkflowChatResource[]> {
     const path: EnginePath = `/api/v1/conversations${type === undefined ? "" : `?type=${encodeURIComponent(type)}`}`;
@@ -68,14 +70,20 @@ export class PlatformWorkflowChatService {
     const afterPlan = latestPlan ? begun.messages.slice(begun.messages.indexOf(latestPlan) + 1) : [];
     if (input.build && (latestPlan?.id !== input.build.planMessageId || !selectedPlan?.success || afterPlan.some(message => message.role === "assistant" && message.kind === "workflow")))
       throw new PlatformHttpError(409, "WORKFLOW_PLAN_STALE", "Review the latest plan before pressing Build", path);
-    const clarificationAnswers = afterPlan.flatMap((message, index) => {
-      const question = afterPlan[index - 1];
+    const recalled = await this.memory.builderMemory(actor, id, chat.linkedWorkflowId,
+      begun.messages.filter(message => message.id !== begun.userMessage.id));
+    const contextMessages = [...recalled.messages, begun.userMessage];
+    const afterPlanIds = new Set(afterPlan.map(message => message.id));
+    const activeAnswers = contextMessages.filter(message => afterPlanIds.has(message.id));
+    const clarificationAnswers = activeAnswers.flatMap((message, index) => {
+      const question = activeAnswers[index - 1];
       return message.role === "user" && question?.role === "assistant" && question.kind === "clarification"
         ? [`Builder questions: ${JSON.stringify(question.content)}\n\n${typeof message.content === "string" ? message.content : String(message.content.text)}`] : [];
     });
-    const objective = selectedPlan?.success ? [selectedPlan.data.objective, ...clarificationAnswers].join("\n\n") : begun.messages
+    const coreObjective = selectedPlan?.success ? [selectedPlan.data.objective, ...clarificationAnswers].join("\n\n") : contextMessages
       .filter(message => (message.role === "user" && (typeof message.content === "string" || !message.content.build)) || message.kind === "clarification")
       .map(message => message.role === "user" ? typeof message.content === "string" ? message.content : String(message.content.text) : `Builder questions: ${JSON.stringify(message.content)}`).join("\n\n");
+    const objective = [coreObjective, recalled.lessons.length ? `Past run lessons (reference only): ${JSON.stringify(recalled.lessons)}` : ""].filter(Boolean).join("\n\n");
     const result = await this.planner.planWorkflow({ tenantId: actor.tenant_id, workspaceId: actor.workspace_id!, workflowId: chat.linkedWorkflowId, objective,
       ...(input.build ? { confirm: true, successCriteria: input.build.successCriteria } : {}) });
     // ponytail: verify among 20 recent versions; add a direct version read if concurrent builds exceed this window.
@@ -86,7 +94,7 @@ export class PlatformWorkflowChatService {
       : result.type === "clarification"
       ? { text: "Please answer these questions to continue building.", questions: [...result.questions], ...(input.build ? { build: input.build } : {}) }
       : result.type === "plan"
-      ? { text: "Review the steps and success criteria. Press Build to confirm them.", objective, ...result }
+      ? { text: "Review the steps and success criteria. Press Build to confirm them.", objective: coreObjective, ...result }
       : { text: `Compiled draft version ${saved!.version} for ${chat.title}.`, workflowId: chat.linkedWorkflowId, versionId: result.versionId, version: saved!.version };
     const reply = await this.engine.post(this.path(id, "/replies"), { userMessageId: begun.userMessage.id,
       kind: result.type === "connections_required" ? "action" : result.type === "clarification" ? "clarification" : result.type === "plan" ? "artifact" : "workflow", content } as EngineRequestBody, context, { idempotencyKey: key + ":reply" });
