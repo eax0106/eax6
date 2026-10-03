@@ -166,7 +166,7 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
   await new Promise<void>(done=>issuer.listen(0,'127.0.0.1',done));
   const jwksUrl=`http://127.0.0.1:${(issuer.address() as {port:number}).port}/jwks`;
   const uri=new URL(postgres.getConnectionUri());uri.username=role;uri.password='chat-fixture-only';
-  const config={NODE_ENV:'test',AUTH0_DOMAIN:'chat.test',AUTH0_API_AUDIENCE:'alter-engine',AUTH0_JWKS_URL:jwksUrl,
+  const config={NODE_ENV:'test',AUTH0_DOMAIN:'chat.test',AUTH0_API_AUDIENCE:'alter-engine',API_AUDIENCE:'alter-engine',AUTH0_JWKS_URL:jwksUrl,
     ACTOR_TOKEN_ISSUER:'alter-platform-api.identity-broker',ACTOR_TOKEN_AUDIENCE:'alter-engine',ACTOR_TOKEN_JWKS_URL:jwksUrl,
     REDIS_ENDPOINT:redis.getConnectionUrl(),AWS_REGION:'ap-south-1',ALTER_ARTIFACTS_BUCKET_PARAM:'/fixture/artifacts',
     ORCHESTRATION_DATABASE_AUTHENTICATION:'static',ORCHESTRATION_DATABASE_URL:uri.href};
