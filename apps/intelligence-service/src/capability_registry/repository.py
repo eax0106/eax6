@@ -103,6 +103,7 @@ class CapabilityRegistryRepository:
           FROM capability_registry_versions
           WHERE (owner_tenant_id = CAST(:tenant AS uuid) OR scope = 'global')
             AND (CAST(:kind AS text) IS NULL OR kind = CAST(:kind AS text))
+            AND (CAST(:model_alias AS text) IS NULL OR metadata ->> 'model_alias' = CAST(:model_alias AS text))
             AND (CAST(:workspace_id AS uuid) IS NULL OR workspace_id IS NULL
                  OR workspace_id = CAST(:workspace_id AS uuid))
             AND (:include_inactive OR status = 'active')
@@ -112,6 +113,7 @@ class CapabilityRegistryRepository:
             {
                 "tenant": tenant,
                 "kind": query.kind,
+                "model_alias": query.model_alias,
                 "workspace_id": _uuid(query.workspace_id, "ws") if query.workspace_id else None,
                 "include_inactive": query.include_inactive,
                 "capabilities": json.dumps(query.capabilities),

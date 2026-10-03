@@ -55,10 +55,13 @@ from src.selection_binding.models import (
     BindingRequest,
     NodeKey,
     NonEmptyString,
+    OverrideCritiqueRequest,
+    OverrideCritiqueResponse,
     RunId,
     TenantId,
     WorkspaceId,
 )
+from src.selection_binding.override_critique import critique_override
 from src.selection_binding.policy_client import HttpRoutingPolicyClient, RoutingPolicyClient
 
 _default_embedding_client: EmbeddingClient | None = None
@@ -233,3 +236,10 @@ async def bind_architecture(
     except Exception:
         await session.rollback()
         raise
+
+
+@router.post("/critique-override", response_model=OverrideCritiqueResponse)
+async def critique_node_override(
+    request: OverrideCritiqueRequest, session: SessionDep
+) -> OverrideCritiqueResponse:
+    return await critique_override(CapabilityRegistryRepository(session), request)

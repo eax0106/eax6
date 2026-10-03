@@ -1,5 +1,5 @@
 import type { CompiledDag, ModelAlias } from "@alterx/contracts";
-import { ModelAliasSchema } from "@alterx/contracts";
+import { ModelAliasSchema, selectedModelAlias } from "@alterx/contracts";
 
 /** The alias the Synthesis handler always uses. */
 const SYNTHESIS_ALIAS: ModelAlias = "ADVANCED";
@@ -15,7 +15,7 @@ export function modelCallsOf(dag: CompiledDag): readonly { readonly nodeKey: str
     if (node.type === "Synthesis") {
       calls.push({ nodeKey: node.key, alias: SYNTHESIS_ALIAS });
     } else if (node.type === "LLMTask") {
-      const alias = ModelAliasSchema.safeParse((node.config as Record<string, unknown>)["model_alias"]);
+      const alias = ModelAliasSchema.safeParse(selectedModelAlias(node.config));
       if (alias.success) calls.push({ nodeKey: node.key, alias: alias.data });
     }
   }

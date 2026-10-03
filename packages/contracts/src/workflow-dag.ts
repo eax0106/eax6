@@ -1,5 +1,8 @@
 import { z } from "./zod";
 import { ConnectionSecretReferenceSchema, ConnectorTypeSchema } from "./connection-registry";
+import { ModelAliasSchema } from "./model-alias-policy";
+import { ToolNameSchema } from "./tool-names";
+import { DataContractSchema, NodeSelectionEvidenceSchema, dataContractFits } from "./node-overrides";
 import {
   AgentIdSchema,
   ArtifactIdSchema,
@@ -125,11 +128,24 @@ const WorkflowDagNodeSchema = z
     metadata: z
       .object({
         ui: z.record(z.string(), z.unknown()),
+        selection_binding: NodeSelectionEvidenceSchema.optional(),
+        data_contract: z.object({
+          output: DataContractSchema.optional(),
+          inputs: z.record(NodeKeySchema, DataContractSchema).optional(),
+        }).strict().optional(),
       })
       .passthrough(),
   })
   .strict()
   .superRefine(({ type, config }, context) => {
+    for (const [field, nodeType, valueSchema, valueField] of [
+      ["manual_model_override", "LLMTask", ModelAliasSchema, "model_alias"],
+      ["manual_tool_override", "ToolCall", ToolNameSchema, "tool_name"],
+    ] as const) {
+      if (config[field] !== undefined && (config[field] !== true || type !== nodeType || !valueSchema.safeParse(config[valueField]).success)) {
+        context.addIssue({code:"custom",message:`${field} requires ${nodeType} with a valid ${valueField}`,path:["config",field]});
+      }
+    }
     if (type !== "ToolCall" && type !== "SandboxExec" && type !== "MemoryWrite") {
       return;
     }
@@ -297,6 +313,39 @@ export const CompiledDagSchema = z
         message: "Every node must belong to exactly one execution wave",
         path: ["waves"],
       });
+    }
+    // Additive preflight for manual choices; legacy graphs keep their existing contract.
+    if (!nodes.some(node => node.config.manual_model_override === true || node.config.manual_tool_override === true)) return;
+    const outgoing = new Map(nodes.map(node => [node.key, [] as string[]]));
+    const incoming = new Map(nodes.map(node => [node.key, 0]));
+    for (const edge of edges) if (edge.kind !== "loop" && nodeKeys.has(edge.from) && nodeKeys.has(edge.to)) {
+      outgoing.get(edge.from)!.push(edge.to);
+      incoming.set(edge.to, incoming.get(edge.to)! + 1);
+    }
+    const ready = [...incoming].filter(([,count]) => count === 0).map(([key]) => key);
+    let resolved = 0;
+    for (let i = 0; i < ready.length; i++) {
+      resolved++;
+      for (const target of outgoing.get(ready[i]!) ?? []) {
+        const count = incoming.get(target)! - 1; incoming.set(target,count);
+        if (count === 0) ready.push(target);
+      }
+    }
+    if (resolved !== nodeKeys.size) context.addIssue({code:"custom",message:"Manual graph contains a non-loop cycle",path:["edges"]});
+    const reachable = new Set(entry_node_keys);
+    const pending = [...entry_node_keys];
+    for (let i = 0; i < pending.length; i++) for (const target of outgoing.get(pending[i]!) ?? []) if (!reachable.has(target)) {
+      reachable.add(target); pending.push(target);
+    }
+    for (const node of nodes) if (!reachable.has(node.key)) context.addIssue({code:"custom",message:`Node is unreachable from declared entries: ${node.key}`,path:["nodes"]});
+    const byKey = new Map(nodes.map(node => [node.key,node]));
+    for (const node of nodes) for (const [source, input] of Object.entries(node.metadata.data_contract?.inputs ?? {})) {
+      if (!edges.some(edge => edge.from === source && edge.to === node.key)) {
+        context.addIssue({code:"custom",message:`Input contract has no upstream edge: ${source} to ${node.key}`,path:["nodes"]});
+        continue;
+      }
+      const output = byKey.get(source)?.metadata.data_contract?.output;
+      if (output && !dataContractFits(output,input)) context.addIssue({code:"custom",message:`Output contract does not fit downstream input: ${source} to ${node.key}`,path:["nodes"]});
     }
   });
 

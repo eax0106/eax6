@@ -1,15 +1,19 @@
 """Registry- and ArchitectureSpec-driven concrete capability binding."""
 
 import re
+from typing import cast
 
 from src.architecture_synthesizer.registry_client import within_allowed
 from src.capability_registry.models import CapabilityRecord, CapabilitySearch
 from src.capability_registry.repository import CapabilityRegistryRepository
+from src.capability_resolver.models import ModelAlias
+from src.capability_resolver.resolver import resolve_node_requirements
 
 from .models import (
     ArchitectureBindingOutcome,
     BindingBlocked,
     BindingDecision,
+    BindingPolicy,
     BindingRequest,
     BoundCapability,
 )
@@ -67,15 +71,46 @@ class ArchitectureBinder:
                 )
             selected = sorted(eligible, key=lambda candidate: _rank(candidate, request))[0]
             connector = selected.metadata.get("required_connector")
-            if (connector is not None and (
-                not isinstance(connector, str)
-                or re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", connector) is None
-            )) or (selected.kind == "connector" and connector is None):
+            if (
+                connector is not None
+                and (
+                    not isinstance(connector, str)
+                    or re.fullmatch(r"[a-z][a-z0-9._-]{0,63}", connector) is None
+                )
+            ) or (selected.kind == "connector" and connector is None):
                 return BindingBlocked(
                     source_node_key=node.source_node_key,
                     reason="Registered connector requirement is missing or invalid",
                 )
-            score, factors = _score(selected, request)
+            score, factors = score_capability(selected, request.policy)
+            model_alias = (
+                selected.metadata.get("model_alias")
+                if selected.kind in ("model", "agent")
+                else None
+            )
+            if model_alias is not None and model_alias not in (
+                "FAST",
+                "STANDARD",
+                "ADVANCED",
+                "CEILING",
+            ):
+                return BindingBlocked(
+                    source_node_key=node.source_node_key, reason="Registered model alias is invalid"
+                )
+            requirements = (
+                resolve_node_requirements(
+                    [
+                        {
+                            "key": node.source_node_key,
+                            "type": "LLMTask",
+                            "config": node.config or {},
+                            "metadata": {"ui": {}},
+                        }
+                    ]
+                ).root[node.source_node_key]
+                if node.execution_kind == "llm"
+                else None
+            )
             bindings.append(
                 BoundCapability(
                     record_id=selected.capability_id,
@@ -86,9 +121,11 @@ class ArchitectureBinder:
                     score=score,
                     factors=factors,
                     required_connector=connector,
+                    model_alias=cast(ModelAlias | None, model_alias),
+                    required_model_alias=requirements.model_alias if requirements else None,
                 )
             )
-        return BindingDecision(bindings=bindings)
+        return BindingDecision(bindings=bindings, policy=request.policy)
 
 
 def _eligible(candidate: CapabilityRecord, request: BindingRequest) -> bool:
@@ -114,14 +151,15 @@ def _eligible(candidate: CapabilityRecord, request: BindingRequest) -> bool:
     return within_allowed(candidate.constraints.data_residency, constraints.allowed_data_residency)
 
 
-def _score(candidate: CapabilityRecord, request: BindingRequest) -> tuple[float, dict[str, float]]:
+def score_capability(
+    candidate: CapabilityRecord, weights: BindingPolicy
+) -> tuple[float, dict[str, float]]:
     reliability = candidate.availability.reliability
     reliability_score = 0.5 if reliability is None else reliability
     latency = candidate.availability.latency_ms_p50
     latency_score = 0.5 if latency is None else 1 / (1 + latency / 1000)
     cost = candidate.availability.cost_amount
     cost_score = 0.5 if cost is None else 1 / (1 + cost)
-    weights = request.policy
     total_weight = weights.reliability_weight + weights.latency_weight + weights.cost_weight
     score = (
         weights.reliability_weight * reliability_score
@@ -132,5 +170,5 @@ def _score(candidate: CapabilityRecord, request: BindingRequest) -> tuple[float,
 
 
 def _rank(candidate: CapabilityRecord, request: BindingRequest) -> tuple[float, str, int]:
-    score, _ = _score(candidate, request)
+    score, _ = score_capability(candidate, request.policy)
     return (-score, candidate.capability_id, candidate.version)

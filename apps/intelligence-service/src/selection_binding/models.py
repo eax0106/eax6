@@ -1,6 +1,6 @@
 """Typed homes for PLAN-7 binding inputs, outputs, and no-match signals."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -16,6 +16,7 @@ from src.agent_contracts.types import TenantId as TenantId
 from src.agent_contracts.types import Uint32 as Uint32
 from src.agent_contracts.types import WorkspaceId as WorkspaceId
 from src.architecture_synthesizer.models import ArchitectureSpec
+from src.capability_registry.canonical_tools import tool_capability
 from src.capability_registry.models import CapabilityKind
 from src.capability_resolver.models import AgentId, ModelAlias, NodeType
 
@@ -83,6 +84,8 @@ class BoundCapability(_StrictFrozenModel):
     rationale: NonEmptyString
     score: float = Field(ge=0, le=1)
     factors: dict[NonEmptyString, float] = Field(min_length=1)
+    model_alias: ModelAlias | None = None
+    required_model_alias: ModelAlias | None = None
     required_connector: (
         Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9._-]{0,63}$")] | None
     ) = None
@@ -91,6 +94,7 @@ class BoundCapability(_StrictFrozenModel):
 class BindingDecision(_StrictFrozenModel):
     status: Literal["ready"] = "ready"
     bindings: list[BoundCapability]
+    policy: BindingPolicy | None = None
 
 
 class BindingBlocked(_StrictFrozenModel):
@@ -100,3 +104,50 @@ class BindingBlocked(_StrictFrozenModel):
 
 
 ArchitectureBindingOutcome = BindingDecision | BindingBlocked
+
+
+class OverrideChoice(_StrictFrozenModel):
+    kind: Literal["model", "tool"]
+    value: NonEmptyString
+
+    @model_validator(mode="after")
+    def canonical_choice(self) -> "OverrideChoice":
+        if self.kind == "model" and self.value not in ("FAST", "STANDARD", "ADVANCED", "CEILING"):
+            raise ValueError("model override must name a model alias")
+        if self.kind == "tool" and tool_capability(self.value) is None:
+            raise ValueError("tool override must name a canonical tool")
+        return self
+
+
+class OverrideCritiqueRequest(_StrictFrozenModel):
+    tenant_id: TenantId
+    workspace_id: WorkspaceId
+    node_key: NodeKey
+    choice: OverrideChoice
+    original_binding: BoundCapability | None = None
+    required_capabilities: list[NonEmptyString] = Field(default_factory=list, max_length=128)
+    required_model_alias: ModelAlias | None = None
+    policy: BindingPolicy | None = None
+    latency_multiplier: float = Field(default=2.0, ge=1)
+
+
+class OverrideWarning(_StrictFrozenModel):
+    code: NonEmptyString
+    message: NonEmptyString
+
+
+class OverrideCandidate(_StrictFrozenModel):
+    record_id: NonEmptyString
+    version: int = Field(gt=0)
+    kind: CapabilityKind
+    source_node_key: NodeKey
+    rationale: NonEmptyString
+    score: float | None = Field(default=None, ge=0, le=1)
+    factors: dict[NonEmptyString, float] | None = None
+    output_contract: dict[str, Any] | None = None
+
+
+class OverrideCritiqueResponse(_StrictFrozenModel):
+    original_binding: BoundCapability | None
+    candidate: OverrideCandidate | None
+    warnings: list[OverrideWarning]
