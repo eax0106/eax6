@@ -249,6 +249,10 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
       expect(compiled.rows[0]!.compiled_dag.success_criteria).toEqual(criteria);
       expect(compiled.rows[0]!.compiled_dag.nodes.find(node=>node.key==='start')?.success_criteria).toEqual(criteria);
       expect(await workflows.getWorkflow(`ten_${tenant}`,compiled.rows[0]!.workflow_id)).toMatchObject({dag:compiled.rows[0]!.compiled_dag});
+      const draft={...compiled.rows[0]!.compiled_dag,success_criteria:['Retain the edited draft.']};
+      await store.withTenant(tenant,tx=>tx.query('UPDATE workflows SET draft_dag=$3 WHERE tenant_id=$1 AND id=$2',[tenant,compiled.rows[0]!.workflow_id,draft]));
+      expect(await workflows.getWorkflow(`ten_${tenant}`,compiled.rows[0]!.workflow_id)).toMatchObject({dag:draft});
+      await store.withTenant(tenant,tx=>tx.query('UPDATE workflows SET draft_dag=NULL WHERE tenant_id=$1 AND id=$2',[tenant,compiled.rows[0]!.workflow_id]));
       const observed={workflowId:`wf_${uuidV7()}`,runId:`run_${uuidV7()}`,nodeId:`node_${uuidV7()}`,foreignWorkflowId:`wf_${uuidV7()}`,foreignRunId:`run_${uuidV7()}`,oldRunId:`run_${uuidV7()}`};
       await store.withTenant(tenant,async tx=>{
         await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES($1,$2,$3,'Recent invoice checks'),($4,$2,$5,'Foreign workspace sentinel')",[observed.workflowId,tenant,workspace,observed.foreignWorkflowId,otherWorkspace]);
