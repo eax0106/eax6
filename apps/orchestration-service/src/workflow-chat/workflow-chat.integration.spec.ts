@@ -123,9 +123,9 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
   const turn=await chats.begin(actor(),assistant.id,{content:'What failed this week?'});
   await expect(chats.answer(actor(),assistant.id,turn.userMessage.id,{capturedAt:new Date().toISOString(),workflows:[]})).rejects.toThrow('Storage proof must not invoke a model');
   const lookup=new RunWorkspaceLookupService(store),run=`run_${turn.userMessage.id.slice(4)}`,node=`node_${turn.userMessage.id.slice(4)}`;
-  expect(await lookup.getRunWorkspace(`ten_${tenant}`,run)).toEqual({workspaceId:workspace,workflowId:''});
-  expect(await lookup.getRunWorkspaceResponse(`ten_${tenant}`,run)).toEqual({workspace_id:`ws_${workspace}`,workflow_id:''});
-  expect(await lookup.getRecoveryInfo(`ten_${tenant}`,run,node)).toEqual({isRetry:false,isRecovery:false});
+  await expect(lookup.getRunWorkspace(`ten_${tenant}`,run)).resolves.toEqual({workspaceId:workspace,workflowId:''});
+  await expect(lookup.getRunWorkspaceResponse(`ten_${tenant}`,run)).resolves.toEqual({workspace_id:`ws_${workspace}`,workflow_id:''});
+  await expect(lookup.getRecoveryInfo(`ten_${tenant}`,run,node)).resolves.toEqual({isRetry:false,isRecovery:false});
   await expect(lookup.getRunWorkspace(`ten_${otherTenant}`,run)).rejects.toThrow('was not found');
   await expect(lookup.getRecoveryInfo(`ten_${tenant}`,run,`node_${uuidV7()}`)).rejects.toThrow('was not found');
   expect((await store.withTenant(tenant,tx=>tx.query('SELECT id FROM runs WHERE tenant_id=$1',[tenant]))).rows).toEqual([]);

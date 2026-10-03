@@ -27,9 +27,9 @@ Scope: One persistent chat per workflow, workflow title, independently archived 
 - [x] G5: Removing each consequential scope, ownership, atomicity, context preservation, read-only action, costing or live-route check fails its known-positive native assertion; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: workflow-chat-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=45ef914989dc4190ffd9a183e1d0787511897d002ad17732aea3cd8a79b8a03f; exit=0; EXPECT=matched; output-sha256=42c6e8b54ecab427853001b85a67ddf4cbb36824c0b4a9279e2c72cc09f41a52; output-bytes=6748; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=45ef914989dc4190ffd9a183e1d0787511897d002ad17732aea3cd8a79b8a03f; exit=0; EXPECT=matched; output-sha256=3f2d3baaa9576e98298a724fffd3e9f8aa20f36280ebaf8aad7a1d360781f212; output-bytes=4832; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
 
-- [ ] G6: Full touched suites including platform folder coverage, build/typecheck/lint, migration/erasure registration, architecture, RBAC, naming and zero added normalized AST findings pass with actual CI discovery
+- [x] G6: Full touched suites including platform folder coverage, build/typecheck/lint, migration/erasure registration, architecture, RBAC, naming and zero added normalized AST findings pass with actual CI discovery
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: workflow-chat-final-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5859d580654ef857cd7a07b8a79a53528f1b9c563c09312175423cd64f9bf417; exit=0; EXPECT=matched; output-sha256=ab1e78b7b258ab6c0036dfe45ca2979d6941886bd8a26ef2886f877777164815; output-bytes=1126; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
