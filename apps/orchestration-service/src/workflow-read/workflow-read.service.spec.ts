@@ -128,6 +128,7 @@ function createFakeStore(
             return { rowCount: 1, rows: [updated] as unknown as readonly TRow[] };
           }
 
+          if (sql.startsWith("INSERT INTO conversations")) return { rowCount: 1, rows: [] };
           throw new Error(`Unexpected query in fake store: ${sql}`);
         },
       });

@@ -30,5 +30,6 @@ const WORKFLOW_SAFEGUARDS_AUDIT_CLIENT = Symbol("WORKFLOW_SAFEGUARDS_AUDIT_CLIEN
     },
   ],
   controllers: [PlannerFacadeController, WorkflowSafeguardsController],
+  exports: [PlannerFacadeService],
 })
 export class PlannerFacadeModule {}

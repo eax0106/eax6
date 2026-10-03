@@ -15,6 +15,7 @@ function fakeRecoveryStore(
   hasRecoveryAction: boolean,
 ): { store: OrchestrationTenantStore; query: ReturnType<typeof vi.fn> } {
   const query = vi.fn(async (statement: string) => {
+    if (statement.includes("FROM conversation_messages")) return { rowCount: 0, rows: [] };
     if (statement.includes("FROM node_executions")) {
       return {
         rowCount: attempt === undefined ? 0 : 1,
@@ -76,6 +77,10 @@ describe("RunWorkspaceLookupService", () => {
       workspaceId: WORKSPACE,
       workflowId: WORKFLOW,
     });
+  });
+  it("uses the required prefixed workspace identity at the actual transport binding", async () => {
+    const { store } = fakeStore(WORKSPACE);
+    expect(await new RunWorkspaceLookupService(store).getRunWorkspaceResponse(TENANT, RUN)).toEqual({ workspace_id: `ws_${WORKSPACE}`, workflow_id: WORKFLOW });
   });
 
   it("raises RunNotFoundError for a run this tenant cannot see", async () => {
