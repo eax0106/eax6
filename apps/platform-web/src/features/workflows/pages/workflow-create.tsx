@@ -10,6 +10,7 @@ import { useMutation } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import type { ConnectionsRequired } from "@alterx/contracts";
 import { Button } from "@/components/ui/button";
+import { WorkflowPlanCard } from "@/components/conversation/workflow-plan";
 import { type ChatMessage } from "@/api/types"
 
 export function WorkflowCreate() {
@@ -22,6 +23,7 @@ export function WorkflowCreate() {
   const [objective, setObjective] = React.useState("")
   const [answers, setAnswers] = React.useState<Record<string, string>>({})
   const [workflowId, setWorkflowId] = React.useState<string | undefined>(undefined)
+  const [confirmedCriteria, setConfirmedCriteria] = React.useState<string[] | undefined>()
 
   const compileMutation = useMutation({
     mutationFn: api.compileWorkflow,
@@ -29,7 +31,9 @@ export function WorkflowCreate() {
       setWorkflowId(data.workflow.id)
       setMessages(prev => [
         ...prev,
-        data.missingConnections
+        data.plan ? { id: `msg_${Date.now()}`, role: "assistant" as const, type: "workflow_plan" as const,
+          content: data.explanation, data: data.plan, createdAt: new Date().toISOString() }
+        : data.missingConnections
           ? {
               id: `msg_${Date.now()}`,
               role: "assistant" as const,
@@ -80,6 +84,7 @@ export function WorkflowCreate() {
 
     setObjective(text)
     setAnswers({})
+    setConfirmedCriteria(undefined)
     compileMutation.mutate({ goal: text, answers: {} })
   }
 
@@ -100,7 +105,8 @@ export function WorkflowCreate() {
     ])
     // The same objective and the same draft, now with the answers attached:
     // the planner asked about this goal, not about a new one.
-    compileMutation.mutate({ goal: objective, answers: accumulatedAnswers, workflowId })
+    compileMutation.mutate({ goal: objective, answers: accumulatedAnswers, workflowId,
+      ...(confirmedCriteria !== undefined ? { confirm: true, successCriteria: confirmedCriteria } : {}) })
   }
 
   return (
@@ -153,6 +159,9 @@ export function WorkflowCreate() {
                     </div>
                   )
                 }
+                if (msg.type === "workflow_plan") return <WorkflowPlanCard plan={msg.data} pending={compileMutation.isPending}
+                  disabled={messages.slice(messages.indexOf(msg) + 1).some(message => message.type === "workflow_draft" || message.type === "workflow_plan")}
+                  onBuild={successCriteria => { setConfirmedCriteria(successCriteria); compileMutation.mutate({ goal: objective, answers, workflowId, confirm: true, successCriteria }) }} />
                 if (msg.type === "connections_required") {
                   const batch = msg.data as ConnectionsRequired["missing_connections"]
                   const latest = messages.indexOf(msg) === messages.length - 1
@@ -164,7 +173,7 @@ export function WorkflowCreate() {
                       </ul>
                       {latest && <div className="flex items-center gap-4">
                         <a className="text-primary underline" href="/app/connections" target="_blank" rel="noreferrer">Open connections in new tab</a>
-                        <Button disabled={compileMutation.isPending} onClick={() => compileMutation.mutate({ goal: objective, answers, workflowId })}>Check connections and plan again</Button>
+                        <Button disabled={compileMutation.isPending} onClick={() => compileMutation.mutate({ goal: objective, answers, workflowId, ...(confirmedCriteria ? { confirm: true, successCriteria: confirmedCriteria } : {}) })}>Check connections and plan again</Button>
                       </div>}
                     </div>
                   )
@@ -213,7 +222,7 @@ export function WorkflowCreate() {
           <Composer 
             onSend={handleSend} 
             loading={compileMutation.isPending} 
-            disabled={messages[messages.length - 1]?.type === "connections_required" || messages[messages.length - 1]?.type === "clarification" || messages[messages.length - 1]?.type === "workflow_draft"}
+            disabled={messages[messages.length - 1]?.type === "connections_required" || messages[messages.length - 1]?.type === "clarification" || messages[messages.length - 1]?.type === "workflow_draft" || messages[messages.length - 1]?.type === "workflow_plan"}
           />
         </div>
       </div>

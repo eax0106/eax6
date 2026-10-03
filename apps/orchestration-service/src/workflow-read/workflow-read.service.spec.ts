@@ -50,7 +50,7 @@ function createFakeStore(
         ) {
           const sql = statement.replace(/\s+/g, " ").trim();
 
-          if (sql.includes("FROM workflow_versions")) {
+          if (sql.includes("FROM workflow_versions") && !sql.includes("COALESCE(draft_dag")) {
             const [queryTenantId, workflowId, cursor, rawLimit] = values as [
               string,
               string,

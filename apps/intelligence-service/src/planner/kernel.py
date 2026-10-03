@@ -86,9 +86,14 @@ class PlannerKernel:
                 skeleton, criteria
             )
         except ValueError as exc:
-            raise PlannerExecutionError(
-                f"Planner did not assign intake success criteria: {exc}"
-            ) from exc
+            return DecomposeResponse(
+                task_skeleton_json="{}",
+                ambiguity_detected=True,
+                clarification_questions=[
+                    f"Planner did not assign intake success criteria: {exc}. "
+                    "Could you clarify the intended outcome or revise the criteria?"
+                ],
+            )
 
         # Problem Understanding owns ambiguity evidence; Planner does not
         # re-query ADS or infer ambiguity from raw conversational text.

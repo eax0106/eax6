@@ -45,14 +45,14 @@ describe("a workflow plan that needs clarifying", () => {
     await api.compileWorkflow({
       goal: "Triage support mail",
       answers: { "Which inbox?": "support@acme.test" },
-      workflowId,
+      workflowId, confirm: true, successCriteria: ["Notify support."],
     })
 
     // No second workflow: the draft that raised the questions is re-planned.
     expect(vi.mocked(apiPost).mock.calls.filter(([path]) => path === "/api/v1/workflows")).toHaveLength(0)
     expect(apiPost).toHaveBeenCalledWith(
       `/api/v1/workflows/${workflowId}/actions/plan`,
-      { goal: "Triage support mail", answers: { "Which inbox?": "support@acme.test" } },
+      { goal: "Triage support mail", answers: { "Which inbox?": "support@acme.test" }, confirm: true, successCriteria: ["Notify support."] },
       expect.anything(),
     )
   })
@@ -62,13 +62,21 @@ describe("a workflow plan that needs clarifying", () => {
     vi.mocked(apiPost).mockImplementation(async (path: string) =>
       path === "/api/v1/workflows"
         ? ({ id: workflowId, name: "Triage", status: "draft" } as never)
-        : ({ type: "compiled", versionId: "wfv_1" } as never),
+        : ({ type: "plan", successCriteria: [], steps: [{ key: "work", type: "llm", description: "Triage", successCriteria: [] }] } as never),
     )
 
     await api.compileWorkflow({ goal: "Triage support mail", answers: {} })
 
     expect(vi.mocked(apiPost).mock.calls.filter(([path]) => path === "/api/v1/workflows")).toHaveLength(1)
   })
+  it("accepts explicit removal of every criterion and rejects unconfirmed compilation", async () => {
+    vi.mocked(apiGet).mockResolvedValue({ id: workflowId, name: "Triage", status: "draft" })
+    vi.mocked(apiPost).mockResolvedValue({ type: "compiled", versionId: "wfv_1" })
+    await expect(api.compileWorkflow({ goal: "Triage", answers: {}, workflowId })).rejects.toThrow("Planner compiled before Build confirmation.")
+    await api.compileWorkflow({ goal: "Triage", answers: {}, workflowId, confirm: true, successCriteria: [] })
+    expect(apiPost).toHaveBeenLastCalledWith(`/api/v1/workflows/${workflowId}/actions/plan`, { goal: "Triage", answers: {}, confirm: true, successCriteria: [] }, expect.anything())
+  })
+
 })
 
 describe("project clarifications", () => {

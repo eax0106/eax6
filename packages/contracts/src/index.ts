@@ -445,6 +445,7 @@ export {
 
 export * from "./memory-settings";
 export * from "./workflow-chat";
+export * from "./workflow-plan";
 
 export * from "./workflow-folders";
 export * from "./node-overrides";

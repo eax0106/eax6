@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from src.ads_client.client import StubAdsClient
 from src.ads_client.models import RetrieveRequest, RetrieveResponse
-from src.planner.kernel import PlannerExecutionError, PlannerKernel, PlannerValidationError
+from src.planner.kernel import PlannerKernel, PlannerValidationError
 from src.planner.llm_client import StubLlmClient
 from src.planner.manager_worker import ManagerWorkerPlan
 from src.planner.models import (
@@ -138,13 +138,15 @@ class TestDecompose:
                 )
 
         kernel = PlannerKernel(ads_client=StubAdsClient(), llm_client=IncompleteAssignmentLlm())
-        with pytest.raises(PlannerExecutionError, match="Summary is complete"):
-            await kernel.decompose(_decompose_req(
-                problem_spec_json=problem_spec_json(ProblemSpec(
-                    objective="research and summarise",
-                    success_criteria=criteria,
-                ))
+        result = await kernel.decompose(_decompose_req(
+            problem_spec_json=problem_spec_json(ProblemSpec(
+                objective="research and summarise",
+                success_criteria=criteria,
             ))
+        ))
+        assert result.ambiguity_detected
+        assert "Summary is complete" in result.clarification_questions[0]
+        assert "Could you clarify" in result.clarification_questions[0]
 
     async def test_ambiguity_false_for_short_objective_with_no_kb(self) -> None:
         kernel = _kernel()

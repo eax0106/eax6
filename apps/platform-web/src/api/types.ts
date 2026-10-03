@@ -278,7 +278,7 @@ export interface NodeTypeDefinition {
 }
 
 export type MessageRole = "user" | "assistant" | "system"
-export type MessageType = "text" | "clarification" | "connections_required" | "workflow_draft" | "project_brief" | "project_plan"
+export type MessageType = "text" | "clarification" | "connections_required" | "workflow_draft" | "project_brief" | "project_plan" | "workflow_plan"
 
 export interface ChatMessage {
   id: string

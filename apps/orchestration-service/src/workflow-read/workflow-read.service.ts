@@ -29,6 +29,7 @@ export interface Workflow {
   readonly status: WorkflowStatus;
   readonly createdAt: string;
   readonly updatedAt: string;
+  readonly dag?: import("@alterx/contracts").CompiledDag;
 }
 
 export interface UpdateWorkflowRequest {
@@ -102,6 +103,7 @@ type WorkflowRow = {
   readonly status: WorkflowStatus;
   readonly created_at: string;
   readonly updated_at: string;
+  readonly dag?: unknown;
 };
 
 type WorkflowVersionSummaryRow = {
@@ -143,6 +145,7 @@ function fromRow(row: WorkflowRow): Workflow {
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    ...(row.dag == null ? {} : { dag: CompiledDagSchema.parse(row.dag) }),
   };
 }
 
@@ -237,7 +240,9 @@ export class WorkflowReadService {
     const bareTenant = bareTenantUuid(tenantId);
     return this.store.withTenant(bareTenant, async (tx) => {
       const result = await tx.query<WorkflowRow>(
-        `SELECT id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at
+        `SELECT id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at,
+           COALESCE(draft_dag, (SELECT compiled_dag FROM workflow_versions
+             WHERE tenant_id = $1 AND workflow_id = $2 ORDER BY version DESC LIMIT 1)) AS dag
          FROM workflows WHERE tenant_id = $1 AND id = $2`,
         [bareTenant, workflowId],
       );

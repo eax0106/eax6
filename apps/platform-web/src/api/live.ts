@@ -391,10 +391,10 @@ export async function createWorkflow(goal: string): Promise<Workflow> {
   }))
 }
 
-export async function saveWorkflowGraph(id: string, graph: { nodes: any[]; edges: any[] }): Promise<void> {
+export async function saveWorkflowGraph(id: string, graph: { nodes: any[]; edges: any[]; successCriteria?: string[] }): Promise<void> {
   await apiPatch(
     `/api/v1/workflows/${encodeURIComponent(id)}`,
-    { dag: compileDag(graph.nodes, graph.edges) },
+    { dag: compileDag(graph.nodes, graph.edges, graph.successCriteria) },
     { idempotencyKey: mutationKey("workflow-save") },
   )
 }

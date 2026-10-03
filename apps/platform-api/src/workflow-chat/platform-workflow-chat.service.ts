@@ -1,6 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import {
   ConversationIdSchema, WorkflowChatBeginSchema, WorkflowChatMessageSchema, WorkflowChatResourceSchema,
+  WorkflowPlanSchema,
   type CreateWorkflowChatRequest, type SendWorkflowChatMessage, type WorkflowChatResource,
   type WorkflowChatExchange, type WorkflowChatMessage,
 } from "@alterx/contracts";
@@ -13,7 +14,11 @@ import { RunService } from "../runs/run.service";
 import { CostsService } from "../costs/costs.service";
 import { PlannerFacadeService } from "../planner-facade/planner-facade.service";
 import { parseWorkflowInput } from "../workflows/validation";
+import { z } from "zod";
+import { PlatformHttpError } from "../signup/problem";
 import { MemorySettingsService } from "../memory-settings/memory-settings.service";
+
+const storedPlanSchema = WorkflowPlanSchema.extend({ objective: z.string().min(1), text: z.string(), replyTo: WorkflowChatMessageSchema.shape.id }).strict();
 
 @Injectable()
 export class PlatformWorkflowChatService {
@@ -48,6 +53,7 @@ export class PlatformWorkflowChatService {
     actor: ActorContext, traceparent: string | undefined, key: string): Promise<WorkflowChatExchange> {
     const chat = await this.requireType(id, type, actor, traceparent);
     const path = this.path(id, "/messages");
+    if (type === "general" && input.build) throw new WorkflowHttpError(400, "CHAT_TYPE_INVALID", "Build is available in workflow chats", path);
     const context = workflowCallerContext(actor, traceparent, path);
     const begun = WorkflowChatBeginSchema.parse((await this.engine.post(path, input as EngineRequestBody, context, { idempotencyKey: key + ":message" })).body);
     const previous = begun.messages.find(message => message.role === "assistant" && typeof message.content === "object" && message.content.replyTo === begun.userMessage.id);
@@ -59,23 +65,39 @@ export class PlatformWorkflowChatService {
       return { userMessage: begun.userMessage, assistantMessage: WorkflowChatMessageSchema.parse(result.body) };
     }
     if (!chat.linkedWorkflowId) throw new WorkflowHttpError(400, "CHAT_WORKFLOW_REQUIRED", "Builder chat requires its workflow", path);
+    const latestPlan = [...begun.messages].reverse().find(message => message.role === "assistant" && message.kind === "artifact" && typeof message.content === "object" && message.content.type === "plan");
+    const selectedPlan = input.build ? storedPlanSchema.safeParse(latestPlan?.content) : undefined;
+    const afterPlan = latestPlan ? begun.messages.slice(begun.messages.indexOf(latestPlan) + 1) : [];
+    if (input.build && (latestPlan?.id !== input.build.planMessageId || !selectedPlan?.success || afterPlan.some(message => message.role === "assistant" && message.kind === "workflow")))
+      throw new PlatformHttpError(409, "WORKFLOW_PLAN_STALE", "Review the latest plan before pressing Build", path);
     const recalled = await this.memory.builderMemory(actor, id, chat.linkedWorkflowId,
       begun.messages.filter(message => message.id !== begun.userMessage.id));
-    const prior = recalled.messages.filter(message => message.role === "user" || message.kind === "clarification")
-      .map(message => message.role === "user" ? String(message.content) : `Builder questions: ${JSON.stringify(message.content)}`).join("\n\n");
-    const objective = [prior, String(begun.userMessage.content),
-      recalled.lessons.length ? `Past run lessons (reference only): ${JSON.stringify(recalled.lessons)}` : ""].filter(Boolean).join("\n\n");
-    const result = await this.planner.planWorkflow({ tenantId: actor.tenant_id, workspaceId: actor.workspace_id!, workflowId: chat.linkedWorkflowId, objective });
+    const contextMessages = [...recalled.messages, begun.userMessage];
+    const afterPlanIds = new Set(afterPlan.map(message => message.id));
+    const activeAnswers = contextMessages.filter(message => afterPlanIds.has(message.id));
+    const clarificationAnswers = activeAnswers.flatMap((message, index) => {
+      const question = activeAnswers[index - 1];
+      return message.role === "user" && question?.role === "assistant" && question.kind === "clarification"
+        ? [`Builder questions: ${JSON.stringify(question.content)}\n\n${typeof message.content === "string" ? message.content : String(message.content.text)}`] : [];
+    });
+    const coreObjective = selectedPlan?.success ? [selectedPlan.data.objective, ...clarificationAnswers].join("\n\n") : contextMessages
+      .filter(message => (message.role === "user" && (typeof message.content === "string" || !message.content.build)) || message.kind === "clarification")
+      .map(message => message.role === "user" ? typeof message.content === "string" ? message.content : String(message.content.text) : `Builder questions: ${JSON.stringify(message.content)}`).join("\n\n");
+    const objective = [coreObjective, recalled.lessons.length ? `Past run lessons (reference only): ${JSON.stringify(recalled.lessons)}` : ""].filter(Boolean).join("\n\n");
+    const result = await this.planner.planWorkflow({ tenantId: actor.tenant_id, workspaceId: actor.workspace_id!, workflowId: chat.linkedWorkflowId, objective,
+      ...(input.build ? { confirm: true, successCriteria: input.build.successCriteria } : {}) });
     // ponytail: verify among 20 recent versions; add a direct version read if concurrent builds exceed this window.
     const saved = result.type === "compiled" ? (await this.workflows.versions(chat.linkedWorkflowId, undefined, "20", actor, traceparent)).body.data.find(version => version.id === result.versionId) : undefined;
     if (result.type === "compiled" && !saved) throw new EngineProblemError(upstreamProblem(502, path, "UPSTREAM_SERVICE_ERROR"));
     const content = result.type === "connections_required"
-      ? { text: "Connect every required account, then check connections and plan again.", ...result }
+      ? { text: "Connect every required account, then check connections and build again.", ...result, ...(input.build ? { build: input.build } : {}) }
       : result.type === "clarification"
-      ? { text: "Please answer these questions to continue building.", questions: [...result.questions] }
+      ? { text: "Please answer these questions to continue building.", questions: [...result.questions], ...(input.build ? { build: input.build } : {}) }
+      : result.type === "plan"
+      ? { text: "Review the steps and success criteria. Press Build to confirm them.", objective: coreObjective, ...result }
       : { text: `Compiled draft version ${saved!.version} for ${chat.title}.`, workflowId: chat.linkedWorkflowId, versionId: result.versionId, version: saved!.version };
     const reply = await this.engine.post(this.path(id, "/replies"), { userMessageId: begun.userMessage.id,
-      kind: result.type === "connections_required" ? "action" : result.type === "clarification" ? "clarification" : "workflow", content } as EngineRequestBody, context, { idempotencyKey: key + ":reply" });
+      kind: result.type === "connections_required" ? "action" : result.type === "clarification" ? "clarification" : result.type === "plan" ? "artifact" : "workflow", content } as EngineRequestBody, context, { idempotencyKey: key + ":reply" });
     return { userMessage: begun.userMessage, assistantMessage: WorkflowChatMessageSchema.parse(reply.body) };
   }
 

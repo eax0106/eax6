@@ -1,5 +1,6 @@
 import { z } from "./zod";
 import { ConversationIdSchema, UserIdSchema, WorkflowIdSchema, prefixedUuidV7 } from "./ids";
+import { SuccessCriteriaSchema } from "./workflow-plan";
 
 export const WorkflowChatResourceSchema = z.object({
   id: ConversationIdSchema,
@@ -32,6 +33,7 @@ export const CreateWorkflowChatRequestSchema = z.object({
 export const SendWorkflowChatMessageSchema = z.object({
   content: z.string().trim().min(1).max(16000),
   kind: z.literal("text").optional(),
+  build: z.object({ planMessageId: prefixedUuidV7("msg"), successCriteria: SuccessCriteriaSchema }).strict().optional(),
 }).strict();
 
 export const WorkflowChatExchangeSchema = z.object({

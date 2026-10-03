@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { compileDag, WorkflowGraphCycleError } from "./compile-dag"
+import { compileDag, dagToCanvas, WorkflowGraphCycleError } from "./compile-dag"
 
 const nodes = [
   { id: "trigger", type: "YAMLImport", position: { x: 0, y: 0 }, data: { label: "Trigger" } },
@@ -9,6 +9,17 @@ const nodes = [
 ]
 
 describe("compileDag", () => {
+  it("keeps workflow and node criteria outside config through a canvas edit", () => {
+    const source = compileDag(nodes, [])
+    source.success_criteria = ["Review the invoice."]
+    source.nodes[0]!.success_criteria = ["Read the invoice."]
+    const canvas = dagToCanvas(source)
+    canvas.nodes[0].data.label = "Edited label"
+    const result = compileDag(canvas.nodes, canvas.edges, source.success_criteria)
+    expect(result.success_criteria).toEqual(source.success_criteria)
+    expect(result.nodes[0]!.success_criteria).toEqual(source.nodes[0]!.success_criteria)
+    expect(result.nodes[0]!.config).not.toHaveProperty("successCriteria")
+  })
   it("compiles a valid DAG into ordered waves", () => {
     const dag = compileDag(nodes, [
       { id: "trigger-review", source: "trigger", target: "review" },

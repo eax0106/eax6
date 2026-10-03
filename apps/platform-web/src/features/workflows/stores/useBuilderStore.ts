@@ -14,6 +14,7 @@ interface BuilderState {
   workflowId?: string
   nodes: Node[]
   edges: Edge[]
+  successCriteria: string[] | undefined
   selectedNodeId: string | null
   isDirty: boolean
   inspectorOpen: boolean
@@ -21,6 +22,7 @@ interface BuilderState {
   setWorkflowId: (id: string) => void
   setNodes: (nodes: Node[]) => void
   setEdges: (edges: Edge[]) => void
+  setSuccessCriteria: (criteria: string[] | undefined) => void
   onNodesChange: OnNodesChange<Node>
   onEdgesChange: OnEdgesChange
   onConnect: OnConnect
@@ -34,13 +36,15 @@ export const useBuilderStore = create<BuilderState>((set, get) => ({
   workflowId: undefined,
   nodes: [],
   edges: [],
+  successCriteria: undefined,
   selectedNodeId: null,
   isDirty: false,
   inspectorOpen: false,
 
-  setWorkflowId: (id) => set({ workflowId: id }),
+  setWorkflowId: (id) => { if (get().workflowId !== id) set({ workflowId: id, nodes: [], edges: [], successCriteria: undefined, isDirty: false, selectedNodeId: null }) },
   setNodes: (nodes) => set({ nodes, isDirty: true }),
   setEdges: (edges) => set({ edges, isDirty: true }),
+  setSuccessCriteria: (successCriteria) => set({ successCriteria }),
   
   onNodesChange: (changes) => {
     set({
