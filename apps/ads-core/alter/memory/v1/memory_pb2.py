@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x61lter/memory/v1/memory.proto\x12\x0f\x61lter.memory.v1\"\x91\x01\n\x17ProposeWritebackRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x0e\n\x06run_id\x18\x03 \x01(\t\x12#\n\x1bverified_output_artifact_id\x18\x04 \x01(\t\x12\x11\n\tnamespace\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"]\n\x18ProposeWritebackResponse\x12\x11\n\tmemory_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63\x61ndidate_json\x18\x02 \x01(\t\x12\x0f\n\x07skipped\x18\x03 \x01(\x08J\x05\x08\x64\x10\xc8\x01\"\x94\x01\n\x14PromoteMemoryRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x11\n\tmemory_id\x18\x02 \x01(\t\x12\x19\n\x11\x65valuation_run_id\x18\x03 \x01(\t\x12\x1e\n\x11\x61\x64s_core_scope_id\x18\x04 \x01(\tH\x00\x88\x01\x01\x42\x14\n\x12_ads_core_scope_idJ\x05\x08\x64\x10\xc8\x01\"E\n\x15PromoteMemoryResponse\x12\x10\n\x08promoted\x18\x01 \x01(\x08\x12\x13\n\x0bpromoted_at\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"o\n\x13UpdatePolicyRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x11\n\tpolicy_id\x18\x02 \x01(\t\x12\x17\n\x0f\x63urrent_version\x18\x03 \x01(\t\x12\x12\n\npatch_json\x18\x04 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"E\n\x14UpdatePolicyResponse\x12\x11\n\tpolicy_id\x18\x01 \x01(\t\x12\x13\n\x0bnew_version\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"H\n\x16MemoryWorkspaceRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\x88\x01\n\x1bUpdateMemorySettingsRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x10\n\x08\x61\x63tor_id\x18\x03 \x01(\t\x12\x15\n\rsettings_json\x18\x04 \x01(\t\x12\x10\n\x08if_match\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"6\n\x16MemorySettingsResponse\x12\x15\n\rsettings_json\x18\x01 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"S\n\x13MemoryAccessRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x0c\n\x04kind\x18\x03 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"F\n\x14MemoryAccessResponse\x12\x0f\n\x07\x61llowed\x18\x01 \x01(\x08\x12\x16\n\x0eretention_days\x18\x02 \x01(\rJ\x05\x08\x64\x10\xc8\x01\"s\n\x11RecallChatRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x17\n\x0f\x63onversation_id\x18\x03 \x01(\t\x12\x15\n\rmessages_json\x18\x04 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\\\n\x15RecallWorkflowRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x13\n\x0bworkflow_id\x18\x03 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"2\n\x14MemoryRecallResponse\x12\x13\n\x0bmemory_json\x18\x01 \x01(\tJ\x05\x08\x64\x10\xc8\x01\x32\xa2\x06\n\rMemoryService\x12g\n\x10ProposeWriteback\x12(.alter.memory.v1.ProposeWritebackRequest\x1a).alter.memory.v1.ProposeWritebackResponse\x12^\n\rPromoteMemory\x12%.alter.memory.v1.PromoteMemoryRequest\x1a&.alter.memory.v1.PromoteMemoryResponse\x12[\n\x0cUpdatePolicy\x12$.alter.memory.v1.UpdatePolicyRequest\x1a%.alter.memory.v1.UpdatePolicyResponse\x12\x65\n\x11GetMemorySettings\x12\'.alter.memory.v1.MemoryWorkspaceRequest\x1a\'.alter.memory.v1.MemorySettingsResponse\x12m\n\x14UpdateMemorySettings\x12,.alter.memory.v1.UpdateMemorySettingsRequest\x1a\'.alter.memory.v1.MemorySettingsResponse\x12[\n\x0cMemoryAccess\x12$.alter.memory.v1.MemoryAccessRequest\x1a%.alter.memory.v1.MemoryAccessResponse\x12W\n\nRecallChat\x12\".alter.memory.v1.RecallChatRequest\x1a%.alter.memory.v1.MemoryRecallResponse\x12_\n\x0eRecallWorkflow\x12&.alter.memory.v1.RecallWorkflowRequest\x1a%.alter.memory.v1.MemoryRecallResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1c\x61lter/memory/v1/memory.proto\x12\x0f\x61lter.memory.v1\"\x91\x01\n\x17ProposeWritebackRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x0e\n\x06run_id\x18\x03 \x01(\t\x12#\n\x1bverified_output_artifact_id\x18\x04 \x01(\t\x12\x11\n\tnamespace\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"]\n\x18ProposeWritebackResponse\x12\x11\n\tmemory_id\x18\x01 \x01(\t\x12\x16\n\x0e\x63\x61ndidate_json\x18\x02 \x01(\t\x12\x0f\n\x07skipped\x18\x03 \x01(\x08J\x05\x08\x64\x10\xc8\x01\"\x94\x01\n\x14PromoteMemoryRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x11\n\tmemory_id\x18\x02 \x01(\t\x12\x19\n\x11\x65valuation_run_id\x18\x03 \x01(\t\x12\x1e\n\x11\x61\x64s_core_scope_id\x18\x04 \x01(\tH\x00\x88\x01\x01\x42\x14\n\x12_ads_core_scope_idJ\x05\x08\x64\x10\xc8\x01\"E\n\x15PromoteMemoryResponse\x12\x10\n\x08promoted\x18\x01 \x01(\x08\x12\x13\n\x0bpromoted_at\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"o\n\x13UpdatePolicyRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x11\n\tpolicy_id\x18\x02 \x01(\t\x12\x17\n\x0f\x63urrent_version\x18\x03 \x01(\t\x12\x12\n\npatch_json\x18\x04 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"E\n\x14UpdatePolicyResponse\x12\x11\n\tpolicy_id\x18\x01 \x01(\t\x12\x13\n\x0bnew_version\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"J\n\x18GetMemorySettingsRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\x88\x01\n\x1bUpdateMemorySettingsRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x10\n\x08\x61\x63tor_id\x18\x03 \x01(\t\x12\x15\n\rsettings_json\x18\x04 \x01(\t\x12\x10\n\x08if_match\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"9\n\x19GetMemorySettingsResponse\x12\x15\n\rsettings_json\x18\x01 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"<\n\x1cUpdateMemorySettingsResponse\x12\x15\n\rsettings_json\x18\x01 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"S\n\x13MemoryAccessRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x0c\n\x04kind\x18\x03 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"F\n\x14MemoryAccessResponse\x12\x0f\n\x07\x61llowed\x18\x01 \x01(\x08\x12\x16\n\x0eretention_days\x18\x02 \x01(\rJ\x05\x08\x64\x10\xc8\x01\"s\n\x11RecallChatRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x17\n\x0f\x63onversation_id\x18\x03 \x01(\t\x12\x15\n\rmessages_json\x18\x04 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\\\n\x15RecallWorkflowRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\x13\n\x0bworkflow_id\x18\x03 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"0\n\x12RecallChatResponse\x12\x13\n\x0bmemory_json\x18\x01 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"4\n\x16RecallWorkflowResponse\x12\x13\n\x0bmemory_json\x18\x01 \x01(\tJ\x05\x08\x64\x10\xc8\x01\x32\xad\x06\n\rMemoryService\x12g\n\x10ProposeWriteback\x12(.alter.memory.v1.ProposeWritebackRequest\x1a).alter.memory.v1.ProposeWritebackResponse\x12^\n\rPromoteMemory\x12%.alter.memory.v1.PromoteMemoryRequest\x1a&.alter.memory.v1.PromoteMemoryResponse\x12[\n\x0cUpdatePolicy\x12$.alter.memory.v1.UpdatePolicyRequest\x1a%.alter.memory.v1.UpdatePolicyResponse\x12j\n\x11GetMemorySettings\x12).alter.memory.v1.GetMemorySettingsRequest\x1a*.alter.memory.v1.GetMemorySettingsResponse\x12s\n\x14UpdateMemorySettings\x12,.alter.memory.v1.UpdateMemorySettingsRequest\x1a-.alter.memory.v1.UpdateMemorySettingsResponse\x12[\n\x0cMemoryAccess\x12$.alter.memory.v1.MemoryAccessRequest\x1a%.alter.memory.v1.MemoryAccessResponse\x12U\n\nRecallChat\x12\".alter.memory.v1.RecallChatRequest\x1a#.alter.memory.v1.RecallChatResponse\x12\x61\n\x0eRecallWorkflow\x12&.alter.memory.v1.RecallWorkflowRequest\x1a\'.alter.memory.v1.RecallWorkflowResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -43,22 +43,26 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_UPDATEPOLICYREQUEST']._serialized_end=625
   _globals['_UPDATEPOLICYRESPONSE']._serialized_start=627
   _globals['_UPDATEPOLICYRESPONSE']._serialized_end=696
-  _globals['_MEMORYWORKSPACEREQUEST']._serialized_start=698
-  _globals['_MEMORYWORKSPACEREQUEST']._serialized_end=770
-  _globals['_UPDATEMEMORYSETTINGSREQUEST']._serialized_start=773
-  _globals['_UPDATEMEMORYSETTINGSREQUEST']._serialized_end=909
-  _globals['_MEMORYSETTINGSRESPONSE']._serialized_start=911
-  _globals['_MEMORYSETTINGSRESPONSE']._serialized_end=965
-  _globals['_MEMORYACCESSREQUEST']._serialized_start=967
-  _globals['_MEMORYACCESSREQUEST']._serialized_end=1050
-  _globals['_MEMORYACCESSRESPONSE']._serialized_start=1052
-  _globals['_MEMORYACCESSRESPONSE']._serialized_end=1122
-  _globals['_RECALLCHATREQUEST']._serialized_start=1124
-  _globals['_RECALLCHATREQUEST']._serialized_end=1239
-  _globals['_RECALLWORKFLOWREQUEST']._serialized_start=1241
-  _globals['_RECALLWORKFLOWREQUEST']._serialized_end=1333
-  _globals['_MEMORYRECALLRESPONSE']._serialized_start=1335
-  _globals['_MEMORYRECALLRESPONSE']._serialized_end=1385
-  _globals['_MEMORYSERVICE']._serialized_start=1388
-  _globals['_MEMORYSERVICE']._serialized_end=2190
+  _globals['_GETMEMORYSETTINGSREQUEST']._serialized_start=698
+  _globals['_GETMEMORYSETTINGSREQUEST']._serialized_end=772
+  _globals['_UPDATEMEMORYSETTINGSREQUEST']._serialized_start=775
+  _globals['_UPDATEMEMORYSETTINGSREQUEST']._serialized_end=911
+  _globals['_GETMEMORYSETTINGSRESPONSE']._serialized_start=913
+  _globals['_GETMEMORYSETTINGSRESPONSE']._serialized_end=970
+  _globals['_UPDATEMEMORYSETTINGSRESPONSE']._serialized_start=972
+  _globals['_UPDATEMEMORYSETTINGSRESPONSE']._serialized_end=1032
+  _globals['_MEMORYACCESSREQUEST']._serialized_start=1034
+  _globals['_MEMORYACCESSREQUEST']._serialized_end=1117
+  _globals['_MEMORYACCESSRESPONSE']._serialized_start=1119
+  _globals['_MEMORYACCESSRESPONSE']._serialized_end=1189
+  _globals['_RECALLCHATREQUEST']._serialized_start=1191
+  _globals['_RECALLCHATREQUEST']._serialized_end=1306
+  _globals['_RECALLWORKFLOWREQUEST']._serialized_start=1308
+  _globals['_RECALLWORKFLOWREQUEST']._serialized_end=1400
+  _globals['_RECALLCHATRESPONSE']._serialized_start=1402
+  _globals['_RECALLCHATRESPONSE']._serialized_end=1450
+  _globals['_RECALLWORKFLOWRESPONSE']._serialized_start=1452
+  _globals['_RECALLWORKFLOWRESPONSE']._serialized_end=1504
+  _globals['_MEMORYSERVICE']._serialized_start=1507
+  _globals['_MEMORYSERVICE']._serialized_end=2320
 # @@protoc_insertion_point(module_scope)

@@ -354,7 +354,7 @@ async def test_settings_use_real_authenticated_grpc_and_return_precondition_stat
         async with grpc.aio.insecure_channel(f"127.0.0.1:{port}") as channel:
             stub = memory_pb2_grpc.MemoryServiceStub(channel)  # type: ignore[no-untyped-call]
             ws = new_prefixed_uuid7("ws")
-            scope = memory_pb2.MemoryWorkspaceRequest(tenant_id=TENANT, workspace_id=ws)
+            scope = memory_pb2.GetMemorySettingsRequest(tenant_id=TENANT, workspace_id=ws)
             with pytest.raises(grpc.aio.AioRpcError) as anonymous:
                 await stub.GetMemorySettings(scope)
             assert anonymous.value.code() == grpc.StatusCode.UNAUTHENTICATED
@@ -390,7 +390,7 @@ async def test_settings_use_real_authenticated_grpc_and_return_precondition_stat
             foreign = json.loads(
                 (
                     await stub.GetMemorySettings(
-                        memory_pb2.MemoryWorkspaceRequest(tenant_id=OTHER, workspace_id=ws),
+                        memory_pb2.GetMemorySettingsRequest(tenant_id=OTHER, workspace_id=ws),
                         metadata=metadata,
                     )
                 ).settings_json

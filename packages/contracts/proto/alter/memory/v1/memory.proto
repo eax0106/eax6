@@ -6,11 +6,11 @@ service MemoryService {
   rpc ProposeWriteback(ProposeWritebackRequest) returns (ProposeWritebackResponse);
   rpc PromoteMemory(PromoteMemoryRequest) returns (PromoteMemoryResponse);
   rpc UpdatePolicy(UpdatePolicyRequest) returns (UpdatePolicyResponse);
-  rpc GetMemorySettings(MemoryWorkspaceRequest) returns (MemorySettingsResponse);
-  rpc UpdateMemorySettings(UpdateMemorySettingsRequest) returns (MemorySettingsResponse);
+  rpc GetMemorySettings(GetMemorySettingsRequest) returns (GetMemorySettingsResponse);
+  rpc UpdateMemorySettings(UpdateMemorySettingsRequest) returns (UpdateMemorySettingsResponse);
   rpc MemoryAccess(MemoryAccessRequest) returns (MemoryAccessResponse);
-  rpc RecallChat(RecallChatRequest) returns (MemoryRecallResponse);
-  rpc RecallWorkflow(RecallWorkflowRequest) returns (MemoryRecallResponse);
+  rpc RecallChat(RecallChatRequest) returns (RecallChatResponse);
+  rpc RecallWorkflow(RecallWorkflowRequest) returns (RecallWorkflowResponse);
 }
 
 message ProposeWritebackRequest {
@@ -68,7 +68,7 @@ message UpdatePolicyResponse {
   string new_version = 2;
 }
 
-message MemoryWorkspaceRequest {
+message GetMemorySettingsRequest {
   reserved 100 to 199;
   string tenant_id = 1;
   string workspace_id = 2;
@@ -81,7 +81,11 @@ message UpdateMemorySettingsRequest {
   string settings_json = 4;
   string if_match = 5;
 }
-message MemorySettingsResponse {
+message GetMemorySettingsResponse {
+  reserved 100 to 199;
+  string settings_json = 1;
+}
+message UpdateMemorySettingsResponse {
   reserved 100 to 199;
   string settings_json = 1;
 }
@@ -109,7 +113,11 @@ message RecallWorkflowRequest {
   string workspace_id = 2;
   string workflow_id = 3;
 }
-message MemoryRecallResponse {
+message RecallChatResponse {
+  reserved 100 to 199;
+  string memory_json = 1;
+}
+message RecallWorkflowResponse {
   reserved 100 to 199;
   string memory_json = 1;
 }

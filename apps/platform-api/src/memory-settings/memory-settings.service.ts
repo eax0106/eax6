@@ -6,6 +6,7 @@ import { TenantIdSchema, UserIdSchema, WorkspaceIdSchema, WorkspaceMemorySetting
   ConversationIdSchema, WorkflowIdSchema, type WorkflowChatMessage, type WorkspaceMemorySettings } from "@alterx/contracts";
 import type { ActorContextType } from "../rbac";
 import { PlatformHttpError } from "../signup/problem";
+import { memoryServiceConnection } from "../config/memory-service";
 
 const BASE = "/api/v1/memory-settings";
 
@@ -59,12 +60,11 @@ export class MemorySettingsService implements OnModuleDestroy {
 
   private memory(): MemoryServiceClient {
     if (this.client) return this.client;
-    const address = process.env["MEMORY_SERVICE_ADDRESS"]?.trim();
-    const authorization = process.env["MEMORY_SERVICE_AUTHORIZATION"]?.trim();
-    if (!address || !authorization?.startsWith("Bearer ") || !authorization.slice(7).trim()) {
+    const connection = memoryServiceConnection();
+    if (!connection) {
       throw new PlatformHttpError(503, "MEMORY_SETTINGS_UNAVAILABLE", "Memory settings unavailable", BASE);
     }
-    this.client = new MemoryServiceClient({ address, authorization,
+    this.client = new MemoryServiceClient({ ...connection,
       protoPath: resolve(process.cwd(), "packages/contracts/proto/alter/memory/v1/memory.proto") });
     return this.client;
   }

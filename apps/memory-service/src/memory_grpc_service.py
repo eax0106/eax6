@@ -51,7 +51,7 @@ class MemoryGrpcService:
         self,
         request: memory_pb2.RecallChatRequest,
         context: grpc.aio.ServicerContext[object, object],
-    ) -> memory_pb2.MemoryRecallResponse:
+    ) -> memory_pb2.RecallChatResponse:
         if self._settings is None or self._redact is None:
             await _abort(context.abort, grpc.StatusCode.UNAVAILABLE, "Memory recall unavailable")
         try:
@@ -60,7 +60,7 @@ class MemoryGrpcService:
                 self._settings.access, request.tenant_id, request.workspace_id, "chat"
             )
             if not enabled:
-                return memory_pb2.MemoryRecallResponse(memory_json="[]")
+                return memory_pb2.RecallChatResponse(memory_json="[]")
             redacted = await self._redact(request.tenant_id, request.messages_json)
             try:
                 chat_messages(redacted, request.conversation_id)
@@ -78,13 +78,13 @@ class MemoryGrpcService:
             await _abort(context.abort, grpc.StatusCode.UNAVAILABLE, "Memory redaction unavailable")
         except ValueError:
             await _abort(context.abort, grpc.StatusCode.INVALID_ARGUMENT, "Invalid chat memory")
-        return memory_pb2.MemoryRecallResponse(memory_json=result)
+        return memory_pb2.RecallChatResponse(memory_json=result)
 
     async def RecallWorkflow(
         self,
         request: memory_pb2.RecallWorkflowRequest,
         context: grpc.aio.ServicerContext[object, object],
-    ) -> memory_pb2.MemoryRecallResponse:
+    ) -> memory_pb2.RecallWorkflowResponse:
         if self._settings is None or self._redact is None:
             await _abort(context.abort, grpc.StatusCode.UNAVAILABLE, "Memory recall unavailable")
         try:
@@ -107,13 +107,13 @@ class MemoryGrpcService:
                 await _abort(
                     context.abort, grpc.StatusCode.UNAVAILABLE, "Memory redaction unavailable"
                 )
-        return memory_pb2.MemoryRecallResponse(memory_json=result)
+        return memory_pb2.RecallWorkflowResponse(memory_json=result)
 
     async def GetMemorySettings(
         self,
-        request: memory_pb2.MemoryWorkspaceRequest,
+        request: memory_pb2.GetMemorySettingsRequest,
         context: grpc.aio.ServicerContext[object, object],
-    ) -> memory_pb2.MemorySettingsResponse:
+    ) -> memory_pb2.GetMemorySettingsResponse:
         if self._settings is None:
             await _abort(context.abort, grpc.StatusCode.UNAVAILABLE, "Memory settings unavailable")
         try:
@@ -122,13 +122,13 @@ class MemoryGrpcService:
             )
         except ValueError:
             await _abort(context.abort, grpc.StatusCode.INVALID_ARGUMENT, "Invalid memory scope")
-        return memory_pb2.MemorySettingsResponse(settings_json=result.model_dump_json())
+        return memory_pb2.GetMemorySettingsResponse(settings_json=result.model_dump_json())
 
     async def UpdateMemorySettings(
         self,
         request: memory_pb2.UpdateMemorySettingsRequest,
         context: grpc.aio.ServicerContext[object, object],
-    ) -> memory_pb2.MemorySettingsResponse:
+    ) -> memory_pb2.UpdateMemorySettingsResponse:
         if self._settings is None:
             await _abort(context.abort, grpc.StatusCode.UNAVAILABLE, "Memory settings unavailable")
         try:
@@ -152,7 +152,7 @@ class MemoryGrpcService:
             await _abort(context.abort, code, str(error))
         except ValueError:
             await _abort(context.abort, grpc.StatusCode.INVALID_ARGUMENT, "Invalid memory settings")
-        return memory_pb2.MemorySettingsResponse(settings_json=result.model_dump_json())
+        return memory_pb2.UpdateMemorySettingsResponse(settings_json=result.model_dump_json())
 
     async def MemoryAccess(
         self,

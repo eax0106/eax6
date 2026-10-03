@@ -51,13 +51,13 @@ class MemoryServiceStub:
                 _registered_method=True)
         self.GetMemorySettings = channel.unary_unary(
                 '/alter.memory.v1.MemoryService/GetMemorySettings',
-                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryWorkspaceRequest.SerializeToString,
-                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.GetMemorySettingsRequest.SerializeToString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.GetMemorySettingsResponse.FromString,
                 _registered_method=True)
         self.UpdateMemorySettings = channel.unary_unary(
                 '/alter.memory.v1.MemoryService/UpdateMemorySettings',
                 request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsRequest.SerializeToString,
-                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsResponse.FromString,
                 _registered_method=True)
         self.MemoryAccess = channel.unary_unary(
                 '/alter.memory.v1.MemoryService/MemoryAccess',
@@ -67,12 +67,12 @@ class MemoryServiceStub:
         self.RecallChat = channel.unary_unary(
                 '/alter.memory.v1.MemoryService/RecallChat',
                 request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatRequest.SerializeToString,
-                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatResponse.FromString,
                 _registered_method=True)
         self.RecallWorkflow = channel.unary_unary(
                 '/alter.memory.v1.MemoryService/RecallWorkflow',
                 request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowRequest.SerializeToString,
-                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowResponse.FromString,
                 _registered_method=True)
 
 
@@ -147,13 +147,13 @@ def add_MemoryServiceServicer_to_server(servicer, server):
             ),
             'GetMemorySettings': grpc.unary_unary_rpc_method_handler(
                     servicer.GetMemorySettings,
-                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryWorkspaceRequest.FromString,
-                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.SerializeToString,
+                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.GetMemorySettingsRequest.FromString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.GetMemorySettingsResponse.SerializeToString,
             ),
             'UpdateMemorySettings': grpc.unary_unary_rpc_method_handler(
                     servicer.UpdateMemorySettings,
                     request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsRequest.FromString,
-                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.SerializeToString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsResponse.SerializeToString,
             ),
             'MemoryAccess': grpc.unary_unary_rpc_method_handler(
                     servicer.MemoryAccess,
@@ -163,12 +163,12 @@ def add_MemoryServiceServicer_to_server(servicer, server):
             'RecallChat': grpc.unary_unary_rpc_method_handler(
                     servicer.RecallChat,
                     request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatRequest.FromString,
-                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.SerializeToString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatResponse.SerializeToString,
             ),
             'RecallWorkflow': grpc.unary_unary_rpc_method_handler(
                     servicer.RecallWorkflow,
                     request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowRequest.FromString,
-                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.SerializeToString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -277,8 +277,8 @@ class MemoryService:
             request,
             target,
             '/alter.memory.v1.MemoryService/GetMemorySettings',
-            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryWorkspaceRequest.SerializeToString,
-            alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.GetMemorySettingsRequest.SerializeToString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.GetMemorySettingsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -305,7 +305,7 @@ class MemoryService:
             target,
             '/alter.memory.v1.MemoryService/UpdateMemorySettings',
             alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsRequest.SerializeToString,
-            alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -359,7 +359,7 @@ class MemoryService:
             target,
             '/alter.memory.v1.MemoryService/RecallChat',
             alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatRequest.SerializeToString,
-            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -386,7 +386,7 @@ class MemoryService:
             target,
             '/alter.memory.v1.MemoryService/RecallWorkflow',
             alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowRequest.SerializeToString,
-            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowResponse.FromString,
             options,
             channel_credentials,
             insecure,

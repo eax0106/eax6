@@ -68,7 +68,7 @@ class UpdatePolicyResponse(_message.Message):
     new_version: str
     def __init__(self, policy_id: _Optional[str] = ..., new_version: _Optional[str] = ...) -> None: ...
 
-class MemoryWorkspaceRequest(_message.Message):
+class GetMemorySettingsRequest(_message.Message):
     __slots__ = ("tenant_id", "workspace_id")
     TENANT_ID_FIELD_NUMBER: _ClassVar[int]
     WORKSPACE_ID_FIELD_NUMBER: _ClassVar[int]
@@ -90,7 +90,13 @@ class UpdateMemorySettingsRequest(_message.Message):
     if_match: str
     def __init__(self, tenant_id: _Optional[str] = ..., workspace_id: _Optional[str] = ..., actor_id: _Optional[str] = ..., settings_json: _Optional[str] = ..., if_match: _Optional[str] = ...) -> None: ...
 
-class MemorySettingsResponse(_message.Message):
+class GetMemorySettingsResponse(_message.Message):
+    __slots__ = ("settings_json",)
+    SETTINGS_JSON_FIELD_NUMBER: _ClassVar[int]
+    settings_json: str
+    def __init__(self, settings_json: _Optional[str] = ...) -> None: ...
+
+class UpdateMemorySettingsResponse(_message.Message):
     __slots__ = ("settings_json",)
     SETTINGS_JSON_FIELD_NUMBER: _ClassVar[int]
     settings_json: str
@@ -136,7 +142,13 @@ class RecallWorkflowRequest(_message.Message):
     workflow_id: str
     def __init__(self, tenant_id: _Optional[str] = ..., workspace_id: _Optional[str] = ..., workflow_id: _Optional[str] = ...) -> None: ...
 
-class MemoryRecallResponse(_message.Message):
+class RecallChatResponse(_message.Message):
+    __slots__ = ("memory_json",)
+    MEMORY_JSON_FIELD_NUMBER: _ClassVar[int]
+    memory_json: str
+    def __init__(self, memory_json: _Optional[str] = ...) -> None: ...
+
+class RecallWorkflowResponse(_message.Message):
     __slots__ = ("memory_json",)
     MEMORY_JSON_FIELD_NUMBER: _ClassVar[int]
     memory_json: str
