@@ -77,7 +77,7 @@ describe("EventQueryService", () => {
     const query = vi.fn(async (statement: string, values?: readonly unknown[]) => {
       const sql = statement.replace(/\s+/g, " ").trim();
       if (sql.startsWith("SELECT received_at::text")) {
-        expect(values).toEqual([BARE_TENANT, EVENT_A]);
+        expect(values).toEqual([BARE_TENANT, EVENT_A, null]);
         return { rowCount: 1, rows: [{ received_at: "2026-08-26T00:00:00.000Z" }] };
       }
       if (sql.startsWith("SELECT e.event_id")) {

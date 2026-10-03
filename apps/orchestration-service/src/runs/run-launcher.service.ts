@@ -473,6 +473,7 @@ export class RunLauncherService {
   async listRuns(
     tenantIdInput: string,
     query: {
+      readonly workspaceId?: string;
       readonly workflowId?: string;
       readonly mode?: "workflow" | "project";
       readonly status?: string;
@@ -491,6 +492,10 @@ export class RunLauncherService {
     return this.store.withTenant(tenantId, async (tx) => {
       const conditions: string[] = ["tenant_id = $1"];
       const values: unknown[] = [tenantId];
+      if (query.workspaceId !== undefined) {
+        values.push(query.workspaceId);
+        conditions.push(`workspace_id = $${values.length}`);
+      }
 
       if (query.workflowId !== undefined) {
         values.push(query.workflowId);
@@ -506,8 +511,8 @@ export class RunLauncherService {
       }
       if (query.cursor !== undefined) {
         const cursorRow = await tx.query<{ readonly created_at: string }>(
-          "SELECT created_at::text FROM runs WHERE tenant_id = $1 AND id = $2",
-          [tenantId, query.cursor],
+          "SELECT created_at::text FROM runs WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+          [tenantId, query.cursor, query.workspaceId ?? null],
         );
         const createdAt = cursorRow.rows[0]?.created_at;
         if (createdAt === undefined) {

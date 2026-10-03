@@ -21,7 +21,7 @@ function fakeStore(): { readonly store: OrchestrationTenantStore; readonly query
     expiry_at: "2026-08-07T00:00:00.000Z",
   };
   const query = vi.fn(async (statement: string) => {
-    if (statement.includes("WHERE tenant_id = $1 AND status = 'open'")) {
+    if (statement.includes("WHERE tenant_id = $1 AND ($2::uuid IS NULL OR workspace_id = $2) AND status = 'open'")) {
       return { rowCount: 1, rows: [row] };
     }
     if (statement.includes("WHERE tenant_id = $1 AND id = $2 AND status = 'open'")) {
@@ -42,7 +42,7 @@ describe("ClarificationsService", () => {
       data: [{ id: CLARIFICATION, status: "open" }],
       page: { has_more: false, limit: 50 },
     });
-    expect(query).toHaveBeenCalledWith(expect.stringContaining("SET status = 'expired'"), [BARE_TENANT]);
+    expect(query).toHaveBeenCalledWith(expect.stringContaining("SET status = 'expired'"), [BARE_TENANT, null]);
   });
 
   it("assigns an open clarification to a validated user", async () => {

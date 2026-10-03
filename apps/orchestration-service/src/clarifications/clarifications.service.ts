@@ -181,33 +181,33 @@ export class ClarificationsService {
 
   async list(
     tenantIdInput: string,
-    query: { readonly cursor?: string; readonly limit?: number } = {},
+    query: { readonly workspaceId?: string; readonly cursor?: string; readonly limit?: number } = {},
   ): Promise<ClarificationPage> {
     const tenantId = bareTenantUuid(tenantIdInput);
     const limit = normalizeLimit(query.limit);
 
     return this.store.withTenant(tenantId, async (tx) => {
-      await this.#expirePastDue(tx, tenantId);
-      const values: unknown[] = [tenantId];
+      await this.#expirePastDue(tx, tenantId, query.workspaceId);
+      const values: unknown[] = [tenantId, query.workspaceId ?? null];
       let cursorClause = "";
       if (query.cursor !== undefined) {
         requireClarificationId(query.cursor);
         const cursor = await tx.query<{ readonly requested_at: string }>(
-          "SELECT requested_at::text FROM clarifications WHERE tenant_id = $1 AND id = $2",
-          [tenantId, query.cursor],
+          "SELECT requested_at::text FROM clarifications WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+          [tenantId, query.cursor, query.workspaceId ?? null],
         );
         const requestedAt = cursor.rows[0]?.requested_at;
         if (requestedAt === undefined) {
           throw new ClarificationValidationError("cursor does not belong to this tenant");
         }
         values.push(requestedAt, query.cursor);
-        cursorClause = ` AND (requested_at, id) > ($2::timestamptz, $3)`;
+        cursorClause = ` AND (requested_at, id) > ($${values.length - 1}::timestamptz, $${values.length})`;
       }
       values.push(limit + 1);
       const rows = await tx.query<ClarificationRow>(
         `SELECT ${SELECT_COLUMNS}
          FROM clarifications
-         WHERE tenant_id = $1 AND status = 'open'${cursorClause}
+         WHERE tenant_id = $1 AND ($2::uuid IS NULL OR workspace_id = $2) AND status = 'open'${cursorClause}
          ORDER BY requested_at ASC, id ASC
          LIMIT $${values.length}`,
         values,
@@ -256,12 +256,12 @@ export class ClarificationsService {
     });
   }
 
-  async #expirePastDue(tx: OrchestrationTransactionLike, tenantId: string): Promise<void> {
+  async #expirePastDue(tx: OrchestrationTransactionLike, tenantId: string, workspaceId?: string): Promise<void> {
     await tx.query(
       `UPDATE clarifications
        SET status = 'expired'
-       WHERE tenant_id = $1 AND status = 'open' AND expiry_at < clock_timestamp()`,
-      [tenantId],
+       WHERE tenant_id = $1 AND status = 'open' AND expiry_at < clock_timestamp() AND ($2::uuid IS NULL OR workspace_id = $2)`,
+      [tenantId, workspaceId ?? null],
     );
   }
 

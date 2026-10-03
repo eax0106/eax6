@@ -144,7 +144,7 @@ export class ArtifactsService {
     }
   }
 
-  async list(tenantId: string, runId: string): Promise<readonly Artifact[]> {
+  async list(tenantId: string, runId: string, workspaceId?: string): Promise<readonly Artifact[]> {
     const tenant = bareTenantUuid(requireValue("tenantId", tenantId));
     const run = requireValue("runId", runId);
     return this.store.withTenant(tenant, async (tx) => {
@@ -153,8 +153,8 @@ export class ArtifactsService {
            r.workspace_id::text AS workspace_id
          FROM artifacts a
          JOIN runs r ON r.tenant_id = a.tenant_id AND r.id = a.run_id
-         WHERE a.tenant_id = $1 AND a.run_id = $2 ORDER BY a.created_at DESC, a.id DESC`,
-        [tenant, run],
+         WHERE a.tenant_id = $1 AND a.run_id = $2 AND ($3::uuid IS NULL OR r.workspace_id = $3) ORDER BY a.created_at DESC, a.id DESC`,
+        [tenant, run, workspaceId ?? null],
       );
       return result.rows.map(fromRow);
     });

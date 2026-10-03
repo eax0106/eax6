@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import {
   Body,
@@ -157,8 +158,10 @@ export class RunsController {
   @Get()
   async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: RunsQuery) {
     const tenantId = requiredTenantId(request);
+    const scope = workspaceReadScope(request);
     try {
       const page = await this.launcher.listRuns(tenantId, {
+        ...scope,
         ...(query.workflow_id === undefined ? {} : { workflowId: query.workflow_id }),
         ...(query.mode === undefined ? {} : { mode: query.mode }),
         ...(query.status === undefined ? {} : { status: query.status }),

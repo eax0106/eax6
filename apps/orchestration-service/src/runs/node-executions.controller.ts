@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 
 import { Controller, Get, HttpException, Param, Query, Req } from "@nestjs/common";
@@ -31,8 +32,10 @@ export class NodeExecutionsController {
     if (tenantId === undefined) {
       throw new HttpException(problem(request.url, 500, "Missing authenticated tenant context"), 500);
     }
+    const scope = workspaceReadScope(request);
     try {
       return await this.ledger.list(tenantId, runId, {
+        ...scope,
         ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
         ...(query.limit === undefined ? {} : { limit: Number(query.limit) }),
       });

@@ -11,7 +11,7 @@ import type {
   WebhookRouting,
   WebhookSecretRecord,
 } from "./types";
-import type { TriggerBindingConfig, TriggerBindingStatus } from "@alterx/contracts";
+import { type TriggerBindingConfig, type TriggerBindingStatus } from "@alterx/contracts";
 import { defaultDlqPolicy } from "../trigger-registry/dlq-policy";
 
 interface Transaction {
@@ -39,19 +39,23 @@ const SYSTEM_TENANT_ID = "00000000-0000-7000-8000-000000000000";
 export class PostgresTriggerBindingStore implements TriggerBindingStore {
   constructor(private readonly store: OrchestrationTenantStore) {}
 
+  private withTenant<T>(tenantId: string, operation: (tx: Transaction) => Promise<T>): Promise<T> {
+    return this.store.withTenant(tenantId.replace(/^ten_/, ""), operation);
+  }
+
   async findTriggerScope(
     tenantId: string,
     triggerId: string,
   ): Promise<TriggerScope | null> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<{ workspace_id: string; type: string }>(
         `SELECT workspace_id, type FROM triggers WHERE tenant_id = $1 AND id = $2`,
-        [tenantId, triggerId],
+        [tenantId.replace(/^ten_/, ""), triggerId],
       );
       const row = result.rows[0];
       return row === undefined
         ? null
-        : { triggerId, workspaceId: row.workspace_id, type: row.type };
+        : { triggerId, workspaceId: `ws_${row.workspace_id}`, type: row.type };
     });
   }
 
@@ -59,7 +63,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     tenantId: string,
     triggerId: string,
   ): Promise<TriggerDispatchInfo | null> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<{
         workspace_id: string;
         type: string;
@@ -74,7 +78,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
            ON tv.tenant_id = t.tenant_id AND tv.trigger_id = t.id
           AND tv.status = 'active'
          WHERE t.tenant_id = $1 AND t.id = $2`,
-        [tenantId, triggerId],
+        [tenantId.replace(/^ten_/, ""), triggerId],
       );
       const row = result.rows[0];
       if (row === undefined) {
@@ -82,7 +86,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
       }
       return {
         triggerId,
-        workspaceId: row.workspace_id,
+        workspaceId: `ws_${row.workspace_id}`,
         type: row.type,
         status: row.status,
         activeVersion: row.active_version === null ? null : Number(row.active_version),
@@ -99,11 +103,11 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     workspaceId: string,
     integrationId: string,
   ): Promise<WebhookEndpointRecord | null> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<EndpointRow>(
         `${ENDPOINT_COLUMNS}
          WHERE tenant_id = $1 AND workspace_id = $2 AND integration_id = $3`,
-        [tenantId, workspaceId, integrationId],
+        [tenantId.replace(/^ten_/, ""), workspaceId.replace(/^ws_/, ""), integrationId],
       );
       const row = result.rows[0];
       return row === undefined ? null : toEndpoint(tenantId, row);
@@ -114,10 +118,10 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     tenantId: string,
     endpointId: string,
   ): Promise<WebhookEndpointRecord | null> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<EndpointRow>(
         `${ENDPOINT_COLUMNS} WHERE tenant_id = $1 AND id = $2`,
-        [tenantId, endpointId],
+        [tenantId.replace(/^ten_/, ""), endpointId],
       );
       const row = result.rows[0];
       return row === undefined ? null : toEndpoint(tenantId, row);
@@ -132,7 +136,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     readonly endpoint: WebhookEndpointRecord;
     readonly secret: WebhookSecretRecord;
   }> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const endpointResult = await tx.query<EndpointRow>(
         `INSERT INTO webhook_endpoints
            (id, tenant_id, workspace_id, integration_id, path_token, max_skew_seconds)
@@ -140,8 +144,8 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
          RETURNING id, workspace_id, integration_id, path_token, max_skew_seconds, created_at`,
         [
           endpoint.id,
-          tenantId,
-          endpoint.workspaceId,
+          tenantId.replace(/^ten_/, ""),
+          endpoint.workspaceId.replace(/^ws_/, ""),
           endpoint.integrationId,
           endpoint.pathToken,
           endpoint.maxSkewSeconds,
@@ -152,7 +156,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
            (id, tenant_id, endpoint_id, version, secret_ref, status)
          VALUES ($1, $2, $3, $4, $5, 'active')
          RETURNING id, endpoint_id, version, secret_ref, status, created_at, revoked_at`,
-        [secret.id, tenantId, endpoint.id, secret.version, secret.secretRef],
+        [secret.id, tenantId.replace(/^ten_/, ""), endpoint.id, secret.version, secret.secretRef],
       );
       return {
         endpoint: toEndpoint(tenantId, endpointResult.rows[0]!),
@@ -165,7 +169,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     tenantId: string,
     input: UpsertBindingInput,
   ): Promise<TriggerBindingRecord> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       // Re-binding the same (trigger, integration) pair is an update, not a
       // duplicate row, and re-activates a previously disabled binding.
       const result = await tx.query<BindingRow>(
@@ -180,8 +184,8 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
          RETURNING ${BINDING_FIELDS}`,
         [
           input.id,
-          tenantId,
-          input.workspaceId,
+          tenantId.replace(/^ten_/, ""),
+          input.workspaceId.replace(/^ws_/, ""),
           input.triggerId,
           input.integrationId,
           input.webhookEndpointId,
@@ -196,12 +200,12 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     tenantId: string,
     triggerId: string,
   ): Promise<readonly TriggerBindingRecord[]> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<BindingRow>(
         `SELECT ${BINDING_FIELDS} FROM trigger_integration_bindings
          WHERE tenant_id = $1 AND trigger_id = $2
          ORDER BY created_at DESC`,
-        [tenantId, triggerId],
+        [tenantId.replace(/^ten_/, ""), triggerId],
       );
       return result.rows.map((row) => toBinding(tenantId, row));
     });
@@ -212,13 +216,13 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     triggerId: string,
     bindingId: string,
   ): Promise<TriggerBindingRecord | null> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<BindingRow>(
         `UPDATE trigger_integration_bindings
          SET status = 'disabled', updated_at = now()
          WHERE tenant_id = $1 AND trigger_id = $2 AND id = $3
          RETURNING ${BINDING_FIELDS}`,
-        [tenantId, triggerId, bindingId],
+        [tenantId.replace(/^ten_/, ""), triggerId, bindingId],
       );
       const row = result.rows[0];
       return row === undefined ? null : toBinding(tenantId, row);
@@ -229,12 +233,12 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     tenantId: string,
     endpointId: string,
   ): Promise<WebhookSecretRecord | null> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<SecretRow>(
         `SELECT id, endpoint_id, version, secret_ref, status, created_at, revoked_at
          FROM webhook_endpoint_secrets
          WHERE tenant_id = $1 AND endpoint_id = $2 AND status = 'active'`,
-        [tenantId, endpointId],
+        [tenantId.replace(/^ten_/, ""), endpointId],
       );
       const row = result.rows[0];
       return row === undefined ? null : toSecret(tenantId, row);
@@ -254,20 +258,20 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     next: NewWebhookSecret,
     rotatedAt: Date,
   ): Promise<RotationOutcome> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const revoked = await tx.query<SecretRow>(
         `UPDATE webhook_endpoint_secrets
          SET status = 'revoked', revoked_at = $3
          WHERE tenant_id = $1 AND endpoint_id = $2 AND status = 'active'
          RETURNING id, endpoint_id, version, secret_ref, status, created_at, revoked_at`,
-        [tenantId, endpointId, rotatedAt.toISOString()],
+        [tenantId.replace(/^ten_/, ""), endpointId, rotatedAt.toISOString()],
       );
       const inserted = await tx.query<SecretRow>(
         `INSERT INTO webhook_endpoint_secrets
            (id, tenant_id, endpoint_id, version, secret_ref, status)
          VALUES ($1, $2, $3, $4, $5, 'active')
          RETURNING id, endpoint_id, version, secret_ref, status, created_at, revoked_at`,
-        [next.id, tenantId, endpointId, next.version, next.secretRef],
+        [next.id, tenantId.replace(/^ten_/, ""), endpointId, next.version, next.secretRef],
       );
       const previousRow = revoked.rows[0];
       return {
@@ -279,7 +283,7 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
   }
 
   async resolveByPathToken(pathToken: string): Promise<WebhookRouting | null> {
-    const result = await this.store.withTenant(SYSTEM_TENANT_ID, (tx) =>
+    const result = await this.withTenant(SYSTEM_TENANT_ID, (tx) =>
       tx.query<{
         endpoint_id: string;
         tenant_id: string;
@@ -300,8 +304,8 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
       ? null
       : {
           endpointId: row.endpoint_id,
-          tenantId: row.tenant_id,
-          workspaceId: row.workspace_id,
+          tenantId: `ten_${row.tenant_id}`,
+          workspaceId: `ws_${row.workspace_id}`,
           integrationId: row.integration_id,
           maxSkewSeconds: Number(row.max_skew_seconds),
           secretRef: row.secret_ref,
@@ -313,12 +317,12 @@ export class PostgresTriggerBindingStore implements TriggerBindingStore {
     tenantId: string,
     endpointId: string,
   ): Promise<readonly TriggerBindingRecord[]> {
-    return this.store.withTenant(tenantId, async (tx) => {
+    return this.withTenant(tenantId, async (tx) => {
       const result = await tx.query<BindingRow>(
         `SELECT ${BINDING_FIELDS} FROM trigger_integration_bindings
          WHERE tenant_id = $1 AND webhook_endpoint_id = $2 AND status = 'active'
          ORDER BY created_at ASC`,
-        [tenantId, endpointId],
+        [tenantId.replace(/^ten_/, ""), endpointId],
       );
       return result.rows.map((row) => toBinding(tenantId, row));
     });
@@ -365,7 +369,7 @@ function toEndpoint(tenantId: string, row: EndpointRow): WebhookEndpointRecord {
   return {
     id: row.id,
     tenantId,
-    workspaceId: row.workspace_id,
+    workspaceId: `ws_${row.workspace_id}`,
     integrationId: row.integration_id,
     pathToken: row.path_token,
     maxSkewSeconds: Number(row.max_skew_seconds),
@@ -390,7 +394,7 @@ function toBinding(tenantId: string, row: BindingRow): TriggerBindingRecord {
   return {
     id: row.id,
     tenantId,
-    workspaceId: row.workspace_id,
+    workspaceId: `ws_${row.workspace_id}`,
     triggerId: row.trigger_id,
     integrationId: row.integration_id,
     webhookEndpointId: row.webhook_endpoint_id,
