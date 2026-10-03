@@ -48,6 +48,8 @@ export class PlatformWorkflowChatService {
     const path = this.path(id, "/messages");
     const context = workflowCallerContext(actor, traceparent, path);
     const begun = WorkflowChatBeginSchema.parse((await this.engine.post(path, input as EngineRequestBody, context, { idempotencyKey: key + ":message" })).body);
+    const previous = begun.messages.find(message => message.role === "assistant" && typeof message.content === "object" && message.content.replyTo === begun.userMessage.id);
+    if (previous) return { userMessage: begun.userMessage, assistantMessage: previous };
     if (type === "general") {
       const snapshot = await this.snapshot(actor, traceparent);
       const result = await this.engine.post(this.path(id, "/answers"), { userMessageId: begun.userMessage.id, snapshot } as EngineRequestBody,
@@ -61,11 +63,13 @@ export class PlatformWorkflowChatService {
     // ponytail: verify among 20 recent versions; add a direct version read if concurrent builds exceed this window.
     const saved = result.type === "compiled" ? (await this.workflows.versions(chat.linkedWorkflowId, undefined, "20", actor, traceparent)).body.data.find(version => version.id === result.versionId) : undefined;
     if (result.type === "compiled" && !saved) throw new EngineProblemError(upstreamProblem(502, path, "UPSTREAM_SERVICE_ERROR"));
-    const content = result.type === "clarification"
+    const content = result.type === "connections_required"
+      ? { text: "Connect every required account, then check connections and plan again.", ...result }
+      : result.type === "clarification"
       ? { text: "Please answer these questions to continue building.", questions: [...result.questions] }
       : { text: `Compiled draft version ${saved!.version} for ${chat.title}.`, workflowId: chat.linkedWorkflowId, versionId: result.versionId, version: saved!.version };
     const reply = await this.engine.post(this.path(id, "/replies"), { userMessageId: begun.userMessage.id,
-      kind: result.type === "clarification" ? "clarification" : "workflow", content } as EngineRequestBody, context, { idempotencyKey: key + ":reply" });
+      kind: result.type === "connections_required" ? "action" : result.type === "clarification" ? "clarification" : "workflow", content } as EngineRequestBody, context, { idempotencyKey: key + ":reply" });
     return { userMessage: begun.userMessage, assistantMessage: WorkflowChatMessageSchema.parse(reply.body) };
   }
 
@@ -110,6 +114,20 @@ export class PlatformWorkflowChatService {
       limits: { workflows: 5, recentWorkspaceRuns: 20, detailedRuns: 3,
         moreWorkflows: workflowPage.body.page.has_more, moreRuns: runPage.body.page.has_more },
       workflows, recentRuns: recent.map(row => ({ id: row.id, workflow_id: row.workflow_id, status: row.status, created_at: row.created_at })),
-      runDetails: details.map(detail => detail.body) };
+      runDetails: details.map(({body}) => ({
+        run: { id: body.run.id, status: body.run.status, workflow_id: body.run.workflow_id },
+        run_cost_minor: body.run_cost_minor,
+        node_executions: body.node_executions.slice(0, 10).map(row => ({ id: row.id, dag_node_id: row.dag_node_id,
+          status: row.status, error: JSON.stringify(row.error ?? null).slice(0, 500), node_cost_minor: row.node_cost_minor })),
+        verification_results: body.verification_results.slice(0, 10).map(row => ({ node_execution_id: row.node_execution_id,
+          gate_type: row.gate_type, verdict: row.verdict, score: row.score, threshold: row.threshold,
+          details: JSON.stringify(row.details ?? null).slice(0, 500) })),
+        recovery_actions: body.recovery_actions.slice(0, 10).map(row => ({ node_execution_id: row.node_execution_id,
+          failure_class: row.failure_class, strategy: row.strategy, outcome: row.outcome })),
+        outcome: JSON.stringify(body.outcome).slice(0, 500),
+        limits: { nodeExecutions: 10, verificationResults: 10, recoveryActions: 10, diagnosticCharacters: 500,
+          moreNodeExecutions: body.node_executions.length > 10, moreVerificationResults: body.verification_results.length > 10,
+          moreRecoveryActions: body.recovery_actions.length > 10 },
+      })) };
   }
 }

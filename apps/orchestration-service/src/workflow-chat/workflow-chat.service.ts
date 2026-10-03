@@ -93,7 +93,7 @@ export class WorkflowChatService {
     const s=scope(actor);return this.store.withTenant(s.tenant,async tx=>{await this.row(tx,s,id);return this.readMessages(tx,s,id);});
   }
 
-  async begin(actor: Actor,id: string,input: unknown) {
+  async begin(actor: Actor,id: string,input: unknown,requestKey?: string) {
     const payload=SendWorkflowChatMessageSchema.parse(input),s=scope(actor);
     return this.store.withTenant(s.tenant,async tx=>{
       const row=await this.row(tx,s,id);
@@ -102,10 +102,18 @@ export class WorkflowChatService {
       if(!locked.rows[0])throw new WorkflowChatError(404,'CHAT_NOT_FOUND','Chat was not found');
       if(locked.rows[0].status==='archived')throw new WorkflowChatError(409,'CHAT_ARCHIVED','Open an active chat before sending a message');
       const history=await this.readMessages(tx,s,id);
+      if(requestKey){
+        const existing=await tx.query<MessageRow>(`SELECT id,conversation_id,role,kind,content_json,created_at FROM conversation_messages WHERE tenant_id=$1 AND workspace_id=$2 AND conversation_id=$3 AND request_key=$4`,[s.tenant,s.workspace,id,requestKey]);
+        if(existing.rows[0]){
+          const userMessage=message(existing.rows[0]);
+          if(userMessage.role!=='user'||userMessage.content!==payload.content)throw new WorkflowChatError(422,'IDEMPOTENCY_KEY_REUSED','Message key was already used with a different request');
+          return {conversation:resource(row),userMessage,messages:history};
+        }
+      }
       // ponytail: bounded builder context, add paginated context compaction when long-lived chats need it.
       if(history.length>=1000||history.reduce((n,m)=>n+JSON.stringify(m.content).length,0)+payload.content.length>64000)
         throw new WorkflowChatError(413,'CHAT_CONTEXT_LIMIT','Chat context exceeds the supported size');
-      const userMessage=await this.append(tx,s,id,'user','text',payload.content);
+      const userMessage=await this.append(tx,s,id,'user','text',payload.content,requestKey);
       return {conversation:resource(row),userMessage,messages:[...history,userMessage]};
     });
   }
@@ -116,7 +124,7 @@ export class WorkflowChatService {
       await this.row(tx,s,id);
       const user=await tx.query(`SELECT id FROM conversation_messages WHERE tenant_id=$1 AND workspace_id=$2 AND conversation_id=$3 AND id=$4 AND role='user'`,[s.tenant,s.workspace,id,userMessageId]);
       if(user.rows.length!==1)throw new WorkflowChatError(404,'CHAT_MESSAGE_NOT_FOUND','User message was not found');
-      return this.append(tx,s,id,'assistant',kind,typeof content==='string'?{text:content,replyTo:userMessageId}:{...content,replyTo:userMessageId});
+      return this.append(tx,s,id,'assistant',kind,typeof content==='string'?{text:content,replyTo:userMessageId}:{...content,replyTo:userMessageId},userMessageId+':reply');
     });
   }
 
@@ -125,8 +133,12 @@ export class WorkflowChatService {
     if(conversation.type!=='general')throw new WorkflowChatError(400,'CHAT_TYPE_INVALID','Only Ask Alter uses this answer path');
     const messages=await this.messages(actor,id),user=messages.find(m=>m.id===userMessageId&&m.role==='user');
     if(!user)throw new WorkflowChatError(404,'CHAT_MESSAGE_NOT_FOUND','User message was not found');
+    const previous=messages.find(m=>m.role==='assistant'&&typeof m.content==='object'&&m.content.replyTo===userMessageId);
+    if(previous)return previous;
     const s=scope(actor);
-    const result=await this.modelGateway.invoke({tenant_id:`ten_${s.tenant}`,run_id:`run_${uuidV7()}`,node_execution_id:`node_${uuidV7()}`,model_alias:'STANDARD',
+    const runId=`run_${userMessageId.slice(4)}`,nodeId=`node_${userMessageId.slice(4)}`;
+    await this.store.withTenant(s.tenant,tx=>tx.query(`UPDATE conversation_messages SET model_run_id=$5,model_node_execution_id=$6 WHERE tenant_id=$1 AND workspace_id=$2 AND conversation_id=$3 AND id=$4 AND role='user'`,[s.tenant,s.workspace,id,userMessageId,runId,nodeId]));
+    const result=await this.modelGateway.invoke({tenant_id:`ten_${s.tenant}`,run_id:runId,node_execution_id:nodeId,model_alias:'STANDARD',
       input_json:JSON.stringify({messages:[{role:'system',content:assistantPrompt,alter_authored:true},
         {role:'user',content:JSON.stringify({snapshot,conversation:messages.slice(0,messages.indexOf(user)+1).slice(-20).map(m=>({role:m.role,content:m.content}))})}],max_tokens:1200,temperature:0})});
     const output=ModelInvocationResultPayloadSchema.parse(JSON.parse(result.output_json));
@@ -150,9 +162,13 @@ export class WorkflowChatService {
     if(result.rows.length>1000)throw new WorkflowChatError(413,'CHAT_CONTEXT_LIMIT','Chat history exceeds the supported size');
     return result.rows.map(message);
   }
-  private async append(tx: OrchestrationTransactionLike,s: Scope,id: string,role: 'user'|'assistant',kind: WorkflowChatMessage['kind'],content: WorkflowChatMessage['content']): Promise<WorkflowChatMessage> {
-    const result=await tx.query<MessageRow>(`INSERT INTO conversation_messages(id,tenant_id,workspace_id,conversation_id,role,kind,content_json)
-      VALUES($1,$2,$3,$4,$5,$6,$7::jsonb) RETURNING id,conversation_id,role,kind,content_json,created_at`,[`msg_${uuidV7()}`,s.tenant,s.workspace,id,role,kind,JSON.stringify(content)]);
+  private async append(tx: OrchestrationTransactionLike,s: Scope,id: string,role: 'user'|'assistant',kind: WorkflowChatMessage['kind'],content: WorkflowChatMessage['content'],requestKey?: string): Promise<WorkflowChatMessage> {
+    const result=await tx.query<MessageRow>(`INSERT INTO conversation_messages(id,tenant_id,workspace_id,conversation_id,role,kind,content_json,request_key)
+      VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8) ON CONFLICT(tenant_id,conversation_id,request_key) DO NOTHING RETURNING id,conversation_id,role,kind,content_json,created_at`,[`msg_${uuidV7()}`,s.tenant,s.workspace,id,role,kind,JSON.stringify(content),requestKey??null]);
+    if(!result.rows[0]){
+      const prior=await tx.query<MessageRow>(`SELECT id,conversation_id,role,kind,content_json,created_at FROM conversation_messages WHERE tenant_id=$1 AND workspace_id=$2 AND conversation_id=$3 AND request_key=$4`,[s.tenant,s.workspace,id,requestKey]);
+      return message(prior.rows[0]!);
+    }
     await tx.query(`UPDATE conversations SET last_activity_at=clock_timestamp() WHERE tenant_id=$1 AND workspace_id=$2 AND id=$3`,[s.tenant,s.workspace,id]);
     return message(result.rows[0]!);
   }

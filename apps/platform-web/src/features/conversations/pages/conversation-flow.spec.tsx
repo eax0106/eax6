@@ -12,18 +12,22 @@ const workflowId = "wf_00000000-0000-7000-8000-000000000002"
 const resource = { id, title: "Support", type: "workflow_builder", status: "active", linkedWorkflowId: workflowId,
   createdAt: "2026-10-02T00:00:00Z", updatedAt: "2026-10-02T00:00:00Z" }
 const messages: unknown[] = []
-let kind = "workflow_builder", fail = false
+let kind = "workflow_builder", fail = false, requireConnections = false
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
-  messages.length = 0; kind = "workflow_builder"; fail = false; fetchMock.mockReset()
+  messages.length = 0; kind = "workflow_builder"; fail = false; requireConnections = false; fetchMock.mockReset()
   vi.stubGlobal("fetch", fetchMock)
   fetchMock.mockImplementation(async (input, init) => {
     const path = String(input), chat = { ...resource, type: kind, ...(kind === "general" ? { linkedWorkflowId: undefined } : {}) }
     if (path.endsWith("/drafts")) return Response.json({ ...resource, id: draftId, title: "New workflow" })
     if (path.endsWith("/build")) {
       if (fail) return Response.json({ error_code: "PLANNER_UNAVAILABLE", detail: "Planner offline" }, { status: 503 })
-      const user = { id: "msg_00000000-0000-7000-8000-000000000003", conversationId: id, role: "user", kind: "text", content: JSON.parse(String(init?.body)).content, createdAt: resource.createdAt }
-      const assistant = { ...user, id: "msg_00000000-0000-7000-8000-000000000004", role: "assistant", kind: "clarification", content: { text: "Need details", questions: ["Which day?", "Which channel?"] } }
+      const user = { id: `msg_00000000-0000-7000-8000-${String(messages.length + 3).padStart(12, "0")}`, conversationId: id, role: "user", kind: "text", content: JSON.parse(String(init?.body)).content, createdAt: resource.createdAt }
+      const assistant = { ...user, id: `msg_00000000-0000-7000-8000-${String(messages.length + 4).padStart(12, "0")}`, role: "assistant", kind: requireConnections ? "action" : "clarification",
+        content: requireConnections ? { text: "Connect every account", type: "connections_required", missing_connections: [
+          { connector_type: "github", node_keys: ["one", "three"], reason: "missing" },
+          { connector_type: "slack", node_keys: ["two"], reason: "unavailable" },
+        ] } : { text: "Need details", questions: ["Which day?", "Which channel?"] } }
       messages.push(user, assistant); return Response.json({ userMessage: user, assistantMessage: assistant })
     }
     if (path.endsWith("/messages")) return Response.json(messages)
@@ -47,6 +51,19 @@ function submit(text: string) {
 }
 
 describe("live conversation surfaces", () => {
+  it("shows every required connection and retries within the existing draft chat", async () => {
+    requireConnections = true; mount(`/app/conversations/${id}`); await screen.findByRole("textbox"); submit("Original goal with all requirements")
+    expect(await screen.findByText("github — Connect account")).toBeTruthy()
+    expect(screen.getByText("slack — Reconnect account")).toBeTruthy()
+    const link = screen.getByRole("link", { name: "Open connections in new tab" })
+    expect(link.getAttribute("href")).toBe("/app/connections"); expect(link.getAttribute("target")).toBe("_blank")
+    requireConnections = false; fireEvent.click(screen.getByRole("button", { name: "Check connections and plan again" }))
+    expect(await screen.findByRole("textbox", { name: "Which day?" })).toBeTruthy()
+    expect(screen.getByText("Original goal with all requirements")).toBeTruthy()
+    const builds = fetchMock.mock.calls.filter(([path]) => String(path).endsWith("/build"))
+    expect(builds).toHaveLength(2); expect(builds.every(([path]) => String(path).includes(id))).toBe(true)
+    expect(screen.queryByText(/Compiled draft version/)).toBeNull()
+  })
   it("Home creates the actual draft/chat and retains the full goal for its builder", async () => {
     mount(); submit("Create support reports with all the original requirements")
     expect(await screen.findByText("Support")).toBeTruthy()

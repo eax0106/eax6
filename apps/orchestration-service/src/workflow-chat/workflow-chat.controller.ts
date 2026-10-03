@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpException, Inject, Param, Post, Query, Req } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpException, Inject, Param, Post, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import { CreateWorkflowChatRequestSchema, WorkflowChatMessageSchema } from "@alterx/contracts";
 import { z, ZodError } from "zod";
@@ -30,8 +30,8 @@ export class WorkflowChatController {
     return this.respond(request,actor=>this.chats.messages(actor,id));
   }
   @Post(':conversationId/messages')
-  begin(@Req() request: IdentityTenantGatewayRequest,@Param('conversationId') id: string,@Body() body: unknown) {
-    return this.respond(request,actor=>this.chats.begin(actor,id,body));
+  begin(@Req() request: IdentityTenantGatewayRequest,@Param('conversationId') id: string,@Body() body: unknown,@Headers('idempotency-key') key?: string) {
+    return this.respond(request,actor=>this.chats.begin(actor,id,body,key === undefined ? undefined : z.string().min(1).max(256).parse(key)));
   }
   @Post(':conversationId/replies')
   reply(@Req() request: IdentityTenantGatewayRequest,@Param('conversationId') id: string,@Body() body: unknown) {

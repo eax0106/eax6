@@ -61,6 +61,16 @@ function fakeRunsClient() {
 }
 
 describe("CostIngestService.ingestCostEvent", () => {
+  it("records a workspace-only assistant model call and rejects other sources without a workflow parent", async () => {
+    const { store, query } = fakeStore(), runs = fakeRunsClient();
+    runs.getRunWorkspace.mockResolvedValue({ workspace_id: WORKSPACE, workflow_id: "" });
+    const service = new CostIngestService(store, runs, USD_TO_INR_RATE);
+    expect(await service.ingestCostEvent(baseRequest())).toEqual({ accepted: true });
+    expect((query.mock.calls[0] as unknown as [string, unknown[]])[1].slice(1, 6)).toEqual([
+      BARE_TENANT, WORKSPACE.slice(3), null, RUN.slice(4), NODE.slice(5),
+    ]);
+    await expect(service.ingestCostEvent(baseRequest({ source: "sandbox", usage_json: JSON.stringify({ resource_type: "sandbox.calculator.compute", provider: "sandbox-calculator", units: 1, outcome: "success" }) }))).rejects.toThrow(CostValidationError);
+  });
   it("resolves workspace_id via the Runs client and inserts a real bare-uuid row", async () => {
     const { store, query } = fakeStore();
     const runsClient = fakeRunsClient();

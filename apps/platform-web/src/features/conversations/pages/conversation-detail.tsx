@@ -8,6 +8,7 @@ import { Composer } from "@/components/conversation/Composer"
 import { MessageList } from "@/components/conversation/MessageList"
 import { ClarificationQuestions } from "@/components/conversation/clarification-questions"
 import { Button } from "@/components/ui/button"
+import { ConnectionsRequiredSchema } from "@alterx/contracts"
 
 export function ConversationDetail() {
   const { conversationId } = useParams<{ conversationId: string }>()
@@ -76,6 +77,16 @@ export function ConversationDetail() {
 
   const renderCustomMessage = (msg: any) => {
     const data = msg.data
+    const connections = ConnectionsRequiredSchema.safeParse({ type: data.type, missing_connections: data.missing_connections })
+    if (msg.type === "action" && connections.success) {
+      const latest = messages?.at(-1)?.id === msg.id
+      return <div className="space-y-3"><p>{msg.content}</p><ul className="list-disc pl-5">
+        {connections.data.missing_connections.map(gap => <li key={gap.connector_type}>{gap.connector_type} — {gap.reason === "unavailable" ? "Reconnect account" : "Connect account"}</li>)}
+      </ul>{latest && <div className="flex items-center gap-4">
+        <a className="text-primary underline" href="/app/connections" target="_blank" rel="noreferrer">Open connections in new tab</a>
+        <Button disabled={sendMessage.isPending || conversation.status === "archived"} onClick={() => sendMessage.mutate("Check connections and continue building from the original goal and answers.")}>Check connections and plan again</Button>
+      </div>}</div>
+    }
     if (msg.type === "clarification" && Array.isArray(data.questions)) {
       return <div><p>{msg.content}</p><ClarificationQuestions
         questions={data.questions.map((question: string) => ({ id: question, question }))}

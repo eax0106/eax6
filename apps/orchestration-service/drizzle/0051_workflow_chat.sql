@@ -23,11 +23,18 @@ CREATE TABLE "conversation_messages" (
   "role" text NOT NULL,
   "kind" text NOT NULL,
   "content_json" jsonb NOT NULL,
+  "request_key" text,
+  "model_run_id" text,
+  "model_node_execution_id" text,
   "created_at" timestamptz DEFAULT now() NOT NULL,
   CONSTRAINT "conversation_messages_conversation_workspace_fk" FOREIGN KEY ("tenant_id", "workspace_id", "conversation_id") REFERENCES "conversations"("tenant_id", "workspace_id", "id") ON DELETE CASCADE,
   CONSTRAINT "conversation_messages_role_check" CHECK ("role" IN ('user', 'assistant', 'system')),
   CONSTRAINT "conversation_messages_kind_check" CHECK ("kind" IN ('text', 'clarification', 'workflow', 'project', 'run', 'artifact', 'action')),
-  CONSTRAINT "conversation_messages_content_check" CHECK (jsonb_typeof("content_json") IN ('string', 'object'))
+  CONSTRAINT "conversation_messages_content_check" CHECK (jsonb_typeof("content_json") IN ('string', 'object')),
+  CONSTRAINT "conversation_messages_request_key_unique" UNIQUE ("tenant_id", "conversation_id", "request_key"),
+  CONSTRAINT "conversation_messages_model_run_unique" UNIQUE ("tenant_id", "model_run_id"),
+  CONSTRAINT "conversation_messages_model_node_unique" UNIQUE ("tenant_id", "model_node_execution_id"),
+  CONSTRAINT "conversation_messages_model_attribution_check" CHECK (("model_run_id" IS NULL) = ("model_node_execution_id" IS NULL) AND ("model_run_id" IS NULL OR "role" = 'user'))
 );
 --> statement-breakpoint
 CREATE INDEX "conversation_messages_order_idx" ON "conversation_messages" ("tenant_id", "conversation_id", "ordinal");
