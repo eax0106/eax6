@@ -24,7 +24,7 @@ Scope: Existing engine collection reads carry validated actor workspace context 
   EXPECT: workspace-negative-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=31937bc41b2840744762f6f536fb84afd83534019c399bd58520ee074bb06229; exit=0; EXPECT=matched; output-sha256=774f652a1a303f5f0e89413c0ac70a4d48f11d74a667729e57d32ee95cfc4201; output-bytes=1558; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
 
-- [ ] G5: Complete engine test discovery and suite, touched build/typecheck/lint, architecture/RBAC/migration/naming, collection audit inventory and zero new normalized AST findings pass
+- [x] G5: Complete engine test discovery and suite, touched build/typecheck/lint, architecture/RBAC/migration/naming, collection audit inventory and zero new normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: workspace-final-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=2e562195ee1c266c239d08bdf90b1b4b094df74cee433438ed08b2f1ddebbf2f; exit=0; EXPECT=matched; output-sha256=4f32138c281591b25acf10f308bbb3aff2c3475d8bd47ee29bdee170abbb375b; output-bytes=429; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
