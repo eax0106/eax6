@@ -69,6 +69,7 @@ describe("orchestration migration files", () => {
       "0049_add_confirmed_event_replay.sql",
       "0050_create_connection_registry.sql",
       "0051_workflow_chat.sql",
+      "0052_workflow_folders.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -127,6 +128,7 @@ describe("orchestration migration files", () => {
       "0049_remove_confirmed_event_replay.sql",
       "0050_drop_connection_registry.sql",
       "0051_restore_workflow_chat.sql",
+      "0052_restore_workflow_folders.sql",
     ]);
   });
 

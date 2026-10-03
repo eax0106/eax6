@@ -19,6 +19,7 @@ import {
   Store
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { WorkflowFolderSidebar } from "@/features/workflows/components/workflow-folder-sidebar"
 import { WorkspaceSwitcher } from "./workspace-switcher"
 import { useTranslation } from "react-i18next"
 import { useState } from "react"
@@ -206,6 +207,7 @@ export function Sidebar({ className }: SidebarProps) {
           </div>
         ))}
         </TooltipProvider>
+        {!collapsed && <WorkflowFolderSidebar />}
       </div>
     </aside>
   )
