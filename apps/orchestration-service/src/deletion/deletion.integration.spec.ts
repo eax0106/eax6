@@ -100,7 +100,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     expect(DELETE_ORDER).toHaveLength(new Set(DELETE_ORDER).size);
   });
 
-  it("deletes all 38 tenant tables while preserving a second tenant", async () => {
+  it("deletes all 39 tenant tables while preserving a second tenant", async () => {
     await seedAll(adminStore, TENANT_A, "a");
     await seedAll(adminStore, TENANT_B, "b");
 
@@ -110,12 +110,12 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     // verifyDeletion certify erasure complete while their rows survived;
     // C8 added side_effects; D3 added budgets, budget_usage and budget_reservations;
     // D2 added workspace_holds and workspace_run_retention; D5 approval_step_policies;
-    // D19 added connection_registry, including its reference-only snapshots.
-    expect(before).toHaveLength(38);
+    // D19 added connection_registry; D9 added workflow_folders.
+    expect(before).toHaveLength(39);
     expect(before.every((location) => location.rowCount === 1)).toBe(true);
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
-      deletedRows: 38,
+      deletedRows: 39,
       deletedObjects: 2,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
@@ -235,7 +235,9 @@ async function seedAll(
     const conversation = `conv_${suffix}`;
     const run = `run_${suffix}`;
     const node = `node_${suffix}`;
-    await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'fixture')", [workflow, tenant, workspace]);
+    const folder = `fld_018f4d6e-2b4a-7a3e-8c1a-1234567890${SUFFIX_HEX[suffix]}0`;
+    await tx.query("INSERT INTO workflow_folders(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'fixture')", [folder, tenant, workspace]);
+    await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name,folder_id) VALUES ($1,$2,$3,'fixture',$4)", [workflow, tenant, workspace, folder]);
     await tx.query("INSERT INTO workflow_versions(id,tenant_id,workflow_id,version,compiled_dag,dag_schema_version) VALUES ($1,$2,$3,1,'{}','v1')", [workflowVersion, tenant, workflow]);
     await tx.query("INSERT INTO workflow_template_variable_definitions(id,tenant_id,workflow_id,workflow_version_id,name,value_type) VALUES ($1,$2,$3,$4,'REGION','text')", [`wtv_${suffix}`, tenant, workflow, workflowVersion]);
     await tx.query("INSERT INTO workflow_template_variable_values(tenant_id,workflow_id,name,value_json) VALUES ($1,$2,'REGION','\"ap-south-1\"')", [tenant, workflow]);
@@ -267,7 +269,7 @@ async function seedAll(
     await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$5,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node, workspace]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations
-    // 0019+). Seeded here so "deletes all 38 tenant tables" actually proves
+    // 0019+). Seeded here so "deletes all 39 tenant tables" actually proves
     // coverage instead of just proving the original 19 still work.
     const project = `prj_${suffix}`;
     const webhookEndpoint = `whe_${suffix}`;

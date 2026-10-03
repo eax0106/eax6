@@ -19,6 +19,8 @@ import { WorkflowLifecycleService } from "./workflow-lifecycle/workflow-lifecycl
 import { WorkflowDeploymentController } from "./workflow-lifecycle/workflow-deployment.controller";
 import { WorkflowChatController } from "./workflow-chat/workflow-chat.controller";
 import { WorkflowChatService } from "./workflow-chat/workflow-chat.service";
+import { WorkflowFoldersController } from "./workflow-folders/workflow-folders.controller";
+import { WorkflowFoldersService } from "./workflow-folders/workflow-folders.service";
 import { WorkflowReadController } from "./workflow-read/workflow-read.controller";
 import { WorkflowReadService } from "./workflow-read/workflow-read.service";
 import { WorkflowHealthService } from "./workflow-health/workflow-health.service";
@@ -56,6 +58,7 @@ import { OperationsModule } from "./operations.module";
     CompilerGrpcController,
     DeployctlGrpcController,
     WorkflowReadController,
+    WorkflowFoldersController,
     WorkflowChatController,
     WorkflowDeploymentController,
     TemplateVariablesController,
@@ -63,6 +66,7 @@ import { OperationsModule } from "./operations.module";
     ProjectReadController,
   ],
   providers: [
+    { provide: WorkflowFoldersService, useFactory: () => new WorkflowFoldersService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     { provide: WorkflowHealthService, useFactory: () => new WorkflowHealthService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     {
       provide: WorkflowChatService,

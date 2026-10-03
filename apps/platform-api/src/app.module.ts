@@ -16,6 +16,7 @@ import { EngineModule } from "./engine/engine.module";
 import { PlannerFacadeModule } from "./planner-facade/planner-facade.module";
 import { IdempotencyModule } from "./idempotency/idempotency.module";
 import { StreamingModule } from "./streaming/streaming.module";
+import { WorkflowFoldersModule } from "./workflow-folders/workflow-folders.module";
 import { WorkflowModule } from "./workflows/workflow.module";
 import { ProjectModule } from "./projects/project.module";
 import { RunModule } from "./runs/run.module";
@@ -74,6 +75,7 @@ import { AdminDeploymentModule } from "./admin-deployments";
     IdempotencyModule,
     StreamingModule,
     WorkflowModule,
+    WorkflowFoldersModule,
     PlatformWorkflowChatModule,
     ProjectModule,
     RunModule,

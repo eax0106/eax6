@@ -23,6 +23,8 @@ export interface Workflow {
   readonly id: string;
   readonly tenantId: string;
   readonly workspaceId: string;
+  readonly folderId?: string | null;
+  readonly folderEtag?: string;
   readonly name: string;
   readonly status: WorkflowStatus;
   readonly createdAt: string;
@@ -94,6 +96,8 @@ type WorkflowRow = {
   readonly id: string;
   readonly tenant_id: string;
   readonly workspace_id: string;
+  readonly folder_id?: string | null;
+  readonly folder_revision?: number;
   readonly name: string;
   readonly status: WorkflowStatus;
   readonly created_at: string;
@@ -134,6 +138,8 @@ function fromRow(row: WorkflowRow): Workflow {
     tenantId: row.tenant_id,
     workspaceId: row.workspace_id,
     name: row.name,
+    folderId: row.folder_id ?? null,
+    ...(row.folder_revision === undefined ? {} : { folderEtag: `"workflow-folder-${row.id}-${row.folder_revision}"` }),
     status: row.status,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -213,7 +219,7 @@ export class WorkflowReadService {
       const result = await tx.query<WorkflowRow>(
         `INSERT INTO workflows (id, tenant_id, workspace_id, name, status)
          VALUES ($1, $2, $3, $4, 'draft')
-         RETURNING id, tenant_id, workspace_id, name, status, created_at, updated_at`,
+         RETURNING id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at`,
         [workflowId, bareTenant, bareWorkspace, request.name.trim()],
       );
       const row = result.rows[0];
@@ -231,7 +237,7 @@ export class WorkflowReadService {
     const bareTenant = bareTenantUuid(tenantId);
     return this.store.withTenant(bareTenant, async (tx) => {
       const result = await tx.query<WorkflowRow>(
-        `SELECT id, tenant_id, workspace_id, name, status, created_at, updated_at
+        `SELECT id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at
          FROM workflows WHERE tenant_id = $1 AND id = $2`,
         [bareTenant, workflowId],
       );
@@ -266,7 +272,7 @@ export class WorkflowReadService {
     const bareWorkspace = bareWorkspaceUuid(workspaceId);
     return this.store.withTenant(bareTenant, async (tx) => {
       const result = await tx.query<WorkflowRow>(
-        `SELECT id, tenant_id, workspace_id, name, status, created_at, updated_at
+        `SELECT id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at
          FROM workflows
          WHERE tenant_id = $1 AND workspace_id = $2
            AND ($3::text IS NULL OR id > $3)
@@ -372,7 +378,7 @@ export class WorkflowReadService {
              draft_dag = COALESCE($5::jsonb, draft_dag),
              updated_at = now()
          WHERE tenant_id = $1 AND id = $2
-         RETURNING id, tenant_id, workspace_id, name, status, created_at, updated_at`,
+         RETURNING id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at`,
         [
           bareTenant,
           request.workflowId,
@@ -536,7 +542,7 @@ export class WorkflowReadService {
       const result = await tx.query<WorkflowRow>(
         `UPDATE workflows SET status = $4, updated_at = now()
          WHERE tenant_id = $1 AND id = $2 AND status = $3
-         RETURNING id, tenant_id, workspace_id, name, status, created_at, updated_at`,
+         RETURNING id, tenant_id, workspace_id, folder_id, folder_revision, name, status, created_at, updated_at`,
         [bareTenant, workflowId, from, to],
       );
       const row = result.rows[0];
