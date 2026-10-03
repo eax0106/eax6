@@ -1,5 +1,6 @@
-import { CompiledDagSchema, TenantIdSchema, WorkflowIdSchema } from "@alterx/contracts";
+import { CompiledDagSchema, TenantIdSchema, UserIdSchema, WorkflowIdSchema } from "@alterx/contracts";
 import { randomUUID } from "node:crypto";
+import { ensureWorkflowChat } from "../workflow-chat/persistence";
 import { preflightConnections } from "../connections/connection-preflight";
 
 export class WorkflowNotFoundError extends Error {
@@ -40,6 +41,7 @@ export interface CreateWorkflowRequest {
   readonly tenantId: string;
   readonly workspaceId: string;
   readonly name: string;
+  readonly createdBy?: string;
 }
 
 export interface WorkflowPage {
@@ -206,6 +208,7 @@ export class WorkflowReadService {
     const bareTenant = bareTenantUuid(request.tenantId);
     const bareWorkspace = bareWorkspaceUuid(request.workspaceId);
     const workflowId = newWorkflowId();
+    const creator = request.createdBy === undefined ? null : UserIdSchema.parse(request.createdBy).slice(4);
     return this.store.withTenant(bareTenant, async (tx) => {
       const result = await tx.query<WorkflowRow>(
         `INSERT INTO workflows (id, tenant_id, workspace_id, name, status)
@@ -217,6 +220,7 @@ export class WorkflowReadService {
       if (row === undefined) {
         throw new WorkflowValidationError("workflow insert returned no row");
       }
+      await ensureWorkflowChat(tx, bareTenant, bareWorkspace, workflowId, creator);
       return fromRow(row);
     });
   }

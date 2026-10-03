@@ -1,27 +1,32 @@
-import { useNavigate } from "react-router-dom"
+import { useRef } from "react"
+import { Link, useNavigate } from "react-router-dom"
 import { useMutation } from "@tanstack/react-query"
-import { Bot, ArrowRight, Zap, Folder, CheckSquare } from "lucide-react"
+import { Bot, ArrowRight, Zap } from "lucide-react"
 import { Composer } from "@/components/conversation/Composer"
 import { api } from "@/api/client"
 import { cn } from "@/lib/utils"
 
 const INTENT_SUGGESTIONS = [
   { label: "Create a new workflow for support", icon: Zap },
-  { label: "Build a customer portal project", icon: Folder },
-  { label: "Investigate why a run failed", icon: CheckSquare },
-  { label: "Summarize recent activity", icon: Bot },
+  { label: "Create a weekly reporting workflow", icon: Zap },
 ]
 
 export function Home() {
   const navigate = useNavigate()
+  const draft = useRef<Awaited<ReturnType<typeof api.createConversation>> | null>(null)
+  const askAlter = useMutation({
+    mutationFn: () => api.createConversation({ type: "general", title: "Ask Alter" }),
+    onSuccess: chat => navigate(`/app/conversations/${chat.id}`),
+  })
 
   const startConversation = useMutation({
     mutationFn: async (message: string) => {
       // Create conversation
-      const conv = await api.createConversation({
-        type: "general",
+      const conv = draft.current ?? await api.createConversation({
+        type: "workflow_builder",
         title: message.slice(0, 30) + (message.length > 30 ? "..." : "")
       })
+      draft.current = conv
       // Send initial message
       await api.sendMessage(conv.id, { content: message })
       return conv
@@ -44,7 +49,7 @@ export function Home() {
             What do you want to build today?
           </h1>
           <p className="text-muted-foreground mb-8 text-center max-w-md">
-            I'm AlterX. I can help you orchestrate agents, automate workflows, and investigate run failures.
+            Describe a workflow to create its draft and start building in its chat.
           </p>
 
           <div className="w-full mb-8">
@@ -54,6 +59,19 @@ export function Home() {
               placeholder="Describe what you want to achieve..."
             />
           </div>
+
+          {(startConversation.isError || askAlter.isError) && (
+            <div role="alert" className="mb-4 w-full text-sm text-destructive">
+              <p>{(startConversation.error ?? askAlter.error)?.message}</p>
+              {draft.current && <div className="flex gap-4 mt-2">
+                <button onClick={() => startConversation.mutate(startConversation.variables!)} disabled={startConversation.isPending}>Retry in this draft</button>
+                <Link to={`/app/conversations/${draft.current.id}`}>Open draft chat</Link>
+              </div>}
+            </div>
+          )}
+          <button onClick={() => askAlter.mutate()} disabled={askAlter.isPending} className="mb-6 text-sm text-primary">
+            Ask Alter about your workflows
+          </button>
 
           <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
             {INTENT_SUGGESTIONS.map((suggestion, i) => (

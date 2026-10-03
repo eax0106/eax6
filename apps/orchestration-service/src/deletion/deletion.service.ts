@@ -38,6 +38,7 @@ const WEBHOOK_SECRETS_LOCATION = "secrets:alter/webhook-endpoints";
 // real, production array against a live schema -- not a hand-copied
 // duplicate of it that could itself silently drift from this one.
 export const TABLES = [
+  "conversation_messages",
   "connection_registry",
   "trigger_webhook_secrets",
   "workflow_template_variable_values", "workflow_template_variable_definitions",
@@ -70,6 +71,7 @@ export const TABLES = [
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
+  "conversation_messages",
   "connection_registry",
   "workspace_holds", "workspace_run_retention", "approval_step_policies", "budget_reservations", "budget_usage", "budgets", "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",
   "deployments", "artifacts", "escalations", "project_plans", "recovery_actions",

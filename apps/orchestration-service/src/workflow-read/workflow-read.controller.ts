@@ -69,6 +69,7 @@ export class WorkflowReadController {
         tenantId,
         workspaceId,
         name: body.goal ?? "",
+        ...(request.actorContext?.user_id ? { createdBy: request.actorContext.user_id.startsWith("usr_") ? request.actorContext.user_id : `usr_${request.actorContext.user_id}` } : {}),
       });
     } catch (error: unknown) {
       throw mapWorkflowError(error, request.url);

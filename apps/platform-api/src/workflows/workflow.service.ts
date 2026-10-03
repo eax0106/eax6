@@ -319,6 +319,8 @@ function callerContext(
   };
 }
 
+export { callerContext as workflowCallerContext };
+
 function jsonBody(value: unknown): EngineRequestBody {
   return value as JsonValue;
 }

@@ -102,7 +102,8 @@ export class CostIngestService {
         run_id: runId,
       },
     );
-    const parentId = requireSchema(WorkflowIdSchema, workflowId, "workflow_id");
+    // Workspace assistant turns have authoritative message attribution and no workflow parent.
+    const parentId = workflowId === "" && request.source === "model_gateway" ? null : requireSchema(WorkflowIdSchema, workflowId, "workflow_id");
     // OUT-5: real is_retry/is_recovery, derived from the node execution's
     // real attempt counter + whether a recovery_actions row exists for it
     // -- previously always hardcoded false (no signal existed at all).
@@ -127,7 +128,7 @@ export class CostIngestService {
           bareCostEventUuid(costEventId),
           bareTenantUuid(tenantId),
           bareWorkspaceUuid(workspaceId),
-          bareWorkflowUuid(parentId),
+          parentId === null ? null : bareWorkflowUuid(parentId),
           bareRunUuid(runId),
           bareNodeExecutionUuid(nodeExecutionId),
           request.source,
