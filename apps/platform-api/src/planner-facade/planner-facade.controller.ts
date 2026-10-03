@@ -14,6 +14,7 @@ import {
 import { PlatformHttpError } from "../signup/problem";
 import { PlannerFacadeService } from "./planner-facade.service";
 import { z } from "zod";
+import { ConfirmWorkflowBuildSchema, WorkflowIdSchema } from "@alterx/contracts";
 
 const writeRoles = ["admin", "editor"] as const;
 
@@ -26,7 +27,8 @@ export const PlanWorkflowBodySchema = z
     goal: z.string().min(1),
     answers: z.record(z.string(), z.string()).optional(),
   })
-  .strict();
+  .merge(z.object({ confirm: z.literal(true).optional(), successCriteria: ConfirmWorkflowBuildSchema.shape.successCriteria.optional() }))
+  .strict().refine(value => (value.confirm === true) === (value.successCriteria !== undefined), "Build confirmation and successCriteria must be supplied together");
 
 @Controller("/api/v1/workflows/:workflowId/actions")
 export class PlannerFacadeController {
@@ -55,6 +57,7 @@ export class PlannerFacadeController {
       );
     }
     const parsed = result.data;
+    if (!WorkflowIdSchema.safeParse(workflowId).success || !actor.workspace_id) throw new PlatformHttpError(400, "INVALID_PLAN_REQUEST", "A workflow and current workspace are required", `/api/v1/workflows/${workflowId}/actions/plan`);
 
     // Reconstruct the objective including answers
     let objective = parsed.goal;
@@ -72,6 +75,7 @@ export class PlannerFacadeController {
       workspaceId: actor.workspace_id ?? "",
       workflowId,
       objective,
+      ...(parsed.confirm ? { confirm: parsed.confirm, successCriteria: parsed.successCriteria! } : {}),
     });
   }
 }

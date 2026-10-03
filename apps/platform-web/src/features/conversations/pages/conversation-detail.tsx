@@ -9,6 +9,8 @@ import { MessageList } from "@/components/conversation/MessageList"
 import { ClarificationQuestions } from "@/components/conversation/clarification-questions"
 import { Button } from "@/components/ui/button"
 import { ConnectionsRequiredSchema } from "@alterx/contracts"
+import { WorkflowPlanSchema } from "@alterx/contracts"
+import { WorkflowPlanCard } from "@/components/conversation/workflow-plan"
 
 export function ConversationDetail() {
   const { conversationId } = useParams<{ conversationId: string }>()
@@ -33,7 +35,7 @@ export function ConversationDetail() {
   })
 
   const sendMessage = useMutation({
-    mutationFn: (content: string) => api.sendMessage(conversationId!, { content }),
+    mutationFn: (input: string | { content: string; build: { planMessageId: string; successCriteria: string[] } }) => api.sendMessage(conversationId!, typeof input === "string" ? { content: input } : input),
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.messages(conversationId!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
@@ -77,6 +79,13 @@ export function ConversationDetail() {
 
   const renderCustomMessage = (msg: any) => {
     const data = msg.data
+    const plan = WorkflowPlanSchema.safeParse({ type: data.type, steps: data.steps, successCriteria: data.successCriteria })
+    if (msg.type === "artifact" && plan.success) {
+      const later = messages?.slice(messages.findIndex(message => message.id === msg.id) + 1) ?? []
+      return <WorkflowPlanCard key={msg.id} plan={plan.data} pending={sendMessage.isPending}
+        disabled={conversation.status === "archived" || later.some(message => message.role === "assistant" && (message.kind === "workflow" || (message.kind === "artifact" && typeof message.content === "object" && message.content.type === "plan")))}
+        onBuild={successCriteria => sendMessage.mutate({ content: "Build this workflow with the confirmed success criteria.", build: { planMessageId: msg.id, successCriteria } })} />
+    }
     const connections = ConnectionsRequiredSchema.safeParse({ type: data.type, missing_connections: data.missing_connections })
     if (msg.type === "action" && connections.success) {
       const latest = messages?.at(-1)?.id === msg.id
@@ -84,14 +93,17 @@ export function ConversationDetail() {
         {connections.data.missing_connections.map(gap => <li key={gap.connector_type}>{gap.connector_type} — {gap.reason === "unavailable" ? "Reconnect account" : "Connect account"}</li>)}
       </ul>{latest && <div className="flex items-center gap-4">
         <a className="text-primary underline" href="/app/connections" target="_blank" rel="noreferrer">Open connections in new tab</a>
-        <Button disabled={sendMessage.isPending || conversation.status === "archived"} onClick={() => sendMessage.mutate("Check connections and continue building from the original goal and answers.")}>Check connections and plan again</Button>
+        <Button disabled={sendMessage.isPending || conversation.status === "archived"} onClick={() => sendMessage.mutate(data.build ? { content: "Check connections and build with the confirmed success criteria.", build: data.build } : "Check connections and continue building from the original goal and answers.")}>Check connections and plan again</Button>
       </div>}</div>
     }
     if (msg.type === "clarification" && Array.isArray(data.questions)) {
       return <div><p>{msg.content}</p><ClarificationQuestions
         questions={data.questions.map((question: string) => ({ id: question, question }))}
         pending={sendMessage.isPending}
-        onSubmit={answers => sendMessage.mutate(Object.entries(answers).map(([question, answer]) => `${question}: ${answer}`).join("\n"))}
+        onSubmit={answers => {
+          const content = Object.entries(answers).map(([question, answer]) => `${question}: ${answer}`).join("\n")
+          sendMessage.mutate(data.build ? { content, build: data.build } : content)
+        }}
       /></div>
     }
     if (msg.type === "workflow" && data.workflowId) {

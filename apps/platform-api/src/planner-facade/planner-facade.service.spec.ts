@@ -114,7 +114,7 @@ function readyHttp(): FakePlannerHttpClient {
   const http = new FakePlannerHttpClient();
   http.understandResponse = realProblemSpec("Email the customers");
   http.decomposeResponse = {
-    task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+    task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
     ambiguity_detected: false,
     clarification_questions: [],
   };
@@ -140,7 +140,7 @@ describe("PlannerFacadeService.planWorkflow constraints", () => {
     await service(http, new FakeCompilerGrpcClient(), residency, effectiveFor).planWorkflow({
       tenantId: TENANT_ID,
       workspaceId: WORKSPACE_ID,
-      workflowId: WORKFLOW_ID,
+      workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
       objective: "Email the customers",
     });
 
@@ -162,7 +162,7 @@ describe("PlannerFacadeService.planWorkflow constraints", () => {
     await service(http, new FakeCompilerGrpcClient()).planWorkflow({
       tenantId: TENANT_ID,
       workspaceId: WORKSPACE_ID,
-      workflowId: WORKFLOW_ID,
+      workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
       objective: "Email the customers",
     });
 
@@ -183,7 +183,7 @@ describe("PlannerFacadeService.planWorkflow constraints", () => {
       service(http, grpc, undefined, effectiveFor).planWorkflow({
         tenantId: TENANT_ID,
         workspaceId: WORKSPACE_ID,
-        workflowId: WORKFLOW_ID,
+        workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
         objective: "Email the customers",
       }),
     ).rejects.toBeInstanceOf(WorkflowSafeguardsError);
@@ -200,7 +200,7 @@ describe("PlannerFacadeService.planWorkflow constraints", () => {
       service(http, grpc, residency).planWorkflow({
         tenantId: TENANT_ID,
         workspaceId: WORKSPACE_ID,
-        workflowId: WORKFLOW_ID,
+        workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
         objective: "Email the customers",
       }),
     ).rejects.toBeInstanceOf(TenantDataResidencyError);
@@ -214,7 +214,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const http = new FakePlannerHttpClient();
     http.understandResponse = realProblemSpec("Ship the thing");
     http.decomposeResponse = {
-      task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+      task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
       ambiguity_detected: false,
       clarification_questions: [],
     };
@@ -228,7 +228,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const result = await service(http, grpc).planWorkflow({
       tenantId: TENANT_ID,
       workspaceId: WORKSPACE_ID,
-      workflowId: WORKFLOW_ID,
+      workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
       objective: "Ship the thing",
     });
 
@@ -270,7 +270,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const result = await service(http, grpc).planWorkflow({
       tenantId: TENANT_ID,
       workspaceId: WORKSPACE_ID,
-      workflowId: WORKFLOW_ID,
+      workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
       objective: "Ambiguous goal",
     });
 
@@ -289,7 +289,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const http = new FakePlannerHttpClient();
     http.understandResponse = realProblemSpec("Goal");
     http.decomposeResponse = {
-      task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+      task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
       ambiguity_detected: true,
       clarification_questions: [],
     };
@@ -303,7 +303,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const result = await service(http, grpc).planWorkflow({
       tenantId: TENANT_ID,
       workspaceId: WORKSPACE_ID,
-      workflowId: WORKFLOW_ID,
+      workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
       objective: "Goal",
     });
 
@@ -314,7 +314,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const http = new FakePlannerHttpClient();
     http.understandResponse = realProblemSpec("Goal");
     http.decomposeResponse = {
-      task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+      task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
       ambiguity_detected: false,
       clarification_questions: [],
     };
@@ -328,7 +328,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
       service(http, grpc).planWorkflow({
         tenantId: TENANT_ID,
         workspaceId: WORKSPACE_ID,
-        workflowId: WORKFLOW_ID,
+        workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
         objective: "Goal",
       }),
     ).rejects.toThrow("Architecture pipeline blocked compilation");
@@ -339,7 +339,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const http = new FakePlannerHttpClient();
     http.understandResponse = realProblemSpec("Goal");
     http.decomposeResponse = {
-      task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+      task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
       ambiguity_detected: false,
       clarification_questions: [],
     };
@@ -355,7 +355,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
       service(http, grpc).planWorkflow({
         tenantId: TENANT_ID,
         workspaceId: WORKSPACE_ID,
-        workflowId: WORKFLOW_ID,
+        workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
         objective: "Goal",
       }),
     ).rejects.toThrow(/Compiler Service request failed/);
@@ -365,7 +365,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     const http = new FakePlannerHttpClient();
     http.understandResponse = realProblemSpec("Goal");
     http.decomposeResponse = {
-      task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+      task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
       ambiguity_detected: false,
       clarification_questions: [],
     };
@@ -375,7 +375,7 @@ describe("PlannerFacadeService.planWorkflow", () => {
     await service(http, grpc).planWorkflow({
       tenantId: TENANT_ID.slice("ten_".length),
       workspaceId: WORKSPACE_ID.slice("ws_".length),
-      workflowId: WORKFLOW_ID,
+      workflowId: WORKFLOW_ID, confirm: true, successCriteria: [],
       objective: "Goal",
     });
 
@@ -423,13 +423,13 @@ describe("PlannerFacadeService connection preflight", () => {
   it("preserves a validated complete batch from compiler transport", async () => {
     const grpc = new FakeCompilerGrpcClient();
     grpc.error = Object.assign(new Error("precondition"), { code: 9, details: JSON.stringify(batch) });
-    expect(await service(readyHttp(), grpc).planWorkflow({ tenantId: TENANT_ID, workspaceId: WORKSPACE_ID, workflowId: WORKFLOW_ID, objective: "Goal" })).toEqual(batch);
+    expect(await service(readyHttp(), grpc).planWorkflow({ tenantId: TENANT_ID, workspaceId: WORKSPACE_ID, workflowId: WORKFLOW_ID, confirm: true, successCriteria: [], objective: "Goal" })).toEqual(batch);
     expect(grpc.compileArchitectureWorkflowCalls).toHaveLength(1);
   });
   it.each(["unrecognized", JSON.stringify({ ...batch, missing_connections: [] }), JSON.stringify({ ...batch, credential: "must not be forwarded" })])("rejects unrecognized compiler details", async details => {
     const grpc = new FakeCompilerGrpcClient();
     grpc.error = Object.assign(new Error("precondition"), { code: 9, details });
-    await expect(service(readyHttp(), grpc).planWorkflow({ tenantId: TENANT_ID, workspaceId: WORKSPACE_ID, workflowId: WORKFLOW_ID, objective: "Goal" })).rejects.toThrow("Compiler Service request failed");
+    await expect(service(readyHttp(), grpc).planWorkflow({ tenantId: TENANT_ID, workspaceId: WORKSPACE_ID, workflowId: WORKFLOW_ID, confirm: true, successCriteria: [], objective: "Goal" })).rejects.toThrow("Compiler Service request failed");
   });
 });
 
@@ -445,7 +445,7 @@ it.runIf(Boolean(process.env.CONNECTION_PREFLIGHT_COMPILER_ADDRESS))("keeps the 
     new PlannerClient({ baseUrl: "http://fixture.intelligence" }, http),
     new CompilerServiceClient({ address: process.env.CONNECTION_PREFLIGHT_COMPILER_ADDRESS!, protoPath: "packages/contracts/proto/alter/compiler/v1/compiler.proto" }),
   );
-  expect(await planner.planWorkflow({ tenantId: request.tenant_id, workspaceId: request.workspace_id, workflowId: request.workflow_id, objective: "Fixture workflow" })).toEqual({
+  expect(await planner.planWorkflow({ tenantId: request.tenant_id, workspaceId: request.workspace_id, workflowId: request.workflow_id, confirm: true, successCriteria: [], objective: "Fixture workflow" })).toEqual({
     type: "connections_required", missing_connections: [
       { connector_type: "github", node_keys: ["one", "three"], reason: "missing" },
       { connector_type: "slack", node_keys: ["two"], reason: "missing" },

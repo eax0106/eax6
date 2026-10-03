@@ -21,7 +21,8 @@ import { MarketplaceAdminService } from "./services/marketplace-admin"
 import { FeatureFlagsService } from "./services/feature-flags"
 import { SupportAccessService } from "./services/support-access"
 import { isLiveApi } from "./http"
-import { ConnectionsRequiredSchema, type ConnectionsRequired, hasExternalSideEffect } from "@alterx/contracts"
+import { compileDag } from "./compile-dag"
+import { ConnectionsRequiredSchema, ConfirmWorkflowBuildSchema, WorkflowPlanSchema, type WorkflowPlan, type ConnectionsRequired, hasExternalSideEffect } from "@alterx/contracts"
 import type {
   AvailableRepository,
   HumanActionFilters,
@@ -352,12 +353,16 @@ class ApiClient {
   // workflowId is how answering a clarification re-plans the workflow that
   // raised it. Without it every answer created another draft and planned it
   // with the answer as the goal, losing the objective the user started from.
-  async compileWorkflow(_data: { goal: string; answers: Record<string, string>; workflowId?: string }): Promise<{ workflow: Workflow, explanation: string, warnings: any[], questions: string[], missingConnections?: ConnectionsRequired["missing_connections"] }> {
+  async compileWorkflow(_data: { goal: string; answers: Record<string, string>; workflowId?: string; confirm?: true; successCriteria?: string[] }): Promise<{ workflow: Workflow, explanation: string, warnings: any[], questions: string[], plan?: WorkflowPlan; missingConnections?: ConnectionsRequired["missing_connections"] }> {
+    const confirmed = _data.confirm ? ConfirmWorkflowBuildSchema.parse({ confirm: _data.confirm, successCriteria: _data.successCriteria }) : undefined
+    if (_data.successCriteria !== undefined && !confirmed) throw new Error("Build confirmation is required for edited criteria")
     if (isLiveApi) {
       const newWorkflow = _data.workflowId
         ? await live.getWorkflow(_data.workflowId)
         : await live.createWorkflow(_data.goal);
-      const planRes = await live.workflowAction(newWorkflow.id, "plan", { goal: _data.goal, answers: _data.answers }) as any;
+      const planRes = await live.workflowAction(newWorkflow.id, "plan", { goal: _data.goal, answers: _data.answers, ...confirmed }) as any;
+
+      if (planRes.type === "plan") return { workflow: newWorkflow, explanation: "Review the steps and success criteria, then press Build.", warnings: [], questions: [], plan: WorkflowPlanSchema.parse(planRes) }
 
       if (planRes.type === "clarification") {
         return {
@@ -377,6 +382,7 @@ class ApiClient {
         };
       }
       if (planRes.type !== "compiled") throw new Error("Planner did not return a compiled workflow.");
+      if (!confirmed) throw new Error("Planner compiled before Build confirmation.");
       // Successfully compiled - fetch the latest workflow object to get the DAG
       const updatedWorkflow = await live.getWorkflow(newWorkflow.id);
       return {
@@ -388,11 +394,18 @@ class ApiClient {
     }
     await delay(MOCK_DELAY * 2)
     const newWorkflow = {
-      ...mockWorkflows[0],
-      id: `wf_${Date.now()}`,
+      ...mockWorkflows[0]!,
+      id: _data.workflowId ?? `wf_${Date.now()}`,
       name: "Generated Workflow",
       status: "draft" as any
     }
+    if (confirmed) newWorkflow.dag = compileDag([{ id: "work", type: "LLMTask", position: { x: 0, y: 0 },
+      data: { prompt: _data.goal, successCriteria: confirmed.successCriteria } }], [], confirmed.successCriteria)
+    const existing = mockWorkflows.findIndex(workflow => workflow.id === newWorkflow.id)
+    if (existing < 0) mockWorkflows.push(newWorkflow)
+    else mockWorkflows[existing] = newWorkflow
+    if (!confirmed) return { workflow: newWorkflow, explanation: "Review the steps and success criteria, then press Build.", warnings: [], questions: [],
+      plan: { type: "plan", successCriteria: [_data.goal], steps: [{ key: "work", type: "llm", description: _data.goal, successCriteria: [_data.goal] }] } }
     return {
       workflow: newWorkflow,
       explanation: "Compiled based on your goal.",
@@ -457,7 +470,7 @@ class ApiClient {
     await delay(MOCK_DELAY)
   }
 
-  async saveWorkflowGraph(_id: string, _graph: { nodes: any[], edges: any[] }): Promise<void> {
+  async saveWorkflowGraph(_id: string, _graph: { nodes: any[], edges: any[]; successCriteria?: string[] }): Promise<void> {
     if (isLiveApi) return live.saveWorkflowGraph(_id, _graph)
     await delay(MOCK_DELAY)
   }
@@ -766,6 +779,11 @@ class ApiClient {
   async createConversation(data: { type: string; title: string; linkedWorkflowId?: string; linkedProjectId?: string; linkedRunId?: string }): Promise<Conversation> {
     if (isLiveApi) return live.createConversation(data)
     await delay(MOCK_DELAY)
+    let linkedWorkflowId = data.linkedWorkflowId
+    if (data.type === "workflow_builder" && !linkedWorkflowId) {
+      linkedWorkflowId = `wf_${Date.now()}`
+      mockWorkflows.push({ ...mockWorkflows[0]!, id: linkedWorkflowId, name: data.title, status: "draft", runs: 0 })
+    }
     const conv: Conversation = {
       id: `conv_${Date.now()}`,
       title: data.title,
@@ -774,7 +792,7 @@ class ApiClient {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       createdBy: { id: "usr_1", name: "Ameen" },
-      linkedWorkflowId: data.linkedWorkflowId,
+      linkedWorkflowId,
       linkedProjectId: data.linkedProjectId,
       linkedRunId: data.linkedRunId,
       preview: "New conversation started."
@@ -790,7 +808,7 @@ class ApiClient {
     return mockConversationMessages[id] || []
   }
 
-  async sendMessage(id: string, payload: { content: any; kind?: string }): Promise<{ userMessage: ConversationMessage; assistantMessage?: ConversationMessage }> {
+  async sendMessage(id: string, payload: { content: any; kind?: string; build?: { planMessageId: string; successCriteria: string[] } }): Promise<{ userMessage: ConversationMessage; assistantMessage?: ConversationMessage }> {
     if (isLiveApi) return live.sendMessage(id, payload)
     await delay(MOCK_DELAY)
     if (!mockConversationMessages[id]) {
@@ -803,7 +821,7 @@ class ApiClient {
       role: "user",
       kind: (payload.kind as any) || "text",
       createdAt: new Date().toISOString(),
-      content: payload.content
+      content: payload.build ? { text: payload.content, build: payload.build } : payload.content
     }
     mockConversationMessages[id].push(userMessage)
 
@@ -818,7 +836,17 @@ class ApiClient {
     
     await delay(MOCK_DELAY * 2) // Simulate thinking
     
-    if (typeof payload.content === 'string') {
+    if (conv?.type === "workflow_builder" && typeof payload.content === "string") {
+      const history = mockConversationMessages[id]!
+      const latest = [...history].reverse().find(message => message.role === "assistant" && message.kind === "artifact" && typeof message.content === "object" && message.content.type === "plan")
+      if (payload.build && (latest?.id !== payload.build.planMessageId || history.slice(history.indexOf(latest!) + 1).some(message => message.role === "assistant" && message.kind === "workflow"))) throw new Error("Review the latest plan before pressing Build")
+      const goal = payload.build && latest && typeof latest.content === "object" ? String(latest.content.objective) : payload.content
+      const result = await this.compileWorkflow({ goal, answers: {}, workflowId: conv.linkedWorkflowId,
+        ...(payload.build ? { confirm: true, successCriteria: payload.build.successCriteria } : {}) })
+      assistantMessage = { id: `msg_${Date.now() + 1}`, conversationId: id, role: "assistant", kind: result.plan ? "artifact" : "workflow", createdAt: new Date().toISOString(),
+        content: result.plan ? { ...result.plan, objective: goal, text: result.explanation } : { text: result.explanation, workflowId: result.workflow.id } }
+      history.push(assistantMessage)
+    } else if (typeof payload.content === 'string') {
       const text = payload.content.toLowerCase()
       
       if (text.includes("build") || text.includes("create")) {

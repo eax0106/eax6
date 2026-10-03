@@ -112,6 +112,19 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
   await expect(chats.begin(actor(),chat.id,{content:'Different objective'},'retry-message')).rejects.toMatchObject({code:'IDEMPOTENCY_KEY_REUSED'});
   expect(await chats.messages(actor(),chat.id)).toHaveLength(2);
  });
+ it('persists and replays the complete Build request including empty criteria, with JSON object order independent comparison',async()=>{
+  const chat=await chats.create(actor(),{type:'workflow_builder',title:'Build replay'});
+  const planMessageId=`msg_${uuidV7()}`,build={planMessageId,successCriteria:['Notify support.','Archive mail.']};
+  const first=await chats.begin(actor(),chat.id,{content:'Build',build},'build-replay');
+  expect(first.userMessage.content).toEqual({text:'Build',build});
+  const repeat=await chats.begin(actor(),chat.id,{content:'Build',build:{successCriteria:[...build.successCriteria],planMessageId}},'build-replay');
+  expect(repeat.userMessage).toEqual(first.userMessage);
+  await expect(chats.begin(actor(),chat.id,{content:'Build',build:{...build,successCriteria:[]}},'build-replay')).rejects.toMatchObject({code:'IDEMPOTENCY_KEY_REUSED'});
+  await expect(chats.begin(actor(),chat.id,{content:'Build',build:{...build,planMessageId:`msg_${uuidV7()}`}},'build-replay')).rejects.toMatchObject({code:'IDEMPOTENCY_KEY_REUSED'});
+  const removed=await chats.begin(actor(),chat.id,{content:'Build',build:{planMessageId,successCriteria:[]}},'build-empty');
+  expect(removed.userMessage.content).toEqual({text:'Build',build:{planMessageId,successCriteria:[]}});
+  expect(await chats.messages(actor(),chat.id)).toHaveLength(2);
+ });
  it('keeps one assistant per user and workspace, including concurrent creation and archived reuse',async()=>{
   const values=await Promise.all([chats.create(actor(),{type:'general',title:'Ask'}),chats.create(actor(),{type:'general',title:'Ask again'})]);expect(values[0]!.id).toBe(values[1]!.id);
   await chats.archive(actor(),values[0]!.id);expect(await chats.create(actor(),{type:'general',title:'Ask Alter'})).toMatchObject({id:values[0]!.id,status:'active'});
@@ -229,6 +242,17 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
       expect(report.success).toBe(true);expect(report.numFailedTests).toBe(0);expect(report.numPendingTests).toBe(0);
       const native=report.testResults.flatMap(file=>file.assertionResults).filter(test=>test.title==='retains chat context through native planner HTTP and compiler gRPC');
       expect(native).toHaveLength(1);expect(native[0]!.status).toBe('passed');
+      const compiled=await store.withTenant(tenant,tx=>tx.query<{workflow_id:string;compiled_dag:{success_criteria:string[];nodes:{key:string;success_criteria?:string[]}[]}}>(
+        'SELECT v.workflow_id,v.compiled_dag FROM workflow_versions v JOIN workflows w ON w.id=v.workflow_id AND w.tenant_id=v.tenant_id WHERE v.tenant_id=$1 AND w.workspace_id=$2 AND w.name=$3',[tenant,workspace,'Native builder']));
+      expect(compiled.rows).toHaveLength(1);
+      const criteria=['Publish the Friday report.','Archive the report.'];
+      expect(compiled.rows[0]!.compiled_dag.success_criteria).toEqual(criteria);
+      expect(compiled.rows[0]!.compiled_dag.nodes.find(node=>node.key==='start')?.success_criteria).toEqual(criteria);
+      expect(await workflows.getWorkflow(`ten_${tenant}`,compiled.rows[0]!.workflow_id)).toMatchObject({dag:compiled.rows[0]!.compiled_dag});
+      const draft={...compiled.rows[0]!.compiled_dag,success_criteria:['Retain the edited draft.']};
+      await store.withTenant(tenant,tx=>tx.query('UPDATE workflows SET draft_dag=$3 WHERE tenant_id=$1 AND id=$2',[tenant,compiled.rows[0]!.workflow_id,draft]));
+      expect(await workflows.getWorkflow(`ten_${tenant}`,compiled.rows[0]!.workflow_id)).toMatchObject({dag:draft});
+      await store.withTenant(tenant,tx=>tx.query('UPDATE workflows SET draft_dag=NULL WHERE tenant_id=$1 AND id=$2',[tenant,compiled.rows[0]!.workflow_id]));
       const observed={workflowId:`wf_${uuidV7()}`,runId:`run_${uuidV7()}`,nodeId:`node_${uuidV7()}`,foreignWorkflowId:`wf_${uuidV7()}`,foreignRunId:`run_${uuidV7()}`,oldRunId:`run_${uuidV7()}`};
       await store.withTenant(tenant,async tx=>{
         await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES($1,$2,$3,'Recent invoice checks'),($4,$2,$5,'Foreign workspace sentinel')",[observed.workflowId,tenant,workspace,observed.foreignWorkflowId,otherWorkspace]);
