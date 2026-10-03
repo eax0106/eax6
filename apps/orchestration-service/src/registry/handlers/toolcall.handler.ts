@@ -7,6 +7,7 @@ import {
   RunIdSchema,
   TenantIdSchema,
   ToolCallCompiledConfigSchema,
+  parseConnectionSecretReference,
   type NodeType,
   type ProblemDetails,
 } from "@alterx/contracts";
@@ -282,6 +283,8 @@ function resolveReference(
 }
 
 function credentialReferenceTenant(reference: string): string | undefined {
+  const connection = parseConnectionSecretReference(reference);
+  if (connection) return `ten_${connection.tenant_id}`;
   return reference
     .split("/")
     .filter((segment) => segment.length > 0)[3];
@@ -309,6 +312,17 @@ function problemForGatewayFailure(
   }
 
   switch (error.kind) {
+    case "credential_missing":
+      return problem({
+        context,
+        type: "credential-missing",
+        title: "Connection Required",
+        status: 424,
+        detail: "Required connection is unavailable. Reconnect the account before starting a new run.",
+        errorCode: "CREDENTIAL_MISSING",
+        retryable: false,
+        documentationKey: "execution.tool-call.credential-missing",
+      });
     case "invalid_argument":
       return problem({
         context,

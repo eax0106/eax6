@@ -8,6 +8,7 @@ import {
 } from "@aws-sdk/client-secrets-manager";
 
 import type { ProviderCapabilities } from "@alterx/contracts";
+import { SecretNotFoundError } from "@alterx/shared-clients";
 import type {
   ProviderHealth,
   ProviderMetadata,
@@ -78,7 +79,7 @@ export class AwsSecretsManagerProvider implements ErasableSecretsProvider {
         ? undefined
         : Buffer.from(response.SecretBinary).toString("utf8"));
     if (value === undefined || value.length === 0) {
-      throw new Error("Resolved secret contains no value");
+      throw new SecretNotFoundError(referenceId);
     }
     return value;
   }

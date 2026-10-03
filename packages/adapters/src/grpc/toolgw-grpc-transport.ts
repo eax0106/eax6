@@ -21,6 +21,13 @@ import { internalError } from "./internal-error";
 
 export const TOOLGW_HANDLER = Symbol("TOOLGW_HANDLER");
 
+export class ToolGatewayCredentialMissingError extends Error {
+  constructor() {
+    super("CREDENTIAL_MISSING");
+    this.name = "ToolGatewayCredentialMissingError";
+  }
+}
+
 export class ToolGatewayValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -128,6 +135,9 @@ export async function startToolgwGrpcTransport(
 }
 
 function mapToolGatewayError(error: unknown, fallbackMessage: string): RpcException {
+  if (error instanceof ToolGatewayCredentialMissingError) {
+    return new RpcException({ code: status.FAILED_PRECONDITION, message: error.message });
+  }
   if (error instanceof ToolGatewayValidationError) {
     return new RpcException({
       code: status.INVALID_ARGUMENT,

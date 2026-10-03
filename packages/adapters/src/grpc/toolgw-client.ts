@@ -28,6 +28,7 @@ export interface ToolGatewayInvokeHandler {
 }
 
 export type ToolGatewayClientErrorKind =
+  | "credential_missing"
   | "invalid_argument"
   | "permission_denied"
   | "rate_limited"
@@ -55,6 +56,7 @@ export type ToolGatewayClientErrorKind =
 const TOOL_GATEWAY_ERROR_CODES: Partial<
   Readonly<Record<ToolGatewayClientErrorKind, string>>
 > = {
+  credential_missing: "CREDENTIAL_MISSING",
   permission_denied: "TOOL_GATEWAY_PERMISSION_DENIED",
   rate_limited: "TOOL_GATEWAY_RATE_LIMIT",
   deadline_exceeded: "TOOL_GATEWAY_DEADLINE_EXCEEDED",
@@ -162,6 +164,10 @@ function mapGrpcError(
   error: Error & { readonly code?: number },
 ): ToolGatewayClientError {
   switch (error.code) {
+    case status.FAILED_PRECONDITION:
+      return (error as Error & { readonly details?: unknown }).details === "CREDENTIAL_MISSING"
+        ? new ToolGatewayClientError("credential_missing", false, { cause: error })
+        : new ToolGatewayClientError("internal", false, { cause: error });
     case status.INVALID_ARGUMENT:
       return new ToolGatewayClientError("invalid_argument", false, {
         cause: error,

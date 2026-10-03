@@ -56,7 +56,7 @@ describe("AwsSecretsManagerProvider", () => {
       { send: vi.fn(async () => ({})) },
     );
     await expect(emptyProvider.getSecret("audit/database")).rejects.toThrow(
-      "Resolved secret contains no value",
+      "Secret reference was not found",
     );
     expect(() => new AwsSecretsManagerProvider({ region: "" })).toThrow(
       /region is required/,

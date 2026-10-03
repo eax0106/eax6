@@ -63,6 +63,7 @@ describe("classifyNodeFailure", () => {
   });
 
   it.each([
+    ["CREDENTIAL_MISSING", "credential_missing"],
     ["TOOL_GATEWAY_PERMISSION_DENIED", "tool_permission_denial"],
     ["DEADLINE_EXCEEDED", "timeout"],
     ["SANDBOX_SESSION_LOST", "sandbox_crash"],

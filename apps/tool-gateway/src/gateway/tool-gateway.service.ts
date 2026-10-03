@@ -8,6 +8,7 @@ import type {
   ToolgwResolveCredentialRequest,
   ToolgwResolveCredentialResponse,
 } from "@alterx/contracts";
+import { parseConnectionSecretReference, type ConnectionCredentialLookup } from "@alterx/contracts";
 import {
   SES_EMAIL_CAPABILITIES,
   SsrfBlockedError,
@@ -16,6 +17,7 @@ import {
   ToolGatewayPermissionError,
   ToolGatewayRateLimitError,
   ToolGatewayValidationError,
+  ToolGatewayCredentialMissingError,
   type BrowserAutomationProvider,
   type BrowserSessionScope,
   type DatabaseOperationProvider,
@@ -43,7 +45,8 @@ import {
 import { createCostEventId } from "./cost-event-id";
 
 interface CredentialRecord {
-  readonly secretValue: string;
+  readonly secretReference: string;
+  readonly runId?: string;
   readonly expiresAtMs: number;
   readonly tenantId: string;
   readonly integrationId?: string;
@@ -60,6 +63,7 @@ interface ArtifactRecord {
 }
 
 export interface ToolGatewayServiceOptions {
+  readonly resolveConnection?: (input: ConnectionCredentialLookup) => Promise<string>;
   readonly credentialTokenTtlMs?: number;
   readonly maxCredentialTokens?: number;
   readonly artifactTtlMs?: number;
@@ -158,6 +162,7 @@ export class ToolGatewayService implements ToolgwHandler {
   readonly #mintCredentialToken: () => string;
   readonly #mintId: () => string;
   readonly #mintCostEventId: () => string;
+  readonly #resolveConnection: ToolGatewayServiceOptions["resolveConnection"];
 
   constructor(
     private readonly configProvider: ConfigProvider,
@@ -194,6 +199,7 @@ export class ToolGatewayService implements ToolgwHandler {
       options.mintCredentialToken ?? (() => `cred_${randomUUID()}`);
     this.#mintId = options.mintId ?? uuidV7;
     this.#mintCostEventId = options.mintCostEventId ?? createCostEventId;
+    this.#resolveConnection = options.resolveConnection;
   }
 
   async invokeTool(
@@ -217,10 +223,12 @@ export class ToolGatewayService implements ToolgwHandler {
         await this.#auditToolInvocation(request, "denied");
         throw error;
       }
-      await this.#resolveCredentialReference(
+      const resolvedReference = await this.#resolveCredentialReference(
         request.credential_ref,
         request.tenant_id,
+        request.run_id,
       );
+      request = { ...request, credential_ref: resolvedReference };
 
       if (request.tool_name === SEARCH_WEB_TOOL_NAME) {
         const response = await this.#dispatchSearchWeb(request);
@@ -618,11 +626,11 @@ export class ToolGatewayService implements ToolgwHandler {
         request.tenant_id,
         request.integration_id,
       );
-      const secretValue = await this.secretsProvider.getSecret(
-        request.credential_ref,
-      );
+      const secretReference = await this.#resolveConnectionReference(request.credential_ref, request.tenant_id, request.run_id);
+      await this.#readCredentialSecret(secretReference);
       const { expiresAtMs, token } = this.#mintCredentialRecord({
-        secretValue,
+        secretReference,
+        ...(request.run_id !== undefined && parseConnectionSecretReference(secretReference) ? { runId: request.run_id } : {}),
         tenantId: request.tenant_id,
         integrationId: request.integration_id,
       });
@@ -757,7 +765,8 @@ export class ToolGatewayService implements ToolgwHandler {
   async #resolveCredentialReference(
     reference: string,
     tenantId: string,
-  ): Promise<void> {
+    runId: string,
+  ): Promise<string> {
     this.#sweepExpiredCredentialTokens();
     const record = this.#credentialTokens.get(reference);
     if (record === undefined) {
@@ -777,10 +786,11 @@ export class ToolGatewayService implements ToolgwHandler {
         isBrowserAutomationCredentialReference(reference) ||
         isEmailSendCredentialReference(reference)
       ) {
-        return;
+        return reference;
       }
-      await this.#resolveRawSecretReference(reference, tenantId);
-      return;
+      const resolved = await this.#resolveConnectionReference(reference, tenantId, runId);
+      await this.#readCredentialSecret(resolved);
+      return resolved;
     }
     if (record.expiresAtMs <= this.#now().getTime()) {
       this.#credentialTokens.delete(reference);
@@ -791,17 +801,14 @@ export class ToolGatewayService implements ToolgwHandler {
         "Credential token is not owned by this tenant",
       );
     }
-    // Real credential exists only in memory so later GATE-8 dispatch can use it
-    // without accepting raw secrets over gRPC.
-    void record.secretValue;
-    return;
+    if (!parseConnectionSecretReference(record.secretReference)) return record.secretReference;
+    if (record.runId !== undefined && record.runId !== runId) throw new ToolGatewayCredentialMissingError();
+    const resolved = await this.#resolveConnectionReference(record.secretReference, tenantId, runId);
+    await this.#readCredentialSecret(resolved);
+    return resolved;
   }
 
-  #mintCredentialRecord(record: {
-    readonly secretValue: string;
-    readonly tenantId: string;
-    readonly integrationId?: string;
-  }): {
+  #mintCredentialRecord(record: Omit<CredentialRecord, "expiresAtMs">): {
     readonly expiresAtMs: number;
     readonly token: string;
   } {
@@ -812,12 +819,21 @@ export class ToolGatewayService implements ToolgwHandler {
     return { expiresAtMs, token };
   }
 
-  async #resolveRawSecretReference(
-    reference: string,
-    tenantId: string,
-  ): Promise<void> {
-    const secretValue = await this.secretsProvider.getSecret(reference);
-    this.#mintCredentialRecord({ secretValue, tenantId });
+  async #resolveConnectionReference(reference: string, tenantId: string, runId?: string): Promise<string> {
+    if (!parseConnectionSecretReference(reference)) return reference;
+    if (!runId || !this.#resolveConnection) throw new ToolGatewayCredentialMissingError();
+    return this.#resolveConnection({ tenant_id: tenantId, run_id: runId, credential_ref: reference });
+  }
+
+  async #readCredentialSecret(reference: string): Promise<string> {
+    try {
+      const value = await this.secretsProvider.getSecret(reference);
+      if (!value) throw new ToolGatewayCredentialMissingError();
+      return value;
+    } catch (error) {
+      if (error instanceof Error && ["SecretNotFoundError", "ResourceNotFoundException", "AccessDeniedException", "DecryptionFailure", "InvalidRequestException"].includes(error.name)) throw new ToolGatewayCredentialMissingError();
+      throw error;
+    }
   }
 
   #mintUniqueCredentialToken(): string {
@@ -1305,6 +1321,11 @@ function assertDatabaseCredentialOwnedBy(
   tenantId: string,
   databaseId: string,
 ): void {
+  const connection = parseConnectionSecretReference(reference);
+  if (connection) {
+    if (`ten_${connection.tenant_id}` !== tenantId || connection.connection_id !== databaseId) throw new ToolGatewayValidationError("credential_ref is not owned by this tenant/database");
+    return;
+  }
   const segments = reference.split("/").filter(Boolean);
   if (
     segments.length < 7 ||
@@ -1325,6 +1346,11 @@ function assertCredentialReferenceOwnedBy(
   tenantId: string,
   integrationId?: string,
 ): void {
+  const connection = parseConnectionSecretReference(credentialRef);
+  if (connection) {
+    if (`ten_${connection.tenant_id}` !== tenantId || (integrationId !== undefined && integrationId !== connection.connection_id && integrationId !== `itg_${connection.connection_id}`)) throw new ToolGatewayCredentialMissingError();
+    return;
+  }
   const ownership = parseTenantIntegrationSecretReference(credentialRef);
   if (ownership === undefined) {
     throw new ToolGatewayValidationError(

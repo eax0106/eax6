@@ -1,7 +1,8 @@
-import { ConnectionRegistrySnapshotSchema, type ConnectionRegistrySnapshot } from "@alterx/contracts";
+import { ConnectionCredentialLookupSchema, parseConnectionSecretReference, ConnectionRegistrySnapshotSchema, type ConnectionCredentialLookup, type ConnectionRegistrySnapshot } from "@alterx/contracts";
 import type { OrchestrationTenantStore } from "../compiler/graph-compiler.service";
 
 export class ConnectionRegistryConflictError extends Error {}
+export class ConnectionRegistryUnavailableError extends Error {}
 
 export class ConnectionRegistryService {
   constructor(private readonly store: OrchestrationTenantStore) {}
@@ -30,6 +31,23 @@ export class ConnectionRegistryService {
         throw new ConnectionRegistryConflictError("Connection scope or revision conflicts with the stored snapshot");
       }
       return { source_revision: current.source_revision };
+    });
+  }
+
+  async resolve(input: ConnectionCredentialLookup): Promise<ConnectionRegistrySnapshot> {
+    const request = ConnectionCredentialLookupSchema.parse(input);
+    const reference = parseConnectionSecretReference(request.credential_ref)!;
+    const tenantId = request.tenant_id.slice("ten_".length);
+    if (reference.tenant_id !== tenantId) throw new ConnectionRegistryUnavailableError("CREDENTIAL_MISSING");
+    return this.store.withTenant(tenantId, async tx => {
+      const row = (await tx.query<ConnectionRegistrySnapshot>(
+        `SELECT c.tenant_id, c.workspace_id, c.connection_id, c.connector_type, c.status, c.secret_ref, c.source_revision
+         FROM runs r JOIN connection_registry c ON c.tenant_id=r.tenant_id AND c.workspace_id=r.workspace_id
+         WHERE r.tenant_id=$1 AND r.id=$2 AND c.connection_id=$3 AND c.workspace_id=$4 AND c.status='connected'`,
+        [tenantId, request.run_id, reference.connection_id, reference.workspace_id],
+      )).rows[0];
+      if (!row || row.secret_ref !== request.credential_ref) throw new ConnectionRegistryUnavailableError("CREDENTIAL_MISSING");
+      return ConnectionRegistrySnapshotSchema.parse(row);
     });
   }
 

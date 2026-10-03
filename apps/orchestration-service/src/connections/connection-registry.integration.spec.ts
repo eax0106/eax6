@@ -8,15 +8,19 @@ import type { ConnectionRegistrySnapshot } from "@alterx/contracts";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { OrchestrationDeletionService } from "../deletion/deletion.service";
-import { ConnectionRegistryController, CONNECTION_REGISTRY_TOKEN_HASH } from "./connection-registry.controller";
+import { ConnectionRegistryController, CONNECTION_REGISTRY_TOKEN_HASH, CONNECTION_LOOKUP_TOKEN_HASH } from "./connection-registry.controller";
 import { ConnectionRegistryService } from "./connection-registry.service";
 import { connectionRegistry } from "../../db/schema/connection_registry";
 
 const tenant = "00000000-0000-7000-8000-000000000001", other = "00000000-0000-7000-8000-000000000002";
 const workspace = "00000000-0000-7000-8000-000000000003", otherWorkspace = "00000000-0000-7000-8000-000000000004";
 const token = "connection-registry-fixture";
+const lookupToken = "connection-lookup-fixture";
+const runId = "run_00000000-0000-7000-8000-000000000005";
+const otherRunId = "run_00000000-0000-7000-8000-000000000006";
+const foreignRunId = "run_00000000-0000-7000-8000-000000000007";
 const migrationsFolder = resolve("apps/orchestration-service/drizzle");
 function snapshot(overrides: Partial<ConnectionRegistrySnapshot> = {}): ConnectionRegistrySnapshot {
   const record = { tenant_id: tenant, workspace_id: workspace, connection_id: randomUUID(), connector_type: "github", status: "connected" as const, source_revision: 1, ...overrides };
@@ -45,16 +49,72 @@ describe.sequential("Engine connection registry HTTP and restricted PostgreSQL",
     const module = await Test.createTestingModule({ controllers: [ConnectionRegistryController], providers: [
       { provide: ConnectionRegistryService, useValue: registry },
       { provide: CONNECTION_REGISTRY_TOKEN_HASH, useValue: createHash("sha256").update(token).digest("hex") },
+      { provide: CONNECTION_LOOKUP_TOKEN_HASH, useValue: createHash("sha256").update(lookupToken).digest("hex") },
     ] }).compile();
     app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());
     await app.init(); await app.getHttpAdapter().getInstance().ready();
   }, 120_000);
   beforeEach(async () => { await admin.withTenant(tenant, tx => tx.query("TRUNCATE connection_registry")); });
+  afterEach(async () => {
+    for (const scope of [tenant, other]) await admin.withTenant(scope, tx => tx.query("DELETE FROM runs WHERE id=ANY($1::text[])", [[runId, otherRunId, foreignRunId]]));
+  });
   afterAll(async () => { await app?.close(); await store?.close(); await admin?.close(); await postgres?.stop(); });
   const send = (body: unknown, credential: string | undefined = token) => app.getHttpAdapter().getInstance().inject({
     method: "POST", url: "/internal/connections/upsert", payload: body as Record<string, unknown>,
     headers: credential ? { authorization: `Bearer ${credential}` } : {},
   });
+  const lookup = (body: unknown, credential = lookupToken) => app.getHttpAdapter().getInstance().inject({
+    method: "POST", url: "/internal/connections/resolve", payload: body as Record<string, unknown>,
+    headers: credential ? { authorization: `Bearer ${credential}` } : {},
+  });
+  async function seedRuns() {
+    await admin.withTenant(tenant, tx => tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind) VALUES ($1,$2,$3,'workflow'),($4,$2,$5,'workflow')", [runId, tenant, workspace, otherRunId, otherWorkspace]));
+    await admin.withTenant(other, tx => tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind) VALUES ($1,$2,$3,'workflow')", [foreignRunId, other, workspace]));
+  }
+
+  it("authenticates reference-only run lookups with the separate read credential", async () => {
+    await seedRuns();
+    const record = snapshot(); await registry.upsert(record);
+    const query = { tenant_id: `ten_${tenant}`, run_id: runId, credential_ref: record.secret_ref };
+    for (const credential of ["", "wrong", token]) expect((await lookup(query, credential)).statusCode).toBe(401);
+    expect((await send(record, lookupToken)).statusCode).toBe(401);
+    expect((await lookup({ ...query, secret: "must-not-cross" })).statusCode).toBe(400);
+    const response = await lookup(query);
+    expect(response.statusCode).toBe(200); expect(response.json()).toEqual(record);
+    const role = await store.withTenant(tenant, tx => tx.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user"));
+    expect(role.rows[0]).toEqual({ rolsuper: false, rolbypassrls: false });
+  });
+
+  it("resolves only current connected records in the actual run tenant and workspace", async () => {
+    await seedRuns();
+    const record = snapshot(); await registry.upsert(record);
+    const query = { tenant_id: `ten_${tenant}`, run_id: runId, credential_ref: record.secret_ref };
+    expect((await lookup(query)).json()).toEqual(record);
+    for (const change of [{ run_id: otherRunId }, { run_id: foreignRunId }, { tenant_id: `ten_${other}` }, { credential_ref: snapshot().secret_ref }]) {
+      const response = await lookup({ ...query, ...change });
+      expect(response.statusCode).toBe(409); expect(response.json()).toEqual({ error_code: "CREDENTIAL_MISSING" });
+    }
+    const anotherWorkspace = snapshot({ workspace_id: otherWorkspace }); await registry.upsert(anotherWorkspace);
+    expect((await lookup({ ...query, credential_ref: anotherWorkspace.secret_ref })).statusCode).toBe(409);
+    await registry.upsert({ ...record, status: "revoked", source_revision: 2 });
+    expect((await lookup(query)).statusCode).toBe(409);
+    await registry.upsert({ ...record, status: "error", source_revision: 3 });
+    expect((await lookup(query)).statusCode).toBe(409);
+  });
+
+  it("runs the native Tool Gateway against real engine HTTP and restricted PostgreSQL", async () => {
+    await seedRuns();
+    const record = snapshot({ connector_type: "postgres" }); await registry.upsert(record);
+    if (!app.getHttpServer().listening) await app.listen(0, "127.0.0.1");
+    const result = await promisify(execFile)(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run",
+      "apps/tool-gateway/src/gateway/connection-runtime.integration.spec.ts", "--maxWorkers=1"], {
+      env: { ...process.env, CONNECTION_RUNTIME_ENGINE_URL: await app.getUrl(), CONNECTION_RUNTIME_LOOKUP_TOKEN: lookupToken,
+        CONNECTION_RUNTIME_WRITE_TOKEN: token, CONNECTION_RUNTIME_RECORD: JSON.stringify(record),
+        CONNECTION_RUNTIME_RUN_ID: runId, CONNECTION_RUNTIME_OTHER_RUN_ID: otherRunId, CONNECTION_RUNTIME_DATABASE_URL: runtimeUri },
+      timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
+    });
+    expect(result.stdout).toMatch(/3 passed/);
+  }, 120_000);
 
   it("authenticates before storing and rejects secret material or mismatched references", async () => {
     const record = snapshot();
@@ -95,7 +155,7 @@ describe.sequential("Engine connection registry HTTP and restricted PostgreSQL",
   });
 
   it("synchronizes the real platform lifecycle through HTTP in a separate process", async () => {
-    await app.listen(0, "127.0.0.1");
+    if (!app.getHttpServer().listening) await app.listen(0, "127.0.0.1");
     const result = await promisify(execFile)(process.execPath, [resolve("node_modules/vitest/vitest.mjs"), "run",
       "apps/platform-api/src/integrations/connection-registry.integration.spec.ts", "--maxWorkers=1"], {
       env: { ...process.env, CONNECTION_REGISTRY_TEST_URL: await app.getUrl(),
