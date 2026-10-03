@@ -136,7 +136,7 @@ describe("EngineClient", () => {
     const deleted = await client.delete(
       "/api/v1/ads/documents/document-1",
       context,
-      { idempotencyKey: "delete-1" },
+      { idempotencyKey: "delete-1", ifMatch: '"delete-etag"' },
     );
 
     expect(fetchImpl.mock.calls[0]?.[1]).toEqual(
@@ -169,6 +169,7 @@ describe("EngineClient", () => {
         headers: expect.objectContaining({ "Idempotency-Key": "put-1" }),
       }),
     );
+    expect(fetchImpl.mock.calls[3]?.[1]).toEqual(expect.objectContaining({ method: "DELETE", headers: expect.objectContaining({ "If-Match": '"delete-etag"' }) }));
     expect(deleted).toEqual({ status: 204, body: undefined });
   });
 

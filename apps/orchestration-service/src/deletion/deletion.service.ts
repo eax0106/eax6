@@ -39,6 +39,7 @@ const WEBHOOK_SECRETS_LOCATION = "secrets:alter/webhook-endpoints";
 // duplicate of it that could itself silently drift from this one.
 export const TABLES = [
   "conversation_messages",
+  "workflow_folders",
   "connection_registry",
   "trigger_webhook_secrets",
   "workflow_template_variable_values", "workflow_template_variable_definitions",
@@ -79,7 +80,7 @@ export const DELETE_ORDER = [
   "trigger_webhook_secrets", "verification_results", "node_executions", "runs", "events",
   "conversations", "projects", "trigger_versions", "triggers", "webhook_endpoint_secrets",
   "webhook_endpoints", "whatsapp_accounts", "workflow_template_variable_definitions",
-  "workflow_template_variable_values", "workflow_versions", "workflows",
+  "workflow_template_variable_values", "workflow_versions", "workflows", "workflow_folders",
 ] as const;
 
 export class OrchestrationDeletionService implements DeletionProvider, WorkspaceDeletionProvider {
@@ -264,6 +265,7 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
            UNION SELECT tenant_id FROM workflow_template_variable_values
            UNION SELECT tenant_id FROM clarifications
            UNION SELECT tenant_id FROM connection_registry
+           UNION SELECT tenant_id FROM workflow_folders
            UNION SELECT tenant_id FROM triggers UNION SELECT tenant_id FROM trigger_versions
            UNION SELECT tenant_id FROM conversations UNION SELECT tenant_id FROM conversation_goal_states
            UNION SELECT tenant_id FROM events UNION SELECT tenant_id FROM runs

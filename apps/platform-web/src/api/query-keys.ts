@@ -5,6 +5,7 @@ export const queryKeys = {
     pendingDeletion: ["workspaces", "pending-deletion"] as const,
     runRetention: ["workspace", "run-retention"] as const,
   },
+  workflowFolders: ["workflowFolders"] as const,
   workflows: {
     all: ["workflows"] as const,
     detail: (id: string) => ["workflows", id] as const,
