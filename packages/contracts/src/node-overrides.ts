@@ -31,7 +31,7 @@ export const DataContractSchema: z.ZodType<DataContract> = z.lazy(() => z.object
   if ((value.properties !== undefined || value.required !== undefined) && value.type !== "object") ctx.addIssue({code:"custom",message:"Only object contracts declare properties or required fields"});
   if (value.items !== undefined && value.type !== "array") ctx.addIssue({code:"custom",message:"Only array contracts declare items"});
   for (const key of value.required ?? []) if (value.properties?.[key] === undefined) ctx.addIssue({code:"custom",message:`Required field has no declared type: ${key}`});
-}));
+})).openapi("NodeDataContract");
 
 /** True only when every output allowed by the declared type fits the input. */
 export function dataContractFits(output: DataContract, input: DataContract): boolean {
@@ -42,7 +42,7 @@ export function dataContractFits(output: DataContract, input: DataContract): boo
   for (const [key, expected] of Object.entries(input.properties ?? {})) {
     const supplied = output.properties?.[key];
     if (supplied && !dataContractFits(supplied, expected)) return false;
-    if (!supplied && input.required?.includes(key)) return false;
+    if (!supplied) return false;
   }
   return true;
 }
@@ -60,6 +60,32 @@ export const NodeSelectionEvidenceSchema = z.object({
   model_alias: ModelAliasSchema.optional(), tool_name: ToolNameSchema.optional(),
 }).strict();
 export type NodeSelectionEvidence = z.infer<typeof NodeSelectionEvidenceSchema>;
+
+export const NodeOverrideRequestSchema = z.object({
+  nodeKey: z.string().min(1).max(128),
+  choice: NodeOverrideChoiceSchema,
+  dag: z.unknown().refine(value => value !== undefined, "Graph snapshot is required"),
+}).strict();
+export type NodeOverrideRequest = z.infer<typeof NodeOverrideRequestSchema>;
+
+export const NodeOverrideSafeguardsSchema=z.object({approval_required:z.boolean()}).strict();
+export type NodeOverrideSafeguards=z.infer<typeof NodeOverrideSafeguardsSchema>;
+
+export const NodeOverrideComparisonSchema = z.object({
+  nodeKey: z.string().min(1), choice: NodeOverrideChoiceSchema,
+  approval_required:z.boolean(),
+  original: z.object({choice:NodeOverrideChoiceSchema.nullable(),selection:NodeSelectionEvidenceSchema.nullable()}).strict(),
+  candidate: z.object({
+    record_id:z.string().min(1),version:z.number().int().positive(),kind:z.enum(["agent","model","tool","connector","execution"]),
+    source_node_key:z.string().min(1),rationale:z.string().min(1),score:z.number().finite().min(0).max(1).nullable(),
+    factors:z.record(z.string(),z.number().finite()).nullable(),output_contract:z.unknown().nullable(),
+  }).strict().nullable(),
+  warnings:z.array(z.object({code:z.string().min(1),message:z.string().min(1)}).strict()),
+  cost:z.object({currency:z.literal("INR"),before_minor:z.number().int().nonnegative().nullable(),after_minor:z.number().int().nonnegative().nullable()}).strict(),
+  validation:z.object({valid:z.boolean(),errors:z.array(z.string())}).strict(),
+  data_contract:z.object({output:DataContractSchema.optional(),inputs:z.record(z.string(),DataContractSchema).optional()}).strict().nullable(),
+}).strict();
+export type NodeOverrideComparison = z.infer<typeof NodeOverrideComparisonSchema>;
 
 export function applyNodeOverride(config: Record<string, unknown>, choice: NodeOverrideChoice): Record<string, unknown> {
   return choice.kind === "model" ? {...config, model_alias:choice.value, manual_model_override:true}

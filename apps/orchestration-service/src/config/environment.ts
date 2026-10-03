@@ -1,4 +1,13 @@
 import { createEnvironmentValidators } from "@alterx/adapters";
+import { NodeOverrideThresholdsSchema, type NodeOverrideThresholds } from "@alterx/contracts";
+
+export function loadNodeOverrideThresholds(environment:NodeJS.ProcessEnv):NodeOverrideThresholds {
+  try {
+    return NodeOverrideThresholdsSchema.parse(JSON.parse(environment.NODE_OVERRIDE_ADVISORY_THRESHOLDS?.trim() || "{}"));
+  } catch {
+    throw new ConversationManagerConfigurationError("NODE_OVERRIDE_ADVISORY_THRESHOLDS","must be valid advisory threshold JSON");
+  }
+}
 
 // Config for the Conversation Manager (INGR-4) only. Session Gateway's own
 // config stays inline in app.module.ts (INGR-2, untouched) -- this file

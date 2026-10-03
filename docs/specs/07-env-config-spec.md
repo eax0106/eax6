@@ -103,6 +103,15 @@ LOG_LEVEL
 
 **platform-api:** `DATABASE_SECRET_REF (platform_db)`, `IDP_ISSUER_URL`, `IDP_AUDIENCE`, `ACTOR_TOKEN_SIGNING_KEY_REF`, `REDIS_ENDPOINT_PARAM`
 **orchestration-service:** `DATABASE_SECRET_REF (orchestration_db)`, `TEMPORAL_ADDRESS_PARAM`, `TEMPORAL_NAMESPACE`, `TEMPORAL_API_KEY_REF`, `EVENTBUS_NAME_PARAM`, `REDIS_ENDPOINT_PARAM`
+
+D20 node override advice also accepts `NODE_OVERRIDE_ADVISORY_THRESHOLDS`, a
+validated JSON object read at startup. Defaults are
+`{"costIncreaseRatio":0.25,"costIncreaseMinor":500,"latencyMultiplier":2}`;
+the cost warning requires both the ratio and the absolute increase in INR paise.
+Unknown fields, negative cost thresholds and latency multipliers below one fail
+startup. Provider critique uses the existing `PLANNER_BASE_URL` intelligence
+endpoint and `INTERNAL_SERVICE_TOKEN`; D4 prices use the existing model policy
+and Cost Ledger adapters. Workspace/workflow approval rules remain authoritative.
 **event-trigger-gateway:** `DATABASE_SECRET_REF (orchestration_db triggers scope)`, `WEBHOOK_SIGNING_SECRET_REFS_PREFIX`, `EVENTBUS_NAME_PARAM`, `SQS_FIFO_URL_PARAM`, `TEMPORAL_ADDRESS_PARAM`
 **intelligence-service (Python):** `DATABASE_SECRET_REF (intelligence_db)`, `MODEL_GATEWAY_GRPC_ADDR`, `ADSQ_GRPC_ADDR`
 **model-gateway (+cache):** `BEDROCK_ROLE_REF`, `ANTHROPIC_API_KEY_REF`, `OPENAI_API_KEY_REF`, `PRESIDIO_ENDPOINT_PARAM`, `REDIS_ENDPOINT_PARAM`, `DATABASE_SECRET_REF (cache vectors)`, `COST_QUEUE_URL_PARAM`

@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { CompiledDagSchema, WorkflowHealthResourceSchema, WorkflowHealthPageSchema } from "@alterx/contracts";
-import { Injectable } from "@nestjs/common";
+import { CompiledDagSchema, NodeOverrideComparisonSchema, hasExternalSideEffect, withNodeOverrideSafeguards, type NodeOverrideSafeguards, type NodeOverrideRequest, WorkflowHealthResourceSchema, WorkflowHealthPageSchema } from "@alterx/contracts";
+import { Injectable, Optional } from "@nestjs/common";
+import { z } from "zod";
+import { WorkflowSafeguardsService } from "../planner-facade/workflow-safeguards.service";
 import type { JsonValue } from "@alterx/shared-clients";
 import {
   EngineClient,
@@ -36,7 +38,15 @@ import {
 
 @Injectable()
 export class WorkflowService {
-  constructor(private readonly engine: EngineClient) {}
+  constructor(private readonly engine: EngineClient,@Optional() private readonly safeguards?:WorkflowSafeguardsService) {}
+
+  async compareNodeOverride(workflowId:string,input:NodeOverrideRequest,actor:ActorContext,traceparent:string|undefined,idempotencyKey:string) {
+    const instance=`/api/v1/workflows/${workflowId}/node-overrides/compare`;
+    const id=parseWorkflowId(workflowId,instance);
+    const overrideSafeguards=await this.nodeOverrideSafeguards(id,input.dag,actor,input.choice.kind === "tool" && hasExternalSideEffect(input.choice.value));
+    const result=await this.engine.post(`/api/v1/workflows/${encodeURIComponent(id)}/node-overrides/compare`,jsonBody({...input,...(overrideSafeguards ? {overrideSafeguards} : {})}),callerContext(actor,traceparent,instance),{idempotencyKey});
+    return NodeOverrideComparisonSchema.parse(result.body);
+  }
 
   create(
     input: CreateWorkflowInput,
@@ -119,7 +129,7 @@ export class WorkflowService {
       jsonBody(input), callerContext(actor, traceparent, instance), { idempotencyKey, ifMatch });
   }
 
-  saveCanvas(
+  async saveCanvas(
     workflowId: string,
     input: SaveCanvasInput,
     actor: ActorContext,
@@ -129,9 +139,11 @@ export class WorkflowService {
   ): Promise<EngineResponse<WorkflowResource>> {
     const instance = `/api/v1/workflows/${workflowId}`;
     const id = parseWorkflowId(workflowId, instance);
+    const overrideSafeguards=await this.nodeOverrideSafeguards(id,input.dag,actor);
+    const dag=parseWorkflowInput(CompiledDagSchema,withNodeOverrideSafeguards(input.dag,overrideSafeguards?.approval_required ?? true),instance);
     return this.engine.patch(
       `/api/v1/workflows/${encodeURIComponent(id)}`,
-      jsonBody(input),
+      jsonBody({dag,...(overrideSafeguards ? {overrideSafeguards} : {})}),
       callerContext(actor, traceparent, instance),
       { idempotencyKey, ifMatch },
     );
@@ -153,7 +165,7 @@ export class WorkflowService {
     );
   }
 
-  action(
+  async action(
     workflowId: string,
     action:
       | "validate"
@@ -171,12 +183,23 @@ export class WorkflowService {
   ): Promise<EngineResponse<WorkflowActionResult>> {
     const instance = `/api/v1/workflows/${workflowId}/actions/${action}`;
     const id = parseWorkflowId(workflowId, instance);
+    const overrideSafeguards=action === "compile" ? await this.nodeOverrideSafeguards(id,(await this.get(id,actor,traceparent)).body.dag,actor) : undefined;
     return this.engine.post(
       `/api/v1/workflows/${encodeURIComponent(id)}/actions/${action}`,
-      jsonBody(input),
+      jsonBody({...input,...(overrideSafeguards ? {overrideSafeguards} : {})}),
       callerContext(actor, traceparent, instance),
       { idempotencyKey },
     );
+  }
+
+  private async nodeOverrideSafeguards(workflowId:string,raw:unknown,actor:ActorContext,proposedOutside=false):Promise<NodeOverrideSafeguards|undefined> {
+    if (raw === undefined && !proposedOutside) return undefined;
+    const dag=parseWorkflowInput(z.object(CompiledDagSchema.shape).strict(),raw,`/api/v1/workflows/${workflowId}`);
+    if (!proposedOutside && !dag.nodes.some(node=>node.config.manual_tool_override === true && hasExternalSideEffect(String(node.config.tool_name)))) return undefined;
+    if (!this.safeguards) throw new WorkflowHttpError(400,"OVERRIDE_SAFEGUARDS_UNAVAILABLE","Current workspace safeguards could not be read",`/api/v1/workflows/${workflowId}`);
+    const workspaceId=callerContext(actor,undefined,`/api/v1/workflows/${workflowId}`).workspaceId;
+    const effective=await this.safeguards.effectiveFor(actor.tenant_id,workspaceId,workflowId);
+    return {approval_required:effective.approve_external_actions || effective.customer_visible};
   }
 
   /**

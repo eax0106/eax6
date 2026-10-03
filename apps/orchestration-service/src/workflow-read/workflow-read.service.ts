@@ -1,7 +1,9 @@
-import { CompiledDagSchema, TenantIdSchema, UserIdSchema, WorkflowIdSchema } from "@alterx/contracts";
+import { CompiledDagSchema, NodeOverrideSafeguardsSchema, withNodeOverrideSafeguards, TenantIdSchema, UserIdSchema, WorkflowIdSchema } from "@alterx/contracts";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { ensureWorkflowChat } from "../workflow-chat/persistence";
 import { preflightConnections } from "../connections/connection-preflight";
+import { preserveOriginalSelections } from "../node-overrides/original-selection";
 
 export class WorkflowNotFoundError extends Error {
   constructor(workflowId: string) {
@@ -38,6 +40,7 @@ export interface UpdateWorkflowRequest {
   readonly name?: string;
   readonly status?: WorkflowStatus;
   readonly dag?: unknown;
+  readonly overrideSafeguards?:unknown;
 }
 
 export interface CreateWorkflowRequest {
@@ -367,7 +370,7 @@ export class WorkflowReadService {
       throw new WorkflowValidationError("status must be one of draft, active, archived, paused");
     }
     if (request.dag !== undefined) {
-      const parsed = CompiledDagSchema.safeParse(request.dag);
+      const parsed = z.object(CompiledDagSchema.shape).strict().safeParse(request.dag);
       if (!parsed.success) {
         throw new WorkflowValidationError(
           `dag is invalid: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
@@ -376,6 +379,18 @@ export class WorkflowReadService {
     }
     const bareTenant = bareTenantUuid(request.tenantId);
     return this.store.withTenant(bareTenant, async (tx) => {
+      let dag=request.dag === undefined ? undefined : z.object(CompiledDagSchema.shape).strict().parse(request.dag);
+      if (dag !== undefined) {
+        const owner=await tx.query("SELECT id FROM workflows WHERE tenant_id = $1 AND id = $2 FOR UPDATE",[bareTenant,request.workflowId]);
+        if (!owner.rowCount) throw new WorkflowNotFoundError(request.workflowId);
+        const version=await tx.query<{compiled_dag:unknown}>("SELECT compiled_dag FROM workflow_versions WHERE tenant_id=$1 AND workflow_id=$2 ORDER BY version DESC LIMIT 1",[bareTenant,request.workflowId]);
+        dag=preserveOriginalSelections(dag,version.rows[0] ? CompiledDagSchema.parse(version.rows[0].compiled_dag) : undefined);
+        const policy=NodeOverrideSafeguardsSchema.safeParse(request.overrideSafeguards ?? {approval_required:true});
+        if (!policy.success) throw new WorkflowValidationError("Invalid node override safeguards");
+        dag=withNodeOverrideSafeguards(dag,policy.data.approval_required);
+        const valid=CompiledDagSchema.safeParse(dag);
+        if (!valid.success) throw new WorkflowValidationError(`dag is invalid: ${valid.error.issues.map(issue=>issue.message).join("; ")}`);
+      }
       const result = await tx.query<WorkflowRow>(
         `UPDATE workflows
          SET name = COALESCE($3, name),
@@ -389,7 +404,7 @@ export class WorkflowReadService {
           request.workflowId,
           request.name ?? null,
           request.status ?? null,
-          request.dag === undefined ? null : JSON.stringify(request.dag),
+          dag === undefined ? null : JSON.stringify(dag),
         ],
       );
       const row = result.rows[0];
@@ -409,17 +424,22 @@ export class WorkflowReadService {
     };
   }
 
-  async compileWorkflow(tenantId: string, workflowId: string): Promise<WorkflowVersion> {
-    const draftDag = await this.#requireDraftDag(tenantId, workflowId);
-    const parsed = CompiledDagSchema.safeParse(draftDag);
-    if (!parsed.success) {
-      throw new WorkflowValidationError(
-        `Cannot compile an invalid dag: ${parsed.error.issues.map((issue) => issue.message).join("; ")}`,
-      );
-    }
+  async compileWorkflow(tenantId: string, workflowId: string,overrideSafeguards?:unknown): Promise<WorkflowVersion> {
     const bareTenant = bareTenantUuid(tenantId);
     return this.store.withTenant(bareTenant, async (tx) => {
-      await preflightConnections(tx, bareTenant, workflowId, parsed.data);
+      const owner=await tx.query<{draft_dag:unknown}>("SELECT draft_dag FROM workflows WHERE tenant_id=$1 AND id=$2 FOR UPDATE",[bareTenant,workflowId]);
+      const draftDag=owner.rows[0]?.draft_dag;
+      if (!owner.rows[0]) throw new WorkflowNotFoundError(workflowId);
+      if (draftDag === null || draftDag === undefined) throw new WorkflowValidationError("Workflow has no saved canvas to validate -- save the builder canvas first");
+      const parsed=z.object(CompiledDagSchema.shape).strict().safeParse(draftDag);
+      if (!parsed.success) throw new WorkflowValidationError(`Cannot compile an invalid dag: ${parsed.error.issues.map(issue=>issue.message).join("; ")}`);
+      const version=await tx.query<{compiled_dag:unknown}>("SELECT compiled_dag FROM workflow_versions WHERE tenant_id=$1 AND workflow_id=$2 ORDER BY version DESC LIMIT 1",[bareTenant,workflowId]);
+      const policy=NodeOverrideSafeguardsSchema.safeParse(overrideSafeguards ?? {approval_required:true});
+      if (!policy.success) throw new WorkflowValidationError("Invalid node override safeguards");
+      const dag=withNodeOverrideSafeguards(preserveOriginalSelections(parsed.data,version.rows[0] ? CompiledDagSchema.parse(version.rows[0].compiled_dag) : undefined),policy.data.approval_required);
+      const valid=CompiledDagSchema.safeParse(dag);
+      if (!valid.success) throw new WorkflowValidationError(`Cannot compile an invalid dag: ${valid.error.issues.map(issue=>issue.message).join("; ")}`);
+      await preflightConnections(tx, bareTenant, workflowId, dag);
       const nextVersionResult = await tx.query<{ next: number }>(
         `SELECT COALESCE(MAX(version), 0) + 1 AS next FROM workflow_versions WHERE tenant_id = $1 AND workflow_id = $2`,
         [bareTenant, workflowId],
@@ -430,7 +450,7 @@ export class WorkflowReadService {
         `INSERT INTO workflow_versions (id, tenant_id, workflow_id, version, compiled_dag, dag_schema_version, status)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6, 'compiled')
          RETURNING id, tenant_id, workflow_id, version, compiled_dag, dag_schema_version, status, created_at`,
-        [versionId, bareTenant, workflowId, nextVersion, JSON.stringify(parsed.data), parsed.data.schema_version],
+        [versionId, bareTenant, workflowId, nextVersion, JSON.stringify(dag), dag.schema_version],
       );
       const row = result.rows[0];
       if (row === undefined) {

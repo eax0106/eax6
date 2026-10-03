@@ -63,6 +63,7 @@ from src.selection_binding.models import (
 )
 from src.selection_binding.override_critique import critique_override
 from src.selection_binding.policy_client import HttpRoutingPolicyClient, RoutingPolicyClient
+from src.service_auth import fastapi_dependency
 
 _default_embedding_client: EmbeddingClient | None = None
 _default_policy_client: HttpRoutingPolicyClient | None = None
@@ -238,7 +239,11 @@ async def bind_architecture(
         raise
 
 
-@router.post("/critique-override", response_model=OverrideCritiqueResponse)
+@router.post(
+    "/critique-override",
+    response_model=OverrideCritiqueResponse,
+    dependencies=[fastapi_dependency()],
+)
 async def critique_node_override(
     request: OverrideCritiqueRequest, session: SessionDep
 ) -> OverrideCritiqueResponse:

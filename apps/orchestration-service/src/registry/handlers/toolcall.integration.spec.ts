@@ -5,7 +5,7 @@ import { createServer, type Server } from "node:http";
 import { createServer as createTcpServer } from "node:net";
 import { resolve } from "node:path";
 
-import { ProblemDetailsSchema } from "@alterx/contracts";
+import { ProblemDetailsSchema, applyNodeOverride } from "@alterx/contracts";
 import { ToolGatewayClient } from "@alterx/adapters";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -167,6 +167,20 @@ describe("ToolCallHandler real Tool Gateway boundary", () => {
     });
     expect(details.trace_id).toMatch(/^trc_/);
     expect(details.request_id).toMatch(/^req_/);
+  });
+
+  it("routes a canonical manual tool change through authenticated Tool Gateway and retains credential validation", async () => {
+    const initial = executionContext("email.send", { query: "Manual search", maxResults: 2 });
+    const config = applyNodeOverride(initial.config, { kind: "tool", value: "search.web" });
+    const result = await handler.execute({ ...initial, config });
+    expect(config).toMatchObject({ tool_name: "search.web", manual_tool_override: true });
+    expect(result.output).toMatchObject({ results: [expect.objectContaining({ title: "AlterX result" })] });
+    expect(result.metadata?.["audit_id"]).toMatch(/^aud_/);
+    expect(tavilyRequests).toContainEqual({ api_key: FIXTURE_TAVILY_API_KEY, query: "Manual search", max_results: 2 });
+    const calls = tavilyRequests.length;
+    const invalid = await handler.execute({ ...initial, config: { ...config, credential_ref: "unresolved" } });
+    expect(ProblemDetailsSchema.parse(invalid.output)).toMatchObject({ status: 400, error_code: "TOOL_CALL_VALIDATION_FAILED" });
+    expect(tavilyRequests).toHaveLength(calls);
   });
 });
 

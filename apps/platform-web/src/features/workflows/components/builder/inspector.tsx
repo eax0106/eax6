@@ -1,4 +1,5 @@
 import { ApprovalPolicyControls } from "../approval-policy-controls"
+import { NodeOverrideControls } from "./node-override-controls"
 import { X, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -18,6 +19,7 @@ export function Inspector() {
 
   const node = nodes.find(n => n.id === selectedNodeId)
   const nodeDef = nodeTypes?.find(nt => nt.type === node?.type)
+  const configFields = (nodeDef?.configSchema as any)?.properties ?? nodeDef?.configSchema
 
   if (!node) {
     return null
@@ -45,6 +47,7 @@ export function Inspector() {
         )}
 
         {node.type === "HumanApproval" && workflowId && <ApprovalPolicyControls workflowId={workflowId} nodeKey={node.id} />}
+        {(node.type === "LLMTask" || node.type === "ToolCall") && workflowId && <NodeOverrideControls key={node.id} workflowId={workflowId} nodeKey={node.id} />}
 
         <div className="space-y-4">
           <h4 className="text-sm font-medium">Configuration</h4>
@@ -57,17 +60,23 @@ export function Inspector() {
             />
           </div>
 
-          {nodeDef?.configSchema && Object.entries(nodeDef.configSchema).map(([key, schema]: [string, any]) => (
+          {configFields && Object.entries(configFields).filter(([key]) =>
+            !(node.type === "LLMTask" && key === "model_alias") && !(node.type === "ToolCall" && key === "tool_name")).map(([key, schema]: [string, any]) => (
             <div key={key} className="space-y-2">
-              <Label>{schema.label || key}</Label>
-              <Input 
-                value={String(node.data[key] || schema.default || "")}
-                onChange={(e) => updateNodeData(node.id, { [key]: e.target.value })}
-              />
+              <Label htmlFor={`node-config-${key}`}>{schema.label || key}</Label>
+              {schema.type === "object" || schema.type === "array" ? <>
+                <textarea id={`node-config-${key}`} className="w-full rounded border border-border bg-surface p-2 text-sm" rows={4}
+                  value={typeof node.data[key] === "string" ? node.data[key] : JSON.stringify(node.data[key] ?? schema.default ?? (schema.type === "array" ? [] : {}), null, 2)}
+                  onChange={event => { let value:unknown=event.target.value; try { value=JSON.parse(event.target.value) } catch { /* Retain the invalid text so validation can report it. */ } updateNodeData(node.id,{[key]:value}) }} />
+                {typeof node.data[key] === "string" && <p role="alert">Enter valid {schema.type} JSON.</p>}
+              </> : <Input id={`node-config-${key}`} type={schema.type === "number" || schema.type === "integer" ? "number" : "text"}
+                value={String(node.data[key] ?? schema.default ?? "")}
+                onChange={(event) => updateNodeData(node.id, { [key]: schema.type === "number" || schema.type === "integer" ? Number(event.target.value) : event.target.value })}
+              />}
             </div>
           ))}
 
-          {(!nodeDef?.configSchema || Object.keys(nodeDef.configSchema).length === 0) && (
+          {(!configFields || Object.keys(configFields).length === 0) && (
             <p className="text-xs text-muted-foreground italic">No configuration required.</p>
           )}
         </div>

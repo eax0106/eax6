@@ -423,6 +423,7 @@ export type {
 } from "./generated/alter/eval/v1/eval";
 export {
   CompiledDagSchema,
+  withNodeOverrideSafeguards,
   NodeRequirementsSchema,
   NodeTypeSchema,
   PolicyBindingsSchema,

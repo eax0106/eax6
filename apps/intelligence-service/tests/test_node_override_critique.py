@@ -1,5 +1,7 @@
 """D20 rule cases against the real route; registry storage is the controlled edge."""
 
+import hashlib
+import secrets
 from collections.abc import AsyncGenerator
 from typing import Any, cast
 
@@ -83,6 +85,11 @@ def payload(kind: str = "model", value: str = "FAST") -> dict[str, object]:
 @pytest.fixture
 def app(monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     application = FastAPI()
+    application.state.service_token = secrets.token_urlsafe(32)
+    monkeypatch.setenv(
+        "INTERNAL_SERVICE_TOKEN_SHA256",
+        hashlib.sha256(application.state.service_token.encode()).hexdigest(),
+    )
     application.include_router(router)
 
     async def session() -> AsyncGenerator[object, None]:
@@ -104,7 +111,11 @@ def call(
         lambda _: Registry(original, candidate),
     )
     with TestClient(app) as client:
-        response = client.post("/selection-binding/critique-override", json=request or payload())
+        response = client.post(
+            "/selection-binding/critique-override",
+            json=request or payload(),
+            headers={"Authorization": f"Bearer {app.state.service_token}"},
+        )
     assert response.status_code == 200, response.text
     return cast(dict[str, Any], response.json())
 
@@ -196,3 +207,26 @@ def test_uses_configured_latency_threshold_and_keeps_provider_contract_facts(
     selected = result["candidate"]
     assert isinstance(selected, dict)
     assert selected["output_contract"]["properties"]["summary"]["type"] == "string"
+
+
+def test_requires_the_existing_internal_service_credential(app: FastAPI) -> None:
+    with TestClient(app) as client:
+        response = client.post("/selection-binding/critique-override", json=payload())
+    assert response.status_code == 401
+
+
+def test_missing_original_weights_leave_candidate_score_unknown(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request = payload()
+    request["policy"] = None
+    result = call(
+        app,
+        monkeypatch,
+        record("original"),
+        record("candidate", metadata={"model_alias": "FAST"}),
+        request,
+    )
+    assert result["candidate"]["score"] is None
+    assert result["candidate"]["factors"] is None
+    assert "facts_unavailable" in {warning["code"] for warning in result["warnings"]}
