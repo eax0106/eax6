@@ -1,4 +1,4 @@
-import { ModelAliasSchema, type NodeType } from "@alterx/contracts";
+import { ModelAliasSchema, selectedModelAlias, type NodeType } from "@alterx/contracts";
 import type { ModelGatewayHandler, ModelGatewayStreamHandler } from "@alterx/adapters";
 import { ModelGatewayInvalidResponseError } from "@alterx/shared-clients";
 
@@ -64,11 +64,8 @@ export class LlmTaskHandler implements NodeHandler {
   constructor(private readonly modelGateway: ModelGatewayHandler) {}
 
   async execute(context: NodeExecutionContext): Promise<NodeExecutionResult> {
-    // Selection & Binding's ranked match (resolved fresh by Nodeexec, see
-    // NodeExecutionContext.bound_model_alias) takes priority over the
-    // compiled config's static alias whenever a real binding was found --
-    // absent it, this is unchanged EXEC-2 behavior.
-    const modelAlias = context.bound_model_alias ?? context.config["model_alias"];
+    // An explicit manual choice wins; automatic nodes keep runtime binding.
+    const modelAlias = selectedModelAlias(context.config, context.bound_model_alias);
     const aliasResult = ModelAliasSchema.safeParse(modelAlias);
     if (!aliasResult.success) {
       throw new NodeHandlerValidationError(

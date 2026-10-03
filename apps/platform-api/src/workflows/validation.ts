@@ -17,7 +17,7 @@ export const createWorkflowSchema = z
 
 export const saveCanvasSchema = z
   .object({
-    dag: CompiledDagSchema,
+    dag: z.object(CompiledDagSchema.shape).strict(),
   })
   .strict();
 

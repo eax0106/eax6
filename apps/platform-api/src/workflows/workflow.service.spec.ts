@@ -8,6 +8,7 @@ import type {
 } from "../engine";
 import type { ActorContext } from "../rbac/types";
 import { WorkflowService } from "./workflow.service";
+import type { WorkflowSafeguardsService } from "../planner-facade/workflow-safeguards.service";
 
 const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc";
 const traceparent =
@@ -23,6 +24,73 @@ const actor: ActorContext = {
 };
 
 describe("WorkflowService", () => {
+  it("compares models without outside-action rules and rereads rules for proposed outside tools", async () => {
+    const engine = engineStub();
+    const effectiveFor = vi.fn().mockResolvedValue({ approve_external_actions: true, customer_visible: false });
+    const service = new WorkflowService(engine.value, { effectiveFor } as unknown as WorkflowSafeguardsService);
+    const dag = outsideDag();
+    dag.nodes[2]!.config = { tool_name: "search.web" };
+    const comparison = { nodeKey: "send", choice: { kind: "model", value: "STANDARD" }, approval_required: true,
+      original: { choice: null, selection: null }, candidate: null, warnings: [],
+      cost: { currency: "INR", before_minor: null, after_minor: null }, validation: { valid: true, errors: [] }, data_contract: null };
+    engine.post.mockResolvedValue({ status: 200, body: comparison });
+    expect(await service.compareNodeOverride(workflowId, { nodeKey: "send", choice: { kind: "model", value: "STANDARD" }, dag }, actor, traceparent, "model")).toEqual(comparison);
+    expect(effectiveFor).not.toHaveBeenCalled();
+    expect(engine.post).toHaveBeenLastCalledWith(`/api/v1/workflows/${workflowId}/node-overrides/compare`,
+      { nodeKey: "send", choice: { kind: "model", value: "STANDARD" }, dag }, expectedContext(), { idempotencyKey: "model" });
+    const choice = { kind: "tool", value: "email.send" } as const;
+    engine.post.mockResolvedValue({ status: 200, body: { ...comparison, choice } });
+    await service.compareNodeOverride(workflowId, { nodeKey: "send", choice, dag }, actor, traceparent, "tool");
+    expect(effectiveFor).toHaveBeenCalledWith(actor.tenant_id, actor.workspace_id, workflowId);
+    expect(engine.post).toHaveBeenLastCalledWith(`/api/v1/workflows/${workflowId}/node-overrides/compare`,
+      { nodeKey: "send", choice, dag, overrideSafeguards: { approval_required: true } }, expectedContext(), { idempotencyKey: "tool" });
+  });
+
+  it("refuses outside changes when current safeguards cannot be read", async () => {
+    const engine = engineStub();
+    const service = new WorkflowService(engine.value);
+    await expect(service.saveCanvas(workflowId, { dag: outsideDag() }, actor, traceparent, "save", '"etag"'))
+      .rejects.toMatchObject({ response: expect.objectContaining({ error_code: "OVERRIDE_SAFEGUARDS_UNAVAILABLE", status: 400 }) });
+    expect(engine.patch).not.toHaveBeenCalled();
+    expect(engine.post).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [false, false, false],
+    [true, false, true],
+    [false, true, true],
+  ])("uses current workspace/workflow approval rules for a manual outside choice (%s, %s)", async (approveExternal, customerVisible, required) => {
+    const engine = engineStub();
+    const effectiveFor = vi.fn().mockResolvedValue({ approve_external_actions: approveExternal, customer_visible: customerVisible, contains_pii: false });
+    const service = new WorkflowService(engine.value, { effectiveFor } as unknown as WorkflowSafeguardsService);
+    const dag = outsideDag();
+    // The submitted snapshot carries the opposite rule. Only the current
+    // workspace/workflow setting decides whether an approval step is needed.
+    dag.nodes[2]!.metadata.override_safeguards = { approval_required: !required };
+    if (required) {
+      await expect(service.saveCanvas(workflowId, { dag }, actor, traceparent, "save", '"etag"')).rejects.toThrow(WorkflowHttpError);
+      expect(engine.patch).not.toHaveBeenCalled();
+    } else {
+      await service.saveCanvas(workflowId, { dag }, actor, traceparent, "save", '"etag"');
+      expect(engine.patch).toHaveBeenCalledWith(`/api/v1/workflows/${workflowId}`, expect.objectContaining({ overrideSafeguards: { approval_required: false }, dag: expect.objectContaining({ nodes: expect.arrayContaining([expect.objectContaining({ key: "send", metadata: expect.objectContaining({ override_safeguards: { approval_required: false } }) })]) }) }), expectedContext(), { idempotencyKey: "save", ifMatch: '"etag"' });
+    }
+    expect(effectiveFor).toHaveBeenCalledWith(actor.tenant_id, actor.workspace_id, workflowId);
+    effectiveFor.mockClear();
+    engine.get.mockResolvedValue({ status: 200, body: { dag } });
+    await service.action(workflowId, "compile", {}, actor, traceparent, "compile");
+    expect(effectiveFor).toHaveBeenCalledOnce();
+    expect(engine.post).toHaveBeenCalledWith(`/api/v1/workflows/${workflowId}/actions/compile`, { overrideSafeguards: { approval_required: required } }, expectedContext(), { idempotencyKey: "compile" });
+  });
+
+  it("keeps the normal verification boundary when approval is disabled", async () => {
+    const engine = engineStub();
+    const effectiveFor = vi.fn().mockResolvedValue({ approve_external_actions: false, customer_visible: false, contains_pii: false });
+    const service = new WorkflowService(engine.value, { effectiveFor } as unknown as WorkflowSafeguardsService);
+    const dag = outsideDag();
+    delete dag.nodes[1]!.config.verification;
+    await expect(service.saveCanvas(workflowId, { dag }, actor, traceparent, "save", '"etag"')).rejects.toThrow(WorkflowHttpError);
+    expect(engine.patch).not.toHaveBeenCalled();
+  });
   it("reads scoped workflow health and preserves list pagination", async () => {
     const engine = engineStub(), service = new WorkflowService(engine.value);
     const dimension = { score: null, status: "not_enough_data", summary: "No recorded evidence", observations: 0, passed: 0 };
@@ -296,6 +364,26 @@ function expectedContext(): EngineCallerContext {
     roles: actor.roles,
     permissions: actor.permissions,
     traceparent,
+  };
+}
+
+function outsideDag(): CompiledDag {
+  return {
+    schema_version: "v1", entry_node_keys: ["start"],
+    nodes: [
+      { key: "start", type: "LLMTask", config: { model_alias: "FAST" }, metadata: { ui: {} } },
+      { key: "verify", type: "Gate", config: { verification: { source_node_key: "start", protected_node_key: "send", policy: "provisional-quality-pass-and-noncritical-safety" } }, metadata: { ui: {} } },
+      { key: "send", type: "ToolCall", config: { tool_name: "email.send", manual_tool_override: true }, metadata: { ui: {} } },
+    ],
+    edges: [
+      { key: "prepare", from: "start", to: "verify", kind: "sequential" },
+      { key: "send-after-verification", from: "verify", to: "send", kind: "conditional", condition: { expression: "true", language: "cel" } },
+    ],
+    waves: [
+      { key: "first", order: 0, node_keys: ["start"], depends_on: [] },
+      { key: "verification", order: 1, node_keys: ["verify"], depends_on: ["first"] },
+      { key: "last", order: 2, node_keys: ["send"], depends_on: ["verification"] },
+    ],
   };
 }
 

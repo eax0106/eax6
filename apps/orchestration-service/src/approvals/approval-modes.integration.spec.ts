@@ -7,13 +7,15 @@ import {
 } from "@alterx/adapters";
 import { createExecutorTestHarness, type ExecutorTestHarness } from "@alterx/adapters/testing";
 import { createMockAuditEventHandler, type MockAuditEventHandler } from "@alterx/shared-clients";
-import type { NodeType } from "@alterx/contracts";
+import { CompiledDagSchema, applyNodeOverride, type CompiledDag, type NodeType } from "@alterx/contracts";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { compileArchitectureToDag } from "../compiler/architecture-dag-builder";
 import type { NodeExecutionResult, NodeHandler } from "../registry/handler";
 import { HumanApprovalHandler } from "../registry/handlers/human-approval.handler";
+import { GateHandler } from "../registry/handlers/gate.handler";
+import { MergeHandler } from "../registry/handlers/merge.handler";
 import { NodeHandlerRegistry } from "../registry/node-handler-registry";
 import { NodeexecService } from "../registry/nodeexec.service";
 import { NodeExecutionLedgerService } from "../runs/node-execution-ledger.service";
@@ -52,7 +54,7 @@ class SendStandIn implements NodeHandler {
   readonly nodeType: NodeType = "ToolCall";
   async execute(context: { readonly run_id?: string }): Promise<NodeExecutionResult> {
     sent.add(context.run_id ?? "");
-    return { output: { sent: true } };
+    return { output: { sent: true, messageId: `fixture-${context.run_id}` } };
   }
 }
 
@@ -126,6 +128,11 @@ describe.sequential("approval modes (D5), end to end", () => {
 
     const handlers = new NodeHandlerRegistry([
       new SendStandIn(),
+      new MergeHandler(),
+      new GateHandler({ findForSourceNode: async () => [
+        { gateType: "quality", verdict: "pass", score: .95, threshold: .7, details: {} },
+        { gateType: "safety", verdict: "pass", score: null, threshold: null, details: { severity: "low" } },
+      ] }),
       new HumanApprovalHandler({
         requestApproval: async (request) => {
           const created = await approvals.createPending(request);
@@ -162,7 +169,7 @@ describe.sequential("approval modes (D5), end to end", () => {
     return policies.set(TENANT_A, WORKSPACE, workflow, nodeKey, input, step.etag);
   }
 
-  async function startRun(workflow = WORKFLOW) {
+  async function startRun(workflow = WORKFLOW, manualDag?: CompiledDag) {
     const runId = `run_${uuidV7()}`;
     await admin.withTenant(TENANT_A, (tx) =>
       tx.query(
@@ -170,7 +177,7 @@ describe.sequential("approval modes (D5), end to end", () => {
         [runId, TENANT_A, WORKSPACE, workflow, `wfv_${workflow.slice(3)}`],
       ),
     );
-    const dag = workflow === WORKFLOW ? compiledDag : emailDag;
+    const dag = manualDag ?? (workflow === WORKFLOW ? compiledDag : emailDag);
     const result = harness.run(runId, { tenantId: `ten_${TENANT_A}`, runId, compiledDagJson: JSON.stringify(dag) });
     result.catch(() => undefined);
     return { runId, result };
@@ -237,6 +244,25 @@ describe.sequential("approval modes (D5), end to end", () => {
     const { runId, result } = await startRun();
     const approval = await approvalOf(runId);
     expect(approval).toMatchObject({ status: "pending", mode: "ask", policy_set_by: null });
+    expect(sent.has(runId)).toBe(false);
+    await approvals.decide(`ten_${TENANT_A}`, approval.id, "approved", APPROVER, undefined);
+    await expect(result).resolves.toBeDefined();
+    expect(sent.has(runId)).toBe(true);
+  }, 120_000);
+
+  it("a manual outside tool choice retains its real Temporal approval wait", async () => {
+    const verified = compileArchitectureToDag({
+      tenant_id: `ten_${TENANT_A}`, workspace_id: `ws_${WORKSPACE}`, workflow_id: EMAIL_WORKFLOW, dag_schema_version: "v1",
+      architecture: { status: "ready", version: "1", topology: "sequential",
+        boundaries: [{ kind: "human_approval", before_node_key: "send", reason: "approve outside action" }, { kind: "verification", before_node_key: "send", reason: "verify prepared output" }],
+        nodes: [{ source_node_key: "prepare", role: "deterministic", execution_kind: "control", source_node_type: "join", depends_on: [], config: {} }, { source_node_key: "send", role: "deterministic", execution_kind: "deterministic", source_node_type: "tool", depends_on: ["prepare"], config: { tool_name: "search.web" } }],
+        execution_waves: [{ order: 0, node_keys: ["prepare"], depends_on_wave_orders: [] }, { order: 1, node_keys: ["send"], depends_on_wave_orders: [0] }],
+      }, binding_decision: { status: "ready", bindings: [] },
+    });
+    const dag = CompiledDagSchema.parse({ ...verified, nodes: verified.nodes.map(node => node.key === "send" ? { ...node, config: applyNodeOverride(node.config, { kind: "tool", value: "email.send" }) } : node) });
+    const { runId, result } = await startRun(EMAIL_WORKFLOW, dag);
+    const approval = await approvalOf(runId);
+    expect(approval).toMatchObject({ status: "pending", mode: "ask" });
     expect(sent.has(runId)).toBe(false);
     await approvals.decide(`ten_${TENANT_A}`, approval.id, "approved", APPROVER, undefined);
     await expect(result).resolves.toBeDefined();

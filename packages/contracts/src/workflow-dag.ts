@@ -1,5 +1,8 @@
 import { z } from "./zod";
 import { ConnectionSecretReferenceSchema, ConnectorTypeSchema } from "./connection-registry";
+import { ModelAliasSchema } from "./model-alias-policy";
+import { ToolNameSchema, hasExternalSideEffect } from "./tool-names";
+import { DataContractSchema, NodeOverrideChoiceSchema, NodeOverrideSafeguardsSchema, NodeSelectionEvidenceSchema, dataContractFits } from "./node-overrides";
 import {
   AgentIdSchema,
   ArtifactIdSchema,
@@ -125,11 +128,26 @@ const WorkflowDagNodeSchema = z
     metadata: z
       .object({
         ui: z.record(z.string(), z.unknown()),
+        selection_binding: NodeSelectionEvidenceSchema.optional(),
+        original_choice: NodeOverrideChoiceSchema.optional(),
+        override_safeguards: NodeOverrideSafeguardsSchema.optional(),
+        data_contract: z.object({
+          output: DataContractSchema.optional(),
+          inputs: z.record(NodeKeySchema, DataContractSchema).optional(),
+        }).strict().optional(),
       })
       .passthrough(),
   })
   .strict()
   .superRefine(({ type, config }, context) => {
+    for (const [field, nodeType, valueSchema, valueField] of [
+      ["manual_model_override", "LLMTask", ModelAliasSchema, "model_alias"],
+      ["manual_tool_override", "ToolCall", ToolNameSchema, "tool_name"],
+    ] as const) {
+      if (config[field] !== undefined && (config[field] !== true || type !== nodeType || !valueSchema.safeParse(config[valueField]).success)) {
+        context.addIssue({code:"custom",message:`${field} requires ${nodeType} with a valid ${valueField}`,path:["config",field]});
+      }
+    }
     if (type !== "ToolCall" && type !== "SandboxExec" && type !== "MemoryWrite") {
       return;
     }
@@ -298,6 +316,63 @@ export const CompiledDagSchema = z
         path: ["waves"],
       });
     }
+    // Additive preflight for manual choices; legacy graphs keep their existing contract.
+    if (!nodes.some(node => node.config.manual_model_override === true || node.config.manual_tool_override === true)) return;
+    const outgoing = new Map(nodes.map(node => [node.key, [] as string[]]));
+    const incoming = new Map(nodes.map(node => [node.key, 0]));
+    for (const edge of edges) if (edge.kind !== "loop" && nodeKeys.has(edge.from) && nodeKeys.has(edge.to)) {
+      outgoing.get(edge.from)!.push(edge.to);
+      incoming.set(edge.to, incoming.get(edge.to)! + 1);
+    }
+    const ready = [...incoming].filter(([,count]) => count === 0).map(([key]) => key);
+    let resolved = 0;
+    for (let i = 0; i < ready.length; i++) {
+      resolved++;
+      for (const target of outgoing.get(ready[i]!) ?? []) {
+        const count = incoming.get(target)! - 1; incoming.set(target,count);
+        if (count === 0) ready.push(target);
+      }
+    }
+    if (resolved !== nodeKeys.size) context.addIssue({code:"custom",message:"Manual graph contains a non-loop cycle",path:["edges"]});
+    const reachable = new Set(entry_node_keys);
+    const pending = [...entry_node_keys];
+    for (let i = 0; i < pending.length; i++) for (const target of outgoing.get(pending[i]!) ?? []) if (!reachable.has(target)) {
+      reachable.add(target); pending.push(target);
+    }
+    for (const node of nodes) if (!reachable.has(node.key)) context.addIssue({code:"custom",message:`Node is unreachable from declared entries: ${node.key}`,path:["nodes"]});
+    const byKey = new Map(nodes.map(node => [node.key,node]));
+    const waveOrder=new Map(waves.flatMap(wave=>wave.node_keys.map(key=>[key,wave.order] as const)));
+    for (const edge of edges) if (edge.kind !== "loop" && (waveOrder.get(edge.from) ?? -1) >= (waveOrder.get(edge.to) ?? -1)) context.addIssue({code:"custom",message:`Execution waves must follow forward dependencies: ${edge.from} to ${edge.to}`,path:["waves"]});
+    for (const node of nodes) {
+      if (node.config.manual_tool_override !== true || !hasExternalSideEffect(String(node.config.tool_name))) continue;
+      const conditions = edges.filter(edge => edge.to === node.key && edge.kind === "conditional");
+      const gates = conditions.map(edge => byKey.get(edge.from));
+      const verification=gates[0]?.config.verification as Record<string,unknown> | undefined;
+      const guarded = gates.length === 1 && gates[0]?.type === "Gate" &&
+        verification?.protected_node_key === node.key && verification?.policy === "provisional-quality-pass-and-noncritical-safety" &&
+        typeof verification?.source_node_key === "string" && byKey.has(verification.source_node_key) && verification.source_node_key !== node.key;
+      const approvals = nodes.filter(item => item.type === "HumanApproval" &&
+        (item.config.requested_action as Record<string,unknown> | undefined)?.node_key === node.key);
+      const gateKey = gates[0]?.key;
+      const approved = gateKey !== undefined && approvals.some(approval => {
+        const descendants = new Set([approval.key]);
+        const queue = [approval.key];
+        for (let i=0;i<queue.length;i++) for (const target of outgoing.get(queue[i]!) ?? []) if (!descendants.has(target) && target !== node.key) {
+          descendants.add(target); queue.push(target);
+        }
+        return descendants.has(gateKey);
+      });
+      if (!guarded) context.addIssue({code:"custom",message:`Manual outside action needs its verification boundary: ${node.key}`,path:["nodes"]});
+      if (node.metadata.override_safeguards?.approval_required !== false && !approved) context.addIssue({code:"custom",message:`Manual outside action needs its required approval boundary: ${node.key}`,path:["nodes"]});
+    }
+    for (const node of nodes) for (const [source, input] of Object.entries(node.metadata.data_contract?.inputs ?? {})) {
+      if (!edges.some(edge => edge.from === source && edge.to === node.key)) {
+        context.addIssue({code:"custom",message:`Input contract has no upstream edge: ${source} to ${node.key}`,path:["nodes"]});
+        continue;
+      }
+      const output = byKey.get(source)?.metadata.data_contract?.output;
+      if (output && !dataContractFits(output,input)) context.addIssue({code:"custom",message:`Output contract does not fit downstream input: ${source} to ${node.key}`,path:["nodes"]});
+    }
   });
 
 export const NodeRequirementSchema = z
@@ -395,6 +470,14 @@ export type MemoryWriteCompiledConfig = z.infer<
   typeof MemoryWriteCompiledConfigSchema
 >;
 export type CompiledDag = z.infer<typeof CompiledDagSchema>;
+
+/** The public caller's current workspace/workflow rules replace client metadata. */
+export function withNodeOverrideSafeguards(dag:CompiledDag,approvalRequired:boolean):CompiledDag {
+  return {...dag,nodes:dag.nodes.map(node=>{
+    const metadata={...node.metadata}; delete metadata.override_safeguards;
+    return {...node,metadata:{...metadata,...(node.config.manual_tool_override === true && hasExternalSideEffect(String(node.config.tool_name)) ? {override_safeguards:{approval_required:approvalRequired}} : {})}};
+  })};
+}
 export type NodeRequirements = z.infer<typeof NodeRequirementsSchema>;
 export type PolicyBindings = z.infer<typeof PolicyBindingsSchema>;
 export type WorkflowDagDraft = z.infer<typeof WorkflowDagDraftSchema>;

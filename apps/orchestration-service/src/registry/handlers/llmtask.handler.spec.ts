@@ -100,6 +100,17 @@ describe("unwrapFencedJson", () => {
 });
 
 describe("LlmTaskHandler", () => {
+  it("honors a confirmed manual model alias while retaining bound agent instructions", async () => {
+    const invoke=vi.fn().mockResolvedValue({output_json:'{"summary":"ready"}',usage_json:"{}",estimated_cost_usd:""});
+    await new LlmTaskHandler(fakeGateway(invoke)).execute({
+      config:{model_alias:"FAST",manual_model_override:true,prompt:"Summarize invoices"},inputs:{},
+      tenant_id:TENANT_ID,run_id:RUN_ID,node_execution_id:NODE_EXECUTION_ID,
+      bound_model_alias:"CEILING",bound_agent_instructions:"Check invoice totals.",
+    });
+    expect(invoke).toHaveBeenCalledWith(expect.objectContaining({model_alias:"FAST"}));
+    expect(JSON.parse(invoke.mock.calls[0]![0].input_json).messages[0].content).toContain("Check invoice totals.");
+  });
+
   it("has nodeType LLMTask", () => {
     const handler = new LlmTaskHandler(fakeGateway(vi.fn()));
     expect(handler.nodeType).toBe("LLMTask");
