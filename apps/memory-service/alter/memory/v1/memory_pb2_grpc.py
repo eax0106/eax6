@@ -49,6 +49,31 @@ class MemoryServiceStub:
                 request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdatePolicyRequest.SerializeToString,
                 response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdatePolicyResponse.FromString,
                 _registered_method=True)
+        self.GetMemorySettings = channel.unary_unary(
+                '/alter.memory.v1.MemoryService/GetMemorySettings',
+                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryWorkspaceRequest.SerializeToString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+                _registered_method=True)
+        self.UpdateMemorySettings = channel.unary_unary(
+                '/alter.memory.v1.MemoryService/UpdateMemorySettings',
+                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsRequest.SerializeToString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+                _registered_method=True)
+        self.MemoryAccess = channel.unary_unary(
+                '/alter.memory.v1.MemoryService/MemoryAccess',
+                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryAccessRequest.SerializeToString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryAccessResponse.FromString,
+                _registered_method=True)
+        self.RecallChat = channel.unary_unary(
+                '/alter.memory.v1.MemoryService/RecallChat',
+                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatRequest.SerializeToString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+                _registered_method=True)
+        self.RecallWorkflow = channel.unary_unary(
+                '/alter.memory.v1.MemoryService/RecallWorkflow',
+                request_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowRequest.SerializeToString,
+                response_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+                _registered_method=True)
 
 
 class MemoryServiceServicer:
@@ -72,6 +97,36 @@ class MemoryServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetMemorySettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateMemorySettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def MemoryAccess(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecallChat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RecallWorkflow(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_MemoryServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -89,6 +144,31 @@ def add_MemoryServiceServicer_to_server(servicer, server):
                     servicer.UpdatePolicy,
                     request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdatePolicyRequest.FromString,
                     response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdatePolicyResponse.SerializeToString,
+            ),
+            'GetMemorySettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMemorySettings,
+                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryWorkspaceRequest.FromString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.SerializeToString,
+            ),
+            'UpdateMemorySettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateMemorySettings,
+                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsRequest.FromString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.SerializeToString,
+            ),
+            'MemoryAccess': grpc.unary_unary_rpc_method_handler(
+                    servicer.MemoryAccess,
+                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryAccessRequest.FromString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryAccessResponse.SerializeToString,
+            ),
+            'RecallChat': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecallChat,
+                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatRequest.FromString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.SerializeToString,
+            ),
+            'RecallWorkflow': grpc.unary_unary_rpc_method_handler(
+                    servicer.RecallWorkflow,
+                    request_deserializer=alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowRequest.FromString,
+                    response_serializer=alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -172,6 +252,141 @@ class MemoryService:
             '/alter.memory.v1.MemoryService/UpdatePolicy',
             alter_dot_memory_dot_v1_dot_memory__pb2.UpdatePolicyRequest.SerializeToString,
             alter_dot_memory_dot_v1_dot_memory__pb2.UpdatePolicyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMemorySettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/alter.memory.v1.MemoryService/GetMemorySettings',
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryWorkspaceRequest.SerializeToString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateMemorySettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/alter.memory.v1.MemoryService/UpdateMemorySettings',
+            alter_dot_memory_dot_v1_dot_memory__pb2.UpdateMemorySettingsRequest.SerializeToString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemorySettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def MemoryAccess(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/alter.memory.v1.MemoryService/MemoryAccess',
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryAccessRequest.SerializeToString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryAccessResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecallChat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/alter.memory.v1.MemoryService/RecallChat',
+            alter_dot_memory_dot_v1_dot_memory__pb2.RecallChatRequest.SerializeToString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RecallWorkflow(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/alter.memory.v1.MemoryService/RecallWorkflow',
+            alter_dot_memory_dot_v1_dot_memory__pb2.RecallWorkflowRequest.SerializeToString,
+            alter_dot_memory_dot_v1_dot_memory__pb2.MemoryRecallResponse.FromString,
             options,
             channel_credentials,
             insecure,

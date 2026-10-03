@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import get_settings
 from src.m2m_auth import lazy_auth0_m2m_token_provider_from_settings
+from src.memory_settings.redaction import GrpcMemoryRedactor, MemoryRedactionUnavailableError
 
 from .extraction import MemoryLearningKernel, MemoryLearningValidationError
 from .models import ProposeWritebackRequest, ProposeWritebackResponse
@@ -37,9 +38,13 @@ async def memory_learning_lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.orchestration_service_timeout_seconds,
         access_token_provider=lazy_auth0_m2m_token_provider_from_settings(settings),
     )
+    redactor = GrpcMemoryRedactor(
+        settings.model_gateway_grpc_target, lazy_auth0_m2m_token_provider_from_settings(settings)
+    )
     _default_kernel = MemoryLearningKernel(
         _default_client,
         SqlAlchemyMemoryCandidateRepository(sessions),
+        redactor.redact,
     )
     try:
         yield
@@ -47,6 +52,7 @@ async def memory_learning_lifespan(app: FastAPI) -> AsyncIterator[None]:
         _default_kernel = None
         await _default_client.close()
         _default_client = None
+        await redactor.close()
         engine.dispose()
 
 
@@ -81,4 +87,6 @@ async def propose_writeback(
     except MemoryLearningValidationError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     except OrchestrationUnavailableError as error:
+        raise HTTPException(status_code=502, detail=str(error)) from error
+    except MemoryRedactionUnavailableError as error:
         raise HTTPException(status_code=502, detail=str(error)) from error

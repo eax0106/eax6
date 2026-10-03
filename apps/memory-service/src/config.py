@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     intelligence_service_base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8000")
     intelligence_service_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
     internal_service_token: str = ""
+    model_gateway_grpc_target: str = "localhost:50051"
     ads_core_base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8000")
     ads_core_timeout_seconds: float = Field(default=5.0, gt=0, le=30)
     cost_ledger_service_base_url: AnyHttpUrl = AnyHttpUrl("http://127.0.0.1:8000")

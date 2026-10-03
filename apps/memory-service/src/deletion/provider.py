@@ -15,6 +15,9 @@ TABLES = (
     "memory_records",
     "policies",
     "policy_promotions",
+    "workspace_memory_settings",
+    "memory_settings_audit",
+    "memory_retention_tenants",
 )
 
 
@@ -54,6 +57,14 @@ class MemoryDeletionProvider:
                 ),
                 "policy_promotions": _scalar(session, _PROMOTIONS_COUNT, tenant),
             }
+            for table in (
+                "workspace_memory_settings",
+                "memory_settings_audit",
+                "memory_retention_tenants",
+            ):
+                counts[table] = _scalar(
+                    session, f"SELECT count(*) FROM {table} WHERE tenant_id=:t", tenant
+                )
         with self._system_sessions.begin() as session:
             counts["drift_scores"] = _scalar(
                 session, "SELECT count(*) FROM drift_scores WHERE tenant_id=:t", tenant
@@ -86,22 +97,41 @@ class MemoryDeletionProvider:
         )
 
     def apply_retention_policy(self) -> RetentionSweepResult:
+        deleted = 0
+        for tenant_id in self.list_subject_ids():
+            tenant = _tenant_uuid(tenant_id)
+            with self._sessions.begin() as session:
+                _set_tenant(session, tenant)
+                deleted += _rowcount(
+                    session.execute(
+                        text(
+                            "DELETE FROM memory_records m WHERE m.tenant_id=:t "
+                            "AND m.scope<>'global' "
+                            "AND m.created_at < now() - make_interval(days => COALESCE("
+                            "(SELECT s.retention_days FROM workspace_memory_settings s "
+                            "WHERE s.tenant_id=m.tenant_id AND s.workspace_id=m.workspace_id),90))"
+                        ),
+                        {"t": tenant},
+                    )
+                )
         return RetentionSweepResult(
-            store=STORE, deletedRows=0, deletedObjects=0, sweptAt=datetime.now(UTC).isoformat()
+            store=STORE,
+            deletedRows=deleted,
+            deletedObjects=0,
+            sweptAt=datetime.now(UTC).isoformat(),
         )
 
     def list_subject_ids(self) -> tuple[str, ...]:
-        """Tenants the system role can see.
+        """Enumerate tenant identifiers through the existing maintenance role.
 
-        Row security hides other tenants' memory and policies from every role in this
-        database, so the deletion-ledger replay covers the tenants that have agent drift
-        rows until a dedicated cross-tenant reader exists.
+        The index contains no memory content; the sweep opens each tenant's ordinary
+        RLS transaction. Inserts register their tenant, including default-settings writes.
         """
         with self._system_sessions.begin() as session:
             rows = session.scalars(
                 text(
-                    "SELECT DISTINCT tenant_id::text FROM drift_scores "
-                    "WHERE tenant_id IS NOT NULL ORDER BY 1"
+                    "SELECT tenant_id::text FROM drift_scores WHERE tenant_id IS NOT NULL "
+                    "UNION SELECT tenant_id::text FROM memory_retention_tenants ORDER BY 1"
                 )
             ).all()
         return tuple(f"ten_{value}" for value in rows)
@@ -117,6 +147,9 @@ _TENANT_DELETES = (
     "(SELECT id FROM policies WHERE scope='tenant' AND scope_id=:t)",
     "DELETE FROM policies WHERE scope='tenant' AND scope_id=:t",
     "DELETE FROM memory_records WHERE tenant_id=:t",
+    "DELETE FROM memory_settings_audit WHERE tenant_id=:t",
+    "DELETE FROM workspace_memory_settings WHERE tenant_id=:t",
+    "DELETE FROM memory_retention_tenants WHERE tenant_id=:t",
 )
 
 

@@ -771,13 +771,7 @@ export interface RetrievalResult {
   provenance: ProvenanceReference[]
 }
 
-export interface MemoryConfiguration {
-  conversationMemoryEnabled: boolean
-  workflowMemoryEnabled: boolean
-  workspaceMemoryEnabled: boolean
-  retentionDays?: number
-  allowSensitiveData?: boolean
-}
+export type MemoryConfiguration = import("@alterx/contracts").WorkspaceMemorySettings
 
 export type IntegrationCategory = "Communication" | "Productivity" | "Development" | "Data" | "CRM" | "Storage" | "AI" | "Other"
 

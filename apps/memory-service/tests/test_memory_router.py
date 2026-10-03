@@ -65,6 +65,7 @@ def test_route_matches_locked_proto_shape() -> None:
     assert response.json() == {
         "memory_id": "mem_018f4d6e-2b4a-7a3e-8c1a-1234567890af",
         "candidate_json": '{"ok":true}',
+        "skipped": False,
     }
 
 

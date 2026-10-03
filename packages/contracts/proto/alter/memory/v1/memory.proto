@@ -6,6 +6,11 @@ service MemoryService {
   rpc ProposeWriteback(ProposeWritebackRequest) returns (ProposeWritebackResponse);
   rpc PromoteMemory(PromoteMemoryRequest) returns (PromoteMemoryResponse);
   rpc UpdatePolicy(UpdatePolicyRequest) returns (UpdatePolicyResponse);
+  rpc GetMemorySettings(MemoryWorkspaceRequest) returns (MemorySettingsResponse);
+  rpc UpdateMemorySettings(UpdateMemorySettingsRequest) returns (MemorySettingsResponse);
+  rpc MemoryAccess(MemoryAccessRequest) returns (MemoryAccessResponse);
+  rpc RecallChat(RecallChatRequest) returns (MemoryRecallResponse);
+  rpc RecallWorkflow(RecallWorkflowRequest) returns (MemoryRecallResponse);
 }
 
 message ProposeWritebackRequest {
@@ -23,6 +28,7 @@ message ProposeWritebackResponse {
 
   string memory_id = 1; // mem_ prefixed UUIDv7
   string candidate_json = 2;
+  bool skipped = 3;
 }
 
 message PromoteMemoryRequest {
@@ -60,4 +66,50 @@ message UpdatePolicyResponse {
 
   string policy_id = 1; // pol_ prefixed UUIDv7
   string new_version = 2;
+}
+
+message MemoryWorkspaceRequest {
+  reserved 100 to 199;
+  string tenant_id = 1;
+  string workspace_id = 2;
+}
+message UpdateMemorySettingsRequest {
+  reserved 100 to 199;
+  string tenant_id = 1;
+  string workspace_id = 2;
+  string actor_id = 3;
+  string settings_json = 4;
+  string if_match = 5;
+}
+message MemorySettingsResponse {
+  reserved 100 to 199;
+  string settings_json = 1;
+}
+message MemoryAccessRequest {
+  reserved 100 to 199;
+  string tenant_id = 1;
+  string workspace_id = 2;
+  string kind = 3;
+}
+message MemoryAccessResponse {
+  reserved 100 to 199;
+  bool allowed = 1;
+  uint32 retention_days = 2;
+}
+message RecallChatRequest {
+  reserved 100 to 199;
+  string tenant_id = 1;
+  string workspace_id = 2;
+  string conversation_id = 3;
+  string messages_json = 4;
+}
+message RecallWorkflowRequest {
+  reserved 100 to 199;
+  string tenant_id = 1;
+  string workspace_id = 2;
+  string workflow_id = 3;
+}
+message MemoryRecallResponse {
+  reserved 100 to 199;
+  string memory_json = 1;
 }

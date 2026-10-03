@@ -158,6 +158,9 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "intelligence_db", schema: "public", table: "performance_records", owner: "intelligence-service", erasure: { kind: "provider", provider: "intelligence-service" } },
   { database: "policy_db", schema: "public", table: "drift_scores", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
   { database: "policy_db", schema: "public", table: "memory_records", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
+  { database: "policy_db", schema: "public", table: "memory_settings_audit", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
+  { database: "policy_db", schema: "public", table: "memory_retention_tenants", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
+  { database: "policy_db", schema: "public", table: "workspace_memory_settings", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
   { database: "policy_db", schema: "public", table: "policies", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
   { database: "policy_db", schema: "public", table: "policy_promotions", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
 ];

@@ -1,32 +1,35 @@
-# Gates: D19 runtime connection consumption (C108)
+# Gates: D12 memory switches and retention (C114)
 
-OWNS: apps/orchestration-service/src/health/health.controller.spec.ts, apps/orchestration-service/src/connections/**, apps/orchestration-service/src/operations.module.ts, apps/orchestration-service/src/registry/handlers/toolcall*, apps/orchestration-service/src/recovery/failure-classifier.ts, apps/orchestration-service/src/recovery/failure-classifier.spec.ts, apps/tool-gateway/src/**, packages/contracts/src/connection-registry.ts, packages/contracts/src/index.ts, packages/contracts/proto/alter/toolgw/v1/toolgw.proto, packages/contracts/src/generated/alter/toolgw/v1/toolgw.ts, packages/adapters/src/grpc/toolgw*, packages/adapters/src/index.ts, packages/adapters/src/testing/toolgw-credential-client.ts, packages/adapters/src/testing/index.ts, packages/adapters/src/aws/secrets-manager-provider*, apps/eval-service/alter/toolgw/v1/**, apps/eval-service/tests/test_orchestrator_integration.py, scripts/gates/baseline.json, .env.local.example, deploy/ec2/**, docs/work-queue.md
+OWNS: apps/model-gateway/src/gateway/memory-redaction-native.integration.spec.ts, apps/memory-service/**, apps/ads-core/src/config.py, apps/ads-core/src/ingestion/router.py, apps/ads-core/src/ingestion/embedding_client.py, apps/ads-core/src/memory_namespace/**, apps/ads-core/src/query/**, apps/ads-core/src/deletion/**, apps/ads-core/scripts/generate_protos.py, apps/ads-core/alter/memory/**, apps/ads-core/tests/test_memory_settings_integration.py, apps/ads-core/tests/test_memory_namespace.py, apps/platform-api/src/memory-settings/**, apps/platform-api/src/app.module.ts, apps/platform-api/src/workflow-chat/**, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/mock/data.ts, apps/platform-web/src/api/live-memory-settings.ts, apps/platform-web/src/api/live-memory-settings.spec.ts, apps/platform-web/src/features/knowledge/pages/memory-settings.tsx, apps/platform-web/src/features/knowledge/pages/memory-settings.spec.tsx, packages/contracts/proto/alter/memory/v1/memory.proto, packages/contracts/src/memory-settings.ts, packages/contracts/src/memory-settings.spec.ts, packages/contracts/src/index.ts, packages/adapters/src/grpc/memory-client.ts, packages/adapters/src/grpc/memory-client.spec.ts, packages/deletion-registry/src/declaration.ts, apps/orchestration-service/src/registry/run-finalization-memory-writer.ts, apps/orchestration-service/src/registry/run-finalization-memory-writer.spec.ts, apps/orchestration-service/src/registry/handlers/memory-write.handler.ts, apps/orchestration-service/src/registry/handlers/memory-write.handler.spec.ts, scripts/gates/baseline.json, docs/work-queue.md
 
-OWNS: packages/adapters/src/postgres/tool-database-provider*
+Scope: D12 implements per-workspace chat, workflow and workspace memory switches, on by default, and a 7–365 day retention window defaulting to 90. Memory-service checks each kind before storing or recalling it; actual workflow chat and ADS consumers honor the result. Store memories with PII redacted, remove allow-sensitive-data, and preserve the separate anonymised cross-tenant policy layer. Settings writes require If-Match and commit their audit in the same locked transaction. Erasure, rollback and scheduled retention remain real.
 
-Scope: Tool Gateway resolves user connection credentials through current engine records scoped from the actual run. Both raw and opaque credential paths preserve that scope and refuse revoked, missing or unreadable credentials with the existing named credential-missing recovery category. Preserve existing platform credential templates and dispatch permissions. The compiler prerequisite is C100; I11 requires C99, C100 and C108.
+- [ ] G1: Restricted PostgreSQL and authenticated memory settings transport prove workspace defaults, strict values, If-Match missing/stale/concurrent writes, atomic audit rollback, tenant/workspace separation, erasure and reversible migration
+  CHECK: node .unlazy/verify-settings.mjs
+  EXPECT: memory-settings-native-passed
+  EVIDENCE: pending
 
-- [x] G1: Real restricted PostgreSQL and authenticated engine HTTP resolve only connected records in the actual run tenant/workspace, return references only, refuse mismatched scope and preserve the separate write credential
-  CHECK: node .unlazy/verify-engine.mjs
-  EXPECT: connection-runtime-engine-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a99c14bce457a9f06ba0b432727fe546c7b035c34ebfdf310729f1e7fb664045; exit=0; EXPECT=matched; output-sha256=9a6f5ac00f3d48f9a9c6a61fdb35bc8c397eb42e58684d7887dc56899816b496; output-bytes=97; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+- [ ] G2: Real memory-service storage and recall enforce independent chat/workflow switches and retention; actual caller-authenticated redaction output is stored and recalled, while separate global policy operations keep their existing behavior
+  CHECK: node .unlazy/verify-recall.mjs
+  EXPECT: memory-recall-native-passed
+  EVIDENCE: pending
 
-- [x] G2: Real Tool Gateway gRPC plus engine HTTP and native secret/provider edges exercise both credential entry points, opaque token reuse, current revocation and scope checks, unreadable credentials, successful dispatch and existing credential-missing recovery classification
-  CHECK: node .unlazy/verify-runtime.mjs
-  EXPECT: connection-runtime-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=80f94f346b22dbc114e122b14c09843cbc970aa7be74b4a471dbe1b30f78aeae; exit=0; EXPECT=matched; output-sha256=932ab675e5cbafb967dc084da4c9d04a9f2a84c05d1c6a255fb5756a1c426443; output-bytes=151; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+- [ ] G3: Actual ADS writes/reads call memory-service for workspace settings, respect validated scopes and retention, and actual scheduled sweeps delete expired local memories without deleting current or other-workspace records
+  CHECK: node .unlazy/verify-ads-retention.mjs
+  EXPECT: memory-ads-retention-passed
+  EVIDENCE: pending
 
-- [x] G3: Production module wiring and local/EC2 configuration supply the actual read lookup address and service credential; additive wire changes retain legacy callers and existing platform credential templates
-  CHECK: node .unlazy/verify-wiring.mjs
-  EXPECT: connection-runtime-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=ff1611c0484aebc0734d121351cfeaa10392a0f5dac0159b38da2a3e01afbd74; exit=0; EXPECT=matched; output-sha256=a1c6c860c5db94b0506f3d91e2440824c6cd4ab1dc22894868e8cc557302c4db; output-bytes=198; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+- [ ] G4: Public API RBAC and actual live web requests preserve ETag/If-Match, show validation/conflict/error recovery, expose three correctly labelled switches and retention only, and actual workflow builder uses the memory-service recall result
+  CHECK: node .unlazy/verify-delivery.mjs
+  EXPECT: memory-settings-delivery-passed
+  EVIDENCE: pending
 
-- [x] G4: Disabling scope/status, opaque revalidation, lookup authentication, database authentication classification or named gRPC error mapping fails the relevant native assertion; restored sources pass
+- [ ] G5: Each consequential switch, scope, retention, audit, PII or live-route assertion has a known-positive control that fails when the corresponding production check is removed and passes after restoration
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: connection-runtime-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=fe5a4caaacee45555500fb75be1c9a3d60765cdc11b93b779e9942a6ae670305; exit=0; EXPECT=matched; output-sha256=23e1825e12ba0b7cca9f3a7ecff12a93bf8216383032ec05533199c5c55f9b80; output-bytes=6231; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+  EXPECT: memory-settings-controls-passed
+  EVIDENCE: pending
 
-- [x] G5: Full engine, Tool Gateway, adapters and contracts suites, build/typecheck/lint, proto compatibility, architecture, RBAC, rollback pairing and zero added normalized AST findings pass
+- [ ] G6: Full touched Python and TypeScript suites, native transport discovery, build/typecheck/lint, proto consistency, migration/erasure registration, architecture/RBAC/naming and zero added normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
-  EXPECT: connection-runtime-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=cff5dff110466fce972d37778bdb95b568cb917fc43f8337755552d5e1ef0628; exit=0; EXPECT=matched; output-sha256=e2c43d3ed446a41653c493af400900b647e300ce54f0d8eeb500e7bc3dd13190; output-bytes=948; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+  EXPECT: memory-settings-final-passed
+  EVIDENCE: pending

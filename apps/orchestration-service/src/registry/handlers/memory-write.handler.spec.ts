@@ -44,4 +44,13 @@ describe("MemoryWriteHandler", () => {
       NodeHandlerValidationError,
     );
   });
+
+  it("completes a disabled write without reporting a stored memory", async () => {
+    const handler = new MemoryWriteHandler({ proposeWriteback: vi.fn().mockResolvedValue({
+      memory_id: "", candidate_json: "{}", skipped: true,
+    }) });
+    await expect(handler.execute(context)).resolves.toEqual({
+      output: { skipped: true, reason: "memory_disabled" },
+    });
+  });
 });

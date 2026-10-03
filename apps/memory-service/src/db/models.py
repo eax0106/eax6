@@ -72,6 +72,9 @@ class MemoryRecord(Base):
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     tenant_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False))
+    workspace_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False))
+    memory_kind: Mapped[str | None] = mapped_column(Text)
+    context_id: Mapped[str | None] = mapped_column(Text)
     scope: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     provenance: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
