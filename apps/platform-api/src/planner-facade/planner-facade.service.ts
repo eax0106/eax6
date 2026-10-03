@@ -1,6 +1,7 @@
 import { Injectable, Inject, Optional } from "@nestjs/common";
 import { PlannerClient, type PlannerHttpClient, type SynthesisConstraints } from "@alterx/adapters";
-import type { ConnectionsRequired } from "@alterx/contracts";
+import { ConfirmWorkflowBuildSchema, WorkflowPlanSchema, type ConnectionsRequired, type WorkflowPlan } from "@alterx/contracts";
+import { z } from "zod";
 import { CompilerServiceClient, CompilerServiceClientError } from "./compiler-client";
 import { randomUUID } from "node:crypto";
 import { getCompilerProtoPath } from "./compiler-client";
@@ -41,11 +42,14 @@ export interface PlanWorkflowInput {
   readonly workspaceId: string;
   readonly workflowId: string;
   readonly objective: string;
+  readonly confirm?: true;
+  readonly successCriteria?: readonly string[];
 }
 
 export type PlanWorkflowResult = 
   | { type: "clarification"; questions: readonly string[] }
   | { type: "compiled"; versionId: string }
+  | WorkflowPlan
   | ConnectionsRequired;
 
 /**
@@ -110,15 +114,21 @@ export class PlannerFacadeService {
 
 
   async planWorkflow(input: PlanWorkflowInput): Promise<PlanWorkflowResult> {
+    const confirmed = input.confirm === true
+      ? ConfirmWorkflowBuildSchema.parse({ confirm: input.confirm, successCriteria: input.successCriteria }) : undefined;
+    if (input.successCriteria !== undefined && !confirmed) throw new Error("Build confirmation is required for edited criteria");
+    // Preview also verifies the real workflow's workspace before any model call.
+    await this.safeguards.effectiveFor(input.tenantId, input.workspaceId, input.workflowId);
     const runId = `run_${randomUUID().slice(0, 14)}7${randomUUID().slice(15)}`;
     const tenantId = prefixed("ten", input.tenantId);
     const workspaceId = prefixed("ws", input.workspaceId);
-    const problemSpec = await this.plannerClient.understand({
+    const inferred = await this.plannerClient.understand({
       tenant_id: tenantId,
       workspace_id: workspaceId,
       run_id: runId,
       objective: input.objective,
     });
+    const problemSpec = confirmed ? { ...inferred, success_criteria: confirmed.successCriteria } : inferred;
 
     const decomposeResponse = await this.plannerClient.decompose({
       tenant_id: tenantId,
@@ -135,10 +145,22 @@ export class PlannerFacadeService {
       };
     }
 
+    const skeleton = z.object({ nodes: z.array(z.object({ key: z.string().min(1), type: z.string().min(1), config: z.record(z.string(), z.unknown()).optional(), success_criteria: z.array(z.string().min(1)).optional() }).passthrough()).min(1) }).passthrough().parse(JSON.parse(decomposeResponse.task_skeleton_json));
+    const assigned = new Set(skeleton.nodes.flatMap(node => node.success_criteria ?? []));
+    const missing = problemSpec.success_criteria.filter(criterion => !assigned.has(criterion));
+    const unexpected = [...assigned].filter(criterion => !problemSpec.success_criteria.includes(criterion));
+    if (missing.length || unexpected.length) return { type: "clarification", questions: [
+      `No complete step assignment for these success criteria: ${[...missing, ...unexpected].join("; ")}. Could you clarify the intended outcome or revise the criteria?`,
+    ] };
+    if (!confirmed) return WorkflowPlanSchema.parse({ type: "plan", successCriteria: problemSpec.success_criteria,
+      steps: skeleton.nodes.map(node => ({ key: node.key, type: node.type,
+        description: typeof node.config?.["prompt"] === "string" && node.config["prompt"].trim() ? node.config["prompt"] : node.key,
+        successCriteria: node.success_criteria ?? [] })) });
+
     const prepared = await this.plannerClient.prepareCompilerInput({
       tenant_id: tenantId,
       workspace_id: workspaceId,
-      task_skeleton: JSON.parse(decomposeResponse.task_skeleton_json),
+      task_skeleton: skeleton,
       constraints: await this.constraints(input),
     });
     if (prepared.status !== "ready") throw new Error("Architecture pipeline blocked compilation");

@@ -1,30 +1,35 @@
-# Gates: Engine collection read context (C113)
+# Gates: D8 success criteria shown and confirmed (C116)
 
-OWNS: apps/orchestration-service/src/workspace-read-scope.ts, apps/orchestration-service/src/workspace-read-scope.integration.spec.ts, apps/orchestration-service/src/runs/runs.controller.ts, apps/orchestration-service/src/runs/run-launcher.service.ts, apps/orchestration-service/src/runs/node-executions.controller.ts, apps/orchestration-service/src/runs/node-execution-ledger.service.ts, apps/orchestration-service/src/runs/run-observability.controller.ts, apps/orchestration-service/src/runs/run-observability.service.ts, apps/orchestration-service/src/runs/run-stream.controller.ts, apps/orchestration-service/src/runs/run-stream-event.service.ts, apps/orchestration-service/src/approvals/approvals.controller.ts, apps/orchestration-service/src/approvals/approvals.service.ts, apps/orchestration-service/src/clarifications/clarifications.controller.ts, apps/orchestration-service/src/clarifications/clarifications.service.ts, apps/orchestration-service/src/escalations/escalations.controller.ts, apps/orchestration-service/src/escalations/escalations.service.ts, apps/orchestration-service/src/trigger-registry/trigger-registry.controller.ts, apps/orchestration-service/src/trigger-registry/trigger-registry.service.ts, apps/orchestration-service/src/trigger-registry/event.controller.ts, apps/orchestration-service/src/trigger-registry/event-query.service.ts, apps/orchestration-service/src/artifacts/artifacts.controller.ts, apps/orchestration-service/src/artifacts/artifacts.service.ts, apps/orchestration-service/src/trigger-bindings/trigger-binding.controller.ts, apps/orchestration-service/src/trigger-bindings/trigger-binding.service.ts, apps/orchestration-service/src/trigger-bindings/postgres-trigger-binding.store.ts, apps/orchestration-service/src/template-variables/template-variables.controller.ts, apps/orchestration-service/src/template-variables/template-variables.service.ts, apps/orchestration-service/src/workflow-read/workflow-read.controller.ts, apps/orchestration-service/src/workflow-read/workflow-read.service.ts, apps/orchestration-service/src/project-read/project-read.controller.ts, apps/orchestration-service/src/project-read/project-domain.service.ts, apps/orchestration-service/src/approvals/approvals.controller.spec.ts, apps/orchestration-service/src/escalations/escalations.controller.spec.ts, apps/orchestration-service/src/runs/node-executions.controller.spec.ts, apps/orchestration-service/src/runs/runs.controller.spec.ts, apps/orchestration-service/src/clarifications/clarifications.service.spec.ts, apps/orchestration-service/src/trigger-registry/event-query.service.spec.ts, scripts/gates/baseline.json, docs/work-queue.md
+OWNS: apps/orchestration-service/src/workflow-chat/**, apps/orchestration-service/src/workflow-read/**, apps/platform-api/src/planner-facade/**, apps/platform-api/src/workflow-chat/**, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/live.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/compile-dag.ts, apps/platform-web/src/api/compile-dag.spec.ts, apps/platform-web/src/api/clarification-flow.spec.ts, apps/platform-web/src/api/live-conversations.spec.ts, apps/platform-web/src/components/conversation/workflow-plan.tsx, apps/platform-web/src/components/conversation/workflow-plan.spec.tsx, apps/platform-web/src/features/conversations/pages/conversation-detail.tsx, apps/platform-web/src/features/conversations/pages/conversation-flow.spec.tsx, apps/platform-web/src/features/workflows/pages/workflow-create.tsx, apps/platform-web/src/features/workflows/pages/workflow-create.spec.tsx, apps/platform-web/src/features/workflows/pages/workflow-builder.tsx, apps/platform-web/src/features/workflows/pages/workflow-builder.spec.tsx, apps/platform-web/src/features/workflows/stores/useBuilderStore.ts, apps/intelligence-service/src/planner/kernel.py, apps/intelligence-service/tests/test_planner_kernel.py, apps/intelligence-service/tests/test_planner_criteria_confirmation.py, packages/contracts/src/workflow-chat.ts, packages/contracts/src/workflow-plan.ts, packages/contracts/src/workflow-plan.spec.ts, packages/contracts/src/index.ts, scripts/gates/baseline.json, docs/work-queue.md
 
-Scope: Existing engine collection reads carry validated actor workspace context through SQL filters and cursor ownership. Ordinary actors require a valid workspace; only the signed D1 system principal retains explicitly tenant-wide read-only audited access. Audit all engine HTTP collection surfaces, including nested collections and streams, against actual callers and stores. No new service, migration, shared contract or dependency.
+Scope: Both active workflow builders show steps and editable criteria before compilation. Build explicitly confirms the complete edited list; decomposition reassigns it to nodes and uncovered criteria produce questions without a version. Persisted chats bind Build to their own latest server plan. Live canvas edits affecting criteria ask whether the goal changed and preserve criteria through save.
 
-- [x] G1: Restricted PostgreSQL proves actual workspace-filtered runs, approvals, clarifications, escalations, triggers and events with filters and pagination, foreign cursor rejection and tenant RLS
-  CHECK: node .unlazy/verify-collections.mjs
-  EXPECT: workspace-collections-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=f62d9cf275f09b0865b2ad8381bc8579960855b8066dcab48fcbad319409ea70; exit=0; EXPECT=matched; output-sha256=2b900e3bf77538df9abbe7e3cd240f4c46e7f5873efdb62b9292e9943a6fa1ae; output-bytes=30; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
+- [ ] G1: Rule-derived golden cases measure preview without compilation, authoritative edited criteria, uncovered-criterion questions and legacy no-criteria compatibility
+  CHECK: node .unlazy/verify-planner.mjs
+  EXPECT: criteria-planner-passed
+  EVIDENCE: pending
 
-- [x] G2: Actual run/workflow/project/trigger parent ownership governs nested collection reads and stream visibility; existing metadata and system-only feeds retain their declared behavior
-  CHECK: node .unlazy/verify-nested.mjs
-  EXPECT: workspace-nested-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=4f467e6bfbb82895aa574910298eedacdc1558ad6958c787cb5c6de04273ca1c; exit=0; EXPECT=matched; output-sha256=85bbfcdc1b715ac23a96d317c60a5e84d098fef4c55497ede82ef93667ad1b8a; output-bytes=25; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
+- [ ] G2: Actual public builder routes and persisted chats require explicit Build, preserve edited criteria and scope, bind the latest plan, retain questions and replay without duplicate compilation
+  CHECK: node .unlazy/verify-public.mjs
+  EXPECT: criteria-public-passed
+  EVIDENCE: pending
 
-- [x] G3: Real signed machine and actor HTTP guards derive scope from the caller, ignore a supplied workspace query, refuse missing/invalid delegation and token replay, and preserve read-only audited D1 system access
-  CHECK: node .unlazy/verify-http.mjs
-  EXPECT: workspace-http-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=3836dda82ff309223f06a4669d1b296cf3207b884fd0a25dd68734b74ff0c1a8; exit=0; EXPECT=matched; output-sha256=a8ee711bf9f66a97f5d60bdb768fc51eeed667bb48c0078d9cbdf3cf8e8792ed; output-bytes=23; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
+- [ ] G3: Ordinary PostgreSQL and real compiler transport persist exactly confirmed workflow and node criteria; preview and uncovered criteria persist no compiled version
+  CHECK: node .unlazy/verify-native.mjs
+  EXPECT: criteria-native-passed
+  EVIDENCE: pending
 
-- [x] G4: Removing actual workspace propagation, SQL collection scope, cursor ownership, nested parent ownership or explicit system exemption fails known-positive native assertions; restored sources pass
+- [ ] G4: Both rendered plan screens edit/add/remove criteria and Build them through live requests; affected live canvas edits ask about the goal, preserve unchanged criteria and retain failed requests
+  CHECK: node .unlazy/verify-web.mjs
+  EXPECT: criteria-web-passed
+  EVIDENCE: pending
+
+- [ ] G5: Known-positive controls fail when confirmation, authoritative criteria, uncovered-criterion handling, latest-chat-plan binding, live request fields or canvas criteria carry/prompt are removed, then pass after restoration
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: workspace-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=31937bc41b2840744762f6f536fb84afd83534019c399bd58520ee074bb06229; exit=0; EXPECT=matched; output-sha256=774f652a1a303f5f0e89413c0ac70a4d48f11d74a667729e57d32ee95cfc4201; output-bytes=1558; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
+  EXPECT: criteria-controls-passed
+  EVIDENCE: pending
 
-- [x] G5: Complete engine test discovery and suite, touched build/typecheck/lint, architecture/RBAC/migration/naming, collection audit inventory and zero new normalized AST findings pass
+- [ ] G6: Full touched suites, build/typecheck/lint, Python validation and CI discovery, architecture/RBAC/naming, and zero added normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
-  EXPECT: workspace-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=2e562195ee1c266c239d08bdf90b1b4b094df74cee433438ed08b2f1ddebbf2f; exit=0; EXPECT=matched; output-sha256=8a807408396c19da0fa85fcbf9ebd60f40d53930689ece4b1fd144d2f69ffa8e; output-bytes=429; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
+  EXPECT: criteria-final-passed
+  EVIDENCE: pending

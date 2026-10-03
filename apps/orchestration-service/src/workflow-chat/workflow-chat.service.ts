@@ -10,6 +10,7 @@ import type { OrchestrationTenantStore, OrchestrationTransactionLike } from "../
 import { WorkflowReadService } from "../workflow-read/workflow-read.service";
 import { uuidV7 } from "../trigger-bindings/ids";
 import { ensureWorkflowChat } from "./persistence";
+import { isDeepStrictEqual } from "node:util";
 
 type Actor = NonNullable<IdentityTenantGatewayRequest["actorContext"]>;
 type Scope = { tenant: string; workspace: string; user: string };
@@ -95,6 +96,7 @@ export class WorkflowChatService {
 
   async begin(actor: Actor,id: string,input: unknown,requestKey?: string) {
     const payload=SendWorkflowChatMessageSchema.parse(input),s=scope(actor);
+    const content=payload.build ? {text:payload.content,build:payload.build} : payload.content;
     return this.store.withTenant(s.tenant,async tx=>{
       const row=await this.row(tx,s,id);
       if(row.workflow_id)await ensureWorkflowChat(tx,s.tenant,s.workspace,row.workflow_id,s.user);
@@ -106,14 +108,14 @@ export class WorkflowChatService {
         const existing=await tx.query<MessageRow>(`SELECT id,conversation_id,role,kind,content_json,created_at FROM conversation_messages WHERE tenant_id=$1 AND workspace_id=$2 AND conversation_id=$3 AND request_key=$4`,[s.tenant,s.workspace,id,requestKey]);
         if(existing.rows[0]){
           const userMessage=message(existing.rows[0]);
-          if(userMessage.role!=='user'||userMessage.content!==payload.content)throw new WorkflowChatError(422,'IDEMPOTENCY_KEY_REUSED','Message key was already used with a different request');
+          if(userMessage.role!=='user'||!isDeepStrictEqual(userMessage.content,content))throw new WorkflowChatError(422,'IDEMPOTENCY_KEY_REUSED','Message key was already used with a different request');
           return {conversation:resource(row),userMessage,messages:history};
         }
       }
       // ponytail: bounded builder context, add paginated context compaction when long-lived chats need it.
-      if(history.length>=1000||history.reduce((n,m)=>n+JSON.stringify(m.content).length,0)+payload.content.length>64000)
+      if(history.length>=1000||history.reduce((n,m)=>n+JSON.stringify(m.content).length,0)+JSON.stringify(content).length>64000)
         throw new WorkflowChatError(413,'CHAT_CONTEXT_LIMIT','Chat context exceeds the supported size');
-      const userMessage=await this.append(tx,s,id,'user','text',payload.content,requestKey);
+      const userMessage=await this.append(tx,s,id,'user','text',content,requestKey);
       return {conversation:resource(row),userMessage,messages:[...history,userMessage]};
     });
   }

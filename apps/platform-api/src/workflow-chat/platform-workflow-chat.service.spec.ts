@@ -22,6 +22,43 @@ function fixture(type: "general" | "workflow_builder" = "workflow_builder") {
  const costs = { workflowCost: vi.fn() };
  return { user, reply, engine, planner, workflows, runs, costs, service: new PlatformWorkflowChatService(engine as unknown as EngineClient, planner as unknown as PlannerFacadeService, workflows as unknown as WorkflowService, runs as unknown as RunService, costs as unknown as CostsService) };
 }
+it("stores a reviewable plan before Build and confirms only the latest server plan", async () => {
+ const f=fixture(), plan={type:"plan",successCriteria:["Notify support."],steps:[{key:"work",type:"llm",description:"Triage support mail",successCriteria:["Notify support."]}]};
+ f.planner.planWorkflow.mockResolvedValueOnce(plan as never);
+ await f.service.send(id("cnv"),{content:"Triage support mail"},"workflow_builder",actor,undefined,"preview");
+ expect(f.workflows.versions).not.toHaveBeenCalled();
+ expect(f.engine.post).toHaveBeenLastCalledWith(expect.anything(),expect.objectContaining({kind:"artifact",content:expect.objectContaining({...plan,objective:"Original goal"})}),expect.anything(),expect.anything());
+ const saved=message("assistant",{...plan,objective:"Original goal",text:"Review plan",replyTo:f.user.id},"artifact",2),user=message("user",{text:"Build",build:{planMessageId:saved.id,successCriteria:["Notify billing.","Archive mail."]}},"text",3);
+ f.engine.post.mockResolvedValueOnce({status:201,body:{conversation:chat(),userMessage:user,messages:[f.user,saved,user]}} as never);
+ await f.service.send(id("cnv"),{content:"Build",build:{planMessageId:saved.id,successCriteria:["Notify billing.","Archive mail."]}},"workflow_builder",actor,undefined,"confirm");
+ expect(f.planner.planWorkflow).toHaveBeenLastCalledWith(expect.objectContaining({objective:"Original goal",confirm:true,successCriteria:["Notify billing.","Archive mail."]}));
+ expect(f.workflows.versions).toHaveBeenCalledTimes(1);
+ f.engine.post.mockResolvedValueOnce({status:201,body:{conversation:chat(),userMessage:user,messages:[f.user,saved,message("assistant",{...plan,objective:"Revised goal",text:"Review revised plan",replyTo:f.user.id},"artifact",4),user]}} as never);
+ f.planner.planWorkflow.mockClear();
+ await expect(f.service.send(id("cnv"),{content:"Build",build:{planMessageId:saved.id,successCriteria:[]}},"workflow_builder",actor,undefined,"old-plan")).rejects.toMatchObject({status:409});
+ expect(f.planner.planWorkflow).not.toHaveBeenCalled();
+});
+it("keeps the confirmed list and plan reference for a connection retry", async () => {
+ const f=fixture(),saved=message("assistant",{type:"plan",successCriteria:[],steps:[{key:"work",type:"llm",description:"Work",successCriteria:[]}],objective:"Original goal",text:"Review",replyTo:f.user.id},"artifact",2);
+ const build={planMessageId:saved.id,successCriteria:["Notify support."]};
+ const user=message("user",{text:"Build",build},"text",3);
+ f.engine.post.mockResolvedValueOnce({status:201,body:{conversation:chat(),userMessage:user,messages:[f.user,saved,user]}} as never);
+ f.planner.planWorkflow.mockResolvedValueOnce({type:"connections_required",missing_connections:[{connector_type:"slack",node_keys:["work"],reason:"missing"}]} as never);
+ await f.service.send(id("cnv"),{content:"Build",build},"workflow_builder",actor,undefined,"connections-confirmed");
+ expect(f.engine.post).toHaveBeenLastCalledWith(expect.anything(),expect.objectContaining({kind:"action",content:expect.objectContaining({build})}),expect.anything(),expect.anything());
+});
+it("retains confirmed criteria on a clarification and includes the answer when building again", async () => {
+ const f=fixture(),saved=message("assistant",{type:"plan",successCriteria:[],steps:[{key:"work",type:"llm",description:"Work",successCriteria:[]}],objective:"Original goal",text:"Review",replyTo:f.user.id},"artifact",2);
+ const build={planMessageId:saved.id,successCriteria:["Archive mail."]},user=message("user",{text:"Build",build},"text",3);
+ f.engine.post.mockResolvedValueOnce({status:201,body:{conversation:chat(),userMessage:user,messages:[f.user,saved,user]}} as never);
+ f.planner.planWorkflow.mockResolvedValueOnce({type:"clarification",questions:["Where should mail be archived?"]} as never);
+ await f.service.send(id("cnv"),{content:"Build",build},"workflow_builder",actor,undefined,"uncovered");
+ expect(f.engine.post).toHaveBeenLastCalledWith(expect.anything(),expect.objectContaining({kind:"clarification",content:expect.objectContaining({build})}),expect.anything(),expect.anything());
+ const question=message("assistant",{questions:["Where should mail be archived?"],build,replyTo:user.id},"clarification",4),answer=message("user",{text:"Archive in billing.",build},"text",5);
+ f.engine.post.mockResolvedValueOnce({status:201,body:{conversation:chat(),userMessage:answer,messages:[f.user,saved,user,question,answer]}} as never);
+ await f.service.send(id("cnv"),{content:"Archive in billing.",build},"workflow_builder",actor,undefined,"answer");
+ expect(f.planner.planWorkflow).toHaveBeenLastCalledWith(expect.objectContaining({confirm:true,successCriteria:build.successCriteria,objective:expect.stringContaining("Archive in billing.")}));
+});
 it("retains prior questions and answers and reports only an actually stored compiled version", async () => {
  const f = fixture(), history = [f.user, message("assistant", { questions: ["Which channel?"] }, "clarification", 2), message("user", "Slack", "text", 3)];
  f.engine.post.mockResolvedValueOnce({ status: 201, body: { conversation: chat(), userMessage: history[2]!, messages: history } } as never);

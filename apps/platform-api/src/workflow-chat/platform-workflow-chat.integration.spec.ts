@@ -27,6 +27,8 @@ it.runIf(Boolean(process.env.WORKFLOW_CHAT_NATIVE_BRIDGE))("retains chat context
   };
   const objectives: string[] = [], definitions = [{ key: "one", connector: "github" }, { key: "two", connector: "slack" }, { key: "three", connector: "github" }];
   const edgeErrors: unknown[] = [];
+  let omitCriteria = false;
+  const decomposedCriteria: string[][] = [];
   const skeleton = { version: "1", entry_point: "start", nodes: [{ key: "start", type: "llm", config: {}, depends_on: [] },
     ...definitions.map(({ key, connector }, index) => ({ key, type: "tool", config: { tool_name: "search.web", required_connector: connector }, depends_on: index === 0 ? ["start"] : [definitions[index - 1]!.key] }))] };
   const architecture = { status: "ready", version: "1", topology: "sequential", boundaries: [],
@@ -45,13 +47,18 @@ it.runIf(Boolean(process.env.WORKFLOW_CHAT_NATIVE_BRIDGE))("retains chat context
       let result: unknown;
       if (request.url?.endsWith("/understand")) {
         objectives.push(String(input.objective));
-        result = { objective: input.objective, current_situation: null, actors: [], systems_involved: [], constraints: [], required_data: [], risk: "low", missing_information: [], success_criteria: [], context_references: [] };
+        result = { objective: input.objective, current_situation: null, actors: [], systems_involved: [], constraints: [], required_data: [], risk: "low", missing_information: [], success_criteria: ["Original inferred outcome."], context_references: [] };
       } else if (request.url === "/planner/decompose") {
-        result = { task_skeleton_json: JSON.stringify(skeleton), ambiguity_detected: objectives.length < 3,
+        const criteria = (JSON.parse(String(input.problem_spec_json)) as { success_criteria: string[] }).success_criteria;
+        decomposedCriteria.push(criteria);
+        result = { task_skeleton_json: JSON.stringify({ ...skeleton, success_criteria: criteria,
+          nodes: skeleton.nodes.map(node => ({ ...node, ...(node.key === "start" ? { success_criteria: omitCriteria ? [] : criteria } : {}) })) }), ambiguity_detected: objectives.length < 3,
           clarification_questions: objectives.length === 1 ? ["Which day?", "Which channel?"] : objectives.length === 2 ? ["Which timezone?"] : [] };
       } else if (request.url?.endsWith("/prepare-compiler-input")) {
         expect(input.constraints).toMatchObject({ customer_visible: false, contains_pii: false, external_action_approval_required: false, allowed_data_residency: [] });
-        result = { status: "ready", architecture, binding_decision: bindings };
+        const task = input.task_skeleton as { success_criteria: string[]; nodes: { key: string; success_criteria?: string[] }[] };
+        result = { status: "ready", architecture: { ...architecture, success_criteria: task.success_criteria,
+          nodes: architecture.nodes.map(node => ({ ...node, success_criteria: task.nodes.find(step => step.key === node.source_node_key)?.success_criteria })) }, binding_decision: bindings };
       } else throw new Error("Unexpected planner route");
       return result;
     } catch (error) {
@@ -101,8 +108,19 @@ it.runIf(Boolean(process.env.WORKFLOW_CHAT_NATIVE_BRIDGE))("retains chat context
     const second = await chats.send(chat.id, { content: "Which day?: Friday\nWhich channel?: reporting" }, "workflow_builder", actor, undefined, "native-second");
     expect(second.assistantMessage?.content).toMatchObject({ questions: ["Which timezone?"] });
     const third = await chats.send(chat.id, { content: "Which timezone?: Asia/Kolkata" }, "workflow_builder", actor, undefined, "native-third");
-    expect(third.assistantMessage?.kind).toBe("action");
-    expect(third.assistantMessage?.content).toMatchObject({ type: "connections_required", missing_connections: [
+    expect(third.assistantMessage?.kind).toBe("artifact");
+    expect(third.assistantMessage?.content).toMatchObject({ type: "plan", successCriteria: ["Original inferred outcome."] });
+    expect((await workflows.versions(chat.linkedWorkflowId!, undefined, "20", actor, undefined)).body.data).toEqual([]);
+    const build = { planMessageId: third.assistantMessage!.id, successCriteria: ["Publish the Friday report.", "Archive the report."] };
+    omitCriteria = true;
+    const uncovered = await chats.send(chat.id, { content: "Build", build }, "workflow_builder", actor, undefined, "native-uncovered");
+    expect(uncovered.assistantMessage?.kind).toBe("clarification");
+    expect(uncovered.assistantMessage?.content).toMatchObject({ questions: [expect.stringContaining("Archive the report.")], build });
+    expect((await workflows.versions(chat.linkedWorkflowId!, undefined, "20", actor, undefined)).body.data).toEqual([]);
+    omitCriteria = false;
+    const gaps = await chats.send(chat.id, { content: "Archive the report in the reporting account.", build }, "workflow_builder", actor, undefined, "native-gaps");
+    expect(gaps.assistantMessage?.kind).toBe("action");
+    expect(gaps.assistantMessage?.content).toMatchObject({ type: "connections_required", build, missing_connections: [
       { connector_type: "github", node_keys: ["one", "three"], reason: "missing" }, { connector_type: "slack", node_keys: ["two"], reason: "missing" },
     ] });
     expect((await workflows.versions(chat.linkedWorkflowId!, undefined, "20", actor, undefined)).body.data).toEqual([]);
@@ -112,17 +130,22 @@ it.runIf(Boolean(process.env.WORKFLOW_CHAT_NATIVE_BRIDGE))("retains chat context
       await registry.upsert({ tenant_id: fixture.tenant, workspace_id: fixture.workspace, connection_id: connection, connector_type: connector, status: "connected", source_revision: 1,
           secret_ref: `/alter/integrations/${fixture.tenant}/${fixture.workspace}/${connection}` });
     }
-    const final = await chats.send(chat.id, { content: "Check connections and continue building from the original goal and answers." }, "workflow_builder", actor, undefined, "native-final");
+    const finalInput = { content: "Check connections and build again.", build };
+    const final = await chats.send(chat.id, finalInput, "workflow_builder", actor, undefined, "native-final");
     const versions = (await workflows.versions(chat.linkedWorkflowId!, undefined, "20", actor, undefined)).body.data;
     expect(versions).toHaveLength(1);
     expect(final.assistantMessage?.content).toMatchObject({ text: "Compiled draft version 1 for Native builder.", workflowId: chat.linkedWorkflowId, versionId: versions[0]!.id, version: 1 });
-    expect(objectives).toHaveLength(4);
+    expect(decomposedCriteria.slice(3)).toEqual([build.successCriteria, build.successCriteria, build.successCriteria]);
+    expect(objectives).toHaveLength(6);
     expect(objectives.slice(1).every(objective => objective.includes(goal) && objective.includes("Which day?") && objective.includes("Which channel?"))).toBe(true);
     expect(objectives.slice(2).every(objective => objective.includes("Friday") && objective.includes("reporting") && objective.includes("Which timezone?"))).toBe(true);
-    expect(objectives[3]).toContain("Asia/Kolkata");
+    expect(objectives.slice(3).every(objective => objective.includes("Asia/Kolkata"))).toBe(true);
+    expect(objectives[5]).toContain("Archive the report in the reporting account.");
     expect((await chats.messages(chat.id, actor)).at(-1)).toEqual(final.assistantMessage);
-    expect(await chats.send(chat.id, { content: "Check connections and continue building from the original goal and answers." }, "workflow_builder", actor, undefined, "native-final")).toEqual(final);
-    expect(objectives).toHaveLength(4);
+    expect(await chats.send(chat.id, finalInput, "workflow_builder", actor, undefined, "native-final")).toEqual(final);
+    await expect(chats.send(chat.id, finalInput, "workflow_builder", actor, undefined, "native-consumed")).rejects.toMatchObject({ status: 409 });
+    expect((await workflows.versions(chat.linkedWorkflowId!, undefined, "20", actor, undefined)).body.data).toHaveLength(1);
+    expect(objectives).toHaveLength(6);
   } catch (error) {
     throw edgeErrors.at(-1) ?? error;
   } finally {

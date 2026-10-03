@@ -57,7 +57,7 @@ function realProblemSpec(objective: string): Record<string, unknown> {
 }
 
 const DEFAULT_DECOMPOSE_RESPONSE = {
-  task_skeleton_json: JSON.stringify({ nodes: [], entry_point: "n1", version: "v1" }),
+  task_skeleton_json: JSON.stringify({ nodes: [{ key: "n1", type: "llm", config: {}, depends_on: [] }], entry_point: "n1", version: "v1" }),
   ambiguity_detected: false,
   clarification_questions: [] as readonly string[],
 };
@@ -229,10 +229,23 @@ describe("PlannerFacadeController routes", () => {
 
   afterAll(async () => app.close());
 
+  it("returns the plan before Build and never calls synthesis or compiler", async () => {
+    const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, { key: "preview", body: { goal: "Triage support mail" } });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ type: "plan", successCriteria: [], steps: [{ key: "n1", type: "llm", description: "n1", successCriteria: [] }] });
+    expect(grpc.compileArchitectureWorkflowCalls).toHaveLength(0);
+    expect(http.calls.filter(call => call.url.endsWith("/prepare-compiler-input"))).toHaveLength(0);
+  });
+
+  it.each([{ confirm: true }, { successCriteria: ["Notify support."] }, { confirm: false, successCriteria: [] }, { confirm: true, successCriteria: [""] }])("rejects incomplete or invalid Build confirmation before planning", async confirmation => {
+    const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, { key: "invalid-confirmation", body: { goal: "Triage", ...confirmation } });
+    expect(response.statusCode).toBe(400); expect(http.calls).toHaveLength(0); expect(grpc.compileArchitectureWorkflowCalls).toHaveLength(0);
+  });
+
   it("real happy path: plans, synthesizes, binds, and compiles through the real route", async () => {
     const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: "plan-1",
-      body: { goal: "Ship the thing" },
+      body: { confirm: true, successCriteria: [], goal: "Ship the thing" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -245,6 +258,7 @@ describe("PlannerFacadeController routes", () => {
     await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: "plan-answers",
       body: {
+        confirm: true, successCriteria: [],
         goal: "Ship the thing",
         answers: { "Which environment?": "staging" },
       },
@@ -268,7 +282,7 @@ describe("PlannerFacadeController routes", () => {
 
     const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: "plan-clarify",
-      body: { goal: "Ambiguous goal" },
+      body: { confirm: true, successCriteria: [], goal: "Ambiguous goal" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -284,7 +298,7 @@ describe("PlannerFacadeController routes", () => {
       "POST",
       `/api/v1/workflows/${workflowId}/actions/plan`,
       viewer,
-      { key: "plan-denied", body: { goal: "Ship the thing" } },
+      { key: "plan-denied", body: { confirm: true, successCriteria: [], goal: "Ship the thing" } },
     );
 
     expect(response.statusCode).toBe(403);
@@ -295,11 +309,11 @@ describe("PlannerFacadeController routes", () => {
     const url = `/api/v1/workflows/${workflowId}/actions/plan`;
     const first = await request("POST", url, actor, {
       key: "plan-replay",
-      body: { goal: "Ship the thing" },
+      body: { confirm: true, successCriteria: [], goal: "Ship the thing" },
     });
     const replay = await request("POST", url, actor, {
       key: "plan-replay",
-      body: { goal: "Ship the thing" },
+      body: { confirm: true, successCriteria: [], goal: "Ship the thing" },
     });
 
     expect(first.json()).toEqual(replay.json());
@@ -310,7 +324,7 @@ describe("PlannerFacadeController routes", () => {
   it("plans with the stored safeguards and the tenant's residency", async () => {
     const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: "plan-safeguards",
-      body: { goal: "Email the customers" },
+      body: { confirm: true, successCriteria: [], goal: "Email the customers" },
     });
 
     expect(response.statusCode).toBe(200);
@@ -332,7 +346,7 @@ describe("PlannerFacadeController routes", () => {
     const before = http.calls.length;
     const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: `plan-rejected-${JSON.stringify(extra)}`,
-      body: { goal: "Email the customers", ...extra },
+      body: { confirm: true, successCriteria: [], goal: "Email the customers", ...extra },
     });
 
     expect(response.statusCode).toBe(400);
@@ -343,7 +357,7 @@ describe("PlannerFacadeController routes", () => {
   it("real body validation: a blank goal is rejected before any Planner call", async () => {
     const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: "plan-invalid",
-      body: { goal: "" },
+      body: { confirm: true, successCriteria: [], goal: "" },
     });
 
     // Was a bare 500 from an uncaught ZodError; the body is now validated
@@ -360,7 +374,7 @@ describe("PlannerFacadeController routes", () => {
 
     const response = await request("POST", `/api/v1/workflows/${workflowId}/actions/plan`, actor, {
       key: "plan-blocked",
-      body: { goal: "Ship the thing" },
+      body: { confirm: true, successCriteria: [], goal: "Ship the thing" },
     });
 
     // planner-facade.module.ts registers no exception filter of its own,

@@ -61,7 +61,7 @@ function findCycleNodeIds(nodes: any[], edges: any[]): string[] {
   return [...cycleNodeIds].sort()
 }
 
-export function compileDag(nodes: any[], edges: any[]): CompiledDag {
+export function compileDag(nodes: any[], edges: any[], successCriteria?: string[]): CompiledDag {
   const cycleNodeIds = findCycleNodeIds(nodes, edges)
   if (cycleNodeIds.length > 0) {
     const labels = new Map(nodes.map((node) => [node.id, node.data?.label ?? node.id]))
@@ -77,7 +77,7 @@ export function compileDag(nodes: any[], edges: any[]): CompiledDag {
     // Inspector writes edited config fields flat onto node.data (see
     // inspector.tsx's updateNodeData calls), not nested under node.data.config.
     // Read both: flat fields (the real path) win over any legacy nested config.
-    const { label: _label, category: _category, status: _status, config: nestedConfig, ...flatConfig } =
+    const { label: _label, category: _category, status: _status, successCriteria: _criteria, config: nestedConfig, ...flatConfig } =
       (node.data ?? {}) as Record<string, unknown>
     let config: Record<string, unknown> = {
       ...(nestedConfig as Record<string, unknown> | undefined),
@@ -101,6 +101,7 @@ export function compileDag(nodes: any[], edges: any[]): CompiledDag {
       key: node.id,
       type: type,
       config: config,
+      ...(node.data?.successCriteria?.length ? { success_criteria: node.data.successCriteria } : {}),
       metadata: {
         ui: {
           position: node.position,
@@ -165,6 +166,7 @@ export function compileDag(nodes: any[], edges: any[]): CompiledDag {
 
   return {
     schema_version: "v1",
+    ...(successCriteria?.length ? { success_criteria: successCriteria } : {}),
     entry_node_keys: entryNodes.length > 0 ? entryNodes : [nodes[0]?.id].filter(Boolean),
     nodes: compiledNodes,
     edges: compiledEdges,
@@ -186,6 +188,7 @@ export function dagToCanvas(dag: CompiledDag): { nodes: any[]; edges: any[] } {
         label: ui.label ?? node.key,
         category: NODE_TYPE_CATEGORY[node.type] ?? node.type,
         ...node.config,
+        successCriteria: node.success_criteria,
       },
     }
   })

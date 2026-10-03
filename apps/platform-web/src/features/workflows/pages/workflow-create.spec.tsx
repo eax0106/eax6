@@ -22,6 +22,7 @@ describe("WorkflowCreate connection batch and retry", () => {
       .mockResolvedValueOnce({ ...result, explanation: "Need inbox", questions: ["Which inbox?"] })
       .mockResolvedValueOnce({ ...result, explanation: "Need team", questions: ["Which team?"] })
       .mockResolvedValueOnce({ ...result, explanation: "Connect these accounts", missingConnections })
+      .mockResolvedValueOnce({ ...result, plan: { type: "plan", successCriteria: ["Notify support."], steps: [{ key: "work", type: "llm", description: "Triage", successCriteria: ["Notify support."] }] } })
       .mockResolvedValueOnce(result)
     render(<QueryClientProvider client={new QueryClient({ defaultOptions: { mutations: { retry: false } } })}>
       <MemoryRouter><WorkflowCreate /></MemoryRouter>
@@ -42,6 +43,10 @@ describe("WorkflowCreate connection batch and retry", () => {
     expect((screen.getByPlaceholderText("Describe a workflow...") as HTMLTextAreaElement).disabled).toBe(true)
     await user.click(retry)
     await waitFor(() => expect(api.compileWorkflow).toHaveBeenLastCalledWith({ goal: "Triage support mail", answers: { "Which inbox?": "support", "Which team?": "customer success" }, workflowId: workflow.id }, expect.anything()))
+    expect(await screen.findByRole("button", { name: "Build" })).toBeTruthy()
+    expect(screen.queryByText("Workflow ready for review")).toBeNull()
+    await user.click(screen.getByRole("button", { name: "Build" }))
     expect(await screen.findByText("Workflow ready for review")).toBeTruthy()
+    expect(api.compileWorkflow).toHaveBeenLastCalledWith({ goal: "Triage support mail", answers: { "Which inbox?": "support", "Which team?": "customer success" }, workflowId: workflow.id, confirm: true, successCriteria: ["Notify support."] }, expect.anything())
   })
 })
