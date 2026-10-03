@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { Body, Controller, Get, HttpException, Param, Put, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
@@ -32,8 +33,9 @@ export class TemplateVariablesController {
 
   @Get(":workflowId/template-variables")
   async list(@Req() request: IdentityTenantGatewayRequest, @Param("workflowId") workflowId: string) {
+    const scope = workspaceReadScope(request);
     try {
-      return { data: await this.templates.list(requiredTenantId(request), workflowId) };
+      return { data: await this.templates.list(requiredTenantId(request), workflowId, scope.workspaceId) };
     } catch (error: unknown) {
       throw mapError(error, request.url);
     }

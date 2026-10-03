@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import { Controller, Get, HttpException, Param, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
@@ -15,9 +16,10 @@ export class ArtifactsController {
     @Query("cursor") cursor: string | undefined,
     @Query("limit") rawLimit: string | undefined,
   ) {
+    const scope = workspaceReadScope(request);
     try {
       if (runId !== undefined) {
-        return { data: await this.artifacts.list(requiredTenantId(request), runId) };
+        return { data: await this.artifacts.list(requiredTenantId(request), runId, scope.workspaceId) };
       }
       return await this.artifacts.listForWorkspace(
         requiredTenantId(request),

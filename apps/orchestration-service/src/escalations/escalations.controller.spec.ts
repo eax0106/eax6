@@ -46,7 +46,7 @@ function escalationRow(overrides: Record<string, unknown> = {}) {
 
 function request(tenantId: string | undefined = TENANT, userId: string | null = USER_ID) {
   return {
-    actorContext: tenantId === undefined ? undefined : { tenant_id: tenantId, user_id: userId },
+    actorContext: tenantId === undefined ? undefined : { tenant_id: tenantId, user_id: userId, workspace_id: "ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ac" },
     url: "/api/v1/escalations",
   };
 }
@@ -63,7 +63,7 @@ describe("EscalationsController.list/get", () => {
       status: "open",
     });
 
-    expect(service.list).toHaveBeenCalledWith(TENANT, { status: "open" });
+    expect(service.list).toHaveBeenCalledWith(TENANT, { status: "open", workspaceId: "018f4d6e-2b4a-7a3e-8c1a-1234567890ac" });
     expect(response.data).toHaveLength(1);
   });
 

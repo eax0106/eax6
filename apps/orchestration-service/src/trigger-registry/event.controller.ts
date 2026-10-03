@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import { Body, Controller, Get, Headers, HttpException, Param, Post, Query, Req } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
@@ -43,7 +44,9 @@ export class EventController {
   @Get()
   async list(@Req() request: IdentityTenantGatewayRequest, @Query() query: EventListQueryParams) {
     const tenantId = requireTenant(request);
+    const scope = workspaceReadScope(request);
     const listQuery: EventListQuery = {
+      ...scope,
       ...(query.source === undefined ? {} : { source: query.source }),
       ...(query.status === undefined ? {} : { status: query.status }),
       ...(query.cursor === undefined ? {} : { cursor: query.cursor }),

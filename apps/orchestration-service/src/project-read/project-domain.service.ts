@@ -157,9 +157,13 @@ export class ProjectDomainService {
     }
   }
 
-  async clarifications(tenantId: string, projectId: string) {
+  async clarifications(tenantId: string, projectId: string, workspaceId?: string) {
     const tenant = bareTenantId(tenantId);
     return this.store.withTenant(tenant, async (tx) => {
+      if (workspaceId !== undefined) {
+        const owner = await tx.query("SELECT id FROM projects WHERE tenant_id=$1 AND id=$2 AND workspace_id=$3", [tenant, projectId, workspaceId]);
+        if (owner.rowCount === 0) throw new ProjectNotFoundError(projectId);
+      }
       await this.#requirePlan(tx, tenant, projectId);
       const result = await tx.query<ClarificationRow>(
         `SELECT c.id, c.question, c.status

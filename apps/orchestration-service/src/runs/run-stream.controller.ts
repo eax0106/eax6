@@ -1,3 +1,4 @@
+import { workspaceReadScope } from "../workspace-read-scope";
 import { randomUUID } from "node:crypto";
 import { Controller, Get, Headers, HttpException, Param, Req, Res } from "@nestjs/common";
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
@@ -24,7 +25,7 @@ export class RunStreamController {
       runId,
       lastEventId,
       "/runs/{id}/stream",
-      () => this.events.runIsVisible(request.actorContext!.tenant_id, runId),
+      () => this.events.runIsVisible(request.actorContext!.tenant_id, runId, workspaceReadScope(request).workspaceId),
       (tenantId, cursor) => this.events.listAfter(tenantId, runId, cursor),
     );
   }
@@ -43,7 +44,7 @@ export class RunStreamController {
       runId,
       lastEventId,
       "/projects/{projectId}/builds/{runId}/stream",
-      () => this.events.projectRunIsVisible(request.actorContext!.tenant_id, projectId, runId),
+      () => this.events.projectRunIsVisible(request.actorContext!.tenant_id, projectId, runId, workspaceReadScope(request).workspaceId),
       (tenantId, cursor) => this.events.listTerminalAfter(tenantId, runId, cursor),
     );
   }
