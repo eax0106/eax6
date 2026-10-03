@@ -189,7 +189,12 @@ export class TriggerBindingService {
   async listBindings(
     tenantId: string,
     triggerId: string,
+    workspaceId?: string,
   ): Promise<{ readonly bindings: readonly TriggerBinding[] }> {
+    if (workspaceId !== undefined) {
+      const scope = await this.#store.findTriggerScope(parseTenantId(tenantId), parseTriggerId(triggerId));
+      if (scope === null || scope.workspaceId.replace(/^ws_/, "") !== workspaceId) throw new TriggerBindingNotFoundError(triggerId);
+    }
     const records = await this.#store.listBindings(
       parseTenantId(tenantId),
       parseTriggerId(triggerId),

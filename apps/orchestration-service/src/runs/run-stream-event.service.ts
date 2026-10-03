@@ -100,13 +100,13 @@ export class RunStreamEventService {
     return this.listAfterWhere(tenantIdInput, runId, after, "AND event = 'terminal.frame'");
   }
 
-  async runIsVisible(tenantIdInput: string, runId: string): Promise<boolean> {
+  async runIsVisible(tenantIdInput: string, runId: string, workspaceId?: string): Promise<boolean> {
     if (!RunIdSchema.safeParse(runId).success) return false;
     const tenantId = bareTenant(tenantIdInput);
     return this.store.withTenant(tenantId, async (tx) => {
       const result = await tx.query(
-        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2",
-        [tenantId, runId],
+        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+        [tenantId, runId, workspaceId ?? null],
       );
       return result.rowCount === 1;
     });
@@ -116,6 +116,7 @@ export class RunStreamEventService {
     tenantIdInput: string,
     projectId: string,
     runId: string,
+    workspaceId?: string,
   ): Promise<boolean> {
     if (
       !RunIdSchema.safeParse(runId).success ||
@@ -126,8 +127,8 @@ export class RunStreamEventService {
     const tenantId = bareTenant(tenantIdInput);
     return this.store.withTenant(tenantId, async (tx) => {
       const result = await tx.query(
-        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2 AND project_id = $3",
-        [tenantId, runId, projectId],
+        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2 AND project_id = $3 AND ($4::uuid IS NULL OR workspace_id = $4)",
+        [tenantId, runId, projectId, workspaceId ?? null],
       );
       return result.rowCount === 1;
     });

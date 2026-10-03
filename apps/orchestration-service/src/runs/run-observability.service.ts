@@ -104,15 +104,15 @@ function normalizeLimit(limit: number | undefined): number {
 export class RunObservabilityService {
   constructor(private readonly store: OrchestrationTenantStore) {}
 
-  verificationResults(tenantId: string, runId: string, query: { cursor?: string; limit?: number } = {}) {
+  verificationResults(tenantId: string, runId: string, query: { workspaceId?: string; cursor?: string; limit?: number } = {}) {
     return this.list("verification-results", tenantId, runId, query);
   }
 
-  recoveryActions(tenantId: string, runId: string, query: { cursor?: string; limit?: number } = {}) {
+  recoveryActions(tenantId: string, runId: string, query: { workspaceId?: string; cursor?: string; limit?: number } = {}) {
     return this.list("recovery-actions", tenantId, runId, query);
   }
 
-  qualityGates(tenantId: string, runId: string, query: { cursor?: string; limit?: number } = {}) {
+  qualityGates(tenantId: string, runId: string, query: { workspaceId?: string; cursor?: string; limit?: number } = {}) {
     return this.list("quality-gates", tenantId, runId, query);
   }
 
@@ -188,7 +188,7 @@ export class RunObservabilityService {
     collection: Collection,
     tenantIdInput: string,
     runId: string,
-    query: { cursor?: string; limit?: number },
+    query: { workspaceId?: string; cursor?: string; limit?: number },
   ): Promise<RunObservabilityPage> {
     const tenantId = bareTenantUuid(tenantIdInput);
     requireRunId(runId);
@@ -200,8 +200,8 @@ export class RunObservabilityService {
 
     return this.store.withTenant(tenantId, async (tx) => {
       const run = await tx.query<{ readonly id: string }>(
-        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2",
-        [tenantId, runId],
+        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+        [tenantId, runId, query.workspaceId ?? null],
       );
       if (run.rowCount === 0) throw new RunObservabilityRunNotFoundError(runId);
 

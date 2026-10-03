@@ -299,6 +299,7 @@ export class WorkflowReadService {
     workflowId: string,
     cursor: string | undefined,
     limit: number,
+    workspaceId?: string,
   ): Promise<WorkflowVersionPage> {
     requireNonEmpty("tenantId", tenantId);
     requireNonEmpty("workflowId", workflowId);
@@ -314,6 +315,10 @@ export class WorkflowReadService {
     }
     const bareTenant = bareTenantUuid(tenantId);
     return this.store.withTenant(bareTenant, async (tx) => {
+      if (workspaceId !== undefined) {
+        const owner = await tx.query("SELECT id FROM workflows WHERE tenant_id=$1 AND id=$2 AND workspace_id=$3", [bareTenant, workflowId, workspaceId]);
+        if (owner.rowCount === 0) throw new WorkflowNotFoundError(workflowId);
+      }
       const result = await tx.query<WorkflowVersionSummaryRow>(
         `SELECT id, workflow_id, version, status, dag_schema_version, traffic_percent,
                 evaluation_run_id, tested_at, evaluation_failed_at, created_at

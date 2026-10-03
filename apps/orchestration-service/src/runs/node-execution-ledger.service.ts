@@ -382,7 +382,7 @@ export class NodeExecutionLedgerService {
   async list(
     tenantIdInput: string,
     runId: string,
-    query: { readonly cursor?: string; readonly limit?: number } = {},
+    query: { readonly workspaceId?: string; readonly cursor?: string; readonly limit?: number } = {},
   ): Promise<NodeExecutionPage> {
     const tenantId = bareTenantUuid(tenantIdInput);
     requireRunId(runId);
@@ -391,8 +391,8 @@ export class NodeExecutionLedgerService {
 
     return this.store.withTenant(tenantId, async (tx) => {
       const run = await tx.query<RunRow>(
-        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2",
-        [tenantId, runId],
+        "SELECT id FROM runs WHERE tenant_id = $1 AND id = $2 AND ($3::uuid IS NULL OR workspace_id = $3)",
+        [tenantId, runId, query.workspaceId ?? null],
       );
       if (run.rowCount === 0) throw new NodeExecutionRunNotFoundError(runId);
 

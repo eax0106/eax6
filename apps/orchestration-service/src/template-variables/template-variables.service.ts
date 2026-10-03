@@ -169,12 +169,16 @@ const SELECT_DEFINITIONS = `SELECT definition.name, definition.value_type, defin
 export class TemplateVariablesService {
   constructor(private readonly store: OrchestrationTenantStore) {}
 
-  async list(tenantIdInput: string, workflowId: string): Promise<readonly TemplateVariableRead[]> {
+  async list(tenantIdInput: string, workflowId: string, workspaceId?: string): Promise<readonly TemplateVariableRead[]> {
     const tenantId = bareTenantUuid(tenantIdInput);
     requireWorkflowId(workflowId);
-    return this.store.withTenant(tenantId, async (tx) =>
-      (await this.#definitions(tx, tenantId, workflowId)).map(toRead),
-    );
+    return this.store.withTenant(tenantId, async (tx) => {
+      if (workspaceId !== undefined) {
+        const owner = await tx.query("SELECT id FROM workflows WHERE tenant_id=$1 AND id=$2 AND workspace_id=$3", [tenantId, workflowId, workspaceId]);
+        if (owner.rowCount === 0) throw new TemplateVariableNotFoundError("Workflow was not found");
+      }
+      return (await this.#definitions(tx, tenantId, workflowId)).map(toRead);
+    });
   }
 
   async replaceDefinitions(

@@ -1,32 +1,30 @@
-# Gates: D19 runtime connection consumption (C108)
+# Gates: Engine collection read context (C113)
 
-OWNS: apps/orchestration-service/src/health/health.controller.spec.ts, apps/orchestration-service/src/connections/**, apps/orchestration-service/src/operations.module.ts, apps/orchestration-service/src/registry/handlers/toolcall*, apps/orchestration-service/src/recovery/failure-classifier.ts, apps/orchestration-service/src/recovery/failure-classifier.spec.ts, apps/tool-gateway/src/**, packages/contracts/src/connection-registry.ts, packages/contracts/src/index.ts, packages/contracts/proto/alter/toolgw/v1/toolgw.proto, packages/contracts/src/generated/alter/toolgw/v1/toolgw.ts, packages/adapters/src/grpc/toolgw*, packages/adapters/src/index.ts, packages/adapters/src/testing/toolgw-credential-client.ts, packages/adapters/src/testing/index.ts, packages/adapters/src/aws/secrets-manager-provider*, apps/eval-service/alter/toolgw/v1/**, apps/eval-service/tests/test_orchestrator_integration.py, scripts/gates/baseline.json, .env.local.example, deploy/ec2/**, docs/work-queue.md
+OWNS: apps/orchestration-service/src/workspace-read-scope.ts, apps/orchestration-service/src/workspace-read-scope.integration.spec.ts, apps/orchestration-service/src/runs/runs.controller.ts, apps/orchestration-service/src/runs/run-launcher.service.ts, apps/orchestration-service/src/runs/node-executions.controller.ts, apps/orchestration-service/src/runs/node-execution-ledger.service.ts, apps/orchestration-service/src/runs/run-observability.controller.ts, apps/orchestration-service/src/runs/run-observability.service.ts, apps/orchestration-service/src/runs/run-stream.controller.ts, apps/orchestration-service/src/runs/run-stream-event.service.ts, apps/orchestration-service/src/approvals/approvals.controller.ts, apps/orchestration-service/src/approvals/approvals.service.ts, apps/orchestration-service/src/clarifications/clarifications.controller.ts, apps/orchestration-service/src/clarifications/clarifications.service.ts, apps/orchestration-service/src/escalations/escalations.controller.ts, apps/orchestration-service/src/escalations/escalations.service.ts, apps/orchestration-service/src/trigger-registry/trigger-registry.controller.ts, apps/orchestration-service/src/trigger-registry/trigger-registry.service.ts, apps/orchestration-service/src/trigger-registry/event.controller.ts, apps/orchestration-service/src/trigger-registry/event-query.service.ts, apps/orchestration-service/src/artifacts/artifacts.controller.ts, apps/orchestration-service/src/artifacts/artifacts.service.ts, apps/orchestration-service/src/trigger-bindings/trigger-binding.controller.ts, apps/orchestration-service/src/trigger-bindings/trigger-binding.service.ts, apps/orchestration-service/src/trigger-bindings/postgres-trigger-binding.store.ts, apps/orchestration-service/src/template-variables/template-variables.controller.ts, apps/orchestration-service/src/template-variables/template-variables.service.ts, apps/orchestration-service/src/workflow-read/workflow-read.controller.ts, apps/orchestration-service/src/workflow-read/workflow-read.service.ts, apps/orchestration-service/src/project-read/project-read.controller.ts, apps/orchestration-service/src/project-read/project-domain.service.ts, apps/orchestration-service/src/approvals/approvals.controller.spec.ts, apps/orchestration-service/src/escalations/escalations.controller.spec.ts, apps/orchestration-service/src/runs/node-executions.controller.spec.ts, apps/orchestration-service/src/runs/runs.controller.spec.ts, apps/orchestration-service/src/clarifications/clarifications.service.spec.ts, apps/orchestration-service/src/trigger-registry/event-query.service.spec.ts, scripts/gates/baseline.json, docs/work-queue.md
 
-OWNS: packages/adapters/src/postgres/tool-database-provider*
+Scope: Existing engine collection reads carry validated actor workspace context through SQL filters and cursor ownership. Ordinary actors require a valid workspace; only the signed D1 system principal retains explicitly tenant-wide read-only audited access. Audit all engine HTTP collection surfaces, including nested collections and streams, against actual callers and stores. No new service, migration, shared contract or dependency.
 
-Scope: Tool Gateway resolves user connection credentials through current engine records scoped from the actual run. Both raw and opaque credential paths preserve that scope and refuse revoked, missing or unreadable credentials with the existing named credential-missing recovery category. Preserve existing platform credential templates and dispatch permissions. The compiler prerequisite is C100; I11 requires C99, C100 and C108.
+- [x] G1: Restricted PostgreSQL proves actual workspace-filtered runs, approvals, clarifications, escalations, triggers and events with filters and pagination, foreign cursor rejection and tenant RLS
+  CHECK: node .unlazy/verify-collections.mjs
+  EXPECT: workspace-collections-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=f62d9cf275f09b0865b2ad8381bc8579960855b8066dcab48fcbad319409ea70; exit=0; EXPECT=matched; output-sha256=2b900e3bf77538df9abbe7e3cd240f4c46e7f5873efdb62b9292e9943a6fa1ae; output-bytes=30; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
 
-- [x] G1: Real restricted PostgreSQL and authenticated engine HTTP resolve only connected records in the actual run tenant/workspace, return references only, refuse mismatched scope and preserve the separate write credential
-  CHECK: node .unlazy/verify-engine.mjs
-  EXPECT: connection-runtime-engine-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a99c14bce457a9f06ba0b432727fe546c7b035c34ebfdf310729f1e7fb664045; exit=0; EXPECT=matched; output-sha256=9a6f5ac00f3d48f9a9c6a61fdb35bc8c397eb42e58684d7887dc56899816b496; output-bytes=97; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+- [x] G2: Actual run/workflow/project/trigger parent ownership governs nested collection reads and stream visibility; existing metadata and system-only feeds retain their declared behavior
+  CHECK: node .unlazy/verify-nested.mjs
+  EXPECT: workspace-nested-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=4f467e6bfbb82895aa574910298eedacdc1558ad6958c787cb5c6de04273ca1c; exit=0; EXPECT=matched; output-sha256=85bbfcdc1b715ac23a96d317c60a5e84d098fef4c55497ede82ef93667ad1b8a; output-bytes=25; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Real Tool Gateway gRPC plus engine HTTP and native secret/provider edges exercise both credential entry points, opaque token reuse, current revocation and scope checks, unreadable credentials, successful dispatch and existing credential-missing recovery classification
-  CHECK: node .unlazy/verify-runtime.mjs
-  EXPECT: connection-runtime-native-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=80f94f346b22dbc114e122b14c09843cbc970aa7be74b4a471dbe1b30f78aeae; exit=0; EXPECT=matched; output-sha256=932ab675e5cbafb967dc084da4c9d04a9f2a84c05d1c6a255fb5756a1c426443; output-bytes=151; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+- [x] G3: Real signed machine and actor HTTP guards derive scope from the caller, ignore a supplied workspace query, refuse missing/invalid delegation and token replay, and preserve read-only audited D1 system access
+  CHECK: node .unlazy/verify-http.mjs
+  EXPECT: workspace-http-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=3836dda82ff309223f06a4669d1b296cf3207b884fd0a25dd68734b74ff0c1a8; exit=0; EXPECT=matched; output-sha256=a8ee711bf9f66a97f5d60bdb768fc51eeed667bb48c0078d9cbdf3cf8e8792ed; output-bytes=23; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Production module wiring and local/EC2 configuration supply the actual read lookup address and service credential; additive wire changes retain legacy callers and existing platform credential templates
-  CHECK: node .unlazy/verify-wiring.mjs
-  EXPECT: connection-runtime-wiring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=ff1611c0484aebc0734d121351cfeaa10392a0f5dac0159b38da2a3e01afbd74; exit=0; EXPECT=matched; output-sha256=a1c6c860c5db94b0506f3d91e2440824c6cd4ab1dc22894868e8cc557302c4db; output-bytes=198; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
-
-- [x] G4: Disabling scope/status, opaque revalidation, lookup authentication, database authentication classification or named gRPC error mapping fails the relevant native assertion; restored sources pass
+- [x] G4: Removing actual workspace propagation, SQL collection scope, cursor ownership, nested parent ownership or explicit system exemption fails known-positive native assertions; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: connection-runtime-negative-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=fe5a4caaacee45555500fb75be1c9a3d60765cdc11b93b779e9942a6ae670305; exit=0; EXPECT=matched; output-sha256=23e1825e12ba0b7cca9f3a7ecff12a93bf8216383032ec05533199c5c55f9b80; output-bytes=6231; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+  EXPECT: workspace-negative-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=31937bc41b2840744762f6f536fb84afd83534019c399bd58520ee074bb06229; exit=0; EXPECT=matched; output-sha256=774f652a1a303f5f0e89413c0ac70a4d48f11d74a667729e57d32ee95cfc4201; output-bytes=1558; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workspace-reads-c113; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Full engine, Tool Gateway, adapters and contracts suites, build/typecheck/lint, proto compatibility, architecture, RBAC, rollback pairing and zero added normalized AST findings pass
+- [ ] G5: Complete engine test discovery and suite, touched build/typecheck/lint, architecture/RBAC/migration/naming, collection audit inventory and zero new normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
-  EXPECT: connection-runtime-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=cff5dff110466fce972d37778bdb95b568cb917fc43f8337755552d5e1ef0628; exit=0; EXPECT=matched; output-sha256=e2c43d3ed446a41653c493af400900b647e300ce54f0d8eeb500e7bc3dd13190; output-bytes=948; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-connection-runtime-c108; path=b33e9cf43ae9/31 entries
+  EXPECT: workspace-final-passed
+  EVIDENCE: pending
