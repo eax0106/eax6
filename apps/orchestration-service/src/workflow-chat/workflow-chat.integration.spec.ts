@@ -18,7 +18,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { WorkflowReadService } from "../workflow-read/workflow-read.service";
 import { WorkflowReadController } from "../workflow-read/workflow-read.controller";
 import { GraphCompilerService } from "../compiler/graph-compiler.service";
-import { CONNECTION_REGISTRY_TOKEN_HASH, ConnectionRegistryController } from "../connections/connection-registry.controller";
+import { CONNECTION_LOOKUP_TOKEN_HASH, CONNECTION_REGISTRY_TOKEN_HASH, ConnectionRegistryController } from "../connections/connection-registry.controller";
 import { ConnectionRegistryService } from "../connections/connection-registry.service";
 import { OrchestrationDeletionService } from "../deletion/deletion.service";
 import { uuidV7 } from "../trigger-bindings/ids";
@@ -59,7 +59,7 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
   chats=new WorkflowChatService(store,{invoke:async request=>{if(modelGateway)return modelGateway.invoke(request);throw Error('Storage proof must not invoke a model');}});workflows=new WorkflowReadService(store);
  },120000);
  beforeEach(async()=>{
-  for(const id of [tenant,otherTenant])await admin.withTenant(id,async tx=>{await tx.query('DELETE FROM runs WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM conversation_messages WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM conversations WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM workflows WHERE tenant_id=$1',[id]);});
+  for(const id of [tenant,otherTenant])await admin.withTenant(id,async tx=>{await tx.query('DELETE FROM runs WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM conversation_messages WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM conversations WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM workflow_versions WHERE tenant_id=$1',[id]);await tx.query('DELETE FROM workflows WHERE tenant_id=$1',[id]);});
  });
  afterAll(async()=>{await store?.close();await admin?.close();await postgres?.stop();});
 
@@ -185,6 +185,7 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
       {provide:COMPILER_HANDLER,useValue:new GraphCompilerService(store)},
       {provide:ConnectionRegistryService,useValue:new ConnectionRegistryService(store)},
       {provide:CONNECTION_REGISTRY_TOKEN_HASH,useValue:createHash('sha256').update(registryToken).digest('hex')},
+      {provide:CONNECTION_LOOKUP_TOKEN_HASH,useValue:createHash('sha256').update(randomBytes(24)).digest('hex')},
       {provide:RUNS_HANDLER,useValue:{getRunWorkspace:(request:{tenant_id:string;run_id:string})=>lookup.getRunWorkspaceResponse(request.tenant_id,request.run_id),
         getNodeExecutionRecoveryInfo:async(request:{tenant_id:string;run_id:string;node_execution_id:string})=>{const result=await lookup.getRecoveryInfo(request.tenant_id,request.run_id,request.node_execution_id);return {is_retry:result.isRetry,is_recovery:result.isRecovery};}}},
     ]}).compile();

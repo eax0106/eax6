@@ -4,30 +4,30 @@ OWNS: apps/orchestration-service/drizzle/0051_workflow_chat.sql, apps/orchestrat
 
 Scope: One persistent chat per workflow, workflow title, independently archived conversation and atomic workflow/chat creation. Builder messages retain prior context through the existing understand/plan/clarify/compile flow. One Ask Alter assistant per user in the workspace uses only existing caller-scoped reads and costed Model Gateway calls. Its sole workflow action creates an empty draft and hands off to that draft's chat. Wire all six existing web methods plus home and assistant entry points. No project-mode expansion or new dependency.
 
-- [ ] G1: Restricted PostgreSQL and authenticated engine HTTP prove unique workflow chats, atomic creation, stored ordered messages, current workflow title, workspace/user scope, independent archiving, migration rollback and registered tenant/workspace erasure
+- [x] G1: Restricted PostgreSQL and authenticated engine HTTP prove unique workflow chats, atomic creation, stored ordered messages, current workflow title, workspace/user scope, independent archiving, migration rollback and registered tenant/workspace erasure
   CHECK: node .unlazy/verify-storage.mjs
   EXPECT: workflow-chat-storage-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1d26b5470d1e31e31698ccad78d0c3ff5767a9312caae25f22809c6603736285; exit=0; EXPECT=matched; output-sha256=176379cd14e54d8abceafa17b84c804eb8cf69886f68dfd06224f780d5c6df20; output-bytes=83; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
 
-- [ ] G2: Native planner/compiler transports reached from the platform chat retain original goal and multiple clarification rounds, return complete connection requirements, save compiled versions and persist replies that describe the actual result
+- [x] G2: Native planner/compiler transports reached from the platform chat retain original goal and multiple clarification rounds, return complete connection requirements, save compiled versions and persist replies that describe the actual result
   CHECK: node .unlazy/verify-builder.mjs
   EXPECT: workflow-chat-builder-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=b14aea59b223d07f3cfaefa3319cd3f7fa2a778559c984517271b68d06742074; exit=0; EXPECT=matched; output-sha256=7406c0fd32718c95224280f49a59e1d30fc1a70d755eae14dbd18175b33cd1b2; output-bytes=147; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
 
-- [ ] G3: Real caller-authenticated read boundaries and actual Model Gateway/cost recording prove Ask Alter sees readable workspace workflows, recent runs, failures, verification and billed spend; it cannot change existing workflows and its only action creates a draft/chat handoff
+- [x] G3: Real caller-authenticated read boundaries and actual Model Gateway/cost recording prove Ask Alter sees readable workspace workflows, recent runs, failures, verification and billed spend; it cannot change existing workflows and its only action creates a draft/chat handoff
   CHECK: node .unlazy/verify-assistant.mjs
   EXPECT: workflow-chat-assistant-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=cf3f66468e5df3524d6459fddacbb11ea84f607b2d0436ae2e5ae606f9baa1ee; exit=0; EXPECT=matched; output-sha256=a69df4a95f6223fd7ac081ef9a16eeb456f4e620a255cad0e31cf9964a96447f; output-bytes=85; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
 
-- [ ] G4: All six web methods use live HTTP; rendered home, workflow chat and Ask Alter use actual returned identities, show clarification/results/errors and route draft handoff without mock fallback
+- [x] G4: All six web methods use live HTTP; rendered home, workflow chat and Ask Alter use actual returned identities, show clarification/results/errors and route draft handoff without mock fallback
   CHECK: node .unlazy/verify-web.mjs
   EXPECT: workflow-chat-web-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=758efc6652f52b9c9bad083a938114bc3be65cd2e366a1ca36f627fa8733e27e; exit=0; EXPECT=matched; output-sha256=f0b2d30bfd85e57600cd0ba44ad44e708ac457e925b67906feeb2ecbf506bb17; output-bytes=77; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
 
-- [ ] G5: Removing each consequential scope, ownership, atomicity, context preservation, read-only action, costing or live-route check fails its known-positive native assertion; restored sources pass
+- [x] G5: Removing each consequential scope, ownership, atomicity, context preservation, read-only action, costing or live-route check fails its known-positive native assertion; restored sources pass
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: workflow-chat-negative-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=45ef914989dc4190ffd9a183e1d0787511897d002ad17732aea3cd8a79b8a03f; exit=0; EXPECT=matched; output-sha256=42c6e8b54ecab427853001b85a67ddf4cbb36824c0b4a9279e2c72cc09f41a52; output-bytes=6748; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-chat-c110; path=b33e9cf43ae9/31 entries
 
 - [ ] G6: Full touched suites including platform folder coverage, build/typecheck/lint, migration/erasure registration, architecture, RBAC, naming and zero added normalized AST findings pass with actual CI discovery
   CHECK: node .unlazy/verify-final.mjs
