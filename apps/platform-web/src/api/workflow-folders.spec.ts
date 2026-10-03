@@ -55,3 +55,20 @@ it("never treats an incomplete or repeating page sequence as complete workflow c
   for (let index = 0; index < 2; index++) respond({ data: [], page: { has_more: true, next_cursor: "same" } })
   await expect(getWorkflows()).rejects.toThrow("Workflow pagination could not continue")
 })
+
+it("mirrors folder placement and stale writes for the existing mock workflows", async () => {
+  vi.stubEnv("VITE_API_MODE", "mock")
+  const folders = await import("./workflow-folders"), { mockWorkflows } = await import("./mock/data")
+  const workflow = mockWorkflows[0], before = { ...workflow }
+  try {
+    await folders.getWorkflowFolders()
+    const created = await folders.createWorkflowFolder("Demo folder")
+    const firstEtag = workflow.folderEtag!
+    const moved = await folders.moveWorkflowFolder(workflow.id, created.id, firstEtag)
+    expect(workflow.folderId).toBe(created.id); expect(moved.etag).not.toBe(firstEtag)
+    await expect(folders.moveWorkflowFolder(workflow.id, null, firstEtag)).rejects.toMatchObject({ status: 412 })
+    await folders.deleteWorkflowFolder(created)
+    expect(workflow.folderId).toBeNull(); expect(mockWorkflows[0].id).toBe(before.id)
+    expect(fetch).not.toHaveBeenCalled()
+  } finally { Object.assign(workflow, before); if (before.folderId === undefined) delete workflow.folderId; if (before.folderEtag === undefined) delete workflow.folderEtag }
+})
