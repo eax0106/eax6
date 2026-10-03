@@ -64,6 +64,22 @@ class GrpcEmbeddingClient:
         if self._owns_channel:
             self._channel.close()
 
+    def redact(self, tenant_id: str, content: str) -> str:
+        try:
+            if self._access_token_provider is None:
+                raise EmbeddingTransportError("Redaction caller identity is unavailable")
+            response = self._stub.Redact(
+                modelgw_pb2.RedactRequest(tenant_id=tenant_id, content=content),
+                metadata=self._access_token_provider.metadata(),
+                timeout=self._timeout_seconds,
+            )
+            content = response.redacted_content
+            if not isinstance(content, str):
+                raise EmbeddingTransportError("Invalid redaction response")
+            return content
+        except Exception as error:
+            raise EmbeddingTransportError("Redaction RPC call failed") from error
+
     def embed(
         self, *, tenant_id: str, text: str, dimensions: EmbeddingDimensions
     ) -> EmbeddingResult:

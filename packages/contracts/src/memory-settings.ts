@@ -1,4 +1,5 @@
 import { z } from "./zod";
+import { MemoryIdSchema } from "./ids";
 
 export const WorkspaceMemoryValuesSchema = z.object({
   conversationMemoryEnabled: z.boolean(),
@@ -11,3 +12,7 @@ export const WorkspaceMemorySettingsSchema = WorkspaceMemoryValuesSchema.extend(
 }).strict();
 export type WorkspaceMemoryValues = z.infer<typeof WorkspaceMemoryValuesSchema>;
 export type WorkspaceMemorySettings = z.infer<typeof WorkspaceMemorySettingsSchema>;
+export const WorkspaceWorkflowMemoriesSchema = z.array(z.object({
+  id: MemoryIdSchema, content: z.record(z.string(), z.unknown()),
+}).strict()).max(20).refine(value => new TextEncoder().encode(JSON.stringify(value)).length <= 16_000,
+  "Workflow memory exceeds recall limit");

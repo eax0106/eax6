@@ -1,9 +1,11 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 
 from src.db.ids import validate_prefixed_id
 
+from .client import MemoryUnavailableError
 from .models import RecordMemoryNamespaceRequest, RecordMemoryNamespaceResponse
 from .repository import ScopeNotFoundError, SqlAlchemyMemoryNamespaceRepository
 
@@ -42,7 +44,8 @@ async def record_memory_namespace(
     validate_prefixed_id("ten", request.tenant_id)
     tenant_uuid = request.tenant_id.removeprefix("ten_")
     try:
-        record_id = repository.record(
+        record_id = await run_in_threadpool(
+            repository.record,
             tenant_uuid=tenant_uuid,
             scope_id=request.scope_id,
             project_ref=request.project_ref,
@@ -53,4 +56,6 @@ async def record_memory_namespace(
         )
     except ScopeNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
-    return RecordMemoryNamespaceResponse(id=record_id)
+    except MemoryUnavailableError as error:
+        raise HTTPException(status_code=503, detail="Workspace memory unavailable") from error
+    return RecordMemoryNamespaceResponse(id=record_id, skipped=not record_id)

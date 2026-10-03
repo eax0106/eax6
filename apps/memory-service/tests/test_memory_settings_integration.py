@@ -678,6 +678,7 @@ async def test_public_memory_settings_use_actual_grpc_and_workspace_rbac(
     import subprocess
 
     import grpc
+    from test_memory_learning import fixture_redact
     from test_memory_repository_integration import SeededRunClient
 
     from alter.memory.v1 import memory_pb2_grpc
@@ -694,6 +695,7 @@ async def test_public_memory_settings_use_actual_grpc_and_workspace_rbac(
         MemoryLearningKernel(SeededRunClient(), SqlAlchemyMemoryCandidateRepository(repo.sessions)),
         PolicyStoreService(SqlAlchemyPolicyStoreRepository(repo.sessions, system)),
         repo,
+        fixture_redact,
     )
     server = grpc.aio.server(interceptors=[ServiceAuthInterceptor()])
     memory_pb2_grpc.add_MemoryServiceServicer_to_server(service, server)  # type: ignore[no-untyped-call]
@@ -713,6 +715,14 @@ async def test_public_memory_settings_use_actual_grpc_and_workspace_rbac(
         )
     )
     config.chmod(0o600)
+    with admin.begin() as session:
+        session.execute(sa.text(
+            "INSERT INTO memory_records(id,tenant_id,workspace_id,memory_kind,scope,"
+            "content,provenance,status) VALUES(:id,:tenant,:ws,'workflow','project',"
+            "CAST(:content AS jsonb),CAST(:provenance AS jsonb),'candidate')"
+        ), {"id": new_prefixed_uuid7("mem"), "tenant": TENANT[4:], "ws": ws[3:],
+            "content": json.dumps({"lesson": "Earlier run lesson"}),
+            "provenance": json.dumps({"namespace": f"workflow:wf_{ws[3:]}"})})
     report = tmp_path / "public-report.json"
     database_url = admin.kw["bind"].url.set(drivername="postgresql").render_as_string(
         hide_password=False
@@ -750,14 +760,14 @@ async def test_public_memory_settings_use_actual_grpc_and_workspace_rbac(
         data = json.loads(report.read_text())
         assert data["success"] and data["numPassedTests"] == 1 and data["numPendingTests"] == 0
         stored = repo.get(TENANT, ws)
-        assert stored.etag == '"memory-1"' and stored.retentionDays == 7
+        assert stored.etag == '"memory-2"' and stored.retentionDays == 7
         with admin.begin() as session:
             assert (
                 session.scalar(
                     sa.text("SELECT count(*) FROM memory_settings_audit WHERE workspace_id=:ws"),
                     {"ws": ws[3:]},
                 )
-                == 1
+                == 2
             )
     finally:
         await server.stop(0)

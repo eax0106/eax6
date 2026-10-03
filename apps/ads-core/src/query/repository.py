@@ -94,11 +94,15 @@ class QueryResult:
 
 
 class SqlAlchemyRetrievalRepository:
-    def __init__(self, sessions: sessionmaker[Session]) -> None:
+    def __init__(
+        self,
+        sessions: sessionmaker[Session],
+        memory_namespace: SqlAlchemyMemoryNamespaceRepository | None = None,
+    ) -> None:
         self._sessions = sessions
         # memory_namespace lives in the same ads_db, same sessions factory --
         # no separate connection/config needed to fetch it alongside hits.
-        self._memory_namespace = SqlAlchemyMemoryNamespaceRepository(sessions)
+        self._memory_namespace = memory_namespace or SqlAlchemyMemoryNamespaceRepository(sessions)
 
     def validate_scopes(self, request: RetrievalRequest) -> None:
         validate_prefixed_id("ten", request.tenant_id)
@@ -170,7 +174,10 @@ class SqlAlchemyRetrievalRepository:
             ).mappings()
             hits = tuple(self._hit(row) for row in rows)
         memory_facts = self._memory_namespace.list_active_for_scopes(
-            tenant_uuid=tenant_uuid, scope_ids=request.scope_ids, limit=request.top_k
+            tenant_uuid=tenant_uuid,
+            workspace_uuid=workspace_uuid,
+            scope_ids=request.scope_ids,
+            limit=request.top_k,
         )
         return QueryResult(hits=hits, memory_facts=memory_facts)
 

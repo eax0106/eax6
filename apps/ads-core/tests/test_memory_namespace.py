@@ -31,6 +31,15 @@ SCOPE_B = "scp_018f47a5-7b2c-7d10-8f11-123456789ab2"
 PROJECT_A = "018f47a5-7b2c-7d10-8f11-1234567890aa"
 
 
+def _repository(sessions: sessionmaker[Session]) -> SqlAlchemyMemoryNamespaceRepository:
+    # Fixed anonymous fixtures; separate native proof covers settings and gateway transport.
+    return SqlAlchemyMemoryNamespaceRepository(
+        sessions,
+        access=lambda _tenant, _workspace: (True, 90),
+        redact=lambda _tenant, content: content,
+    )
+
+
 def raw(prefixed: str) -> str:
     return prefixed.split("_", maxsplit=1)[1]
 
@@ -67,7 +76,7 @@ class TestSqlAlchemyMemoryNamespaceRepository:
     def test_records_a_real_row_scoped_to_an_existing_scope(
         self, sessions: sessionmaker[Session]
     ) -> None:
-        repository = SqlAlchemyMemoryNamespaceRepository(sessions)
+        repository = _repository(sessions)
 
         record_id = repository.record(
             tenant_uuid=raw(TENANT_A),
@@ -81,7 +90,10 @@ class TestSqlAlchemyMemoryNamespaceRepository:
 
         assert record_id.startswith("mns_")
         facts = repository.list_active_for_scopes(
-            tenant_uuid=raw(TENANT_A), scope_ids=(SCOPE_A,), limit=10
+            tenant_uuid=raw(TENANT_A),
+            workspace_uuid="018f47a5-7b2c-7d10-8f11-123456789cde",
+            scope_ids=(SCOPE_A,),
+            limit=10,
         )
         assert len(facts) == 1
         assert facts[0].id == record_id
@@ -91,7 +103,7 @@ class TestSqlAlchemyMemoryNamespaceRepository:
     def test_rejects_an_unknown_scope_instead_of_an_orphan_row(
         self, sessions: sessionmaker[Session]
     ) -> None:
-        repository = SqlAlchemyMemoryNamespaceRepository(sessions)
+        repository = _repository(sessions)
 
         with pytest.raises(ScopeNotFoundError):
             repository.record(
@@ -107,7 +119,7 @@ class TestSqlAlchemyMemoryNamespaceRepository:
     def test_rejects_a_scope_belonging_to_a_different_tenant(
         self, sessions: sessionmaker[Session]
     ) -> None:
-        repository = SqlAlchemyMemoryNamespaceRepository(sessions)
+        repository = _repository(sessions)
 
         with pytest.raises(ScopeNotFoundError):
             repository.record(
@@ -123,10 +135,13 @@ class TestSqlAlchemyMemoryNamespaceRepository:
     def test_list_active_for_scopes_excludes_a_different_scope(
         self, sessions: sessionmaker[Session]
     ) -> None:
-        repository = SqlAlchemyMemoryNamespaceRepository(sessions)
+        repository = _repository(sessions)
 
         facts = repository.list_active_for_scopes(
-            tenant_uuid=raw(TENANT_A), scope_ids=(SCOPE_B,), limit=10
+            tenant_uuid=raw(TENANT_A),
+            workspace_uuid="018f47a5-7b2c-7d10-8f11-123456789cde",
+            scope_ids=(SCOPE_B,),
+            limit=10,
         )
 
         assert facts == ()
@@ -134,10 +149,13 @@ class TestSqlAlchemyMemoryNamespaceRepository:
     def test_list_active_for_scopes_returns_empty_for_no_scope_ids(
         self, sessions: sessionmaker[Session]
     ) -> None:
-        repository = SqlAlchemyMemoryNamespaceRepository(sessions)
+        repository = _repository(sessions)
 
         facts = repository.list_active_for_scopes(
-            tenant_uuid=raw(TENANT_A), scope_ids=(), limit=10
+            tenant_uuid=raw(TENANT_A),
+            workspace_uuid="018f47a5-7b2c-7d10-8f11-123456789cde",
+            scope_ids=(),
+            limit=10,
         )
 
         assert facts == ()
@@ -149,7 +167,7 @@ class TestMemoryNamespaceRoute:
     ) -> None:
         app = FastAPI()
         app.include_router(memory_namespace_router)
-        configure_memory_namespace_repository(SqlAlchemyMemoryNamespaceRepository(sessions))
+        configure_memory_namespace_repository(_repository(sessions))
         try:
             response = TestClient(app).post(
                 "/ads/memory-namespace/records",
@@ -172,7 +190,7 @@ class TestMemoryNamespaceRoute:
     def test_returns_404_for_an_unknown_scope(self, sessions: sessionmaker[Session]) -> None:
         app = FastAPI()
         app.include_router(memory_namespace_router)
-        configure_memory_namespace_repository(SqlAlchemyMemoryNamespaceRepository(sessions))
+        configure_memory_namespace_repository(_repository(sessions))
         try:
             response = TestClient(app).post(
                 "/ads/memory-namespace/records",
@@ -192,7 +210,7 @@ class TestMemoryNamespaceRoute:
     def test_rejects_an_unrecognised_kind(self, sessions: sessionmaker[Session]) -> None:
         app = FastAPI()
         app.include_router(memory_namespace_router)
-        configure_memory_namespace_repository(SqlAlchemyMemoryNamespaceRepository(sessions))
+        configure_memory_namespace_repository(_repository(sessions))
         try:
             response = TestClient(app).post(
                 "/ads/memory-namespace/records",

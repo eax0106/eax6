@@ -8,9 +8,10 @@ import { PlannerFacadeModule } from "../planner-facade/planner-facade.module";
 import { WorkflowExceptionFilter } from "../workflows/workflow-exception.filter";
 import { PlatformWorkflowChatController } from "./platform-workflow-chat.controller";
 import { PlatformWorkflowChatService } from "./platform-workflow-chat.service";
+import { MemorySettingsModule } from "../memory-settings/memory-settings.module";
 
 @Module({
-  imports: [EngineModule, IdempotencyModule, WorkflowModule, RunModule, CostsModule, PlannerFacadeModule],
+  imports: [EngineModule, IdempotencyModule, WorkflowModule, RunModule, CostsModule, PlannerFacadeModule, MemorySettingsModule],
   controllers: [PlatformWorkflowChatController],
   providers: [PlatformWorkflowChatService, WorkflowExceptionFilter],
 })

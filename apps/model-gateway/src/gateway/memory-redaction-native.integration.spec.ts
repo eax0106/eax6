@@ -61,8 +61,8 @@ it.runIf(Boolean(process.env["MEMORY_REDACTION_NATIVE_DIR"]))("serves authentica
       if (Date.now() > deadline) throw Error("Memory proof did not finish");
       await new Promise(done => setTimeout(done, 25));
     }
-    const expected = JSON.parse(readFileSync(join(directory, "expected.json"), "utf8")) as { minimumCalls: number };
-    expect(calls.length).toBeGreaterThanOrEqual(expected.minimumCalls); expect(tokenRequests).toBe(1);
+    const expected = JSON.parse(readFileSync(join(directory, "expected.json"), "utf8")) as { minimumCalls: number; tokenRequests?: number };
+    expect(calls.length).toBeGreaterThanOrEqual(expected.minimumCalls); expect(tokenRequests).toBe(expected.tokenRequests ?? 1);
     writeFileSync(join(directory, "observed.json"), JSON.stringify({ tokenRequests, calls }), { mode: 0o600 });
   } finally {
     await app?.close(); await new Promise<void>((done, reject) => issuer.close(error => error ? reject(error) : done()));

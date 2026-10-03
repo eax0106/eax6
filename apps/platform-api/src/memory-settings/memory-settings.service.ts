@@ -2,7 +2,8 @@ import { resolve } from "node:path";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import { MemoryServiceClient, MemoryServiceClientError } from "@alterx/adapters";
 import { TenantIdSchema, UserIdSchema, WorkspaceIdSchema, WorkspaceMemorySettingsSchema,
-  WorkspaceMemoryValuesSchema, type WorkspaceMemorySettings } from "@alterx/contracts";
+  WorkspaceMemoryValuesSchema, WorkspaceWorkflowMemoriesSchema, WorkflowChatMessageSchema,
+  ConversationIdSchema, WorkflowIdSchema, type WorkflowChatMessage, type WorkspaceMemorySettings } from "@alterx/contracts";
 import type { ActorContextType } from "../rbac";
 import { PlatformHttpError } from "../signup/problem";
 
@@ -16,7 +17,7 @@ export class MemorySettingsService implements OnModuleDestroy {
 
   async get(actor: ActorContextType | undefined): Promise<WorkspaceMemorySettings> {
     const scope = this.scope(actor);
-    return this.request(client => client.getMemorySettings(scope));
+    return this.request(async client => WorkspaceMemorySettingsSchema.parse(JSON.parse((await client.getMemorySettings(scope)).settings_json)));
   }
 
   async set(actor: ActorContextType | undefined, body: unknown, ifMatch: string | undefined): Promise<WorkspaceMemorySettings> {
@@ -26,9 +27,23 @@ export class MemorySettingsService implements OnModuleDestroy {
     if (!ifMatch?.trim()) throw new PlatformHttpError(428, "IF_MATCH_REQUIRED", "If-Match header required", BASE);
     const actorId = UserIdSchema.safeParse(actor!.user_id.startsWith("usr_") ? actor!.user_id : `usr_${actor!.user_id}`);
     if (!actorId.success) throw new PlatformHttpError(403, "MEMORY_ACTOR_REQUIRED", "Valid workspace user required", BASE);
-    return this.request(client => client.updateMemorySettings({
+    return this.request(async client => WorkspaceMemorySettingsSchema.parse(JSON.parse((await client.updateMemorySettings({
       ...scope, actor_id: actorId.data, settings_json: JSON.stringify(parsed.data), if_match: ifMatch.trim(),
-    }));
+    })).settings_json)));
+  }
+
+  async builderMemory(actor: ActorContextType, conversationId: string, workflowId: string, messages: readonly WorkflowChatMessage[]) {
+    const scope = this.scope(actor);
+    return this.request(async client => {
+      const [chat, workflow] = await Promise.all([
+        client.recallChat({ ...scope, conversation_id: ConversationIdSchema.parse(conversationId), messages_json: JSON.stringify(messages) }),
+        client.recallWorkflow({ ...scope, workflow_id: WorkflowIdSchema.parse(workflowId) }),
+      ]);
+      const recalled = WorkflowChatMessageSchema.array().max(1000).parse(JSON.parse(chat.memory_json));
+      const allowed = new Set(messages.map(row => row.id));
+      if (recalled.some(row => row.conversationId !== conversationId || !allowed.has(row.id))) throw new Error("Invalid memory context");
+      return { messages: recalled, lessons: WorkspaceWorkflowMemoriesSchema.parse(JSON.parse(workflow.memory_json)) };
+    });
   }
 
   private scope(actor: ActorContextType | undefined, write = false) {
@@ -54,10 +69,9 @@ export class MemorySettingsService implements OnModuleDestroy {
     return this.client;
   }
 
-  private async request(operation: (client: MemoryServiceClient) => Promise<{ readonly settings_json: string }>): Promise<WorkspaceMemorySettings> {
+  private async request<T>(operation: (client: MemoryServiceClient) => Promise<T>): Promise<T> {
     try {
-      const response = await operation(this.memory());
-      return WorkspaceMemorySettingsSchema.parse(JSON.parse(response.settings_json));
+      return await operation(this.memory());
     } catch (error: unknown) {
       if (error instanceof PlatformHttpError) throw error;
       if (error instanceof MemoryServiceClientError) {
