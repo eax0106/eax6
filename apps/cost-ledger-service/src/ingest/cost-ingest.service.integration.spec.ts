@@ -23,7 +23,7 @@ const USD_TO_INR_RATE = 83;
 interface StoredCostEvent extends Record<string, unknown> {
   readonly id: string;
   readonly run_id: string;
-  readonly parent_id: string;
+  readonly parent_id: string | null;
   readonly node_execution_id: string;
   readonly source: string;
   readonly resource: string;
@@ -48,6 +48,7 @@ function fakeRunsClient() {
 describe.sequential("CostIngestService against a real Postgres cost_db", () => {
   let postgres: StartedPostgreSqlContainer;
   let store: PostgresCostStoreProvider;
+  let admin: PostgresCostStoreProvider;
 
   beforeAll(async () => {
     postgres = await new PostgreSqlContainer("postgres:16.6-alpine")
@@ -62,10 +63,20 @@ describe.sequential("CostIngestService against a real Postgres cost_db", () => {
       migrationsFolder,
     });
     await store.migrate();
+    admin = store;
+    const role = `chat_cost_${randomBytes(5).toString("hex")}`, password = randomBytes(24).toString("hex");
+    await admin.withTenant(BARE_TENANT, async tx => {
+      await tx.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOBYPASSRLS NOSUPERUSER`);
+      await tx.query(`GRANT USAGE ON SCHEMA public TO ${role}`);
+      await tx.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${role}`);
+    });
+    const uri = new URL(postgres.getConnectionUri()); uri.username = role; uri.password = password;
+    store = new PostgresCostStoreProvider({ authentication: "static", connectionString: uri.href, migrationsFolder });
   }, 90_000);
 
   afterAll(async () => {
     await store?.close();
+    await admin?.close();
     await postgres?.stop();
   }, 60_000);
 
@@ -73,6 +84,22 @@ describe.sequential("CostIngestService against a real Postgres cost_db", () => {
     await store.withTenant(BARE_TENANT, async (tx) => {
       await tx.query("DELETE FROM cost_events WHERE tenant_id = $1", [BARE_TENANT]);
     });
+  });
+
+  it("persists a workspace-only assistant model event through a restricted PostgreSQL role", async () => {
+    const roles = await store.withTenant(BARE_TENANT, tx => tx.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user"));
+    expect(roles.rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+    const runs = { ...fakeRunsClient(), getRunWorkspace: async () => ({ workspace_id: WORKSPACE, workflow_id: "" }) };
+    const service = new CostIngestService(store, runs, USD_TO_INR_RATE);
+    const request = { tenant_id: TENANT, cost_event_id: "cst_018f4d6e-2b4a-7a3e-8c1a-1234567890b2", run_id: RUN, node_execution_id: NODE,
+      provider_reference: "aws-bedrock", usage_json: JSON.stringify({ input_tokens: 100, output_tokens: 50 }),
+      amount_json: JSON.stringify({ usd: 0.0125, estimated: true }), source: "model_gateway", occurred_at: "2026-07-31T00:00:00.000Z" };
+    expect(await service.ingestCostEvent(request)).toEqual({ accepted: true });
+    expect(await service.ingestCostEvent(request)).toEqual({ accepted: true });
+    const result = await store.withTenant(BARE_TENANT, tx => tx.query("SELECT workspace_id,parent_id,run_id,node_execution_id,internal_cost_minor,currency FROM cost_events WHERE tenant_id=$1", [BARE_TENANT]));
+    expect(result.rows).toEqual([{ workspace_id: WORKSPACE.slice(3), parent_id: null, run_id: RUN.slice(4), node_execution_id: NODE.slice(5), internal_cost_minor: "104", currency: "INR" }]);
+    const hidden = await store.withTenant("018f4d6e-2b4a-7a3e-8c1a-1234567890ff", tx => tx.query("SELECT id FROM cost_events"));
+    expect(hidden.rows).toEqual([]);
   });
 
   it("inserts a real model_gateway event with correctly cast bare uuids and derived usage", async () => {

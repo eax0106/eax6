@@ -100,7 +100,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     expect(DELETE_ORDER).toHaveLength(new Set(DELETE_ORDER).size);
   });
 
-  it("deletes all 37 tenant tables while preserving a second tenant", async () => {
+  it("deletes all 38 tenant tables while preserving a second tenant", async () => {
     await seedAll(adminStore, TENANT_A, "a");
     await seedAll(adminStore, TENANT_B, "b");
 
@@ -111,11 +111,11 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     // C8 added side_effects; D3 added budgets, budget_usage and budget_reservations;
     // D2 added workspace_holds and workspace_run_retention; D5 approval_step_policies;
     // D19 added connection_registry, including its reference-only snapshots.
-    expect(before).toHaveLength(37);
+    expect(before).toHaveLength(38);
     expect(before.every((location) => location.rowCount === 1)).toBe(true);
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
-      deletedRows: 37,
+      deletedRows: 38,
       deletedObjects: 2,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
@@ -143,19 +143,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
 
   it("erases one workspace from the live schema and leaves the tenant's other workspace (D2)", async () => {
     const other = "018f4d6e-2b4a-7a3e-8c1a-1234567890e9";
-    await seedAll(adminStore, TENANT_A, "x");
-    await adminStore.withTenant(TENANT_A, async (tx) => {
-      const tables = await tx.query<{ table_name: string }>(
-        "SELECT table_name FROM information_schema.columns WHERE table_schema = 'public' AND column_name = 'workspace_id' AND table_name = ANY($1::text[])",
-        [[...TABLES]],
-      );
-      for (const { table_name } of tables.rows) {
-        const reference = table_name === "connection_registry"
-          ? ", secret_ref = '/alter/integrations/' || tenant_id::text || '/' || $2::uuid::text || '/' || connection_id::text"
-          : "";
-        await tx.query(`UPDATE ${table_name} SET workspace_id = $2${reference} WHERE tenant_id = $1`, [TENANT_A, other]);
-      }
-    });
+    await seedAll(adminStore, TENANT_A, "x", other);
     await seedAll(adminStore, TENANT_A, "w");
 
     await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_w/v1`, "erased");
@@ -238,6 +226,7 @@ async function seedAll(
   store: PostgresOrchestrationStoreProvider,
   tenant: string,
   suffix: string,
+  workspace: string = tenant,
 ): Promise<void> {
   await store.withTenant(tenant, async (tx) => {
     const workflow = `wf_${suffix}`;
@@ -246,55 +235,56 @@ async function seedAll(
     const conversation = `conv_${suffix}`;
     const run = `run_${suffix}`;
     const node = `node_${suffix}`;
-    await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES ($1,$2,$2,'fixture')", [workflow, tenant]);
+    await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'fixture')", [workflow, tenant, workspace]);
     await tx.query("INSERT INTO workflow_versions(id,tenant_id,workflow_id,version,compiled_dag,dag_schema_version) VALUES ($1,$2,$3,1,'{}','v1')", [workflowVersion, tenant, workflow]);
     await tx.query("INSERT INTO workflow_template_variable_definitions(id,tenant_id,workflow_id,workflow_version_id,name,value_type) VALUES ($1,$2,$3,$4,'REGION','text')", [`wtv_${suffix}`, tenant, workflow, workflowVersion]);
     await tx.query("INSERT INTO workflow_template_variable_values(tenant_id,workflow_id,name,value_json) VALUES ($1,$2,'REGION','\"ap-south-1\"')", [tenant, workflow]);
-    await tx.query("INSERT INTO triggers(id,tenant_id,workspace_id,workflow_id,name,type) VALUES ($1,$2,$2,$3,'fixture','manual')", [trigger, tenant, workflow]);
+    await tx.query("INSERT INTO triggers(id,tenant_id,workspace_id,workflow_id,name,type) VALUES ($1,$2,$4,$3,'fixture','manual')", [trigger, tenant, workflow, workspace]);
     await tx.query("INSERT INTO trigger_webhook_secrets(tenant_id,trigger_id,version,secret_hash) VALUES ($1,$2,1,repeat('0',64))", [tenant, trigger]);
     await tx.query("INSERT INTO trigger_versions(id,tenant_id,trigger_id,version,config) VALUES ($1,$2,$3,1,'{}')", [`trgv_${suffix}`, tenant, trigger]);
-    await tx.query("INSERT INTO conversations(id,tenant_id,workspace_id,channel,temporal_workflow_id) VALUES ($1,$2,$2,'api',$3)", [conversation, tenant, `temporal-${suffix}`]);
-    await tx.query("INSERT INTO clarifications(id,tenant_id,workspace_id,conversation_id,question,expiry_at) VALUES ($1,$2,$2,$3,'fixture',now()+interval '1 hour')", [`clr_${suffix}`, tenant, conversation]);
+    await tx.query("INSERT INTO conversations(id,tenant_id,workspace_id,channel,temporal_workflow_id) VALUES ($1,$2,$4,'api',$3)", [conversation, tenant, `temporal-${suffix}`, workspace]);
+    await tx.query("INSERT INTO conversation_messages(id,tenant_id,workspace_id,conversation_id,role,kind,content_json) VALUES ($1,$2,$4,$3,'user','text','\"fixture\"')", [`msg_${suffix}`,tenant,conversation, workspace]);
+    await tx.query("INSERT INTO clarifications(id,tenant_id,workspace_id,conversation_id,question,expiry_at) VALUES ($1,$2,$4,$3,'fixture',now()+interval '1 hour')", [`clr_${suffix}`, tenant, conversation, workspace]);
     await tx.query("INSERT INTO conversation_goal_states(tenant_id,conversation_id) VALUES ($1,$2)", [tenant, conversation]);
-    await tx.query("INSERT INTO events(event_id,event_type,schema_version,tenant_id,workspace_id,source,idempotency_key,occurred_at,conversation_id,trigger_id,trigger_version,payload,signature_status) VALUES ($1,'fixture','v1',$2,$2,'fixture',$3,now(),$4,$5,1,'{}','verified')", [`evt_${suffix}`, tenant, `idem-${suffix}`, conversation, trigger]);
-    await tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id,conversation_id,trigger_id,triggering_event_id) VALUES ($1,$2,$2,'workflow',$3,$4,$5,$6,$7)", [run, tenant, workflow, workflowVersion, conversation, trigger, `evt_${suffix}`]);
+    await tx.query("INSERT INTO events(event_id,event_type,schema_version,tenant_id,workspace_id,source,idempotency_key,occurred_at,conversation_id,trigger_id,trigger_version,payload,signature_status) VALUES ($1,'fixture','v1',$2,$6,'fixture',$3,now(),$4,$5,1,'{}','verified')", [`evt_${suffix}`, tenant, `idem-${suffix}`, conversation, trigger, workspace]);
+    await tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id,conversation_id,trigger_id,triggering_event_id) VALUES ($1,$2,$8,'workflow',$3,$4,$5,$6,$7)", [run, tenant, workflow, workflowVersion, conversation, trigger, `evt_${suffix}`, workspace]);
     await tx.query("INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES ($1,$2,'fixture','{}')", [tenant, run]);
     await tx.query("INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,'fixture','Merge','succeeded')", [node, tenant, run]);
     await tx.query("INSERT INTO side_effects(id,tenant_id,run_id,dag_node_id,node_execution_id,tool_name,status) VALUES ($1,$2,$3,'fixture',$4,'email.send','completed')", [`sfx_${suffix}`, tenant, run, node]);
     // D3: a budget, what it has spent, and the run's reservation against it.
     const budget = `bud_018f4d6e-2b4a-7a3e-8c1a-1234567890${SUFFIX_HEX[suffix]}9`;
-    await tx.query("INSERT INTO budgets(id,tenant_id,workspace_id,workflow_id,kind,period,amount_minor,created_by) VALUES ($1,$2,$2,$3,'workflow','daily',100,'usr_fixture')", [budget, tenant, workflow]);
+    await tx.query("INSERT INTO budgets(id,tenant_id,workspace_id,workflow_id,kind,period,amount_minor,created_by) VALUES ($1,$2,$4,$3,'workflow','daily',100,'usr_fixture')", [budget, tenant, workflow, workspace]);
     await tx.query("INSERT INTO budget_usage(tenant_id,budget_id,period_key,reserved_minor) VALUES ($1,$2,'2026-09-30',10)", [tenant, budget]);
     await tx.query("INSERT INTO budget_reservations(tenant_id,run_id,budget_id,period_key,reserved_minor) VALUES ($1,$2,$3,'2026-09-30',10)", [tenant, run, budget]);
     // D2: a workspace held pending deletion.
-    await tx.query("INSERT INTO workspace_holds(tenant_id,workspace_id,held_by) VALUES ($1,$1,'usr_fixture')", [tenant]);
-    await tx.query("INSERT INTO workspace_run_retention(tenant_id,workspace_id,retention_days,updated_by) VALUES ($1,$1,30,'usr_fixture')", [tenant]);
-    await tx.query("INSERT INTO approval_step_policies(tenant_id,workspace_id,workflow_id,node_key,set_by) VALUES ($1,$1,$2,'approve','usr_fixture')", [tenant, workflow]);
+    await tx.query("INSERT INTO workspace_holds(tenant_id,workspace_id,held_by) VALUES ($1,$2,'usr_fixture')", [tenant, workspace]);
+    await tx.query("INSERT INTO workspace_run_retention(tenant_id,workspace_id,retention_days,updated_by) VALUES ($1,$2,30,'usr_fixture')", [tenant, workspace]);
+    await tx.query("INSERT INTO approval_step_policies(tenant_id,workspace_id,workflow_id,node_key,set_by) VALUES ($1,$3,$2,'approve','usr_fixture')", [tenant, workflow, workspace]);
     await tx.query("INSERT INTO run_stream_events(id,tenant_id,run_id,seq,event,payload) VALUES ($1,$2,$3,1,'node.completed','{}')", [`sse_${suffix}`, tenant, run]);
     await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,node_execution_id,gate_type,verdict) VALUES ($1,$2,$3,$4,'quality','pass')", [`vrf_${suffix}`, tenant, run, node]);
     await tx.query("INSERT INTO recovery_actions(id,tenant_id,run_id,node_execution_id,failure_class) VALUES ($1,$2,$3,$4,'fixture')", [`rcv_${suffix}`, tenant, run, node]);
-    await tx.query("INSERT INTO run_outcomes(id,tenant_id,workspace_id,run_id,mode,eligible,verdict,human_rescue,critical_external_error,decided_at) VALUES ($1,$2,$2,$3,'workflow',true,'completed_verified',false,false,now())", [`018f4d6e-2b4a-7a3e-8c1a-1234567890${SUFFIX_HEX[suffix]}8`, tenant, run]);
-    await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$2,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node]);
+    await tx.query("INSERT INTO run_outcomes(id,tenant_id,workspace_id,run_id,mode,eligible,verdict,human_rescue,critical_external_error,decided_at) VALUES ($1,$2,$4,$3,'workflow',true,'completed_verified',false,false,now())", [`018f4d6e-2b4a-7a3e-8c1a-1234567890${SUFFIX_HEX[suffix]}8`, tenant, run, workspace]);
+    await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$5,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node, workspace]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations
-    // 0019+). Seeded here so "deletes all 37 tenant tables" actually proves
+    // 0019+). Seeded here so "deletes all 38 tenant tables" actually proves
     // coverage instead of just proving the original 19 still work.
     const project = `prj_${suffix}`;
     const webhookEndpoint = `whe_${suffix}`;
     const integrationId = randomUUID();
     const artifact = `art_${suffix}`;
-    await tx.query("INSERT INTO connection_registry(tenant_id,workspace_id,connection_id,connector_type,status,secret_ref,source_revision) VALUES ($1,$1,$2,'github','connected',$3,1)", [tenant, integrationId, `/alter/integrations/${tenant}/${tenant}/${integrationId}`]);
-    await tx.query("INSERT INTO projects(id,tenant_id,workspace_id,name) VALUES ($1,$2,$2,'fixture')", [project, tenant]);
+    await tx.query("INSERT INTO connection_registry(tenant_id,workspace_id,connection_id,connector_type,status,secret_ref,source_revision) VALUES ($1,$4,$2,'github','connected',$3,1)", [tenant, integrationId, `/alter/integrations/${tenant}/${workspace}/${integrationId}`, workspace]);
+    await tx.query("INSERT INTO projects(id,tenant_id,workspace_id,name) VALUES ($1,$2,$3,'fixture')", [project, tenant, workspace]);
     // artifacts before deployments: deployments.artifact_id -> artifacts is a
     // plain (non-CASCADE) FK, so the referenced row must exist first.
     await tx.query("INSERT INTO artifacts(id,tenant_id,run_id,storage_reference,content_type,size_bytes) VALUES ($1,$2,$3,'s3://fixture','text/plain',1)", [artifact, tenant, run]);
     await tx.query("INSERT INTO deployments(id,tenant_id,project_id,artifact_id) VALUES ($1,$2,$3,$4)", [`dep_${suffix}`, tenant, project, artifact]);
     await tx.query("INSERT INTO project_plans(tenant_id,project_id,conversation_id,brief) VALUES ($1,$2,$3,'fixture')", [tenant, project, conversation]);
-    await tx.query("INSERT INTO whatsapp_accounts(id,tenant_id,workspace_id,phone_number_id,waba_id,access_token_ref) VALUES ($1,$2,$2,$3,$4,'fixture-ref')", [`wa_${suffix}`, tenant, `phone_${suffix}_${randomUUID()}`, `waba_${suffix}`]);
-    await tx.query("INSERT INTO webhook_endpoints(id,tenant_id,workspace_id,integration_id,path_token) VALUES ($1,$2,$2,$3,$4)", [webhookEndpoint, tenant, integrationId, `token_${suffix}_${randomUUID()}`]);
+    await tx.query("INSERT INTO whatsapp_accounts(id,tenant_id,workspace_id,phone_number_id,waba_id,access_token_ref) VALUES ($1,$2,$5,$3,$4,'fixture-ref')", [`wa_${suffix}`, tenant, `phone_${suffix}_${randomUUID()}`, `waba_${suffix}`, workspace]);
+    await tx.query("INSERT INTO webhook_endpoints(id,tenant_id,workspace_id,integration_id,path_token) VALUES ($1,$2,$5,$3,$4)", [webhookEndpoint, tenant, integrationId, `token_${suffix}_${randomUUID()}`, workspace]);
     await tx.query("INSERT INTO webhook_endpoint_secrets(id,tenant_id,endpoint_id,version,secret_ref) VALUES ($1,$2,$3,1,'fixture-secret-ref')", [`whs_${suffix}`, tenant, webhookEndpoint]);
-    await tx.query("INSERT INTO trigger_integration_bindings(id,tenant_id,workspace_id,trigger_id,integration_id,webhook_endpoint_id,config) VALUES ($1,$2,$2,$3,$4,$5,'{}')", [`tib_${suffix}`, tenant, trigger, integrationId, webhookEndpoint]);
-    await tx.query("INSERT INTO escalations(id,tenant_id,workspace_id,run_id,recovery_action_id,reason) VALUES ($1,$2,$2,$3,$4,'fixture')", [`esc_${suffix}`, tenant, run, `rcv_${suffix}`]);
+    await tx.query("INSERT INTO trigger_integration_bindings(id,tenant_id,workspace_id,trigger_id,integration_id,webhook_endpoint_id,config) VALUES ($1,$2,$6,$3,$4,$5,'{}')", [`tib_${suffix}`, tenant, trigger, integrationId, webhookEndpoint, workspace]);
+    await tx.query("INSERT INTO escalations(id,tenant_id,workspace_id,run_id,recovery_action_id,reason) VALUES ($1,$2,$5,$3,$4,'fixture')", [`esc_${suffix}`, tenant, run, `rcv_${suffix}`, workspace]);
     await tx.query("INSERT INTO run_dispatch_queue(id,tenant_id,run_id,compiled_dag) VALUES ($1,$2,$3,'{}')", [randomUUID(), tenant, run]);
   });
 }
