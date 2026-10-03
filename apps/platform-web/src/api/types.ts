@@ -53,6 +53,8 @@ export interface User {
 }
 
 export interface Workflow {
+  folderId?: string | null
+  folderEtag?: string
   id: string
   name: string
   description?: string

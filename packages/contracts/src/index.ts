@@ -445,3 +445,5 @@ export {
 
 export * from "./memory-settings";
 export * from "./workflow-chat";
+
+export * from "./workflow-folders";

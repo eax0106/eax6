@@ -27,9 +27,9 @@ Scope: D12 implements per-workspace chat, workflow and workspace memory switches
 - [x] G5: Each consequential switch, scope, retention, audit, PII or live-route assertion has a known-positive control that fails when the corresponding production check is removed and passes after restoration
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: memory-settings-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=466413e4a6c1a12a3eaf6b6c3f047df40b7844ab15ad9ec49018ec54762a147f; exit=0; EXPECT=matched; output-sha256=1e211e86eaadf7ec0b0be0aa074a153ed9c76f31dfbe8ff53d4293379ba57b1f; output-bytes=10893; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=466413e4a6c1a12a3eaf6b6c3f047df40b7844ab15ad9ec49018ec54762a147f; exit=0; EXPECT=matched; output-sha256=0da2f4f4bff087b11cf583fb9a06d2b178f03c93ab864c5a49309d6712b09576; output-bytes=10893; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
 - [x] G6: Full touched Python and TypeScript suites, native transport discovery, build/typecheck/lint, proto consistency, migration/erasure registration, architecture/RBAC/naming and zero added normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: memory-settings-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5336176fe382eeefc91ce001ccdf3304adf5d68024682222c9e8dbd3b0b24839; exit=0; EXPECT=matched; output-sha256=5075039a732a9f9c4abf17eba61c4938b06a12e7a442c46baed4d359a89ef026; output-bytes=1222; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5336176fe382eeefc91ce001ccdf3304adf5d68024682222c9e8dbd3b0b24839; exit=0; EXPECT=matched; output-sha256=cf09edd69ff201b07b9eadab09a2aafb0554fb1b618692b5ea5ccf0a1819e94b; output-bytes=1222; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries

@@ -123,10 +123,11 @@ export class EngineClient {
   delete<TResponse>(
     path: EnginePath,
     context: EngineCallerContext,
-    options: EngineMutationOptions,
+    options: EnginePutOptions,
   ): Promise<EngineResponse<TResponse>> {
     return this.request("DELETE", path, context, {
       idempotencyKey: options.idempotencyKey,
+      ...(options.ifMatch === undefined ? {} : { ifMatch: options.ifMatch }),
     });
   }
 

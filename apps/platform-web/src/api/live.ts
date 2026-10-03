@@ -1,7 +1,7 @@
 import { CreateWorkflowChatRequestSchema, SendWorkflowChatMessageSchema, WorkflowChatResourceSchema, WorkflowChatMessageSchema, WorkflowChatExchangeSchema } from "@alterx/contracts"
 import { apiDelete, apiGet, apiGetWithEtag, apiPatch, apiPost, apiPut, mutationKey } from "./http"
 import { compileDag } from "./compile-dag"
-import { WorkflowHealthResourceSchema, WorkflowHealthPageSchema } from "@alterx/contracts"
+import { WorkflowHealthResourceSchema, WorkflowHealthPageSchema, WorkflowFolderPlacementSchema } from "@alterx/contracts"
 import type {
   AvailableRepository,
   RepositoryBinding,
@@ -288,8 +288,17 @@ export async function updateLanguage(lang: string): Promise<void> {
 }
 
 export async function getWorkflows(): Promise<Workflow[]> {
-  const body = await apiGet<unknown>("/api/v1/workflows")
-  return asArray(body, "workflows").map(mapWorkflow)
+  const workflows: Workflow[] = [], seen = new Set<string>()
+  let path = "/api/v1/workflows"
+  for (;;) {
+    const body = await apiGet<unknown>(path)
+    workflows.push(...asArray(body, "workflows").map(mapWorkflow))
+    const page = (body as { page?: { has_more?: boolean; next_cursor?: string } } | null)?.page
+    if (!page?.has_more) return workflows
+    if (!page.next_cursor || seen.has(page.next_cursor)) throw new Error("Workflow pagination could not continue")
+    seen.add(page.next_cursor)
+    path = `/api/v1/workflows?limit=200&cursor=${encodeURIComponent(page.next_cursor)}`
+  }
 }
 
 /** The engine's name search over every workflow in the workspace (task B3.4). */
@@ -1400,6 +1409,9 @@ function mapSession(value: unknown): Session {
 
 function mapWorkflow(value: unknown): Workflow {
   const item = value as AnyRecord
+  const placement = item.folderId !== undefined || item.folderEtag !== undefined
+    ? WorkflowFolderPlacementSchema.parse({ workflowId: item.id ?? item.workflow_id, folderId: item.folderId, etag: item.folderEtag })
+    : undefined
   return {
     id: asString(item.id ?? item.workflow_id),
     name: String(item.name ?? item.title ?? item.goal ?? "Untitled workflow"),
@@ -1409,6 +1421,7 @@ function mapWorkflow(value: unknown): Workflow {
     successRate: Number(item.successRate ?? item.success_rate ?? 0),
     updatedAt: asDate(item.updatedAt ?? item.updated_at ?? item.createdAt ?? item.created_at),
     dag: item.dag ?? undefined,
+    ...(placement ? { folderId: placement.folderId, folderEtag: placement.etag } : {}),
   }
 }
 

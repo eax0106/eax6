@@ -32,6 +32,7 @@ import type {
 import * as approvalPoliciesLive from "./live-approval-policies"
 import * as approvalPoliciesMock from "./mock/approval-policies"
 import type { ApprovalPolicyChange } from "./types"
+import * as workflowFolders from "./workflow-folders"
 import * as live from "./live"
 import * as liveDataExport from "./live-data-export"
 import * as liveMemorySettings from "./live-memory-settings"
@@ -61,6 +62,11 @@ const MOCK_DELAY = 600
 const mockPendingDeletion: { workspace: Workspace; deletionDueAt: string }[] = []
 
 class ApiClient {
+  getWorkflowFolders = workflowFolders.getWorkflowFolders
+  createWorkflowFolder = workflowFolders.createWorkflowFolder
+  renameWorkflowFolder = workflowFolders.renameWorkflowFolder
+  deleteWorkflowFolder = workflowFolders.deleteWorkflowFolder
+  moveWorkflowFolder = workflowFolders.moveWorkflowFolder
   async getDashboardSummary(): Promise<DashboardSummary> {
     if (isLiveApi) return live.getDashboardSummary(mockDashboardSummary)
     await delay(MOCK_DELAY)

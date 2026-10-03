@@ -137,6 +137,7 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "orchestration_db", schema: "public", table: "workflow_template_variable_definitions", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workflow_template_variable_values", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workflow_versions", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
+  { database: "orchestration_db", schema: "public", table: "workflow_folders", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "orchestration_db", schema: "public", table: "workflows", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },
   { database: "audit_db", schema: "public", table: "audit_events", owner: "audit-service", erasure: { kind: "provider", provider: "audit-service" } },
   { database: "cost_db", schema: "public", table: "billing_rollups", owner: "cost-ledger-service", erasure: { kind: "provider", provider: "cost-ledger-service" } },

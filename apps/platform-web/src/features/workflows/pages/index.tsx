@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query"
-import { useNavigate } from "react-router-dom"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { api } from "@/api/client"
+import { ApiHttpError } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -13,7 +14,15 @@ import { GitGraph, MoreHorizontal, PenTool, Play, Info, GitCommit } from "lucide
 import { RequirePermission } from "@/features/permissions/components/require-permission"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
+import { useState } from "react"
+import { WorkflowFolderManager } from "../components/workflow-folder-manager"
+
 export function WorkflowsList() {
+  const [params] = useSearchParams()
+  const client = useQueryClient()
+  const [moveError, setMoveError] = useState("")
+  const [moving, setMoving] = useState(false)
+  const folders = useQuery({ queryKey: queryKeys.workflowFolders, queryFn: () => api.getWorkflowFolders() })
   const navigate = useNavigate()
   
   const { data, isLoading, error, refetch } = useQuery({
@@ -46,6 +55,7 @@ export function WorkflowsList() {
     return (
       <div className="space-y-6">
         <PageHeader title="Workflows" description="Build, manage and monitor automated workflows." />
+        <WorkflowFolderManager />
         <EmptyState
           icon={GitGraph}
           title="No workflows yet"
@@ -60,6 +70,7 @@ export function WorkflowsList() {
     )
   }
 
+  const visible = data.filter(workflow => !params.get("folder") || (params.get("folder") === "ungrouped" ? !workflow.folderId : workflow.folderId === params.get("folder")))
   return (
     <div className="space-y-6">
       <PageHeader 
@@ -72,19 +83,24 @@ export function WorkflowsList() {
         }
       />
 
+      <WorkflowFolderManager />
+      {moveError && <div role="alert">{moveError} <Button onClick={() => { void refetch(); setMoveError("") }}>Reload workflows</Button></div>}
+      {params.get("folder") && <Button variant="outline" onClick={() => navigate("/app/workflows")}>Show all workflows</Button>}
+      {visible.length === 0 && <p role="status">No workflows in this folder.</p>}
       <div className="rounded-xl border border-border bg-surface">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Folder</TableHead>
               <TableHead className="text-right">Runs</TableHead>
               <TableHead className="text-right">Success Rate</TableHead>
               <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((workflow) => (
+            {visible.map((workflow) => (
               <TableRow key={workflow.id} className="ax-row-hover transition-all">
                 <TableCell>
                   <div>
@@ -96,6 +112,19 @@ export function WorkflowsList() {
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={workflow.status as any} />
+                </TableCell>
+                <TableCell>
+                  {folders.data?.canEdit ? <select aria-label={`Folder for ${workflow.name}`} value={workflow.folderId ?? ""} disabled={moving || !workflow.folderEtag}
+                    onChange={async event => {
+                      const folderId = event.target.value || null
+                      setMoving(true)
+                      try { await api.moveWorkflowFolder(workflow.id, folderId, workflow.folderEtag!); await client.invalidateQueries({ queryKey: queryKeys.workflows.all }); setMoveError("") }
+                      catch (failure) { setMoveError(failure instanceof ApiHttpError && failure.status === 412 ? "Workflow folder changed. Reload before moving again." : failure instanceof Error ? failure.message : "Workflow move failed") }
+                      finally { setMoving(false) }
+                    }}>
+                    <option value="">Ungrouped</option>
+                    {folders.data.data.map(folder => <option value={folder.id} key={folder.id}>{folder.name}</option>)}
+                  </select> : workflow.folderId ? folders.data?.data.find(folder => folder.id === workflow.folderId)?.name ?? "Folder unavailable" : "Ungrouped"}
                 </TableCell>
                 <TableCell className="text-right">{workflow.runs.toLocaleString()}</TableCell>
                 <TableCell className="text-right">{workflow.successRate}%</TableCell>

@@ -1,6 +1,7 @@
 import {
   check,
   pgTable,
+  integer,
   sql,
   text,
   timestamp,
@@ -15,6 +16,8 @@ export const workflows = pgTable(
     tenantId: uuid("tenant_id").notNull(),
     workspaceId: uuid("workspace_id").notNull(),
     name: text("name").notNull(),
+    folderId: text("folder_id"),
+    folderRevision: integer("folder_revision").notNull().default(0),
     status: text("status").notNull().default("draft"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
