@@ -24,10 +24,10 @@ Scope: D12 implements per-workspace chat, workflow and workspace memory switches
   EXPECT: memory-settings-delivery-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=5f355ba5671d7eaad0dbed7dde8ea966af7e452eaaaccf062d19cb28e0d82724; exit=0; EXPECT=matched; output-sha256=9cb3bdb2c4fdd3352809a99801db5bf3554e7351d4cdaf1ce5c9f0381de86b64; output-bytes=310; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
-- [ ] G5: Each consequential switch, scope, retention, audit, PII or live-route assertion has a known-positive control that fails when the corresponding production check is removed and passes after restoration
+- [x] G5: Each consequential switch, scope, retention, audit, PII or live-route assertion has a known-positive control that fails when the corresponding production check is removed and passes after restoration
   CHECK: node .unlazy/negative-controls.mjs
   EXPECT: memory-settings-controls-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=466413e4a6c1a12a3eaf6b6c3f047df40b7844ab15ad9ec49018ec54762a147f; exit=0; EXPECT=matched; output-sha256=c549dbec2b1e5d307e5a2445835017032efe33966a976b49c7b2186bc2dcd5bf; output-bytes=10893; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
 - [ ] G6: Full touched Python and TypeScript suites, native transport discovery, build/typecheck/lint, proto consistency, migration/erasure registration, architecture/RBAC/naming and zero added normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
