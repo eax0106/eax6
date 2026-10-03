@@ -14,6 +14,8 @@ from src.memory_grpc_service import MemoryGrpcService
 from src.memory_learning.extraction import MemoryLearningKernel
 from src.memory_learning.orchestration_client import HttpxOrchestrationRunClient
 from src.memory_learning.repository import SqlAlchemyMemoryCandidateRepository
+from src.memory_settings.redaction import GrpcMemoryRedactor
+from src.memory_settings.repository import MemorySettingsRepository
 from src.policy_store.ads_core_client import HttpxAdsCoreMemoryClient
 from src.policy_store.repository import SqlAlchemyPolicyStoreRepository
 from src.policy_store.service import PolicyStoreService
@@ -37,15 +39,21 @@ async def serve() -> None:
         settings.ads_core_timeout_seconds,
         access_token_provider=lazy_auth0_m2m_token_provider_from_settings(settings),
     )
+    redactor = GrpcMemoryRedactor(
+        settings.model_gateway_grpc_target, lazy_auth0_m2m_token_provider_from_settings(settings)
+    )
     service = MemoryGrpcService(
         MemoryLearningKernel(
             orchestration,
             SqlAlchemyMemoryCandidateRepository(tenant_sessions),
+            redactor.redact,
         ),
         PolicyStoreService(
             SqlAlchemyPolicyStoreRepository(tenant_sessions, system_sessions),
             ads_core,
         ),
+        MemorySettingsRepository(tenant_sessions),
+        redactor.redact,
     )
     # Interceptor rather than a per-RPC check: MemoryService.UpdatePolicy,
     # PromoteMemory and ProposeWriteback all took their tenant from the request
@@ -60,6 +68,7 @@ async def serve() -> None:
         await server.stop(grace=5)
         await orchestration.close()
         await ads_core.close()
+        await redactor.close()
         tenant_engine.dispose()
         system_engine.dispose()
 

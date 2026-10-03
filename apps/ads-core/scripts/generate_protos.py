@@ -12,7 +12,11 @@ from pathlib import Path
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
 PROTO_ROOT = REPO_ROOT / "packages" / "contracts" / "proto"
-PROTO_FILES = ("alter/modelgw/v1/modelgw.proto", "alter/adsq/v1/adsq.proto")
+PROTO_FILES = (
+    "alter/modelgw/v1/modelgw.proto",
+    "alter/adsq/v1/adsq.proto",
+    "alter/memory/v1/memory.proto",
+)
 
 
 def generate(output: Path) -> None:

@@ -23,6 +23,7 @@ class RecordMemoryNamespaceRequest(_MemoryNamespaceModel):
 
 class RecordMemoryNamespaceResponse(_MemoryNamespaceModel):
     id: str
+    skipped: bool = False
 
 
 class MemoryFact(_MemoryNamespaceModel):

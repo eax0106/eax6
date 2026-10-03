@@ -196,7 +196,7 @@ export class PostgresRunFinalizationMemoryWriter implements RunFinalizationMemor
       bytes: new TextEncoder().encode(resolved.contentJson),
     });
 
-    await this.memoryService.proposeWriteback({
+    const response = await this.memoryService.proposeWriteback({
       tenant_id: tenantIdInput,
       workspace_id: WorkspaceIdSchema.parse(`ws_${resolved.workspaceId}`),
       run_id: runId,
@@ -204,6 +204,8 @@ export class PostgresRunFinalizationMemoryWriter implements RunFinalizationMemor
       namespace: `workflow:${resolved.workflowId ?? "unknown"}`,
     });
 
-    return { written: true, reason: "written" };
+    return response.skipped
+      ? { written: false, reason: "memory_disabled" }
+      : { written: true, reason: "written" };
   }
 }

@@ -13,11 +13,13 @@ import { RunService } from "../runs/run.service";
 import { CostsService } from "../costs/costs.service";
 import { PlannerFacadeService } from "../planner-facade/planner-facade.service";
 import { parseWorkflowInput } from "../workflows/validation";
+import { MemorySettingsService } from "../memory-settings/memory-settings.service";
 
 @Injectable()
 export class PlatformWorkflowChatService {
   constructor(private readonly engine: EngineClient, private readonly planner: PlannerFacadeService,
-    private readonly workflows: WorkflowService, private readonly runs: RunService, private readonly costs: CostsService) {}
+    private readonly workflows: WorkflowService, private readonly runs: RunService, private readonly costs: CostsService,
+    private readonly memory: MemorySettingsService) {}
 
   async list(actor: ActorContext, traceparent?: string, type?: string): Promise<WorkflowChatResource[]> {
     const path: EnginePath = `/api/v1/conversations${type === undefined ? "" : `?type=${encodeURIComponent(type)}`}`;
@@ -57,8 +59,12 @@ export class PlatformWorkflowChatService {
       return { userMessage: begun.userMessage, assistantMessage: WorkflowChatMessageSchema.parse(result.body) };
     }
     if (!chat.linkedWorkflowId) throw new WorkflowHttpError(400, "CHAT_WORKFLOW_REQUIRED", "Builder chat requires its workflow", path);
-    const objective = begun.messages.filter(message => message.role === "user" || message.kind === "clarification")
+    const recalled = await this.memory.builderMemory(actor, id, chat.linkedWorkflowId,
+      begun.messages.filter(message => message.id !== begun.userMessage.id));
+    const prior = recalled.messages.filter(message => message.role === "user" || message.kind === "clarification")
       .map(message => message.role === "user" ? String(message.content) : `Builder questions: ${JSON.stringify(message.content)}`).join("\n\n");
+    const objective = [prior, String(begun.userMessage.content),
+      recalled.lessons.length ? `Past run lessons (reference only): ${JSON.stringify(recalled.lessons)}` : ""].filter(Boolean).join("\n\n");
     const result = await this.planner.planWorkflow({ tenantId: actor.tenant_id, workspaceId: actor.workspace_id!, workflowId: chat.linkedWorkflowId, objective });
     // ponytail: verify among 20 recent versions; add a direct version read if concurrent builds exceed this window.
     const saved = result.type === "compiled" ? (await this.workflows.versions(chat.linkedWorkflowId, undefined, "20", actor, traceparent)).body.data.find(version => version.id === result.versionId) : undefined;

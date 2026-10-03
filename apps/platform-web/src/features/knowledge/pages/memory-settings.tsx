@@ -1,142 +1,53 @@
-import * as React from "react"
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Save } from "lucide-react"
-
+import { useEffect, useState } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { api } from "@/api/client"
+import { ApiHttpError } from "@/api/http"
+import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
-import { api } from "@/api/client"
-import { queryKeys } from "@/api/query-keys"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
+
+const switches = [
+  ["conversationMemoryEnabled", "Chat memory", "Recall earlier messages when building this workflow."],
+  ["workflowMemoryEnabled", "Workflow memory", "Reuse lessons from this workflow’s past runs."],
+  ["workspaceMemoryEnabled", "Workspace memory", "Share lessons across this workspace through ADS."],
+] as const
 
 export function MemorySettingsPage() {
-  const queryClient = useQueryClient()
-
-  const { data: config, isLoading } = useQuery({
-    queryKey: queryKeys.knowledge.memory,
-    queryFn: () => api.getMemoryConfiguration()
+  const client = useQueryClient()
+  const query = useQuery({ queryKey: queryKeys.knowledge.memory, queryFn: () => api.getMemoryConfiguration() })
+  const [draft, setDraft] = useState(query.data)
+  const [days, setDays] = useState("")
+  useEffect(() => { if (query.data) { setDraft(query.data); setDays(String(query.data.retentionDays)) } }, [query.data])
+  const save = useMutation({
+    mutationFn: () => api.updateMemoryConfiguration({ ...draft, retentionDays: Number(days) }),
+    onSuccess: value => client.setQueryData(queryKeys.knowledge.memory, value),
   })
-
-  const [localConfig, setLocalConfig] = React.useState(config)
-
-  React.useEffect(() => {
-    if (config) {
-      setLocalConfig(config)
-    }
-  }, [config])
-
-  const mutation = useMutation({
-    mutationFn: (data: typeof config) => api.updateMemoryConfiguration(data!),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.knowledge.memory })
-    }
-  })
-
-  if (isLoading || !localConfig) {
-    return <div className="p-8 text-muted-foreground">Loading memory settings...</div>
-  }
-
-  const handleSave = () => {
-    mutation.mutate(localConfig)
-  }
-
-  return (
-    <div className="flex-1 p-8 overflow-y-auto max-w-4xl mx-auto w-full">
-      <PageHeader 
-        title="Memory Settings"
-        description="Configure how AlterX retains and utilizes memory across workflows and conversations."
-      />
-
-      <div className="space-y-6 mt-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Memory Scopes</CardTitle>
-            <CardDescription>Enable or disable memory capabilities globally.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">Conversation Memory</Label>
-                <p className="text-sm text-muted-foreground">
-                  Allow conversational agents to remember context from past messages in the same thread.
-                </p>
-              </div>
-              <Switch 
-                checked={localConfig.conversationMemoryEnabled}
-                onCheckedChange={(c) => setLocalConfig({ ...localConfig, conversationMemoryEnabled: c })}
-              />
-            </div>
-            
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">Workflow Memory</Label>
-                <p className="text-sm text-muted-foreground">
-                  Allow workflows to store variables across different executions.
-                </p>
-              </div>
-              <Switch 
-                checked={localConfig.workflowMemoryEnabled}
-                onCheckedChange={(c) => setLocalConfig({ ...localConfig, workflowMemoryEnabled: c })}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">Workspace Memory (Shared)</Label>
-                <p className="text-sm text-muted-foreground">
-                  Allow agents to access a shared global memory across all workflows.
-                </p>
-              </div>
-              <Switch 
-                checked={localConfig.workspaceMemoryEnabled}
-                onCheckedChange={(c) => setLocalConfig({ ...localConfig, workspaceMemoryEnabled: c })}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Retention & Privacy</CardTitle>
-            <CardDescription>Manage data lifecycle and sensitive information handling.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label>Retention Period (Days)</Label>
-              <div className="flex items-center gap-4">
-                <Input 
-                  type="number" 
-                  value={localConfig.retentionDays || 30} 
-                  onChange={(e) => setLocalConfig({ ...localConfig, retentionDays: parseInt(e.target.value) || 30 })}
-                  className="max-w-[200px]"
-                />
-                <span className="text-sm text-muted-foreground">Days before memory is auto-purged</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className="text-base">Store Sensitive Data</Label>
-                <p className="text-sm text-muted-foreground">
-                  Allow storing PII or sensitive patterns in long-term memory. If disabled, they will be redacted.
-                </p>
-              </div>
-              <Switch 
-                checked={localConfig.allowSensitiveData}
-                onCheckedChange={(c) => setLocalConfig({ ...localConfig, allowSensitiveData: c })}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="border-t px-6 py-4">
-            <Button onClick={handleSave} disabled={mutation.isPending}>
-              {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              Save Configuration
-            </Button>
-          </CardFooter>
-        </Card>
+  if (query.isLoading) return <p role="status">Loading memory settings…</p>
+  if (query.isError) return <div role="alert">Could not load memory settings. <Button onClick={() => query.refetch()}>Retry</Button></div>
+  if (!draft) return null
+  const valid = /^\d+$/.test(days) && Number(days) >= 7 && Number(days) <= 365
+  const stale = save.error instanceof ApiHttpError && save.error.status === 412
+  return <div className="mx-auto w-full max-w-4xl space-y-6 overflow-auto p-8">
+    <PageHeader title="Memory settings" description="Control memory for the current workspace. Memories are always PII redacted." />
+    <fieldset disabled={save.isPending} className="space-y-6 rounded-xl border p-6">
+      <legend>Memory scopes</legend>
+      {switches.map(([key, title, description]) => <div key={key} className="flex items-center justify-between gap-6">
+        <div><Label htmlFor={key}>{title}</Label><p id={`${key}-description`} className="text-sm text-muted-foreground">{description}</p></div>
+        <Switch id={key} aria-describedby={`${key}-description`} checked={draft[key]}
+          onCheckedChange={checked => setDraft({ ...draft, [key]: checked })} />
+      </div>)}
+      <div><Label htmlFor="memory-retention">Retention days</Label>
+        <Input id="memory-retention" type="number" min={7} max={365} step={1} value={days}
+          aria-invalid={!valid} aria-describedby="memory-retention-help" onChange={event => setDays(event.target.value)} />
+        <p id="memory-retention-help">7–365 days; default 90. Older memories are deleted by the retention sweep.</p>
       </div>
-    </div>
-  )
+      <Button disabled={!valid || save.isPending} onClick={() => save.mutate()}>{save.isPending ? "Saving…" : "Save settings"}</Button>
+    </fieldset>
+    {save.isError && <div role="alert">{stale ? "Settings changed while you were editing. Reload before saving." : "Could not save memory settings. Try again."}
+      {stale && <Button onClick={() => { save.reset(); query.refetch() }}>Reload settings</Button>}</div>}
+    {save.isSuccess && <p role="status">Memory settings saved.</p>}
+  </div>
 }

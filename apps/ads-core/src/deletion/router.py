@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from starlette.concurrency import run_in_threadpool
 
 from src.config import get_settings
+from src.memory_namespace.client import GrpcWorkspaceMemoryClient
 
 from .errors import DeletionHttpError, deletion_problem
 from .models import (
@@ -40,10 +41,19 @@ async def deletion_lifespan(app: FastAPI) -> AsyncIterator[None]:
     system_engine = create_engine(settings.ads_deletion_db_url_sync, pool_pre_ping=True)
     _sessions = sessionmaker(engine, class_=Session, expire_on_commit=False)
     _system_sessions = sessionmaker(system_engine, class_=Session, expire_on_commit=False)
-    _provider = AdsDeletionProvider(_sessions, AuditOrchestratedObjectStorage(), _system_sessions)
+    memory_client = GrpcWorkspaceMemoryClient(
+        settings.memory_service_address, settings.memory_service_authorization
+    )
+    _provider = AdsDeletionProvider(
+        _sessions,
+        AuditOrchestratedObjectStorage(),
+        _system_sessions,
+        memory_access=memory_client.access,
+    )
     try:
         yield
     finally:
+        memory_client.close()
         _provider = None
         _sessions = None
         _system_sessions = None
@@ -163,14 +173,10 @@ async def verify_workspace(
 @router.post("/retention", response_model=RetentionSweepResult)
 async def retention(provider: ProviderDep, authorization: Auth = None) -> RetentionSweepResult:
     _authorize(authorization)
-    return await _run(
-        "/internal/deletion/retention", provider.apply_retention_policy
-    )
+    return await _run("/internal/deletion/retention", provider.apply_retention_policy)
 
 
 @router.get("/subjects", response_model=tuple[str, ...])
 async def subjects(authorization: Auth = None) -> tuple[str, ...]:
     _authorize(authorization)
-    return await _run(
-        "/internal/deletion/subjects", get_provider().list_subject_ids
-    )
+    return await _run("/internal/deletion/subjects", get_provider().list_subject_ids)

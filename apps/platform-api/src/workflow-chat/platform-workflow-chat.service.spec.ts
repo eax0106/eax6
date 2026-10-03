@@ -7,6 +7,7 @@ import type { PlannerFacadeService } from "../planner-facade/planner-facade.serv
 import type { ActorContext } from "../rbac/types";
 import { PlatformWorkflowChatService } from "./platform-workflow-chat.service";
 import { WorkflowHttpError } from "../workflows/problem";
+import type { MemorySettingsService } from "../memory-settings/memory-settings.service";
 const id = (prefix: string, n = 1) => `${prefix}_018f4d6e-2b4a-7a3e-8c1a-${String(n).padStart(12, "0")}`;
 const time = "2026-10-03T12:00:00.000Z";
 const actor: ActorContext = { user_id: id("usr"), tenant_id: id("ten"), workspace_id: id("ws"), roles: ["editor"], permissions: [], session_id: "chat", auth_time: 1 };
@@ -20,7 +21,8 @@ function fixture(type: "general" | "workflow_builder" = "workflow_builder") {
  const workflows = { versions: vi.fn(async () => ({ body: { data: [{ id: id("wfv"), version: 4 }] } })), list: vi.fn(async () => ({ body: { data: [], page: { has_more: false } } })) };
  const runs = { list: vi.fn(async () => ({ body: { data: [], page: { has_more: false } } })), detail: vi.fn() };
  const costs = { workflowCost: vi.fn() };
- return { user, reply, engine, planner, workflows, runs, costs, service: new PlatformWorkflowChatService(engine as unknown as EngineClient, planner as unknown as PlannerFacadeService, workflows as unknown as WorkflowService, runs as unknown as RunService, costs as unknown as CostsService) };
+ const memory = { builderMemory: vi.fn(async (_actor: ActorContext, _conversation: string, _workflow: string, messages: unknown[]) => ({ messages, lessons: [] })) };
+ return { user, reply, engine, planner, workflows, runs, costs, memory, service: new PlatformWorkflowChatService(engine as unknown as EngineClient, planner as unknown as PlannerFacadeService, workflows as unknown as WorkflowService, runs as unknown as RunService, costs as unknown as CostsService, memory as unknown as MemorySettingsService) };
 }
 it("retains prior questions and answers and reports only an actually stored compiled version", async () => {
  const f = fixture(), history = [f.user, message("assistant", { questions: ["Which channel?"] }, "clarification", 2), message("user", "Slack", "text", 3)];

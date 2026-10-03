@@ -35,6 +35,7 @@ import type { ApprovalPolicyChange } from "./types"
 import * as workflowFolders from "./workflow-folders"
 import * as live from "./live"
 import * as liveDataExport from "./live-data-export"
+import * as liveMemorySettings from "./live-memory-settings"
 import { 
   mockWorkflows, mockRuns, mockDashboardSummary, 
   mockWorkspaces, mockMembers, mockProfile, mockSessions, delay,
@@ -1166,11 +1167,13 @@ class ApiClient {
   }
 
   async getMemoryConfiguration(): Promise<MemoryConfiguration> {
+    if (isLiveApi) return liveMemorySettings.getMemoryConfiguration()
     await delay(MOCK_DELAY)
     return mockMemoryConfig
   }
 
   async updateMemoryConfiguration(data: Partial<MemoryConfiguration>): Promise<MemoryConfiguration> {
+    if (isLiveApi) return liveMemorySettings.updateMemoryConfiguration(data)
     await delay(MOCK_DELAY)
     Object.assign(mockMemoryConfig, data)
     return mockMemoryConfig

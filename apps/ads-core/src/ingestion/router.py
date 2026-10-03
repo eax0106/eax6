@@ -22,6 +22,7 @@ from src.connectors.repository import SqlAlchemyConnectorSourceRepository
 from src.connectors.router import configure_connector_service
 from src.db.ids import new_prefixed_id, validate_prefixed_id
 from src.m2m_auth import lazy_auth0_m2m_token_provider_from_settings
+from src.memory_namespace.client import GrpcWorkspaceMemoryClient
 from src.memory_namespace.repository import SqlAlchemyMemoryNamespaceRepository
 from src.memory_namespace.router import configure_memory_namespace_repository
 from src.query.repository import SqlAlchemyRetrievalRepository
@@ -112,6 +113,12 @@ async def ingestion_lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.model_gateway_grpc_target,
         access_token_provider=lazy_auth0_m2m_token_provider_from_settings(settings),
     )
+    memory_client = GrpcWorkspaceMemoryClient(
+        settings.memory_service_address, settings.memory_service_authorization
+    )
+    memory_namespace = SqlAlchemyMemoryNamespaceRepository(
+        sessions, access=memory_client.access, redact=_default_embedding_client.redact
+    )
     _default_pipeline = IngestionPipeline(
         repository=repository,
         validator=PayloadValidator(
@@ -139,15 +146,16 @@ async def ingestion_lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     configure_retrieval_service(
         RetrievalService(
-            repository=SqlAlchemyRetrievalRepository(sessions),
+            repository=SqlAlchemyRetrievalRepository(sessions, memory_namespace),
             embeddings=_default_embedding_client,
             max_concurrency=settings.ads_q_max_concurrency,
         )
     )
-    configure_memory_namespace_repository(SqlAlchemyMemoryNamespaceRepository(sessions))
+    configure_memory_namespace_repository(memory_namespace)
     try:
         yield
     finally:
+        memory_client.close()
         _default_pipeline = None
         _default_storage = None
         _default_settings = None

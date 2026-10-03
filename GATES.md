@@ -1,35 +1,35 @@
-# Gates: D9 workflow folders (C115)
+# Gates: D12 memory switches and retention (C114)
 
-OWNS: apps/orchestration-service/drizzle/0052_workflow_folders.sql, apps/orchestration-service/drizzle/rollback/0052_restore_workflow_folders.sql, apps/orchestration-service/drizzle/meta/_journal.json, apps/orchestration-service/db/schema/workflows.ts, apps/orchestration-service/db/schema/workflow_folders.ts, apps/orchestration-service/src/workflow-folders/**, apps/orchestration-service/src/workflow-authoring.module.ts, apps/orchestration-service/src/workflow-read/**, apps/orchestration-service/src/database/migration-files.spec.ts, apps/orchestration-service/src/deletion/**, apps/platform-api/src/workflow-folders/**, apps/platform-api/src/workflows/**, apps/platform-api/src/app.module.ts, apps/platform-web/src/api/workflow-folders.ts, apps/platform-web/src/api/workflow-folders.spec.ts, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/query-keys.ts, apps/platform-web/src/features/workflows/**, apps/platform-web/src/layout/sidebar.tsx, packages/contracts/src/workflow-folders.ts, packages/contracts/src/workflow-folders.spec.ts, packages/contracts/src/index.ts, packages/deletion-registry/src/**, scripts/gates/baseline.json, docs/work-queue.md, apps/platform-api/src/engine/engine-client.ts, apps/platform-api/src/engine/engine-client.spec.ts, apps/platform-web/src/api/live.ts
+OWNS: apps/platform-api/src/config/memory-service.ts, apps/platform-api/src/config/memory-service.spec.ts, apps/model-gateway/src/gateway/memory-redaction-native.integration.spec.ts, apps/memory-service/**, apps/ads-core/src/config.py, apps/ads-core/src/ingestion/router.py, apps/ads-core/src/ingestion/embedding_client.py, apps/ads-core/src/memory_namespace/**, apps/ads-core/src/query/**, apps/ads-core/src/deletion/**, apps/ads-core/scripts/generate_protos.py, apps/ads-core/alter/memory/**, apps/ads-core/tests/test_memory_settings_integration.py, apps/ads-core/tests/test_memory_namespace.py, apps/ads-core/tests/test_query.py, apps/platform-api/src/memory-settings/**, apps/platform-api/src/app.module.ts, apps/platform-api/src/workflow-chat/**, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/mock/data.ts, apps/platform-web/src/api/mock/add-mock-data.cjs, apps/platform-web/src/api/live-memory-settings.ts, apps/platform-web/src/api/live-memory-settings.spec.ts, apps/platform-web/src/features/knowledge/pages/memory-settings.tsx, apps/platform-web/src/features/knowledge/pages/memory-settings.spec.tsx, packages/contracts/proto/alter/memory/v1/memory.proto, packages/contracts/src/memory-settings.ts, packages/contracts/src/memory-settings.spec.ts, packages/contracts/src/index.ts, packages/adapters/src/grpc/memory-client.ts, packages/adapters/src/grpc/memory-client.spec.ts, packages/deletion-registry/src/declaration.ts, apps/orchestration-service/src/registry/run-finalization-memory-writer.ts, apps/orchestration-service/src/registry/run-finalization-memory-writer.spec.ts, apps/orchestration-service/src/registry/handlers/memory-write.handler.ts, apps/orchestration-service/src/registry/handlers/memory-write.handler.spec.ts, scripts/gates/baseline.json, docs/work-queue.md
 
-Scope: D9 adds engine-owned, named workspace folders. Every workflow has an optional folder; no folder means Ungrouped. Create, rename, delete and move preserve workspace context. Deleting a folder returns its workflows to Ungrouped and never deletes workflows, chats or runs. Engine projects retain their existing meaning. ADS already validates the actual workspace; this task adds no broader retrieval scope. C110 chat migration0051 precedes folder migration0052. Shared integration files with C110/C113/C114 will be ordered and declared in the PR.
+Scope: D12 implements per-workspace chat, workflow and workspace memory switches, on by default, and a 7–365 day retention window defaulting to 90. Memory-service checks each kind before storing or recalling it; actual workflow chat and ADS consumers honor the result. Store memories with PII redacted, remove allow-sensitive-data, and preserve the separate anonymised cross-tenant policy layer. Settings writes require If-Match and commit their audit in the same locked transaction. Erasure, rollback and scheduled retention remain real.
 
-- [x] G1: Restricted PostgreSQL proves folder create/read/rename/delete and workflow moves in the actual workspace, with primary identities and atomic deletion returning only that folder's workflows to Ungrouped
-  CHECK: node .unlazy/verify-storage.mjs
-  EXPECT: workflow-folders-storage-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=11c8e14089b6bb42be0620bbdde50a6830e1536eec92a1652af1d46992b39fdd; exit=0; EXPECT=matched; output-sha256=cf33f3e3e2f0e113719718a5dec57644d2232b6ccbfe89a1e2eca5cbe33c648c; output-bytes=148; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-folders-c115; path=b33e9cf43ae9/31 entries
+- [x] G1: Restricted PostgreSQL and authenticated memory settings transport prove workspace defaults, strict values, If-Match missing/stale/concurrent writes, atomic audit rollback, tenant/workspace separation, erasure and reversible migration
+  CHECK: node .unlazy/verify-settings.mjs
+  EXPECT: memory-settings-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=7652ce3367036abed1df474a30a5eb65c3dd11f6e0317383e190608483d69613; exit=0; EXPECT=matched; output-sha256=505ce0cfb1e4f65028189d25d3f08d912e0b1d2e10f594eece34ed23cb506e52; output-bytes=33; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
-- [x] G2: Migration upgrade/rollback/reapply and registered tenant/workspace erasure preserve unrelated workflows, chats, runs and folders under ordinary runtime row policies
-  CHECK: node .unlazy/verify-lifecycle.mjs
-  EXPECT: workflow-folders-lifecycle-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=2fd9f3862e7bc51e92e81ea12e70631f201f3920232dee5bd56897f06fd5a9da; exit=0; EXPECT=matched; output-sha256=c96dde4dac1cb8814bac852185775636f159c24e49348c611f84155a144f1435; output-bytes=188; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-folders-c115; path=b33e9cf43ae9/31 entries
+- [x] G2: Real memory-service storage and recall enforce independent chat/workflow switches and retention; actual caller-authenticated redaction output is stored and recalled, while separate global policy operations keep their existing behavior
+  CHECK: node .unlazy/verify-recall.mjs
+  EXPECT: memory-recall-native-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1e2d6de6d8a8f085f00011aeadfcc202e6b17e0d053fb828a242e1704e02a1ff; exit=0; EXPECT=matched; output-sha256=29719594451dca9303d45322f324c8e23e42f90c0cc415e6cec4e59b332268d3; output-bytes=129; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
-- [x] G3: Actual guarded engine HTTP and Platform API transport enforce workspace-bound reads and admin/editor writes, pass real caller context and require resource preconditions for edits
-  CHECK: node .unlazy/verify-http.mjs
-  EXPECT: workflow-folders-http-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=b123c2cfe717fa86f52453a9ee1c0f838865e38795d9694f8efb83d10f4af0fb; exit=0; EXPECT=matched; output-sha256=aa57d8b20b54271764e1a35276b3e49bf7933b1518e3fdd31f464bb6ba468dca; output-bytes=93; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-folders-c115; path=b33e9cf43ae9/31 entries
+- [x] G3: Actual ADS writes/reads call memory-service for workspace settings, respect validated scopes and retention, and actual scheduled sweeps delete expired local memories without deleting current or other-workspace records
+  CHECK: node .unlazy/verify-ads-retention.mjs
+  EXPECT: memory-ads-retention-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1f199a00a8def64fb0f49a01a3b445ebb06a4f5d4081cec0316d0824163546df; exit=0; EXPECT=matched; output-sha256=03e992279d3a51a523842af5722a638ea2340b032dd8aeda4162fb0991165623; output-bytes=32; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
-- [x] G4: Live web requests and rendered workflow grouping show actual folders plus Ungrouped, support create/rename/delete/move, and preserve errors, stale-edit recovery and readable access
-  CHECK: node .unlazy/verify-web.mjs
-  EXPECT: workflow-folders-web-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=4374d57fc6ee559b5f552ac146281dd0f83e445cef08cf5cd0b1f7b9a6768c35; exit=0; EXPECT=matched; output-sha256=3d564a42770f22e9e956bfe3c4c6079c341563889355848b5872bcf92b4e9e2e; output-bytes=82; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-folders-c115; path=b33e9cf43ae9/31 entries
+- [x] G4: Public API RBAC and actual live web requests preserve ETag/If-Match, show validation/conflict/error recovery, expose three correctly labelled switches and retention only, and actual workflow builder uses the memory-service recall result
+  CHECK: node .unlazy/verify-delivery.mjs
+  EXPECT: memory-settings-delivery-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5f355ba5671d7eaad0dbed7dde8ea966af7e452eaaaccf062d19cb28e0d82724; exit=0; EXPECT=matched; output-sha256=9cb3bdb2c4fdd3352809a99801db5bf3554e7351d4cdaf1ce5c9f0381de86b64; output-bytes=310; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
-- [x] G5: Removing each consequential workspace, parent, atomic-delete, precondition, role or live-route check fails its known-positive assertion and restored sources pass
+- [x] G5: Each consequential switch, scope, retention, audit, PII or live-route assertion has a known-positive control that fails when the corresponding production check is removed and passes after restoration
   CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: workflow-folders-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=3e71e639c46224d7fab61d940847446a482d67a57ad92c3bf280a7b517a95fd9; exit=0; EXPECT=matched; output-sha256=97ce51e5f8b7db2d9da6f52cf45c0cfedaf95ad111c4424ce1a6012f003654b9; output-bytes=5004; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-folders-c115; path=b33e9cf43ae9/31 entries
+  EXPECT: memory-settings-controls-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=466413e4a6c1a12a3eaf6b6c3f047df40b7844ab15ad9ec49018ec54762a147f; exit=0; EXPECT=matched; output-sha256=0da2f4f4bff087b11cf583fb9a06d2b178f03c93ab864c5a49309d6712b09576; output-bytes=10893; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries
 
-- [x] G6: Full touched suites, actual recursive engine discovery, build/typecheck/lint, paired migration and erasure registration, architecture/RBAC/naming and zero added normalized AST findings pass
+- [x] G6: Full touched Python and TypeScript suites, native transport discovery, build/typecheck/lint, proto consistency, migration/erasure registration, architecture/RBAC/naming and zero added normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
-  EXPECT: workflow-folders-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=7440a85fe3e48489d535aa09a4740a7128d9f016bcb91676dcdc74f9c9fc04f0; exit=0; EXPECT=matched; output-sha256=bad5896e3438fe149738d7e4e14735028882dcb75f500090f9cbedbb8ff2600b; output-bytes=906; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-workflow-folders-c115; path=b33e9cf43ae9/31 entries
+  EXPECT: memory-settings-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=5336176fe382eeefc91ce001ccdf3304adf5d68024682222c9e8dbd3b0b24839; exit=0; EXPECT=matched; output-sha256=cf09edd69ff201b07b9eadab09a2aafb0554fb1b618692b5ea5ccf0a1819e94b; output-bytes=1222; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-memory-settings-c114; path=b33e9cf43ae9/31 entries

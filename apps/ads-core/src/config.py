@@ -32,6 +32,8 @@ class Settings(BaseSettings):
         pattern=r"^$|^[0-9a-f]{64}$",
     )
     model_gateway_grpc_target: str = "localhost:50051"
+    memory_service_address: str = "localhost:50060"
+    memory_service_authorization: str = ""
     auth0_m2m_token_url: str = ""
     auth0_m2m_audience: str = ""
     auth0_m2m_client_id: str = ""

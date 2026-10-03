@@ -10,6 +10,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from alter.adsq.v1 import adsq_pb2_grpc
 from src.config import get_settings
 from src.ingestion.embedding_client import GrpcEmbeddingClient
+from src.m2m_auth import lazy_auth0_m2m_token_provider_from_settings
+from src.memory_namespace.client import GrpcWorkspaceMemoryClient
+from src.memory_namespace.repository import SqlAlchemyMemoryNamespaceRepository
 from src.service_auth import SyncServiceAuthInterceptor, assert_configured_at_startup
 
 from .grpc_service import AdsqGrpcService
@@ -22,11 +25,19 @@ def serve() -> None:
     # A missing credential is a boot failure, never a per-RPC surprise.
     assert_configured_at_startup()
     engine = create_engine(settings.ads_db_url_sync, pool_pre_ping=True)
-    embeddings = GrpcEmbeddingClient(settings.model_gateway_grpc_target)
+    embeddings = GrpcEmbeddingClient(
+        settings.model_gateway_grpc_target,
+        access_token_provider=lazy_auth0_m2m_token_provider_from_settings(settings),
+    )
+    sessions = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
+    memory_client = GrpcWorkspaceMemoryClient(
+        settings.memory_service_address, settings.memory_service_authorization
+    )
+    memory_namespace = SqlAlchemyMemoryNamespaceRepository(
+        sessions, access=memory_client.access, redact=embeddings.redact
+    )
     service = RetrievalService(
-        repository=SqlAlchemyRetrievalRepository(
-            sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
-        ),
+        repository=SqlAlchemyRetrievalRepository(sessions, memory_namespace),
         embeddings=embeddings,
         max_concurrency=settings.ads_q_max_concurrency,
     )
@@ -52,6 +63,7 @@ def serve() -> None:
     finally:
         server.stop(grace=5)
         embeddings.close()
+        memory_client.close()
         engine.dispose()
 
 

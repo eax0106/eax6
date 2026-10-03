@@ -7,6 +7,7 @@ from pathlib import Path
 import sqlalchemy as sa
 from alembic.config import Config as AlembicConfig
 from sqlalchemy.orm import Session, sessionmaker
+from test_memory_learning import fixture_redact
 from testcontainers.community.postgres import PostgresContainer
 
 from alembic import command
@@ -72,7 +73,7 @@ def test_real_safety_candidate_write_is_durable_and_idempotent() -> None:
         repository = SqlAlchemyMemoryCandidateRepository(
             sessionmaker(engine, class_=Session, expire_on_commit=False)
         )
-        kernel = MemoryLearningKernel(SeededRunClient(), repository)
+        kernel = MemoryLearningKernel(SeededRunClient(), repository, fixture_redact)
         request = ProposeWritebackRequest(
             tenant_id=f"ten_{TENANT}",
             workspace_id="ws_018f4d6e-2b4a-7a3e-8c1a-1234567890ac",

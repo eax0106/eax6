@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 _UUID_V7_BODY = r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 
@@ -76,11 +76,16 @@ class ProposeWritebackResponse(StrictModel):
 
     memory_id: str
     candidate_json: str
+    skipped: bool = False
 
-    @field_validator("memory_id")
-    @classmethod
-    def _memory_id(cls, value: str) -> str:
-        return _validate_pattern(_MEMORY_ID_RE, value, "memory_id")
+    @model_validator(mode="after")
+    def identity(self) -> Self:
+        if self.skipped:
+            if self.memory_id or self.candidate_json != "{}":
+                raise ValueError("Skipped memory cannot return stored content")
+        else:
+            _validate_pattern(_MEMORY_ID_RE, self.memory_id, "memory_id")
+        return self
 
 
 class RunNodeSummary(StrictModel):

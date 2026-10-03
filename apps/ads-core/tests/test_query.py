@@ -15,6 +15,7 @@ from testcontainers.community.postgres import PostgresContainer
 from alembic import command
 from src.db.ids import new_prefixed_id
 from src.ingestion.embedding_client import EmbeddingDimensions, EmbeddingResult
+from src.memory_namespace.repository import SqlAlchemyMemoryNamespaceRepository
 from src.query.models import RetrievalRequest
 from src.query.repository import ScopeViolationError, SqlAlchemyRetrievalRepository
 from src.query.router import get_retrieval_service
@@ -64,7 +65,15 @@ def retrieval_service() -> Generator[tuple[RetrievalService, sa.Engine], None, N
         runtime_url = sa.engine.make_url(url).set(username=RUNTIME_ROLE, password=RUNTIME_PASSWORD)
         runtime = sa.create_engine(runtime_url)
         service = RetrievalService(
-            repository=SqlAlchemyRetrievalRepository(sessionmaker(bind=runtime, class_=Session)),
+            repository=SqlAlchemyRetrievalRepository(
+                sessionmaker(bind=runtime, class_=Session),
+                # Fixed anonymous corpus; separate native proof covers settings and redaction.
+                SqlAlchemyMemoryNamespaceRepository(
+                    sessionmaker(bind=runtime, class_=Session),
+                    access=lambda _tenant, _workspace: (True, 90),
+                    redact=lambda _tenant, content: content,
+                ),
+            ),
             embeddings=FakeEmbeddings(),
             max_concurrency=1,
         )

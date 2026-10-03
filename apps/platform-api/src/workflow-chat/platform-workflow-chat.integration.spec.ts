@@ -18,6 +18,7 @@ import { CompilerServiceClient } from "../planner-facade/compiler-client";
 import { TenantResidencyRepository } from "../planner-facade/tenant-residency.repository";
 import { WorkflowSafeguardsService } from "../planner-facade/workflow-safeguards.service";
 import { PlatformWorkflowChatService } from "./platform-workflow-chat.service";
+import type { MemorySettingsService } from "../memory-settings/memory-settings.service";
 
 // The engine's always-run signed HTTP test launches this child against its real
 // restricted PostgreSQL and compiler server. Only model decisions use a protocol edge.
@@ -92,7 +93,9 @@ it.runIf(Boolean(process.env.WORKFLOW_CHAT_NATIVE_BRIDGE))("retains chat context
       new WorkflowSafeguardsService(new PlatformDb(pool), { recordEvent: async () => { throw Error("Builder must not emit a safeguard write"); }, getEvent: async () => { throw Error("Builder must not read an audit event"); } }),
       new PlannerClient({ baseUrl: `http://127.0.0.1:${(intelligence.server.address() as { port: number }).port}` }, createFetchPlannerHttpClient(() => "native-planner-edge")),
       new CompilerServiceClient({ address: fixture.compilerAddress, protoPath: "packages/contracts/proto/alter/compiler/v1/compiler.proto" }));
-    const workflows = new WorkflowService(engine), chats = new PlatformWorkflowChatService(engine, planner, workflows, new RunService(engine, costs), new CostsService(costs, engine));
+    // This fixture measures native planning and compilation; settings/recall transport has its own native proof.
+    const memory = { builderMemory: async (_actor: unknown, _conversation: string, _workflow: string, messages: unknown[]) => ({ messages, lessons: [] }) } as unknown as MemorySettingsService;
+    const workflows = new WorkflowService(engine), chats = new PlatformWorkflowChatService(engine, planner, workflows, new RunService(engine, costs), new CostsService(costs, engine), memory);
     const actor = { user_id: `usr_${fixture.user}`, tenant_id: `ten_${fixture.tenant}`, workspace_id: `ws_${fixture.workspace}`, roles: ["admin"], permissions: [], session_id: "native-chat", auth_time: Math.floor(Date.now() / 1000) };
     const chat = await chats.create({ type: "workflow_builder", title: "Native builder" }, actor, undefined, "native-create");
     const goal = "Build a weekly report from GitHub and Slack, retaining every original requirement";
