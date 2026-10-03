@@ -94,6 +94,27 @@ export class WorkflowController {
     );
   }
 
+  @Get("health")
+  @RequireWorkspaceRole(...readRoles)
+  async healths(
+    @Query("cursor") cursor: string | undefined,
+    @Query("limit") limit: string | undefined,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+  ) {
+    return this.workflows.healths(cursor, limit, requireActor(actor, "/api/v1/workflows/health"), traceparent);
+  }
+
+  @Get(":workflowId/health")
+  @RequireWorkspaceRole(...readRoles)
+  async health(
+    @Param("workflowId") workflowId: string,
+    @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined,
+  ) {
+    return this.workflows.health(workflowId, requireActor(actor, `/api/v1/workflows/${workflowId}/health`), traceparent);
+  }
+
   @Get(":workflowId/approval-policies")
   @RequireWorkspaceRole(...readRoles)
   @RequirePermission("human-actions:read")

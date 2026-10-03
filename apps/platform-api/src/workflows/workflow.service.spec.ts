@@ -23,6 +23,22 @@ const actor: ActorContext = {
 };
 
 describe("WorkflowService", () => {
+  it("reads scoped workflow health and preserves list pagination", async () => {
+    const engine = engineStub(), service = new WorkflowService(engine.value);
+    const dimension = { score: null, status: "not_enough_data", summary: "No recorded evidence", observations: 0, passed: 0 };
+    const health = { workflowId, overallScore: null, status: "not_enough_data", dimensions: { validation: dimension, availability: dimension, correctness: dimension, reliability: dimension }, recentFailures: 0, degradedRuns: 0, lastEvaluatedAt: "2026-10-03T12:00:00.000Z", window: { startAt: "2026-09-26T12:00:00.000Z", endAt: "2026-10-03T12:00:00.000Z", maximumRuns: 20, sampledRuns: 0 } };
+    const page = { next_cursor: "next cursor", has_more: true, limit: 1 };
+    engine.get.mockResolvedValueOnce({ status: 200, body: { data: [{ id: workflowId }], page } }).mockResolvedValue({ status: 200, body: health });
+    expect(await service.healths("prior", "1", actor, traceparent)).toEqual({ data: [health], page });
+    expect(engine.get).toHaveBeenNthCalledWith(1, "/api/v1/workflows?cursor=prior&limit=1", expectedContext());
+    expect(engine.get).toHaveBeenNthCalledWith(2, `/api/v1/workflows/${workflowId}/health`, expectedContext());
+    await expect(service.health("invalid", actor, traceparent)).rejects.toThrow(WorkflowHttpError);
+    const unscoped = { ...actor }; delete unscoped.workspace_id;
+    await expect(service.health(workflowId, unscoped, traceparent)).rejects.toThrow(WorkflowHttpError);
+    engine.get.mockResolvedValue({ status: 200, body: { ...health, overallScore: 101 } });
+    await expect(service.health(workflowId, actor, traceparent)).rejects.toThrow();
+  });
+
   it("relays approval policies with the caller and exact precondition", async () => {
     const engine = engineStub();
     const service = new WorkflowService(engine.value);
