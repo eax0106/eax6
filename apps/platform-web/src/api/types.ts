@@ -575,16 +575,18 @@ export interface NodeVerification {
 }
 
 export interface HealthDimension {
-  score: number
-  status: "healthy" | "warning" | "critical"
+  score: number | null
+  status: "healthy" | "warning" | "critical" | "not_enough_data"
   summary: string
+  observations?: number
+  passed?: number
   issues?: { id: string; message: string }[]
 }
 
 export interface WorkflowHealth {
   workflowId: string
-  overallScore: number
-  status: "healthy" | "warning" | "critical"
+  overallScore: number | null
+  status: HealthDimension["status"]
   dimensions: {
     validation: HealthDimension
     availability: HealthDimension
@@ -594,6 +596,11 @@ export interface WorkflowHealth {
   recentFailures: number
   degradedRuns: number
   lastEvaluatedAt: string
+  window?: { startAt: string; endAt: string; maximumRuns: 20; sampledRuns: number }
+}
+
+export type WorkflowHealthCollection = Pick<import("@alterx/contracts").WorkflowHealthPage, "page"> & {
+  data: WorkflowHealth[]
 }
 
 // Phase 6 Types

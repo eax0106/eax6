@@ -19,6 +19,7 @@ import { WorkflowLifecycleService } from "./workflow-lifecycle/workflow-lifecycl
 import { WorkflowDeploymentController } from "./workflow-lifecycle/workflow-deployment.controller";
 import { WorkflowReadController } from "./workflow-read/workflow-read.controller";
 import { WorkflowReadService } from "./workflow-read/workflow-read.service";
+import { WorkflowHealthService } from "./workflow-health/workflow-health.service";
 import { TemplateVariablesController } from "./template-variables/template-variables.controller";
 import { TemplateVariablesService } from "./template-variables/template-variables.service";
 import { ClarificationsController } from "./clarifications/clarifications.controller";
@@ -59,6 +60,7 @@ import { OperationsModule } from "./operations.module";
     ProjectReadController,
   ],
   providers: [
+    { provide: WorkflowHealthService, useFactory: () => new WorkflowHealthService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     {
       provide: CONVERSATION_HANDLER,
       useFactory: () => {
