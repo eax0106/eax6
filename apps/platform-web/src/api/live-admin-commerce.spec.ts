@@ -5,7 +5,7 @@ vi.mock("./http", async (importOriginal) => ({
   isLiveApi: true,
 }))
 
-import { listBillingIssues, listMarketplaceReviews, listSellerVerifications, reviewMarketplaceItem, reviewSellerVerification } from "./live-admin-commerce"
+import { listBillingIssues, listMarketplaceReviews, listSellerVerifications, reviewMarketplaceItem, reviewSellerVerification, listToolVersionReviews, reviewToolVersion } from "./live-admin-commerce"
 import { BillingOpsService } from "./services/billing-ops"
 import { MarketplaceAdminService } from "./services/marketplace-admin"
 
@@ -91,5 +91,25 @@ describe("live admin marketplace and billing (B2.1, B2.2)", () => {
     const [url, init] = fetchMock.mock.calls[1]!
     expect(String(url)).toContain("/api/v1/admin/publisher/verifications/7f7c7d1e-0000-4000-8000-000000000001/kyc_1/actions/review")
     expect(JSON.parse(String(init!.body))).toEqual({ decision: "rejected", reason: "Tax ID does not match" })
+  })
+})
+
+
+describe("live first-tool-version review", () => {
+  const item = { manifestId: "tlm_manifest", tenantId: "ten_owner", name: "CRM", version: { id: "tlv_version", version: "1.0.0", artifactRef: "s3://fixture", capabilities: [], permissions: [], status: "review_pending", scanReportId: "scn_current" }, scan: { id: "scn_current", verdict: "clean" as const, findings: [], scannerVersion: "OSV-Scanner v2.6.0", durationMs: 1, scannedAt: "2026-10-04T00:00:00.000Z" } }
+  it("loads the exact scan and submits only decision, report and reason using staff cookies", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json([item]))
+    expect(await listToolVersionReviews()).toEqual([item])
+    expect(String(fetchMock.mock.calls[0]![0])).toContain("/governance/tools/review-queue")
+    fetchMock.mockResolvedValueOnce(Response.json({ ...item.version, status: "published" }))
+    expect((await reviewToolVersion(item, "approved", "  Checked dependencies  ")).status).toBe("published")
+    const [url, init] = fetchMock.mock.calls[1]!
+    expect(String(url)).toContain("/governance/tools/tlm_manifest/versions/tlv_version/review")
+    expect(JSON.parse(String(init!.body))).toEqual({ scanReportId: "scn_current", decision: "approved", reason: "Checked dependencies" })
+    expect(init!.credentials).toBe("include")
+  })
+  it("propagates an exact-scan conflict instead of reporting publication", async () => {
+    fetchMock.mockResolvedValueOnce(Response.json({ status: 409, title: "Conflict", detail: "The scan changed; reload before reviewing" }, { status: 409 }))
+    await expect(reviewToolVersion(item, "approved", "Checked")).rejects.toThrow(/scan changed/)
   })
 })

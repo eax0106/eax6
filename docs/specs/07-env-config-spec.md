@@ -173,3 +173,15 @@ Rules (same law as everywhere): vendor SDKs only inside adapters; canonical Alte
 ## 10. Summary of Locked Decisions
 
 Three permanent environments + three ephemeral preview classes; eight-account Control Tower structure; Terraform-managed everything; AppConfig for dynamic config, SSM for parameters, Secrets Manager for credentials, policy_db for business behavior; hierarchical provider resolution with tenant overrides; 90-day rotation default; full local Docker + mock-provider parity; GPU-ready without GPU dependency; private client connectivity supported from day one; all infrastructure replaceable behind Alter-owned adapters.
+
+
+## D21 registry package scanner
+
+`REGISTRY_SCAN_PROVIDER=osv` is the production default. The Node image includes
+OSV-Scanner v2.6.0 at `/usr/local/bin/osv-scanner`; `OSV_SCANNER_EXECUTABLE` can
+select that executable explicitly. `REGISTRY_PACKAGE_BUCKET` binds the
+version-enabled package bucket. The existing AWS region and service identity
+provide object-version reads. Missing bindings produce nonclean scan reports;
+there is no production mock fallback. See [package-scanning.md](../package-scanning.md)
+for the exact tenant/version object prefix, supported input formats, limits,
+publication states and first-version staff review.

@@ -59,7 +59,7 @@ describe("platformApiEnvSchema", () => {
       SIGNING_KEY_PROVIDER: "secrets",
       ALTER_CONFIG_SOURCE: "local-file",
       MARKETPLACE_OBJECT_STORAGE_PROVIDER: "mock",
-      REGISTRY_SCAN_PROVIDER: "mock",
+      REGISTRY_SCAN_PROVIDER: "osv",
       STATUS_PAGE_PROVIDER: "mock",
       RUNTIME_MODE: "mock",
     });
@@ -181,8 +181,9 @@ describe("platformApiEnvSchema", () => {
 
   it("fails loudly until SCAN-1 when sandbox scanning is selected", () => {
     const base = { DATABASE_URL: "postgres://localhost/platform_db", MARKETPLACE_DATABASE_URL: "postgres://localhost/marketplace_db", MARKETPLACE_SEARCH_CURSOR_SECRET: cursorSecret, SIGNING_KEY_PROVIDER: "mock" };
-    expect(validatePlatformApiEnv(base).REGISTRY_SCAN_PROVIDER).toBe("mock");
-    expect(() => validatePlatformApiEnv({ ...base, REGISTRY_SCAN_PROVIDER: "sandbox" })).toThrow("SCAN-1");
+    expect(validatePlatformApiEnv(base).REGISTRY_SCAN_PROVIDER).toBe("osv");
+    expect(() => validatePlatformApiEnv({ ...base, REGISTRY_SCAN_PROVIDER: "sandbox" })).toThrow("Invalid platform-api environment");
+    expect(() => validatePlatformApiEnv({ ...base, REGISTRY_SCAN_PROVIDER: "mock" })).toThrow("Invalid platform-api environment");
     expect(() => validatePlatformApiEnv({ ...base, REGISTRY_SCAN_PROVIDER: "other" })).toThrow("Invalid platform-api environment");
   });
 

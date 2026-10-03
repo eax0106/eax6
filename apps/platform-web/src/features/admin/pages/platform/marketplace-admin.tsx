@@ -2,7 +2,7 @@ import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { isLiveApi } from "@/api/http"
-import type { MarketplaceReviewItem, SellerVerification } from "@/api/services/marketplace-admin"
+import type { MarketplaceReviewItem, SellerVerification, ToolVersionReviewItem } from "@/api/services/marketplace-admin"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
@@ -120,6 +120,7 @@ export function MarketplaceAdmin() {
         </Table>
       </div>
 
+      <ToolVersionReviewQueue />
       <SellerVerificationQueue />
     </div>
   )
@@ -192,6 +193,52 @@ function SellerVerificationQueue() {
           </TableBody>
         </Table>
       </div>
+    </section>
+  )
+}
+
+
+function ToolVersionReviewQueue() {
+  const client = useQueryClient()
+  const key = [...queryKeys.admin.marketplace.reviewQueue, "toolVersions"]
+  const [reasons, setReasons] = React.useState<Record<string, string>>({})
+  const queue = useQuery({ queryKey: key, queryFn: () => api.admin.marketplace.toolVersionReviewQueue() })
+  const review = useMutation({
+    mutationFn: ({ item, decision }: { item: ToolVersionReviewItem; decision: "approved" | "rejected" }) =>
+      api.admin.marketplace.reviewToolVersion(item, decision, reasons[item.version.id]?.trim() ?? ""),
+    onSuccess: async () => {
+      await client.invalidateQueries({ queryKey: key })
+      await client.invalidateQueries({ queryKey: queryKeys.admin.marketplace.reviewQueue })
+    },
+  })
+  return (
+    <section className="space-y-3" aria-labelledby="tool-review-heading">
+      <h2 id="tool-review-heading" className="text-lg font-semibold">First tool version review</h2>
+      <p className="text-sm text-slate-400">Inspect the package, capabilities and requested permissions before publishing its first version.</p>
+      {queue.isError && <p role="alert">{(queue.error as Error).message}</p>}
+      {review.isError && <p role="alert">{(review.error as Error).message}</p>}
+      <Button variant="outline" size="sm" disabled={queue.isFetching || review.isPending} onClick={() => void queue.refetch()}>Reload tool scans</Button>
+      {queue.isLoading ? <p role="status">Loading tool versions…</p> : queue.data?.length === 0 ? <p>No tool versions awaiting review.</p> : queue.data?.map(item => {
+        const ready = item.version.status === "review_pending" && item.version.scanReportId === item.scan.id && item.scan.verdict === "clean" && item.scan.findings.length === 0
+        return (
+          <article key={item.version.id} aria-label={`${item.name} ${item.version.version}`} className="rounded-lg border border-slate-800 p-4 space-y-3">
+            <h3 className="font-medium">{item.name} · {item.version.version}</h3>
+            <p className="text-sm text-slate-400">Tenant: {item.tenantId}</p>
+            <p className="text-sm break-all">Package: {item.version.artifactRef}</p>
+            <p className="text-sm">Capabilities: {item.version.capabilities.join(", ") || "None declared"}</p>
+            <p className="text-sm">Permissions: {item.version.permissions.join(", ") || "None declared"}</p>
+            <p className="text-sm">Scan: {item.scan.verdict} · {item.scan.scannerVersion} · {new Date(item.scan.scannedAt).toLocaleString()}</p>
+            <p className="text-xs text-slate-400 break-all">Report: {item.scan.id}</p>
+            {item.scan.findings.length === 0 ? <p>No dependency findings.</p> : <ul>{item.scan.findings.map((finding, i) => <li key={`${finding.rule}:${finding.locator}:${i}`}>{finding.severity}: {finding.rule} · {finding.locator} · {finding.detail}</li>)}</ul>}
+            {!ready && <p role="alert">A current, complete clean scan is required. Reload before reviewing.</p>}
+            <Input aria-label={`Review reason for ${item.version.id}`} maxLength={2000} placeholder="What did you review?" value={reasons[item.version.id] ?? ""} onChange={event => setReasons(current => ({ ...current, [item.version.id]: event.target.value }))} />
+            <div className="flex gap-2">
+              <Button disabled={!ready || review.isPending || !reasons[item.version.id]?.trim()} onClick={() => review.mutate({ item, decision: "approved" })}>Approve tool version</Button>
+              <Button variant="outline" disabled={!ready || review.isPending || !reasons[item.version.id]?.trim()} onClick={() => review.mutate({ item, decision: "rejected" })}>Reject tool version</Button>
+            </div>
+          </article>
+        )
+      })}
     </section>
   )
 }

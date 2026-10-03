@@ -19,6 +19,7 @@ export default defineConfig({
       "apps/platform-api/src/marketplace/**/*.integration.spec.ts",
       "apps/platform-api/src/publisher/**/*.integration.spec.ts",
       "apps/platform-api/src/registry/**/*.integration.spec.ts",
+      "apps/platform-api/src/marketplace-governance/**/*.integration.spec.ts",
       // search's was the one marketplace-schema integration spec missing from
       // this list and from the test-db-integration target -- so it ran here,
       // against a real database, alongside the unit specs. It is in that

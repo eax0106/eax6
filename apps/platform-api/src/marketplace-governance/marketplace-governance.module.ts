@@ -6,6 +6,8 @@ import { MarketplaceGovernanceController } from "./marketplace-governance.contro
 import { MarketplaceGovernanceExceptionFilter } from "./marketplace-governance-exception.filter";
 import { MarketplaceGovernanceRepository } from "./marketplace-governance.repository";
 import { MarketplaceGovernanceService } from "./marketplace-governance.service";
+import { ToolVersionReviewRepository } from "./tool-version-review.repository";
+import { ToolVersionReviewService } from "./tool-version-review.service";
 
 @Module({
   imports: [AdminAuditModule, StaffModule],
@@ -21,6 +23,8 @@ import { MarketplaceGovernanceService } from "./marketplace-governance.service";
       ),
     },
     MarketplaceGovernanceService,
+    { provide: ToolVersionReviewRepository, useFactory: () => new ToolVersionReviewRepository(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL ? sharedPool(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL) : undefined,false) },
+    ToolVersionReviewService,
     MarketplaceGovernanceExceptionFilter,
   ],
 })

@@ -46,7 +46,9 @@ export class RbacGuard implements CanActivate {
     );
     const staffRoles = this.reflector.getAllAndOverride<StaffRole[]>(staffRolesMetadataKey, [context.getHandler(), context.getClass()]);
 
-    const request = context.switchToHttp().getRequest<RbacRequest>();
+    const request = context.switchToHttp().getRequest<RbacRequest & { raw?: Pick<RbacRequest, "staffActorContext"> }>();
+    // Nest middleware runs on the raw request; Fastify wraps it before guards.
+    if (!request.staffActorContext && request.raw?.staffActorContext) request.staffActorContext = request.raw.staffActorContext;
     const actorContext = request.actorContext;
     if (staffRoles?.length) {
       const staff = request.staffActorContext;
