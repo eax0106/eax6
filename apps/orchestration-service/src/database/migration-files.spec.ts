@@ -151,13 +151,13 @@ describe("orchestration migration files", () => {
     },
   );
 
-  it("defines immutability function once and reuses it for all thirty-six protected tables", () => {
+  it("defines immutability function once and reuses it for all thirty-seven protected tables", () => {
     const allSql = migrationSql.map(({ sql }) => sql).join("\n");
 
     expect(allSql.match(/CREATE OR REPLACE FUNCTION reject_tenant_id_change/g))
       .toHaveLength(1);
     expect(allSql.match(/EXECUTE FUNCTION reject_tenant_id_change\(\)/g))
-      .toHaveLength(36);
+      .toHaveLength(37);
   });
 
   it("persists a bounded traffic percentage only for canary versions", () => {
