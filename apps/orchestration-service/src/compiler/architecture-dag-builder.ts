@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { ConnectorTypeSchema, CompiledDagSchema, type CompiledDag, type NodeType } from "@alterx/contracts";
+import { ConnectorTypeSchema, CompiledDagSchema, ModelAliasSchema, NodeSelectionEvidenceSchema, ToolNameSchema, type CompiledDag, type NodeType } from "@alterx/contracts";
 
 import { CompilerValidationError, computeWaves, extractGateConditions, validateGateConditionCoverage } from "./dag-builder";
 
@@ -48,7 +48,9 @@ const BindingDecision = z.object({
     record_id: z.string().min(1), version: z.number().int().positive(), kind: CapabilityKind,
     source_node_key: NodeKey, rationale: z.string().min(1), score: z.number().min(0).max(1), factors: z.record(z.string(), z.number()),
     required_connector: ConnectorTypeSchema.nullish(),
+    model_alias: ModelAliasSchema.nullish(), required_model_alias: ModelAliasSchema.nullish(),
   }).strict()),
+  policy: NodeSelectionEvidenceSchema.shape.policy.unwrap().passthrough().nullish(),
 }).strict();
 
 export const ArchitectureCompileInputSchema = z.object({
@@ -118,7 +120,16 @@ export function compileArchitectureToDag(raw: ArchitectureCompileInput): Compile
     const bindingConfig = binding === undefined ? {} : {
       capability_record_id: binding.record_id, capability_version: binding.version,
       ...(binding.required_connector == null ? {} : { required_connector: binding.required_connector }),
+      ...(binding.model_alias == null ? {} : { model_alias: binding.model_alias }),
     };
+    const selection = binding === undefined ? undefined : NodeSelectionEvidenceSchema.parse({
+      binding: {record_id:binding.record_id,version:binding.version,kind:binding.kind,rationale:binding.rationale,score:binding.score,factors:binding.factors},
+      ...(decision.policy == null ? {} : {policy:{reliability_weight:decision.policy.reliability_weight,latency_weight:decision.policy.latency_weight,cost_weight:decision.policy.cost_weight}}),
+      required_capabilities:node.capability_role!.required_capabilities,
+      ...(binding.required_model_alias == null ? {} : {required_model_alias:binding.required_model_alias}),
+      ...(ModelAliasSchema.safeParse(binding.model_alias ?? node.config?.model_alias).success ? {model_alias:binding.model_alias ?? node.config?.model_alias} : {}),
+      ...(ToolNameSchema.safeParse(node.config?.tool_name).success ? {tool_name:node.config?.tool_name} : {}),
+    });
     return {
       key: node.source_node_key,
       type: nodeType(node, binding),
@@ -126,7 +137,7 @@ export function compileArchitectureToDag(raw: ArchitectureCompileInput): Compile
       ...(node.success_criteria === undefined || node.success_criteria === null
         ? {}
         : { success_criteria: node.success_criteria }),
-      metadata: { ui: {} },
+      metadata: { ui: {}, ...(selection === undefined ? {} : {selection_binding:selection}) },
     };
   });
   // Branches route with CEL conditions keyed by successor, exactly as the

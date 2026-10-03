@@ -10,6 +10,16 @@ const artifactPath = resolve(
 );
 
 describe("OpenAPI generation", () => {
+  it("documents strict canonical node comparison, advisory facts and recursive declared port types", () => {
+    const document = createOpenApiDocument();
+    expect(document.paths?.["/api/v1/workflows/{id}/node-overrides/compare"]?.post).toMatchObject({
+      requestBody: { content: { "application/json": { schema: { $ref: "#/components/schemas/NodeOverrideRequest" } } } },
+      responses: { "200": { content: { "application/json": { schema: { $ref: "#/components/schemas/NodeOverrideComparison" } } } } },
+    });
+    expect(document.components?.schemas?.NodeOverrideRequest).toMatchObject({ additionalProperties: false, required: ["nodeKey", "choice", "dag"] });
+    expect(document.components?.schemas?.NodeDataContract).toMatchObject({ type: "object", properties: { items: { $ref: "#/components/schemas/NodeDataContract" } } });
+    expect(document.components?.schemas?.NodeOverrideComparison).toMatchObject({ properties: { approval_required: { type: "boolean" }, cost: { type: "object" } } });
+  });
   it("generates a valid OpenAPI 3.1.1 document", async () => {
     const document = createOpenApiDocument();
     await SwaggerParser.validate(
@@ -42,7 +52,8 @@ describe("OpenAPI generation", () => {
     );
     expect(operationCount).toBe(V1_ROUTE_SPECS.length);
     // 109 before the seven Voice channel operations were removed with Voice.
-    expect(operationCount).toBe(102);
+    // Two node override operations added by D20.
+    expect(operationCount).toBe(104);
   });
 
   it("documents the test-version workflow action", () => {

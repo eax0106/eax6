@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   ConversationManagerConfigurationError,
   loadConversationManagerEnvironment,
+  loadNodeOverrideThresholds,
 } from "./environment";
 
 function environment(
@@ -53,4 +54,10 @@ describe("loadConversationManagerEnvironment", () => {
       loadConversationManagerEnvironment(environment(override)),
     ).toThrow(field);
   });
+});
+
+it("reads configurable D20 thresholds and refuses malformed or invalid overrides",()=>{
+  expect(loadNodeOverrideThresholds({})).toEqual({costIncreaseRatio:.25,costIncreaseMinor:500,latencyMultiplier:2});
+  expect(loadNodeOverrideThresholds({NODE_OVERRIDE_ADVISORY_THRESHOLDS:'{"costIncreaseRatio":0.5,"costIncreaseMinor":1000,"latencyMultiplier":3}'})).toEqual({costIncreaseRatio:.5,costIncreaseMinor:1000,latencyMultiplier:3});
+  for (const value of ['{','{"costIncreaseMinor":-1}','{"latencyMultiplier":0.5}','{"unknown":1}']) expect(()=>loadNodeOverrideThresholds({NODE_OVERRIDE_ADVISORY_THRESHOLDS:value})).toThrow("NODE_OVERRIDE_ADVISORY_THRESHOLDS");
 });

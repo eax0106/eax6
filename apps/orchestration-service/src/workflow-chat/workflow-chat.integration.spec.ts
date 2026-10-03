@@ -36,6 +36,8 @@ import { RunObservabilityService } from "../runs/run-observability.service";
 import { RunObservabilityController } from "../runs/run-observability.controller";
 import { SecurityModule } from "../security.module";
 import { identityTenantGatewayEnvironment, orchestrationStore } from "../orchestration-infrastructure.module";
+import { NodeOverridesService } from "../node-overrides/node-overrides.service";
+import { nativeOverrideService, exerciseNativeOverrides } from "../node-overrides/native-node-overrides";
 
 const tenant=uuidV7(),otherTenant=uuidV7(),workspace=uuidV7(),otherWorkspace=uuidV7(),user=uuidV7(),otherUser=uuidV7();
 const actor=(overrides:Partial<ActorContext>={}):ActorContext=>({actor_type:'user',tenant_id:`ten_${tenant}`,workspace_id:`ws_${workspace}`,user_id:`usr_${user}`,roles:['admin'],permissions:[],session_id:'session-fixture',jti:'chat-fixture',...overrides});
@@ -167,6 +169,15 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
   let registerModel:((address:string)=>void)|undefined;
   const jwk={...pair.publicKey.export({format:'jwk'}),kid:'chat-native',alg:'RS256',use:'sig'};
   const issuer=createServer(async(request,response)=>{
+    if(request.url==='/selection-binding/critique-override'){
+      if(request.method!=='POST'||request.headers.authorization!==`Bearer ${registryToken}`){response.statusCode=401;response.end();return;}
+      const chunks=[];for await(const chunk of request)chunks.push(chunk);
+      const input=JSON.parse(Buffer.concat(chunks).toString()) as {node_key:string;original_binding:unknown;policy:unknown};
+      expect(input.policy).toEqual({reliability_weight:.4,latency_weight:.3,cost_weight:.3});
+      expect(input.original_binding).toMatchObject({rationale:'Recorded native fit'});
+      response.setHeader('content-type','application/json');
+      response.end(JSON.stringify({original_binding:input.original_binding,candidate:{record_id:'native-candidate',version:1,kind:'model',source_node_key:input.node_key,rationale:'Native protocol facts',score:.7,factors:{reliability:.7},output_contract:{type:'object'}},warnings:[]}));return;
+    }
     if(request.url==='/native/model-gateway'){
       if(request.method!=='POST'||request.headers.authorization!==`Bearer ${registryToken}`||!registerModel){response.statusCode=401;response.end();return;}
       const chunks=[];for await(const chunk of request)chunks.push(chunk);
@@ -190,6 +201,7 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
     const lookup=new RunWorkspaceLookupService(store);
     const module=await Test.createTestingModule({imports:[SecurityModule],controllers:[WorkflowChatController,WorkflowReadController,CompilerGrpcController,ConnectionRegistryController,RunsGrpcController,RunsController,NodeExecutionsController,RunObservabilityController],providers:[
       {provide:WorkflowChatService,useValue:chats},{provide:WorkflowReadService,useValue:workflows},
+      {provide:NodeOverridesService,useValue:nativeOverrideService(store,jwksUrl.replace('/jwks',''),registryToken)},
       {provide:RunLauncherService,useValue:new RunLauncherService(store,createMockDurableExecutionProvider())},
       {provide:RunOutcomeService,useValue:new RunOutcomeService(store)},
       {provide:RunEstimateService,useValue:{estimate:async()=>{throw Error('Assistant must not request execution');}}},
@@ -216,6 +228,7 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
         'x-alter-actor-token':jwt({user_id:`usr_${user}`,tenant_id:`ten_${tenant}`,workspace_id:`ws_${workspace}`,roles:['admin'],permissions:[],session_id:'chat-native',auth_time:now,jti:uuidV7(),iss:'alter-platform-api.identity-broker',aud:'alter-engine',iat:now,exp:now+60,...overrides})};
     };
     const url=(await app.getUrl())+'/api/v1/conversations';
+    const overrideWorkflowId=await exerciseNativeOverrides({store,baseUrl:await app.getUrl(),tenant,workspace,otherTenant,otherWorkspace,headers});
     expect((await fetch(url)).status).toBe(401);
     const created=await fetch(url,{method:'POST',headers:headers(),body:JSON.stringify({type:'workflow_builder',title:'HTTP chat'})});
     expect(created.status).toBe(201);const chat=await created.json() as {id:string;linkedWorkflowId:string};
@@ -229,19 +242,21 @@ describe.sequential('Workflow chats on restricted PostgreSQL',()=>{
     const directory=await mkdtemp(resolve(tmpdir(),'alter-chat-bridge-')),reportPath=resolve(directory,'report.json');
     const privateKey=pair.privateKey.export({format:'pem',type:'pkcs8'}).toString();
     try {
-      await promisify(execFile)(process.execPath,[resolve('node_modules/vitest/vitest.mjs'),'run','apps/platform-api/src/workflow-chat/platform-workflow-chat.integration.spec.ts','--maxWorkers=1','--reporter=json',`--outputFile=${reportPath}`],{
-        env:{...process.env,WORKFLOW_CHAT_NATIVE_BRIDGE:JSON.stringify({baseUrl:await app.getUrl(),compilerAddress:`127.0.0.1:${port}`,tenant,workspace,user,privateKey,registryToken})},timeout:120000,maxBuffer:4*1024*1024,
+      await promisify(execFile)(process.execPath,[resolve('node_modules/vitest/vitest.mjs'),'run','apps/platform-api/src/workflow-chat/platform-workflow-chat.integration.spec.ts','apps/platform-api/src/workflows/node-overrides-public.integration.spec.ts','--maxWorkers=1','--reporter=json',`--outputFile=${reportPath}`],{
+        env:{...process.env,WORKFLOW_CHAT_NATIVE_BRIDGE:JSON.stringify({baseUrl:await app.getUrl(),compilerAddress:`127.0.0.1:${port}`,tenant,workspace,user,privateKey,registryToken,overrideWorkflowId})},timeout:120000,maxBuffer:4*1024*1024,
       }).catch(async(error:unknown)=>{
         const output=error as {stdout?:string;stderr?:string};
         const report=JSON.parse(await readFile(reportPath,'utf8').catch(()=>'{}')) as {testResults?:{message?:string;assertionResults?:{failureMessages?:string[]}[]}[]};
         const failures=report.testResults?.flatMap(file=>[file.message??'',...(file.assertionResults??[]).flatMap(test=>test.failureMessages??[])]).join('\n')??'';
         const detail=`${output.stdout??''}\n${output.stderr??''}\n${failures}`.replaceAll(privateKey,'[fixture key]').replaceAll(registryToken,'[fixture token]');
-        console.error(detail.replace(/\u001b\[[0-9;]*m/g,'').split('\n').filter(line=>/FAIL|Error:|expected|received|Expected|Received|❯/.test(line)).slice(-20).join('\n'));throw error;
+        console.error(detail.replace(/\u001b\[[0-9;]*m/g,'').split('\n').filter(line=>/FAIL|Error:|expected|received|Expected|Received|❯|node-overrides-public.integration.spec.ts:/.test(line)).slice(-20).join('\n'));throw error;
       });
       const report=JSON.parse(await readFile(reportPath,'utf8')) as {success:boolean;numFailedTests:number;numPendingTests:number;testResults:{assertionResults:{title:string;status:string}[]}[]};
       expect(report.success).toBe(true);expect(report.numFailedTests).toBe(0);expect(report.numPendingTests).toBe(0);
       const native=report.testResults.flatMap(file=>file.assertionResults).filter(test=>test.title==='retains chat context through native planner HTTP and compiler gRPC');
       expect(native).toHaveLength(1);expect(native[0]!.status).toBe('passed');
+      const overrides=report.testResults.flatMap(file=>file.assertionResults).filter(test=>test.title==='persists manual choices through public RBAC, PostgreSQL idempotency and signed engine HTTP');
+      expect(overrides).toHaveLength(1);expect(overrides[0]!.status).toBe('passed');
       const compiled=await store.withTenant(tenant,tx=>tx.query<{workflow_id:string;compiled_dag:{success_criteria:string[];nodes:{key:string;success_criteria?:string[]}[]}}>(
         'SELECT v.workflow_id,v.compiled_dag FROM workflow_versions v JOIN workflows w ON w.id=v.workflow_id AND w.tenant_id=v.tenant_id WHERE v.tenant_id=$1 AND w.workspace_id=$2 AND w.name=$3',[tenant,workspace,'Native builder']));
       expect(compiled.rows).toHaveLength(1);

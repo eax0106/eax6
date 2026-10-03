@@ -34,6 +34,7 @@ function findCycleNodeIds(nodes: any[], edges: any[]): string[] {
   const outgoing = new Map<string, string[]>()
   for (const node of nodes) outgoing.set(node.id, [])
   for (const edge of edges) {
+    if (edge.data?.kind === "loop") continue
     if (outgoing.has(edge.source) && outgoing.has(edge.target)) {
       outgoing.get(edge.source)!.push(edge.target)
     }
@@ -77,7 +78,7 @@ export function compileDag(nodes: any[], edges: any[], successCriteria?: string[
     // Inspector writes edited config fields flat onto node.data (see
     // inspector.tsx's updateNodeData calls), not nested under node.data.config.
     // Read both: flat fields (the real path) win over any legacy nested config.
-    const { label: _label, category: _category, status: _status, successCriteria: _criteria, config: nestedConfig, ...flatConfig } =
+    const { label: _label, category: _category, status: _status, successCriteria: _criteria, engineMetadata, config: nestedConfig, ...flatConfig } =
       (node.data ?? {}) as Record<string, unknown>
     let config: Record<string, unknown> = {
       ...(nestedConfig as Record<string, unknown> | undefined),
@@ -88,12 +89,13 @@ export function compileDag(nodes: any[], edges: any[], successCriteria?: string[
       // Ensure requested_action is nested properly or flattened based on what handler expects
       // The handler checks config["requested_action"] or falls back to entire config
       config = {
-        requested_action: {
+        ...config,
+        requested_action: node.data?.requested_action ?? {
           title: node.data?.title ?? "Pending Approval",
           description: node.data?.description ?? "Please review this action",
           ...config,
         },
-        expiry_seconds: node.data?.expirySeconds ?? 86400,
+        expiry_seconds: node.data?.expiry_seconds ?? node.data?.expirySeconds ?? 86400,
       }
     }
 
@@ -103,6 +105,7 @@ export function compileDag(nodes: any[], edges: any[], successCriteria?: string[
       config: config,
       ...(node.data?.successCriteria?.length ? { success_criteria: node.data.successCriteria } : {}),
       metadata: {
+        ...(engineMetadata as Record<string, unknown> | undefined),
         ui: {
           position: node.position,
           label: node.data?.label,
@@ -116,15 +119,16 @@ export function compileDag(nodes: any[], edges: any[], successCriteria?: string[
       key: edge.id,
       from: edge.source,
       to: edge.target,
-      kind: edge.label === "conditional" ? ("conditional" as const) : ("sequential" as const),
+      kind: edge.label === "conditional" ? ("conditional" as const) : edge.data?.kind ?? ("sequential" as const),
       ...(edge.label === "conditional"
         ? { condition: { expression: edge.data?.condition || "true", language: "cel" as const } }
         : {}),
+      ...(edge.data?.loop ? { loop: edge.data.loop } : {}),
     }
   })
 
   // Determine entry nodes (nodes without incoming edges)
-  const targets = new Set(edges.map((e) => e.target))
+  const targets = new Set(edges.filter(e => e.data?.kind !== "loop").map((e) => e.target))
   const entryNodes = nodes.filter((n) => !targets.has(n.id)).map((n) => n.id)
 
   // Determine waves (simple topological sort for a DAG)
@@ -145,14 +149,9 @@ export function compileDag(nodes: any[], edges: any[], successCriteria?: string[
     currentWave.forEach(k => unassignedNodes.delete(k))
     currentOrder++
 
-    // Find next wave
-    const nextWave = new Set<string>()
-    for (const edge of compiledEdges) {
-      if (waves[waves.length - 1].node_keys.includes(edge.from) && unassignedNodes.has(edge.to)) {
-        nextWave.add(edge.to)
-      }
-    }
-    currentWave = Array.from(nextWave)
+    // A fan-in waits for every forward dependency, including longer branches.
+    currentWave = [...unassignedNodes].filter(key => compiledEdges.filter(edge => edge.to === key && edge.kind !== "loop")
+      .every(edge => !unassignedNodes.has(edge.from)))
   }
 
   if (unassignedNodes.size > 0) {
@@ -189,6 +188,7 @@ export function dagToCanvas(dag: CompiledDag): { nodes: any[]; edges: any[] } {
         category: NODE_TYPE_CATEGORY[node.type] ?? node.type,
         ...node.config,
         successCriteria: node.success_criteria,
+        engineMetadata: node.metadata,
       },
     }
   })
@@ -198,7 +198,7 @@ export function dagToCanvas(dag: CompiledDag): { nodes: any[]; edges: any[] } {
     source: edge.from,
     target: edge.to,
     label: edge.kind === "conditional" ? "conditional" : undefined,
-    ...(edge.condition ? { data: { condition: edge.condition.expression } } : {}),
+    data: { kind: edge.kind, ...(edge.condition ? { condition: edge.condition.expression } : {}), ...(edge.loop ? { loop: edge.loop } : {}) },
   }))
 
   return { nodes, edges }

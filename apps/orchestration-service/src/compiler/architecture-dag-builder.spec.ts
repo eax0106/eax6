@@ -23,6 +23,20 @@ const input = (): ArchitectureCompileInput => ({
 });
 
 describe("compileArchitectureToDag", () => {
+  it("retains the original binding reason, factors, policy and required model tier for override advice", () => {
+    const value=input();
+    value.binding_decision.policy={reliability_weight:.6,latency_weight:.2,cost_weight:.2};
+    Object.assign(value.binding_decision.bindings[0]!,{model_alias:"CEILING",required_model_alias:"ADVANCED"});
+    value.architecture.nodes[0]!.config={model_alias:"ADVANCED",prompt:"Research the invoice"};
+    const node=compileArchitectureToDag(value).nodes.find(item=>item.key==="plan")!;
+    expect(node.config.model_alias).toBe("CEILING");
+    expect(node.metadata.selection_binding).toEqual({
+      binding:{record_id:"model-main",version:3,kind:"model",rationale:"best",score:1,factors:{reliability:1}},
+      policy:value.binding_decision.policy,required_capabilities:["text"],required_model_alias:"ADVANCED",model_alias:"CEILING",
+    });
+    expect(node.config).not.toHaveProperty("selection_binding");
+  });
+
   it("lowers pinned bindings, topology, and approval boundary deterministically", () => {
     const first = compileArchitectureToDag(input());
     expect(compileArchitectureToDag(input())).toEqual(first);

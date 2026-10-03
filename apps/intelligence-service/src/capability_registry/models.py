@@ -4,6 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
+from src.capability_resolver.models import ModelAlias
+
 CapabilityKind = Literal["agent", "model", "tool", "connector", "execution"]
 CapabilityScope = Literal["global", "tenant", "workspace"]
 CapabilityStatus = Literal["active", "deprecated", "superseded"]
@@ -71,6 +73,7 @@ class CapabilityRecord(RegisterCapability):
 class CapabilitySearch(StrictModel):
     capabilities: list[NonEmpty] = Field(default_factory=list, max_length=32)
     kind: CapabilityKind | None = None
+    model_alias: ModelAlias | None = None
     workspace_id: str | None = None
     include_inactive: bool = False
     limit: int = Field(default=50, ge=1, le=100)

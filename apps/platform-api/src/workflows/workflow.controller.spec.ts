@@ -499,6 +499,26 @@ describe("WorkflowController routes", () => {
     expect(engine.put).not.toHaveBeenCalled();
   });
 
+  it("exposes editing rights and relays a validated node comparison with the actual caller",async()=>{
+    const path=`/api/v1/workflows/${workflowId}/node-overrides`;
+    expect((await request("GET",path,{actor})).json()).toEqual({can_edit:true});
+    expect((await request("GET",path,{actor:viewer})).json()).toEqual({can_edit:false});
+    const body={nodeKey:"start",choice:{kind:"model",value:"FAST"},dag:workflowDag()};
+    const comparison={nodeKey:"start",choice:{kind:"model",value:"FAST"},approval_required:true,original:{choice:null,selection:null},candidate:null,
+      warnings:[{code:"facts_unavailable",message:"Original scores were not recorded"}],cost:{currency:"INR",before_minor:null,after_minor:null},validation:{valid:true,errors:[]},data_contract:null};
+    engine.post.mockImplementationOnce(async()=>({status:200,body:comparison}));
+    const result=await request("POST",`${path}/compare`,{actor,headers:{"idempotency-key":"comparison"},payload:body});
+    expect(result.statusCode).toBe(200);expect(result.json()).toEqual(comparison);
+    expect(engine.post).toHaveBeenCalledWith(`${path}/compare`,body,expect.objectContaining({userId:actor.user_id,tenantId,workspaceId,roles:["editor"]}),{idempotencyKey:"comparison"});
+  });
+
+  it("rejects comparison requests with read-only roles, extra policy assertions or noncanonical choices",async()=>{
+    const path=`/api/v1/workflows/${workflowId}/node-overrides/compare`,body={nodeKey:"start",choice:{kind:"model",value:"FAST"},dag:workflowDag()};
+    expect((await request("POST",path,{actor:viewer,headers:{"idempotency-key":"viewer"},payload:body})).statusCode).toBe(403);
+    for (const payload of [{...body,overrideSafeguards:{approval_required:false}},{...body,choice:{kind:"model",value:"ULTRA"}}]) expect((await request("POST",path,{actor,headers:{"idempotency-key":JSON.stringify(payload.choice)},payload})).statusCode).toBe(400);
+    expect(engine.post).not.toHaveBeenCalled();
+  });
+
   function request(
     method: "GET" | "POST" | "PATCH" | "PUT",
     url: string,

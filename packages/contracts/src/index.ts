@@ -423,6 +423,7 @@ export type {
 } from "./generated/alter/eval/v1/eval";
 export {
   CompiledDagSchema,
+  withNodeOverrideSafeguards,
   NodeRequirementsSchema,
   NodeTypeSchema,
   PolicyBindingsSchema,
@@ -448,3 +449,4 @@ export * from "./workflow-chat";
 export * from "./workflow-plan";
 
 export * from "./workflow-folders";
+export * from "./node-overrides";

@@ -36,11 +36,16 @@ export function WorkflowBuilder() {
   // real DAG to load, so it keeps showing a fixed demo graph instead.
   React.useEffect(() => {
     if (!workflow || isDirty) return
-    if (!isLiveApi) {
+    if (workflow.dag) {
+      const { nodes: loadedNodes, edges: loadedEdges } = dagToCanvas(workflow.dag)
+      setNodes(loadedNodes)
+      setEdges(loadedEdges)
+      setSuccessCriteria(workflow.dag.success_criteria)
+    } else if (!isLiveApi) {
       const mockNodes = [
-        { id: "1", type: "trigger_webhook", position: { x: 250, y: 50 }, data: { label: "Incoming Webhook", category: "Triggers" } },
-        { id: "2", type: "ai_extract", position: { x: 250, y: 200 }, data: { label: "Extract Lead Info", category: "AI" } },
-        { id: "3", type: "action_slack", position: { x: 250, y: 350 }, data: { label: "Slack Notification", category: "Actions" } }
+        { id: "1", type: "LLMTask", position: { x: 250, y: 50 }, data: { label: "Read request", category: "execution", model_alias: "STANDARD", prompt: "Summarize the request" } },
+        { id: "2", type: "ToolCall", position: { x: 250, y: 200 }, data: { label: "Search references", category: "execution", tool_name: "search.web", arguments: { query: "References" } } },
+        { id: "3", type: "Synthesis", position: { x: 250, y: 350 }, data: { label: "Combine findings", category: "output" } }
       ]
       const mockEdges = [
         { id: "e1-2", source: "1", target: "2" },
@@ -48,11 +53,6 @@ export function WorkflowBuilder() {
       ]
       setNodes(mockNodes)
       setEdges(mockEdges)
-    } else if (workflow.dag) {
-      const { nodes: loadedNodes, edges: loadedEdges } = dagToCanvas(workflow.dag)
-      setNodes(loadedNodes)
-      setEdges(loadedEdges)
-      setSuccessCriteria(workflow.dag.success_criteria)
     }
     setDirty(false)
   }, [workflow, isDirty, setNodes, setEdges, setDirty, setSuccessCriteria])

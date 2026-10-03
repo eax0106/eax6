@@ -56,6 +56,9 @@ import {
   WorkflowDagDraftSchema,
 } from "./workflow-dag";
 import { z } from "./zod";
+import { NodeOverrideRequestSchema, NodeOverrideComparisonSchema } from "./node-overrides";
+
+const NodeOverrideOptionsSchema = z.object({ can_edit: z.boolean() }).strict();
 
 type HttpMethod = "get" | "post" | "put" | "patch" | "delete";
 
@@ -105,6 +108,8 @@ export const V1_ROUTE_SPECS: readonly V1RouteSpec[] = [
   { method: "post", path: "/workflows", summary: "Create workflow", tag: "Workflows", successStatus: 201 },
   { method: "get", path: "/workflows", summary: "List workflows", tag: "Workflows", collection: true },
   { method: "get", path: "/workflows/{id}", summary: "Get workflow", tag: "Workflows" },
+  { method: "get", path: "/workflows/{id}/node-overrides", summary: "Get node editing rights", tag: "Workflows", responseSchema: NodeOverrideOptionsSchema },
+  { method: "post", path: "/workflows/{id}/node-overrides/compare", summary: "Compare a manual node choice against recorded selection", tag: "Workflows", successStatus: 200, idempotent: true, requestBodySchema: NodeOverrideRequestSchema, responseSchema: NodeOverrideComparisonSchema },
   { method: "patch", path: "/workflows/{id}", summary: "Update workflow", tag: "Workflows" },
   { method: "get", path: "/workflows/{id}/versions", summary: "List workflow versions", tag: "Workflows", collection: true },
   { method: "post", path: "/workflows/{id}/actions/compile", summary: "Compile workflow", tag: "Workflows", successStatus: 202 },
@@ -478,6 +483,8 @@ export function createOpenApiDocument(): AlterOpenApiDocument {
   registry.register("NodeType", NodeTypeSchema);
 
   const responseSchemaByRaw = new Map<z.ZodTypeAny, z.ZodTypeAny>([
+    [NodeOverrideOptionsSchema, registry.register("NodeOverrideOptions", NodeOverrideOptionsSchema)],
+    [NodeOverrideComparisonSchema, registry.register("NodeOverrideComparison", NodeOverrideComparisonSchema)],
     [TriggerSchema, registry.register("Trigger", TriggerSchema)],
     [TriggerVersionSchema, registry.register("TriggerVersion", TriggerVersionSchema)],
     [
@@ -543,6 +550,7 @@ export function createOpenApiDocument(): AlterOpenApiDocument {
     ],
   ]);
   const requestBodySchemaByRaw = new Map<z.ZodTypeAny, z.ZodTypeAny>([
+    [NodeOverrideRequestSchema, registry.register("NodeOverrideRequest", NodeOverrideRequestSchema)],
     [
       TestVersionRequestSchema,
       registry.register("TestVersionRequest", TestVersionRequestSchema),

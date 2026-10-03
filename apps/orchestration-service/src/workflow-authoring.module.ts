@@ -10,6 +10,7 @@ import {
   ModelGatewayClient,
   PlannerClient,
   S3ObjectStorageProvider,
+  createFetchSelectionBindingHttpClient,
 } from "@alterx/adapters";
 
 import { MODELGW_CLIENT_PROTO_PATH } from "./conversation/grpc.constants";
@@ -31,7 +32,8 @@ import { ClarificationsService } from "./clarifications/clarifications.service";
 import { ProjectReadController } from "./project-read/project-read.controller";
 import { ProjectReadService } from "./project-read/project-read.service";
 import { ProjectDomainService } from "./project-read/project-domain.service";
-import { loadConversationManagerEnvironment } from "./config/environment";
+import { loadConversationManagerEnvironment, loadNodeOverrideThresholds } from "./config/environment";
+import { NodeOverridesService } from "./node-overrides/node-overrides.service";
 import { loadRecoveryEnvironment } from "./config/recovery-environment";
 import { ArtifactsService } from "./artifacts/artifacts.service";
 import { EvalFacadeService } from "./eval-facade/eval-facade.service";
@@ -41,6 +43,7 @@ import {
   internalM2mTokenProvider,
   orchestrationStore,
   identityTenantGatewayEnvironment,
+  buildWorstCaseEstimator,
 } from "./orchestration-infrastructure.module";
 import { RunLauncherModule } from "./run-launcher.module";
 import { ArtifactModule } from "./artifact.module";
@@ -66,6 +69,10 @@ import { OperationsModule } from "./operations.module";
     ProjectReadController,
   ],
   providers: [
+    {provide:NodeOverridesService,useFactory:()=>new NodeOverridesService(
+      orchestrationStore(identityTenantGatewayEnvironment(process.env)),buildWorstCaseEstimator(process.env),
+      createFetchSelectionBindingHttpClient(),loadRecoveryEnvironment(process.env).plannerBaseUrl,loadNodeOverrideThresholds(process.env),
+    )},
     { provide: WorkflowFoldersService, useFactory: () => new WorkflowFoldersService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     { provide: WorkflowHealthService, useFactory: () => new WorkflowHealthService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     {

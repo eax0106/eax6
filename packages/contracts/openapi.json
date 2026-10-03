@@ -895,6 +895,573 @@
         ],
         "additionalProperties": false
       },
+      "NodeDataContract": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "object",
+              "array",
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null"
+            ]
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/NodeDataContract"
+            }
+          },
+          "required": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "maxItems": 1000
+          },
+          "items": {
+            "$ref": "#/components/schemas/NodeDataContract"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "NodeOverrideComparison": {
+        "type": "object",
+        "properties": {
+          "nodeKey": {
+            "type": "string",
+            "minLength": 1
+          },
+          "choice": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "model"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "enum": [
+                      "FAST",
+                      "STANDARD",
+                      "ADVANCED",
+                      "CEILING"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "tool"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "enum": [
+                      "search.web",
+                      "database.select",
+                      "database.insert",
+                      "database.update",
+                      "database.delete",
+                      "browser.session.create",
+                      "browser.navigate",
+                      "browser.click",
+                      "browser.extract",
+                      "browser.session.close",
+                      "email.send"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "approval_required": {
+            "type": "boolean"
+          },
+          "original": {
+            "type": "object",
+            "properties": {
+              "choice": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "model"
+                        ]
+                      },
+                      "value": {
+                        "type": "string",
+                        "enum": [
+                          "FAST",
+                          "STANDARD",
+                          "ADVANCED",
+                          "CEILING"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "tool"
+                        ]
+                      },
+                      "value": {
+                        "type": "string",
+                        "enum": [
+                          "search.web",
+                          "database.select",
+                          "database.insert",
+                          "database.update",
+                          "database.delete",
+                          "browser.session.create",
+                          "browser.navigate",
+                          "browser.click",
+                          "browser.extract",
+                          "browser.session.close",
+                          "email.send"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "value"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selection": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "binding": {
+                    "type": "object",
+                    "properties": {
+                      "record_id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "version": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0
+                      },
+                      "kind": {
+                        "type": "string",
+                        "enum": [
+                          "agent",
+                          "model",
+                          "tool",
+                          "connector",
+                          "execution"
+                        ]
+                      },
+                      "rationale": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "score": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "factors": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "number"
+                        }
+                      }
+                    },
+                    "required": [
+                      "record_id",
+                      "version",
+                      "kind",
+                      "rationale",
+                      "score",
+                      "factors"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "policy": {
+                    "type": "object",
+                    "properties": {
+                      "reliability_weight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "latency_weight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      },
+                      "cost_weight": {
+                        "type": "number",
+                        "minimum": 0,
+                        "maximum": 1
+                      }
+                    },
+                    "required": [
+                      "reliability_weight",
+                      "latency_weight",
+                      "cost_weight"
+                    ],
+                    "additionalProperties": false
+                  },
+                  "required_capabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    "maxItems": 128
+                  },
+                  "required_model_alias": {
+                    "type": "string",
+                    "enum": [
+                      "FAST",
+                      "STANDARD",
+                      "ADVANCED",
+                      "CEILING"
+                    ]
+                  },
+                  "model_alias": {
+                    "type": "string",
+                    "enum": [
+                      "FAST",
+                      "STANDARD",
+                      "ADVANCED",
+                      "CEILING"
+                    ]
+                  },
+                  "tool_name": {
+                    "type": "string",
+                    "enum": [
+                      "search.web",
+                      "database.select",
+                      "database.insert",
+                      "database.update",
+                      "database.delete",
+                      "browser.session.create",
+                      "browser.navigate",
+                      "browser.click",
+                      "browser.extract",
+                      "browser.session.close",
+                      "email.send"
+                    ]
+                  }
+                },
+                "required": [
+                  "binding",
+                  "required_capabilities"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "choice",
+              "selection"
+            ],
+            "additionalProperties": false
+          },
+          "candidate": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "record_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "version": {
+                "type": "integer",
+                "exclusiveMinimum": 0
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "agent",
+                  "model",
+                  "tool",
+                  "connector",
+                  "execution"
+                ]
+              },
+              "source_node_key": {
+                "type": "string",
+                "minLength": 1
+              },
+              "rationale": {
+                "type": "string",
+                "minLength": 1
+              },
+              "score": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 1
+              },
+              "factors": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "additionalProperties": {
+                  "type": "number"
+                }
+              },
+              "output_contract": {}
+            },
+            "required": [
+              "record_id",
+              "version",
+              "kind",
+              "source_node_key",
+              "rationale",
+              "score",
+              "factors"
+            ],
+            "additionalProperties": false
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "message": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "required": [
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "cost": {
+            "type": "object",
+            "properties": {
+              "currency": {
+                "type": "string",
+                "enum": [
+                  "INR"
+                ]
+              },
+              "before_minor": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              },
+              "after_minor": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0
+              }
+            },
+            "required": [
+              "currency",
+              "before_minor",
+              "after_minor"
+            ],
+            "additionalProperties": false
+          },
+          "validation": {
+            "type": "object",
+            "properties": {
+              "valid": {
+                "type": "boolean"
+              },
+              "errors": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "valid",
+              "errors"
+            ],
+            "additionalProperties": false
+          },
+          "data_contract": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "output": {
+                "$ref": "#/components/schemas/NodeDataContract"
+              },
+              "inputs": {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/NodeDataContract"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "nodeKey",
+          "choice",
+          "approval_required",
+          "original",
+          "candidate",
+          "warnings",
+          "cost",
+          "validation",
+          "data_contract"
+        ],
+        "additionalProperties": false
+      },
+      "NodeOverrideOptions": {
+        "type": "object",
+        "properties": {
+          "can_edit": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "can_edit"
+        ],
+        "additionalProperties": false
+      },
+      "NodeOverrideRequest": {
+        "type": "object",
+        "properties": {
+          "nodeKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "choice": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "model"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "enum": [
+                      "FAST",
+                      "STANDARD",
+                      "ADVANCED",
+                      "CEILING"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "tool"
+                    ]
+                  },
+                  "value": {
+                    "type": "string",
+                    "enum": [
+                      "search.web",
+                      "database.select",
+                      "database.insert",
+                      "database.update",
+                      "database.delete",
+                      "browser.session.create",
+                      "browser.navigate",
+                      "browser.click",
+                      "browser.extract",
+                      "browser.session.close",
+                      "email.send"
+                    ]
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "dag": {}
+        },
+        "required": [
+          "nodeKey",
+          "choice",
+          "dag"
+        ],
+        "additionalProperties": false
+      },
       "NodeRequirements": {
         "type": "object",
         "additionalProperties": {
@@ -3036,6 +3603,220 @@
                         "ui": {
                           "type": "object",
                           "additionalProperties": {}
+                        },
+                        "selection_binding": {
+                          "type": "object",
+                          "properties": {
+                            "binding": {
+                              "type": "object",
+                              "properties": {
+                                "record_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "agent",
+                                    "model",
+                                    "tool",
+                                    "connector",
+                                    "execution"
+                                  ]
+                                },
+                                "rationale": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "score": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "factors": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "record_id",
+                                "version",
+                                "kind",
+                                "rationale",
+                                "score",
+                                "factors"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "policy": {
+                              "type": "object",
+                              "properties": {
+                                "reliability_weight": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "latency_weight": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "cost_weight": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                }
+                              },
+                              "required": [
+                                "reliability_weight",
+                                "latency_weight",
+                                "cost_weight"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "required_capabilities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 128
+                            },
+                            "required_model_alias": {
+                              "type": "string",
+                              "enum": [
+                                "FAST",
+                                "STANDARD",
+                                "ADVANCED",
+                                "CEILING"
+                              ]
+                            },
+                            "model_alias": {
+                              "type": "string",
+                              "enum": [
+                                "FAST",
+                                "STANDARD",
+                                "ADVANCED",
+                                "CEILING"
+                              ]
+                            },
+                            "tool_name": {
+                              "type": "string",
+                              "enum": [
+                                "search.web",
+                                "database.select",
+                                "database.insert",
+                                "database.update",
+                                "database.delete",
+                                "browser.session.create",
+                                "browser.navigate",
+                                "browser.click",
+                                "browser.extract",
+                                "browser.session.close",
+                                "email.send"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "binding",
+                            "required_capabilities"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "original_choice": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "model"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "enum": [
+                                    "FAST",
+                                    "STANDARD",
+                                    "ADVANCED",
+                                    "CEILING"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "tool"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "enum": [
+                                    "search.web",
+                                    "database.select",
+                                    "database.insert",
+                                    "database.update",
+                                    "database.delete",
+                                    "browser.session.create",
+                                    "browser.navigate",
+                                    "browser.click",
+                                    "browser.extract",
+                                    "browser.session.close",
+                                    "email.send"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "override_safeguards": {
+                          "type": "object",
+                          "properties": {
+                            "approval_required": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "approval_required"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "data_contract": {
+                          "type": "object",
+                          "properties": {
+                            "output": {
+                              "$ref": "#/components/schemas/NodeDataContract"
+                            },
+                            "inputs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "$ref": "#/components/schemas/NodeDataContract"
+                              }
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -3426,6 +4207,220 @@
                         "ui": {
                           "type": "object",
                           "additionalProperties": {}
+                        },
+                        "selection_binding": {
+                          "type": "object",
+                          "properties": {
+                            "binding": {
+                              "type": "object",
+                              "properties": {
+                                "record_id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 128
+                                },
+                                "version": {
+                                  "type": "integer",
+                                  "exclusiveMinimum": 0
+                                },
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "agent",
+                                    "model",
+                                    "tool",
+                                    "connector",
+                                    "execution"
+                                  ]
+                                },
+                                "rationale": {
+                                  "type": "string",
+                                  "minLength": 1
+                                },
+                                "score": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "factors": {
+                                  "type": "object",
+                                  "additionalProperties": {
+                                    "type": "number"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "record_id",
+                                "version",
+                                "kind",
+                                "rationale",
+                                "score",
+                                "factors"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "policy": {
+                              "type": "object",
+                              "properties": {
+                                "reliability_weight": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "latency_weight": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "cost_weight": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                }
+                              },
+                              "required": [
+                                "reliability_weight",
+                                "latency_weight",
+                                "cost_weight"
+                              ],
+                              "additionalProperties": false
+                            },
+                            "required_capabilities": {
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "minLength": 1
+                              },
+                              "maxItems": 128
+                            },
+                            "required_model_alias": {
+                              "type": "string",
+                              "enum": [
+                                "FAST",
+                                "STANDARD",
+                                "ADVANCED",
+                                "CEILING"
+                              ]
+                            },
+                            "model_alias": {
+                              "type": "string",
+                              "enum": [
+                                "FAST",
+                                "STANDARD",
+                                "ADVANCED",
+                                "CEILING"
+                              ]
+                            },
+                            "tool_name": {
+                              "type": "string",
+                              "enum": [
+                                "search.web",
+                                "database.select",
+                                "database.insert",
+                                "database.update",
+                                "database.delete",
+                                "browser.session.create",
+                                "browser.navigate",
+                                "browser.click",
+                                "browser.extract",
+                                "browser.session.close",
+                                "email.send"
+                              ]
+                            }
+                          },
+                          "required": [
+                            "binding",
+                            "required_capabilities"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "original_choice": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "model"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "enum": [
+                                    "FAST",
+                                    "STANDARD",
+                                    "ADVANCED",
+                                    "CEILING"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "enum": [
+                                    "tool"
+                                  ]
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "enum": [
+                                    "search.web",
+                                    "database.select",
+                                    "database.insert",
+                                    "database.update",
+                                    "database.delete",
+                                    "browser.session.create",
+                                    "browser.navigate",
+                                    "browser.click",
+                                    "browser.extract",
+                                    "browser.session.close",
+                                    "email.send"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "value"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        },
+                        "override_safeguards": {
+                          "type": "object",
+                          "properties": {
+                            "approval_required": {
+                              "type": "boolean"
+                            }
+                          },
+                          "required": [
+                            "approval_required"
+                          ],
+                          "additionalProperties": false
+                        },
+                        "data_contract": {
+                          "type": "object",
+                          "properties": {
+                            "output": {
+                              "$ref": "#/components/schemas/NodeDataContract"
+                            },
+                            "inputs": {
+                              "type": "object",
+                              "additionalProperties": {
+                                "$ref": "#/components/schemas/NodeDataContract"
+                              }
+                            }
+                          },
+                          "additionalProperties": false
                         }
                       },
                       "required": [
@@ -3973,6 +4968,204 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Resource"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem response",
+            "headers": {
+              "request_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^req_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              },
+              "trace_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^trc_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/{id}/node-overrides": {
+      "get": {
+        "operationId": "get_workflows_id_node_overrides",
+        "summary": "Get node editing rights",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "M2MAuth": [],
+            "ActorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]+_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "traceparent",
+            "in": "header"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "request_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^req_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              },
+              "trace_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^trc_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeOverrideOptions"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "RFC 9457 problem response",
+            "headers": {
+              "request_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^req_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              },
+              "trace_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^trc_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/{id}/node-overrides/compare": {
+      "post": {
+        "operationId": "post_workflows_id_node_overrides_compare",
+        "summary": "Compare a manual node choice against recorded selection",
+        "tags": [
+          "Workflows"
+        ],
+        "security": [
+          {
+            "M2MAuth": [],
+            "ActorToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z]+_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "traceparent",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "Idempotency-Key",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "description": "Typed resource or action input",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NodeOverrideRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "request_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^req_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              },
+              "trace_id": {
+                "schema": {
+                  "type": "string",
+                  "pattern": "^trc_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i"
+                },
+                "required": true
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodeOverrideComparison"
                 }
               }
             }

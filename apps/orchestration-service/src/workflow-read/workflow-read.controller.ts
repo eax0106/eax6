@@ -5,6 +5,7 @@ import { Body, Controller, Get, HttpException, Inject, Optional, Param, Patch, P
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import { WorkflowHealthService } from "../workflow-health/workflow-health.service";
+import { NodeOverridesService } from "../node-overrides/node-overrides.service";
 import {
   WorkflowNotFoundError,
   WorkflowReadService,
@@ -16,6 +17,7 @@ interface UpdateWorkflowBody {
   readonly name?: string;
   readonly status?: WorkflowStatus;
   readonly dag?: unknown;
+  readonly overrideSafeguards?:unknown;
 }
 
 interface SimulateWorkflowBody {
@@ -50,7 +52,16 @@ function requiredWorkspaceId(request: IdentityTenantGatewayRequest): string {
 
 @Controller("api/v1/workflows")
 export class WorkflowReadController {
-  constructor(private readonly service: WorkflowReadService, @Optional() @Inject(WorkflowHealthService) private readonly healthService?: WorkflowHealthService) {}
+  constructor(private readonly service: WorkflowReadService, @Optional() @Inject(WorkflowHealthService) private readonly healthService?: WorkflowHealthService,
+    @Optional() @Inject(NodeOverridesService) private readonly overrides?: NodeOverridesService) {}
+
+  @Post(":id/node-overrides/compare")
+  async compareOverride(@Req() request:IdentityTenantGatewayRequest,@Param("id") workflowId:string,@Body() body:unknown) {
+    try {
+      if (!this.overrides) throw new Error("Node override comparison is not configured");
+      return await this.overrides.compare(requiredTenantId(request),requiredWorkspaceId(request),workflowId,body);
+    } catch (error:unknown) { throw mapWorkflowError(error,request.url); }
+  }
 
   @Get(":id/health")
   async health(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
@@ -141,6 +152,7 @@ export class WorkflowReadController {
         ...(body.name === undefined ? {} : { name: body.name }),
         ...(body.status === undefined ? {} : { status: body.status }),
         ...(body.dag === undefined ? {} : { dag: body.dag }),
+        ...(body.overrideSafeguards === undefined ? {} : {overrideSafeguards:body.overrideSafeguards}),
       });
     } catch (error: unknown) {
       throw mapWorkflowError(error, request.url);
@@ -158,10 +170,10 @@ export class WorkflowReadController {
   }
 
   @Post(":id/actions/compile")
-  async compile(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string) {
+  async compile(@Req() request: IdentityTenantGatewayRequest, @Param("id") workflowId: string,@Body() body:{overrideSafeguards?:unknown}) {
     const tenantId = requiredTenantId(request);
     try {
-      return await this.service.compileWorkflow(tenantId, workflowId);
+      return await this.service.compileWorkflow(tenantId, workflowId,body?.overrideSafeguards);
     } catch (error: unknown) {
       throw mapWorkflowError(error, request.url);
     }

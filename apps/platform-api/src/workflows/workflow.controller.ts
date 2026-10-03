@@ -15,6 +15,7 @@ import {
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
 import type { EngineResponse } from "../engine";
+import { NodeOverrideRequestSchema } from "@alterx/contracts";
 import { ConcurrencyHttpError, ConcurrencyExceptionFilter, EtagConstrained, EtagResponseInterceptor } from "../concurrency";
 import { Idempotent } from "../idempotency";
 import { ActorContext, RequirePermission, RequireWorkspaceRole } from "../rbac";
@@ -50,6 +51,26 @@ const operateRoles = ["admin", "editor", "operator"] as const;
 @UseFilters(WorkflowExceptionFilter)
 export class WorkflowController {
   constructor(private readonly workflows: WorkflowService) {}
+
+  @Get(":workflowId/node-overrides")
+  @RequireWorkspaceRole(...readRoles)
+  async overrideOptions(@Param("workflowId") workflowId:string,@ActorContext() actor:ActorContextType|undefined,
+    @Headers("traceparent") traceparent:string|undefined) {
+    const caller=requireActor(actor,`/api/v1/workflows/${workflowId}/node-overrides`);
+    await this.workflows.get(workflowId,caller,traceparent);
+    const roles=caller.workspaceRoles === undefined ? caller.roles : caller.workspaceRoles.filter(binding=>binding.workspaceId === caller.workspace_id).map(binding=>binding.role);
+    return {can_edit:roles.some(role=>writeRoles.some(allowed=>allowed === role))};
+  }
+
+  @Post(":workflowId/node-overrides/compare")
+  @HttpCode(200)
+  @RequireWorkspaceRole(...writeRoles)
+  @Idempotent()
+  async compareNodeOverride(@Param("workflowId") workflowId:string,@Body() body:unknown,@ActorContext() actor:ActorContextType|undefined,
+    @Headers("traceparent") traceparent:string|undefined,@Headers("idempotency-key") idempotencyKey:string|undefined) {
+    const instance=`/api/v1/workflows/${workflowId}/node-overrides/compare`;
+    return this.workflows.compareNodeOverride(workflowId,parseWorkflowInput(NodeOverrideRequestSchema,body,instance),requireActor(actor,instance),traceparent,idempotencyKey!);
+  }
 
   @Post()
   @HttpCode(201)

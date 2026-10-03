@@ -22,7 +22,7 @@ import { FeatureFlagsService } from "./services/feature-flags"
 import { SupportAccessService } from "./services/support-access"
 import { isLiveApi } from "./http"
 import { compileDag } from "./compile-dag"
-import { ConnectionsRequiredSchema, ConfirmWorkflowBuildSchema, WorkflowPlanSchema, type WorkflowPlan, type ConnectionsRequired, hasExternalSideEffect } from "@alterx/contracts"
+import { CompiledDagSchema, withNodeOverrideSafeguards, NodeOverrideChoiceSchema, ConnectionsRequiredSchema, ConfirmWorkflowBuildSchema, WorkflowPlanSchema, type WorkflowPlan, type ConnectionsRequired, hasExternalSideEffect } from "@alterx/contracts"
 import type {
   AvailableRepository,
   HumanActionFilters,
@@ -34,6 +34,7 @@ import * as approvalPoliciesLive from "./live-approval-policies"
 import * as approvalPoliciesMock from "./mock/approval-policies"
 import type { ApprovalPolicyChange } from "./types"
 import * as workflowFolders from "./workflow-folders"
+import * as nodeOverrides from "./node-overrides"
 import * as live from "./live"
 import * as liveDataExport from "./live-data-export"
 import * as liveMemorySettings from "./live-memory-settings"
@@ -63,6 +64,8 @@ const MOCK_DELAY = 600
 const mockPendingDeletion: { workspace: Workspace; deletionDueAt: string }[] = []
 
 class ApiClient {
+  getNodeOverrideOptions = nodeOverrides.getNodeOverrideOptions
+  compareNodeOverride = nodeOverrides.compareNodeOverride
   getWorkflowFolders = workflowFolders.getWorkflowFolders
   createWorkflowFolder = workflowFolders.createWorkflowFolder
   renameWorkflowFolder = workflowFolders.renameWorkflowFolder
@@ -473,6 +476,18 @@ class ApiClient {
   async saveWorkflowGraph(_id: string, _graph: { nodes: any[], edges: any[]; successCriteria?: string[] }): Promise<void> {
     if (isLiveApi) return live.saveWorkflowGraph(_id, _graph)
     await delay(MOCK_DELAY)
+    const workflow = mockWorkflows.find(item => item.id === _id)
+    if (!workflow) throw new Error("Workflow was not found")
+    const dag = CompiledDagSchema.parse(withNodeOverrideSafeguards(compileDag(_graph.nodes, _graph.edges, _graph.successCriteria), true))
+    for (const node of dag.nodes) {
+      const original = workflow.dag?.nodes.find(item => item.key === node.key && item.type === node.type)
+      delete node.metadata.selection_binding; delete node.metadata.original_choice
+      if (original?.metadata.selection_binding) node.metadata.selection_binding = original.metadata.selection_binding
+      const choice = original?.metadata.original_choice ?? (original?.type === "LLMTask" ? { kind: "model", value: original.config.model_alias } : original?.type === "ToolCall" ? { kind: "tool", value: original.config.tool_name } : undefined)
+      const parsed = NodeOverrideChoiceSchema.safeParse(choice)
+      if (parsed.success) node.metadata.original_choice = parsed.data
+    }
+    workflow.dag = dag
   }
 
   async simulateWorkflow(_id: string, _input: any): Promise<any> {
