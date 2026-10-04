@@ -77,6 +77,7 @@ export {
   type BillingRefund,
   type BillingPlan,
   type BillingProvider,
+  BillingOperationNotSubmittedError,
   type KycDocumentRef,
   type KycProvider,
   type KycSubmission,

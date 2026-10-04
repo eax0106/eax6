@@ -41,9 +41,14 @@ describe("PublisherService publishing pipeline", () => {
     }
   });
 
-  it("requires verified publisher before submit", async () => {
-    const store = repository("draft", "pending_review");
-    const service = new PublisherService(store as never, unusedKyc);
-    await expect(service.submitListing(tenantId, listingId)).rejects.toMatchObject({ status: 403 });
+  it("submits free listings for review without collecting KYC", async () => {
+    const store = {...repository("draft", "pending_review"),submitFreeListing:vi.fn().mockResolvedValue("submitted")};
+    const kyc = {submitVerification:vi.fn()};
+    const service = new PublisherService(store as never, kyc as never);
+    await expect(service.submitListing(tenantId,listingId)).resolves.toEqual({listingId,status:"submitted"});
+    expect(store.submitFreeListing).toHaveBeenCalledWith(tenantId,listingId);
+    expect(store.getPublisher).not.toHaveBeenCalled();
+    expect(()=>service.submitVerification(tenantId,{documents:[]})).toThrow();
+    expect(kyc.submitVerification).not.toHaveBeenCalled();
   });
 });

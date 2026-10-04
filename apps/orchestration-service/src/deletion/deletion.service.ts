@@ -13,6 +13,8 @@ import type { ErasableSecretsProvider } from "@alterx/shared-clients";
 
 import { tenantSecretPrefix } from "../trigger-bindings/ids";
 
+import { eraseRunBillingReservations } from "../billing/billing-account.service";
+
 import { sweepRunHistory } from "../run-retention/run-retention.service";
 
 interface TransactionLike {
@@ -84,6 +86,10 @@ export const DELETE_ORDER = [
   "webhook_endpoints", "whatsapp_accounts", "workflow_template_variable_definitions",
   "workflow_template_variable_values", "workflow_versions", "workflows", "workflow_folders",
 ] as const;
+
+// Balances and grant history belong to the tenant, not one workspace.
+export const WORKSPACE_TABLES = TABLES.filter(table => table !== "billing_accounts" && table !== "billing_credit_grants");
+const WORKSPACE_DELETE_ORDER = DELETE_ORDER.filter(table => table !== "billing_accounts" && table !== "billing_credit_grants");
 
 export class OrchestrationDeletionService implements DeletionProvider, WorkspaceDeletionProvider {
   constructor(
@@ -169,6 +175,10 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
         `SELECT id FROM conversations WHERE tenant_id=$1 AND closed_at < now() - interval '90 days'`, [tenant],
       );
       for (const row of closed.rows) {
+        const runs = await tx.query<{ id: string }>("SELECT id FROM runs WHERE tenant_id=$1 AND conversation_id=$2", [tenant, row.id]);
+        const ids = runs.rows.map(run => run.id);
+        changed += await eraseRunBillingReservations(tx, tenant, ids);
+        changed += (await tx.query("DELETE FROM run_dispatch_queue WHERE tenant_id=$1 AND run_id=ANY($2::text[])", [tenant, ids])).rowCount;
         changed += (await tx.query("DELETE FROM events WHERE tenant_id=$1 AND conversation_id=$2", [tenant, row.id])).rowCount;
         changed += (await tx.query("DELETE FROM runs WHERE tenant_id=$1 AND conversation_id=$2", [tenant, row.id])).rowCount;
         changed += (await tx.query("DELETE FROM conversation_goal_states WHERE tenant_id=$1 AND conversation_id=$2", [tenant, row.id])).rowCount;
@@ -183,7 +193,7 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
 
   /**
    * D2: one workspace's rows, scoped from the live schema (planWorkspaceScope).
-   * Every engine table is workspace data, so a table the plan cannot scope is
+   * Tenant balances and grants are preserved. For workspace data, a table the plan cannot scope is
    * an error rather than silently skipped.
    */
   async locateWorkspaceData(tenantId: string, workspaceId: string): Promise<readonly SubjectDataLocation[]> {
@@ -191,7 +201,7 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
     return this.store.withTenant(tenant, async (tx) => {
       const scope = await workspacePredicates(tx);
       const locations: SubjectDataLocation[] = [];
-      for (const table of TABLES) {
+      for (const table of WORKSPACE_TABLES) {
         const result = await tx.query<{ count: string }>(
           `SELECT count(*)::text AS count FROM ${table} WHERE ${scope.get(table)!}`, [tenant, workspace],
         );
@@ -223,9 +233,10 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
     }
     const deletedRows = await this.store.withTenant(tenant, async (tx) => {
       const scope = await workspacePredicates(tx);
-      let deleted = 0;
+      const runs = await tx.query<{ id: string }>(`SELECT id FROM runs WHERE ${scope.get("runs")!}`, [tenant, workspace]);
+      let deleted = await eraseRunBillingReservations(tx, tenant, runs.rows.map(run => run.id));
       // Children first, while their parents still exist for the predicates.
-      for (const table of DELETE_ORDER) {
+      for (const table of WORKSPACE_DELETE_ORDER) {
         deleted += (await tx.query(`DELETE FROM ${table} WHERE ${scope.get(table)!}`, [tenant, workspace])).rowCount;
       }
       return deleted;
@@ -283,7 +294,7 @@ export class OrchestrationDeletionService implements DeletionProvider, Workspace
 }
 
 async function workspacePredicates(tx: TransactionLike): Promise<ReadonlyMap<string, string>> {
-  const plan = await planWorkspaceScope(tx, TABLES);
+  const plan = await planWorkspaceScope(tx, WORKSPACE_TABLES);
   if (plan.unscoped.length > 0) {
     throw new Error(`Workspace erasure cannot scope tables: ${plan.unscoped.join(", ")}`);
   }

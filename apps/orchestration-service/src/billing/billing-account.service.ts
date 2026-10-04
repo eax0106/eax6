@@ -27,6 +27,8 @@ export class EngineBillingAccountService {
   async readAccount(tenantIdInput: string) {
     const tenantId = TenantIdSchema.parse(tenantIdInput).slice(4);
     return this.store.withTenant(tenantId, async tx => {
+      await this.lockAccount(tx, tenantId);
+      await this.reconcileTerminalReservations(tx, tenantId);
       const row = await this.lockAccount(tx, tenantId);
       return { balance: row.credit_balance, reserved: row.reserved_credits,
         available: (BigInt(row.credit_balance) - BigInt(row.reserved_credits)).toString() };
@@ -74,6 +76,8 @@ export class EngineBillingAccountService {
   async reserve(tx: OrchestrationTransactionLike, input: { tenantId: string; runId: string }): Promise<void> {
     const tenantId = TenantIdSchema.parse(input.tenantId.startsWith("ten_") ? input.tenantId : `ten_${input.tenantId}`).slice(4);
     RunIdSchema.parse(input.runId);
+    await this.lockAccount(tx,tenantId);
+    await this.reconcileTerminalReservations(tx,tenantId);
     const account = await this.lockAccount(tx,tenantId);
     if (!account.email_verified) throw new BillingAdmissionError("EMAIL_VERIFICATION_REQUIRED");
     if (account.access_state === "suspended") throw new BillingAdmissionError("BILLING_ACCOUNT_SUSPENDED");
@@ -97,26 +101,58 @@ export class EngineBillingAccountService {
   }
 
   async settleTransaction(tx: OrchestrationTransactionLike, tenantId: string, runId: string): Promise<void> {
+    return settleRunBillingTransaction(tx, tenantId, runId);
+  }
+
+  private async reconcileTerminalReservations(tx: OrchestrationTransactionLike, tenantId: string): Promise<void> {
+    const candidates = await tx.query<{ run_id: string }>(`SELECT held.run_id FROM billing_run_reservations held
+      JOIN runs r ON r.tenant_id = held.tenant_id AND r.id = held.run_id
+      JOIN run_outcomes o ON o.tenant_id = r.tenant_id AND o.run_id = r.id
+      WHERE held.tenant_id = $1 AND held.state = 'reserved' AND r.status IN ('completed','failed','cancelled')
+      ORDER BY r.ended_at NULLS LAST, held.run_id LIMIT 25`, [tenantId]);
+    for (const row of candidates.rows) await this.settleTransaction(tx, tenantId, row.run_id);
+  }
+
+  private async lockAccount(tx: OrchestrationTransactionLike,tenantId: string): Promise<AccountRow> {
+    return lockBillingAccount(tx, tenantId);
+  }
+}
+
+async function lockBillingAccount(tx: OrchestrationTransactionLike, tenantId: string): Promise<AccountRow> {
+    const result=await tx.query<AccountRow>("SELECT *,credit_balance::text,reserved_credits::text FROM billing_accounts WHERE tenant_id=$1 FOR UPDATE",[tenantId]);
+    if (!result.rows[0]) throw new BillingAdmissionError("BILLING_POLICY_UNAVAILABLE");
+    return result.rows[0];
+}
+
+/** Settle against preserved outcome and acceptance evidence before erasing run history. */
+export async function settleRunBillingTransaction(tx: OrchestrationTransactionLike, tenantId: string, runId: string): Promise<void> {
       const exists = await tx.query("SELECT 1 FROM billing_run_reservations WHERE tenant_id=$1 AND run_id=$2", [tenantId,runId]);
       if (!exists.rowCount) return;
-      await this.lockAccount(tx,tenantId);
+      await lockBillingAccount(tx,tenantId);
       const reservation=await tx.query<{ credits: number; state: string }>("SELECT credits,state FROM billing_run_reservations WHERE tenant_id=$1 AND run_id=$2 FOR UPDATE",[tenantId,runId]);
       const held=reservation.rows[0]; if (!held || held.state!=="reserved") return;
-      const result=await tx.query<{ status: string; verified: boolean }>(`SELECT r.status,
+      const result=await tx.query<{ status: string; verified: boolean; outcome_recorded: boolean }>(`SELECT r.status, o.run_id IS NOT NULL AS outcome_recorded,
         (o.verdict IN ('completed_verified','rescued') AND NOT o.critical_external_error AND
          (SELECT v.verdict='pass' FROM verification_results v WHERE v.tenant_id=r.tenant_id AND v.run_id=r.id
             AND v.node_execution_id IS NULL AND v.gate_type='acceptance' ORDER BY v.created_at DESC,v.id DESC LIMIT 1)) AS verified
         FROM runs r LEFT JOIN run_outcomes o ON o.tenant_id=r.tenant_id AND o.run_id=r.id
         WHERE r.tenant_id=$1 AND r.id=$2`,[tenantId,runId]);
       const run=result.rows[0]; if (!run || !["completed","failed","cancelled"].includes(run.status)) return;
+      if (run.status === "completed" && !run.outcome_recorded) return;
       const charged=run.status==="completed" && run.verified===true;
       await tx.query("UPDATE billing_accounts SET reserved_credits=reserved_credits-$2,credit_balance=credit_balance-$3,updated_at=clock_timestamp() WHERE tenant_id=$1",[tenantId,held.credits,charged ? held.credits : 0]);
       await tx.query("UPDATE billing_run_reservations SET state=$3,settled_at=clock_timestamp() WHERE tenant_id=$1 AND run_id=$2",[tenantId,runId,charged ? "charged" : "released"]);
-  }
+}
 
-  private async lockAccount(tx: OrchestrationTransactionLike,tenantId: string): Promise<AccountRow> {
-    const result=await tx.query<AccountRow>("SELECT *,credit_balance::text,reserved_credits::text FROM billing_accounts WHERE tenant_id=$1 FOR UPDATE",[tenantId]);
-    if (!result.rows[0]) throw new BillingAdmissionError("BILLING_POLICY_UNAVAILABLE");
-    return result.rows[0];
-  }
+/** Release unfinished holds while keeping previously charged credits spent. */
+export async function eraseRunBillingReservations(tx: OrchestrationTransactionLike, tenantId: string, runIds: readonly string[]): Promise<number> {
+  if (runIds.length === 0) return 0;
+  const account = await tx.query("SELECT 1 FROM billing_accounts WHERE tenant_id=$1 FOR UPDATE", [tenantId]);
+  if (!account.rowCount) return 0;
+  const held = await tx.query<{ run_id: string }>("SELECT run_id FROM billing_run_reservations WHERE tenant_id=$1 AND run_id=ANY($2::text[]) AND state='reserved' ORDER BY run_id", [tenantId, runIds]);
+  for (const row of held.rows) await settleRunBillingTransaction(tx, tenantId, row.run_id);
+  const removed = await tx.query<{ credits: number; state: string }>("DELETE FROM billing_run_reservations WHERE tenant_id=$1 AND run_id=ANY($2::text[]) RETURNING credits,state", [tenantId, runIds]);
+  const released = removed.rows.reduce((sum, row) => sum + (row.state === "reserved" ? BigInt(row.credits) : 0n), 0n);
+  if (released > 0n) await tx.query("UPDATE billing_accounts SET reserved_credits=reserved_credits-$2,updated_at=clock_timestamp() WHERE tenant_id=$1", [tenantId, released.toString()]);
+  return removed.rowCount;
 }

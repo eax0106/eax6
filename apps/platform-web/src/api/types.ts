@@ -917,24 +917,31 @@ export interface BudgetInput {
 export interface BillingPlan {
   id: string;
   name: string;
-  description: string | null;
-  amount: number;
-  currency: string;
-  interval: number;
-  period: "daily" | "weekly" | "monthly" | "yearly";
-  active: boolean;
+  version: string;
+  limits: {maxRunsPerDay:number;[key:string]:number};
+  commercial: {currency:"INR";basePriceMinor:number|null;razorpayPlanId:string|null;
+    includedCredits:number|null;extraCreditPriceMinor:number|null;creditsPerVerifiedRun:number|null} | null;
+  checkout: {basePriceMinor:number;gstPercent:18;gstMinor:number;totalMinor:number;currency:"INR";gatewayFeeMinor:0} | null;
 }
 
 export interface BillingSubscription {
   id: string;
   tenantId: string;
   planId: string;
-  status: "created" | "authenticated" | "active" | "pending" | "halted" | "cancelled" | "completed" | "expired";
+  status: "created" | "authenticated" | "active" | "pending" | "halted" | "paused" | "cancelled" | "completed" | "expired";
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
   providerCustomerRef: string | null;
   version: string;
+  etag?: string;
+  checkoutUrl?: string;
+  pendingOperation?: "change" | "cancel";
+  pendingPlan?: string;
+  checkoutSnapshot?: BillingPlan["checkout"];
+  gstin?: string | null;
 }
+
+export interface BillingCreditBalance {balance:string;reserved:string;available:string}
 
 export interface BillingPaymentMethod {
   ref: string;

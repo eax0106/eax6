@@ -1,4 +1,5 @@
-import { Inject, Injectable } from "@nestjs/common";
+import { BillingOperationNotSubmittedError } from "@alterx/shared-clients";
+import { Inject, Injectable,Optional } from "@nestjs/common";
 import type {
   BillingProvider,
   Invoice,
@@ -11,6 +12,7 @@ import { PLAN_DEFINITION_STORE, type PlanDefinitionStore } from "../entitlements
 import { BillingRepository } from "./billing.repository";
 import { BillingHttpError } from "./problem";
 import { BILLING_PROVIDER } from "./tokens";
+import { BillingPolicyService } from "./billing-policy.service";
 import type {
   AttachPaymentMethodInput,
   BillingSubscriptionView,
@@ -26,6 +28,7 @@ export class BillingService {
     @Inject(BILLING_PROVIDER)
     private readonly provider: BillingProvider,
     @Inject(PLAN_DEFINITION_STORE) private readonly definitions: PlanDefinitionStore,
+    @Optional() private readonly policy?: BillingPolicyService,
   ) {}
 
   async listPlans(): Promise<ConfiguredBillingPlanView[]> {
@@ -34,6 +37,13 @@ export class BillingService {
       limits: definition.limits, commercial: definition.commercial ?? null,
       checkout: checkoutAmounts(definition.commercial),
     }));
+  }
+
+  async getCredits(tenantId:string):Promise<{balance:string;reserved:string;available:string}> {
+    try{
+      if(!this.policy)throw new Error("Billing policy is unavailable");
+      return await this.policy.account(tenantId);
+    }catch{throw new BillingHttpError(503,"BILLING_CREDITS_UNAVAILABLE","Credit balance is temporarily unavailable; refresh billing status","/api/v1/billing/credits");}
   }
 
   async getSubscription(
@@ -53,7 +63,7 @@ export class BillingService {
     }
     if (!profile?.subscriptionRef) return null;
     const subscription = await this.provided(instance, () => this.provider.getSubscription(tenantId));
-    if (!subscription || subscription.id !== profile.subscriptionRef ||
+    if (!subscription || subscription.tenantId !== tenantId || subscription.id !== profile.subscriptionRef ||
         (profile.providerPlanRef && subscription.planId !== profile.providerPlanRef && subscription.planId !== profile.pendingProviderPlanRef)) {
       throw new BillingHttpError(502,"BILLING_PROFILE_INCONSISTENT","Billing profile is inconsistent",instance);
     }
@@ -79,14 +89,16 @@ export class BillingService {
     }
     const attemptId = await this.repository.claimCheckout(tenantId,actorRef,definition,input.gstin);
     try {
-      const subscription = await this.provided(instance, () => this.provider.createCheckoutSubscription!(tenantId,
+      const subscription = await this.provider.createCheckoutSubscription!(tenantId,
         definition.commercial!.razorpayPlanId!, { internalPlanId: definition.plan, checkoutAttemptId: attemptId,
-          expectedTotalMinor: amounts.totalMinor, currency: amounts.currency, ...(input.gstin ? { gstin: input.gstin } : {}) }));
+          expectedTotalMinor: amounts.totalMinor, currency: amounts.currency, ...(input.gstin ? { gstin: input.gstin } : {}) });
       const profile = await this.repository.finishCheckout(tenantId,actorRef,attemptId,subscription);
-      return view({ ...subscription, planId: definition.plan, status: profile.status as Subscription["status"] },profile.updatedAt);
+      return profileView(subscription,profile);
     } catch (error) {
-      await this.repository.failCheckout(tenantId,actorRef,attemptId);
-      throw error;
+      if (error instanceof BillingOperationNotSubmittedError) await this.repository.releaseUnsubmittedOperation(tenantId,actorRef,attemptId,"checkout");
+      else await this.repository.failCheckout(tenantId,actorRef,attemptId);
+      if (error instanceof BillingHttpError) throw error;
+      throw new BillingHttpError(502,"BILLING_PROVIDER_ERROR","Billing provider operation failed",instance);
     }
   }
 
@@ -102,7 +114,7 @@ export class BillingService {
     if (definition.updatedAt.toISOString()!==input.plan_version) throw new BillingHttpError(412,"BILLING_PLAN_CHANGED","Plan changed; review its current price",instance);
     if (!this.provider.changeConfiguredSubscription) throw new BillingHttpError(503,"BILLING_CHANGE_UNAVAILABLE","Configured subscription changes are unavailable",instance);
     const claim=await this.repository.claimMutation(tenantId,actorRef,"change",ifMatch,definition);
-    const subscription=await this.provided(instance,()=>this.provider.changeConfiguredSubscription!(tenantId,claim.subscriptionRef!,definition.commercial!.razorpayPlanId!,
+    const subscription=await this.submitMutation(tenantId,actorRef,claim.mutationAttemptId!,instance,()=>this.provider.changeConfiguredSubscription!(tenantId,claim.subscriptionRef!,definition.commercial!.razorpayPlanId!,
       {internalPlanId:definition.plan,expectedTotalMinor:amounts.totalMinor,currency:amounts.currency}));
     const profile=await this.repository.confirmMutationResponse(tenantId,actorRef,claim.mutationAttemptId!,subscription);
     return profileView(subscription,profile);
@@ -115,7 +127,7 @@ export class BillingService {
   ): Promise<BillingSubscriptionView> {
     const instance = "/api/v1/billing/subscription";
     const claim=await this.repository.claimMutation(tenantId,actorRef,"cancel",ifMatch);
-    const subscription = await this.provided(instance, () =>
+    const subscription = await this.submitMutation(tenantId,actorRef,claim.mutationAttemptId!,instance, () =>
       this.provider.cancelSubscription(tenantId),
     );
     const profile=await this.repository.confirmMutationResponse(tenantId,actorRef,claim.mutationAttemptId!,subscription);
@@ -154,6 +166,15 @@ export class BillingService {
     );
   }
 
+  private async submitMutation(tenantId: string, actorRef: string, attemptId: string, instance: string,
+    operation: () => Promise<Subscription>): Promise<Subscription> {
+    try { return await operation(); }
+    catch (error) {
+      if (error instanceof BillingOperationNotSubmittedError) await this.repository.releaseUnsubmittedOperation(tenantId,actorRef,attemptId,"mutation");
+      throw new BillingHttpError(502,"BILLING_PROVIDER_ERROR","Billing provider operation failed",instance);
+    }
+  }
+
   private async provided<T>(
     instance: string,
     operation: () => Promise<T>,
@@ -180,5 +201,6 @@ function view(
 
 function profileView(subscription: Subscription, profile: import("./types").BillingProfileRecord): BillingSubscriptionView {
   return {...view({...subscription,planId:profile.currentPlan??subscription.planId,status:profile.status as Subscription["status"]},profile.updatedAt),
+    checkoutSnapshot:checkoutAmounts(profile.commercialSnapshot),gstin:profile.gstin??null,
     ...(profile.mutationKind ? {pendingOperation:profile.mutationKind}:{}),...(profile.pendingPlan?{pendingPlan:profile.pendingPlan}:{})};
 }

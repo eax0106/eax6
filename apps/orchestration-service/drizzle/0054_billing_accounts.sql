@@ -49,3 +49,5 @@ END;
 $$;
 --> statement-breakpoint
 CREATE INDEX billing_daily_runs ON runs(tenant_id,created_at);
+--> statement-breakpoint
+CREATE INDEX billing_pending_reservations ON billing_run_reservations(tenant_id,run_id) WHERE state = 'reserved';

@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { PostgresOrchestrationStoreProvider } from "@alterx/adapters";
+import type { VerifyServiceHandlerClient } from "@alterx/adapters";
+import { NodeExecutionLedgerService } from "../runs/node-execution-ledger.service";
+import { PostgresRunAcceptanceCheck } from "../registry/run-acceptance-check";
+import { VerifyGateService } from "../registry/verify-gate.service";
 import { type CompiledDag } from "@alterx/contracts";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +14,8 @@ import { RunOutcomeService } from "../runs/run-outcome.service";
 import { DurableRunQueue } from "../runs/durable-run-queue.service";
 import { TriggerEventDispatchService } from "../trigger-registry/trigger-event-dispatch.service";
 import { EventReplayService } from "../trigger-registry/event-replay.service";
+import { OrchestrationDeletionService } from "../deletion/deletion.service";
+import { sweepRunHistory } from "../run-retention/run-retention.service";
 import { uuidV7 } from "../trigger-bindings/ids";
 import { EngineBillingAccountService, type BillingAccountPolicy } from "./billing-account.service";
 
@@ -50,7 +56,7 @@ describe.sequential("billing admission and verified settlement on ordinary Postg
   beforeEach(async()=>{
     durable.startWorkflow.mockClear();audit.recordEvent.mockClear();
     for(const id of [tenant,other]) await store.withTenant(id,async tx=>{
-      for(const table of ["billing_run_reservations","billing_credit_grants","billing_accounts","run_dispatch_queue","run_outcomes","verification_results","blackboard_checkpoints","runs","events"]) await tx.query(`DELETE FROM ${table}`);
+      for(const table of ["billing_run_reservations","billing_credit_grants","billing_accounts","run_dispatch_queue","run_outcomes","verification_results","blackboard_checkpoints","node_executions","runs","events"]) await tx.query(`DELETE FROM ${table}`);
     });
   });
   afterAll(async()=>{await store?.close();await admin?.close();await postgres?.stop();},60000);
@@ -126,16 +132,106 @@ describe.sequential("billing admission and verified settlement on ordinary Postg
     await finish(run.id,kind==="failed"||kind==="cancelled"?kind:"completed",kind==="missing"?undefined:kind==="failed"||kind==="cancelled"?"pass":kind);
     expect(await balance()).toEqual({balance:"10",reserved:"0"});expect((await store.withTenant(tenant,tx=>tx.query("SELECT state FROM billing_run_reservations"))).rows[0]).toEqual({state:"released"});
   });
+  it.each(["pass","fail","unavailable"] as const)("settles credits from actual run acceptance and node ledger when verification is %s",async verdict=>{
+    await billing.syncPolicy(policy({free:false,creditsPerVerifiedRun:2}));await billing.grant(ten,"accepted-run-fixture",10);
+    const run=await start(),ledger=new NodeExecutionLedgerService(store),nodeExecutionId=`node_${uuidV7()}`;
+    const criteria=["The combined outcome has accepted equal to true"];
+    await store.withTenant(tenant,tx=>tx.query("UPDATE workflow_versions SET compiled_dag=$2::jsonb WHERE id=$1",[version,JSON.stringify({...dag,success_criteria:criteria})]));
+    try {
+      await ledger.recordStarted({tenantId:ten,runId:run.id,nodeExecutionId,dagNodeId:"receive",nodeType:"Merge"});
+      await ledger.recordSucceeded({tenantId:ten,runId:run.id,nodeExecutionId});
+      await store.withTenant(tenant,tx=>tx.query("INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES($1,$2,'receive',$3::jsonb)",[tenant,run.id,JSON.stringify({accepted:verdict==="pass"})]));
+      const scoreNodeInline=vi.fn(async(request:{success_criteria:readonly string[];output_json:string})=>{
+        expect(request.success_criteria).toEqual(criteria);expect(JSON.parse(request.output_json)).toEqual({receive:{accepted:verdict==="pass"}});
+        if(verdict==="unavailable")throw new Error("Verification edge unavailable");
+        return {verdict,score:verdict==="pass"?1:0,threshold:1,reviewer_model:"native-verification-edge",details_json:"{}"};
+      });
+      const check=new PostgresRunAcceptanceCheck(store,new VerifyGateService({scoreNodeInline} as unknown as VerifyServiceHandlerClient),ledger);
+      expect(await check.check(ten,run.id)).toMatchObject({checked:true,passed:verdict==="pass"});
+      const rows=(await store.withTenant(tenant,tx=>tx.query("SELECT node_execution_id,gate_type,verdict FROM verification_results WHERE run_id=$1",[run.id]))).rows;
+      expect(rows).toEqual(verdict==="unavailable"?[]:[{node_execution_id:null,gate_type:"acceptance",verdict}]);
+      await finish(run.id,"completed");
+      expect(await balance()).toEqual({balance:verdict==="pass"?"8":"10",reserved:"0"});
+      await billing.settle(ten,run.id);expect(await balance()).toEqual({balance:verdict==="pass"?"8":"10",reserved:"0"});
+      expect(scoreNodeInline).toHaveBeenCalledTimes(1);
+    } finally {await store.withTenant(tenant,tx=>tx.query("UPDATE workflow_versions SET compiled_dag=$2::jsonb WHERE id=$1",[version,JSON.stringify(dag)]));}
+  });
+
   it("leaves nonterminal runs held and ignores legacy runs without billing reservations",async()=>{
     await billing.syncPolicy(policy({free:false,creditsPerVerifiedRun:2}));await billing.grant(ten,"payment-one",10);const run=await start();await billing.settle(ten,run.id);
     expect(await balance()).toEqual({balance:"10",reserved:"2"});await billing.settle(`ten_${other}`,`run_${uuidV7()}`);
   });
+  it("recovers terminal reservations in bounded batches from actual outcomes while unfinished acceptance stays held",async()=>{
+    await billing.syncPolicy(policy({free:false,creditsPerVerifiedRun:2,maxRunsPerDay:50}));await billing.grant(ten,"batch-fixture",100);
+    const runs=[];for(let i=0;i<30;i++)runs.push(await start());
+    const outcomeWriter=new RunOutcomeService(store);
+    for(const run of runs){
+      await store.withTenant(tenant,async tx=>{
+        await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,gate_type,verdict) VALUES($1,$2,$3,'acceptance','pass')",[`vrf_${uuidV7()}`,tenant,run.id]);
+        await tx.query("UPDATE runs SET status='completed',ended_at=clock_timestamp() WHERE id=$1",[run.id]);
+      });
+      await outcomeWriter.recordOutcome(ten,run.id,"completed");
+    }
+    expect(await balance()).toEqual({balance:"100",reserved:"60"});
+    expect(await billing.readAccount(ten)).toEqual({balance:"50",reserved:"10",available:"40"});
+    expect(await billing.readAccount(ten)).toEqual({balance:"40",reserved:"0",available:"40"});
+    const unfinished=await start();await store.withTenant(tenant,tx=>tx.query("UPDATE runs SET status='completed' WHERE id=$1",[unfinished.id]));
+    await billing.settle(ten,unfinished.id);expect(await billing.readAccount(ten)).toEqual({balance:"40",reserved:"2",available:"38"});
+    await outcomeWriter.recordOutcome(ten,unfinished.id,"completed");
+    expect(await billing.readAccount(ten)).toEqual({balance:"40",reserved:"0",available:"40"});
+  });
+
   it("rolls back debit, reservation and outcome together on a settlement failure",async()=>{
     await billing.syncPolicy(policy({free:false,creditsPerVerifiedRun:2}));await billing.grant(ten,"payment-one",10);const run=await start();
     await admin.withTenant(tenant,async tx=>{await tx.query("CREATE FUNCTION fail_billing_settle() RETURNS trigger LANGUAGE plpgsql AS $$BEGIN RAISE EXCEPTION 'native settlement failure'; END;$$");await tx.query("CREATE TRIGGER native_billing_failure BEFORE UPDATE ON billing_run_reservations FOR EACH ROW EXECUTE FUNCTION fail_billing_settle()");});
     try {await expect(finish(run.id,"completed","pass")).rejects.toThrow("native settlement failure");expect(await balance()).toEqual({balance:"10",reserved:"2"});expect((await store.withTenant(tenant,tx=>tx.query("SELECT * FROM run_outcomes"))).rows).toEqual([]);}
     finally {await admin.withTenant(tenant,tx=>tx.query("DROP TRIGGER native_billing_failure ON billing_run_reservations;DROP FUNCTION fail_billing_settle()"));}
     await outcomes.recordOutcome(ten,run.id,"completed");expect(await balance()).toEqual({balance:"8",reserved:"0"});
+  });
+  it("retains charged balances and releases unfinished holds before actual run-history erasure",async()=>{
+    await billing.syncPolicy(policy({free:false,creditsPerVerifiedRun:2,maxRunsPerDay:10}));await billing.grant(ten,"retention-fixture",20);
+    const charged=await start(),missed=await start(),unfinished=await start(),recent=await start();
+    await finish(charged.id,"completed","pass");
+    await store.withTenant(tenant,async tx=>{
+      for(const id of [missed.id,unfinished.id])await tx.query("UPDATE runs SET status='completed',ended_at=now()-interval '366 days' WHERE id=$1",[id]);
+      await tx.query("UPDATE runs SET ended_at=now()-interval '366 days' WHERE id=$1",[charged.id]);
+      await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,gate_type,verdict) VALUES($1,$2,$3,'acceptance','pass')",[`vrf_${uuidV7()}`,tenant,missed.id]);
+    });
+    await new RunOutcomeService(store).recordOutcome(ten,missed.id,"completed");
+    expect(await balance()).toEqual({balance:"18",reserved:"6"});
+    expect(await store.withTenant(tenant,tx=>sweepRunHistory(tx,tenant))).toBe(3);
+    expect(await balance()).toEqual({balance:"16",reserved:"2"});
+    expect((await store.withTenant(tenant,tx=>tx.query("SELECT run_id FROM billing_run_reservations"))).rows).toEqual([{run_id:recent.id}]);
+    await expect(billing.grant(ten,"retention-fixture",20)).resolves.toBe(false);
+    expect(await store.withTenant(tenant,tx=>sweepRunHistory(tx,tenant))).toBe(0);
+  });
+  it("workspace erasure settles accepted runs and preserves tenant grants and another workspace",async()=>{
+    await billing.syncPolicy(policy({free:false,creditsPerVerifiedRun:2,maxRunsPerDay:10}));await billing.grant(ten,"workspace-fixture",20);
+    const accepted=await start(),held=await start(),otherWorkspace=uuidV7();
+    await store.withTenant(tenant,async tx=>{
+      await tx.query("UPDATE runs SET workspace_id=$2 WHERE id=$1",[held.id,otherWorkspace]);
+      await tx.query("UPDATE runs SET status='completed' WHERE id=$1",[accepted.id]);
+      await tx.query("INSERT INTO verification_results(id,tenant_id,run_id,gate_type,verdict) VALUES($1,$2,$3,'acceptance','pass')",[`vrf_${uuidV7()}`,tenant,accepted.id]);
+    });
+    await new RunOutcomeService(store).recordOutcome(ten,accepted.id,"completed");
+    // One workflow is shared only by this synthetic history fixture. Keep the other run's parent outside the erased workspace.
+    const keepWorkflow=`wf_${uuidV7()}`,keepVersion=`wfv_${uuidV7()}`;
+    await store.withTenant(tenant,async tx=>{
+      await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES($1,$2,$3,'kept')",[keepWorkflow,tenant,otherWorkspace]);
+      await tx.query("INSERT INTO workflow_versions(id,tenant_id,workflow_id,version,compiled_dag,dag_schema_version) VALUES($1,$2,$3,1,$4::jsonb,'v1')",[keepVersion,tenant,keepWorkflow,JSON.stringify(dag)]);
+      await tx.query("UPDATE runs SET workflow_id=$2,workflow_version_id=$3 WHERE id=$1",[held.id,keepWorkflow,keepVersion]);
+    });
+    const deletion=new OrchestrationDeletionService(store);
+    await deletion.deleteWorkspaceData(ten,ws,`del_${uuidV7()}`);
+    await expect(deletion.verifyWorkspaceDeletion(ten,ws,`del_${uuidV7()}`)).resolves.toMatchObject({deleted:true});
+    expect(await balance()).toEqual({balance:"18",reserved:"2"});
+    expect((await store.withTenant(tenant,tx=>tx.query("SELECT run_id FROM billing_run_reservations"))).rows).toEqual([{run_id:held.id}]);
+    await expect(billing.grant(ten,"workspace-fixture",20)).resolves.toBe(false);
+    // Restore the shared fixture for subsequent rollback verification.
+    await store.withTenant(tenant,async tx=>{
+      await tx.query("INSERT INTO workflows(id,tenant_id,workspace_id,name) VALUES($1,$2,$3,'billing fixture')",[workflow,tenant,workspace]);
+      await tx.query("INSERT INTO workflow_versions(id,tenant_id,workflow_id,version,compiled_dag,dag_schema_version,status) VALUES($1,$2,$3,1,$4::jsonb,'v1','promoted')",[version,tenant,workflow,JSON.stringify(dag)]);
+    });
   });
   it("applies paired migration rollback and reapplies actual policies",async()=>{
     const down=await readFile(resolve(migrationsFolder,"rollback/0054_drop_billing_accounts.sql"),"utf8"),up=await readFile(resolve(migrationsFolder,"0054_billing_accounts.sql"),"utf8");

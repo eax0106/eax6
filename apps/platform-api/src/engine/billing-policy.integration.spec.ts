@@ -55,7 +55,7 @@ describe.skipIf(!databaseUrl).sequential("durable platform billing publication t
     const repository=new BillingRepository(pool),secrets={getSecret:async()=>webhookSecret} as unknown as SecretsProvider;
     const provider=new RazorpayBillingProvider({keyIdSecretRef:"native-key",keySecretSecretRef:"native-secret"},secrets,repository);
     const webhook=new BillingWebhookService(provider,secrets,"native-webhook",new PgIdempotencyStore(pool,3600000),new BillingWebhookRepository(pool),entitlements,config,policy);
-    const service=new BillingService(repository,provider,definitions);
+    const service=new BillingService(repository,provider,definitions,policy);
     const module=await Test.createTestingModule({controllers:[BillingController],providers:[{provide:BillingService,useValue:service},{provide:BillingWebhookService,useValue:webhook},
       {provide:PgIdempotencyStore,useValue:new PgIdempotencyStore(pool,3600000)},
       {provide:ETAG_RESOURCE_RESOLVER,useValue:new BillingEtagResolver(service)},
@@ -106,6 +106,17 @@ describe.skipIf(!databaseUrl).sequential("durable platform billing publication t
   }
   const receive=(body:string,eventId=uuidEvent(),signature=createHmac("sha256",webhookSecret).update(body).digest("hex"))=>app.inject({method:"POST",url:"/api/v1/billing/webhooks/razorpay",headers:{"content-type":"application/json","x-razorpay-signature":signature,"x-razorpay-event-id":eventId},payload:body});
   const uuidEvent=()=>`native_${randomUUID()}`;
+  it("reads real tenant-scoped engine balances through BillingService and reports loss of synchronization explicitly",async()=>{
+    const service=app.get(BillingService);
+    await policy.recordVerifiedIdentity(tenant,user);
+    await policy.synchronize(tenant);
+    const before=await client.account(tenant);
+    const account=await service.getCredits(tenant);
+    expect(account).toEqual(before);
+    expect(account).toEqual(await client.account(tenant));
+    await expect(service.getCredits(other)).rejects.toMatchObject({status:503,response:{error_code:"BILLING_CREDITS_UNAVAILABLE"}});
+  });
+
   it("uses actual signed raw HTTP for activation and credits one captured payment across event duplicates",async()=>{
     await boundSubscription();await policy.synchronize(tenant);const before=BigInt((await client.account(tenant)).balance);
     const body=payload("subscription.activated",{paymentId:"pay_signednative"}),eventId=uuidEvent();

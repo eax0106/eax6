@@ -49,6 +49,10 @@ import { BillingController } from "./billing.controller";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { BILLING_PROVIDER } from "./tokens";
+import { IdentityService } from "../identity/identity.service";
+import type { IdentityProvider } from "../identity/identity-provider.interface";
+import { PgSessionStore } from "../identity/session-store";
+import { PlatformDb } from "../signup/platform-db";
 import {
   billingDeferredCapabilities,
 } from "./types";
@@ -71,6 +75,7 @@ describe.skipIf(!process.env.DATABASE_URL)("billing routes with ordinary Postgre
   let app: NestFastifyApplication;
   let repository: BillingRepository,definitions:PostgresPlanDefinitionStore,store:PgIdempotencyStore;
   let databaseAdmin:pg.Client,pool:pg.Pool,schema:string,role:string;
+  let identity:IdentityService,sessions:PgSessionStore;
   const versions:Record<string,string>={};
   const provider = new MemoryBillingProvider();
   const webhookService = {
@@ -96,6 +101,7 @@ describe.skipIf(!process.env.DATABASE_URL)("billing routes with ordinary Postgre
     repository=new BillingRepository(pool);definitions=new PostgresPlanDefinitionStore(pool);store=new PgIdempotencyStore(pool,3600000);
     for(const plan of ["basic","pro"]){const result=await definitions.upsert(plan,{maxWorkflows:3,maxProjects:1,maxRunsPerDay:25,maxConcurrentRuns:1,maxSandboxMinutesPerMonth:30,maxAdsStorageMb:500,maxIntegrations:3},"stf_http",
       {currency:"INR",basePriceMinor:10000,razorpayPlanId:`plan_${plan}`,includedCredits:100,extraCreditPriceMinor:50,creditsPerVerifiedRun:2},"HTTP fixture configuration");versions[plan]=result.record.updatedAt.toISOString();}
+    sessions=new PgSessionStore(pool);identity=new IdentityService({} as IdentityProvider,sessions);
     const moduleRef = await Test.createTestingModule({
       imports: [RbacModule],
       controllers: [BillingController],
@@ -121,7 +127,7 @@ describe.skipIf(!process.env.DATABASE_URL)("billing routes with ordinary Postgre
           useExisting: BillingEtagResolver,
         },
       ],
-    }).compile();
+    }).overrideProvider(IdentityService).useValue(identity).overrideProvider(PlatformDb).useValue(new PlatformDb(pool)).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
       { rawBody: true },
@@ -196,6 +202,40 @@ describe.skipIf(!process.env.DATABASE_URL)("billing routes with ordinary Postgre
         {} as Parameters<BillingController["webhook"]>[3],
       ),
     ).toThrow(BillingHttpError);
+  });
+
+  it("uses real session cookies, current database memberships and ordinary RLS for purchase and tenant isolation",async()=>{
+    const userA=randomUUID(),userB=randomUUID(),otherTenant=randomUUID();
+    await databaseAdmin.query("INSERT INTO tenants(id,name,status) VALUES($1,'Other buyer','active')",[otherTenant]);
+    for(const [user,tenant] of [[userA,tenantId],[userB,otherTenant]]){
+      await databaseAdmin.query("INSERT INTO users(id,identity_ref,email,status) VALUES($1,$2,$3,'active')",[user,`mock|${user}`,`${user}@example.test`]);
+      await databaseAdmin.query("INSERT INTO tenant_members(id,tenant_id,user_id,role) VALUES(gen_random_uuid(),$1,$2,'owner')",[tenant,user]);
+    }
+    const a=await identity.issueSignupSession(userA,tenantId),b=await identity.issueSignupSession(userB,otherTenant);
+    const payload={plan_id:"basic",plan_version:versions.basic};
+    const bought=await app.inject({method:"POST",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${a.accessToken}`,"idempotency-key":"native-cookie-buy"},payload});
+    expect(bought.statusCode).toBe(201);expect(bought.json()).toMatchObject({tenantId,planId:"basic",status:"created"});
+    const replay=await app.inject({method:"POST",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${a.accessToken}`,"idempotency-key":"native-cookie-buy"},payload});
+    expect(replay.json()).toEqual(bought.json());expect(provider.createCheckoutSubscription).toHaveBeenCalledTimes(1);
+    const foreign=await app.inject({method:"GET",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${b.accessToken}`}});
+    expect(foreign.statusCode).toBe(200);expect(foreign.json()).toBeNull();expect(await repository.getProfile(otherTenant)).toBeNull();
+    const actor=(await databaseAdmin.query("SELECT actor_ref FROM billing_dunning_audits WHERE reason='checkout_claimed' AND tenant_id=$1",[tenantId])).rows[0];
+    expect(actor).toEqual({actor_ref:userA});
+    await databaseAdmin.query("UPDATE tenant_members SET role='member' WHERE tenant_id=$1 AND user_id=$2",[tenantId,userA]);
+    const denied=await app.inject({method:"DELETE",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${a.accessToken}`,"if-match":'*',"idempotency-key":"native-member-cancel"}});
+    expect(denied.statusCode).toBe(403);
+    await sessions.revoke(tenantId,userA,a.sessionId);
+    const revoked=await app.inject({method:"GET",url:"/api/v1/billing/plans",headers:{cookie:`alter_access=${a.accessToken}`}});
+    expect(revoked.statusCode).toBe(403);
+    expect((await app.inject({method:"POST",url:"/api/v1/billing/subscription",headers:{"idempotency-key":"anonymous-buy"},payload})).statusCode).toBe(403);
+    expect(provider.createCheckoutSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies the actual credit read and returns an explicit unavailable error without account synchronization",async()=>{
+    const response=await request("GET","/api/v1/billing/credits",admin);
+    expect(response.statusCode).toBe(503);expect(response.json()).toMatchObject({error_code:"BILLING_CREDITS_UNAVAILABLE"});
+    expect((await request("GET","/api/v1/billing/credits",{...admin,permissions:[]})).statusCode).toBe(403);
+    expect((await request("GET","/api/v1/billing/credits",{...admin,roles:["member"]})).statusCode).toBe(403);
   });
 
   it("serves plans, subscription, invoices, and payment methods", async () => {

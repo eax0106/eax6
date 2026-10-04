@@ -95,6 +95,13 @@ export class BillingController {
     return this.billing.getSubscription(actor.tenant_id);
   }
 
+  @Get("credits")
+  @RequireTenantRole("admin")
+  @RequirePermission("billing:read")
+  credits(@ActorContext() actor:ActorContextType):Promise<{balance:string;reserved:string;available:string}> {
+    return this.billing.getCredits(actor.tenant_id);
+  }
+
   @Post("subscription")
   @HttpCode(201)
   @RequireTenantRole("owner")

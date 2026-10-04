@@ -31,6 +31,8 @@ export interface BillingSubscriptionView extends Subscription {
   readonly version: string;
   readonly pendingOperation?: "change" | "cancel";
   readonly pendingPlan?: string;
+  readonly checkoutSnapshot?: ConfiguredBillingPlanView["checkout"];
+  readonly gstin?: string | null;
 }
 
 export interface CreateSubscriptionInput {

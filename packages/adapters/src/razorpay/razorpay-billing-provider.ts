@@ -1,3 +1,4 @@
+import { BillingOperationNotSubmittedError } from "@alterx/shared-clients";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { ProviderCapabilities } from "@alterx/contracts";
 import type {
@@ -164,6 +165,7 @@ export class RazorpayBillingProvider implements BillingProvider {
     planId: string,
     input: SubscriptionCheckoutInput,
   ): Promise<Subscription> {
+    await billingPreflight(async () => {
     if (!/^plan_[A-Za-z0-9]{1,100}$/.test(planId) || !/^[a-z0-9][a-z0-9_-]{0,99}$/.test(input.internalPlanId) ||
       input.currency !== "INR" || !Number.isSafeInteger(input.expectedTotalMinor) || input.expectedTotalMinor <= 0 ||
       input.expectedTotalMinor > 1_180_000_000 ||
@@ -175,6 +177,7 @@ export class RazorpayBillingProvider implements BillingProvider {
     if (plan.id !== planId || !plan.active || plan.currency !== input.currency || plan.amount !== input.expectedTotalMinor) {
       throw malformedResource("checkout", "plan", "does not match configured amount and currency");
     }
+    });
     const subscription = mapSubscription(await this.call("POST", "/v1/subscriptions", {
       plan_id: planId, total_count: this.config.totalBillingCycles ?? 1_200,
       quantity: 1, customer_notify: true,
@@ -236,6 +239,7 @@ export class RazorpayBillingProvider implements BillingProvider {
 
   async changeConfiguredSubscription(tenantId: string, subscriptionId: string, providerPlanId: string,
     input: SubscriptionCheckoutInput): Promise<Subscription> {
+    await billingPreflight(async () => {
     if (!/^sub_[A-Za-z0-9]{1,100}$/.test(subscriptionId) || !/^plan_[A-Za-z0-9]{1,100}$/.test(providerPlanId) ||
         input.currency !== "INR" || !Number.isSafeInteger(input.expectedTotalMinor) || input.expectedTotalMinor <= 0 ||
         input.expectedTotalMinor > 1_180_000_000) throw malformedResource("subscription", "change", "is invalid");
@@ -248,6 +252,7 @@ export class RazorpayBillingProvider implements BillingProvider {
     if (plan.id !== providerPlanId || !plan.active || plan.currency !== input.currency || plan.amount !== input.expectedTotalMinor) {
       throw malformedResource("subscription", "change", "does not match configured amount and currency");
     }
+    });
     const result = mapSubscription(await this.call("PATCH", `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
       {plan_id:providerPlanId,schedule_change_at:"now",quantity:1,customer_notify:true}),tenantId);
     if (result.id !== subscriptionId || result.planId !== providerPlanId) throw malformedResource("subscription", "change", "returned an unrelated resource");
@@ -255,7 +260,7 @@ export class RazorpayBillingProvider implements BillingProvider {
   }
 
   async cancelSubscription(tenantId: string): Promise<Subscription> {
-    const subscriptionRef = await this.requireSubscriptionRef(tenantId);
+    const subscriptionRef = await billingPreflight(() => this.requireSubscriptionRef(tenantId));
     return mapSubscription(
       await this.call(
         "POST",
@@ -698,4 +703,9 @@ function malformedResource(
     502,
     `Razorpay returned malformed ${resource}: ${field} ${requirement}`,
   );
+}
+
+async function billingPreflight<T>(operation: () => Promise<T>): Promise<T> {
+  try { return await operation(); }
+  catch (error) { throw new BillingOperationNotSubmittedError(error); }
 }

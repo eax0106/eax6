@@ -235,6 +235,19 @@ export class BillingRepository
     });
   }
 
+  releaseUnsubmittedOperation(tenantId: string, actorRef: string, attemptId: string, kind: "checkout" | "mutation"): Promise<void> {
+    return this.withTenant(tenantId, async client => {
+      const changed = kind === "checkout"
+        ? await client.query(`UPDATE billing_profiles SET status='checkout_failed',checkout_attempt_id=NULL,checkout_started_at=NULL,
+            gstin=NULL,commercial_snapshot=NULL,provider_plan_ref=NULL,updated_at=clock_timestamp()
+            WHERE tenant_id=$1 AND checkout_attempt_id=$2`, [tenantId,attemptId])
+        : await client.query(`UPDATE billing_profiles SET mutation_attempt_id=NULL,mutation_kind=NULL,pending_plan=NULL,
+            pending_provider_plan_ref=NULL,pending_commercial_snapshot=NULL,updated_at=clock_timestamp()
+            WHERE tenant_id=$1 AND mutation_attempt_id=$2`, [tenantId,attemptId]);
+      if (changed.rowCount) await this.auditCheckout(client,tenantId,attemptId,actorRef,`${kind}_not_submitted`);
+    });
+  }
+
   failCheckout(tenantId: string, actorRef: string, attemptId: string): Promise<void> {
     return this.withTenant(tenantId, async client => {
       const changed = await client.query(`UPDATE billing_profiles SET status='checkout_unconfirmed',updated_at=clock_timestamp()

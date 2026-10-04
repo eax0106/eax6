@@ -5,6 +5,7 @@ import type {
 } from "@alterx/shared-clients";
 import {
   assertProviderContractParity,
+  BillingOperationNotSubmittedError,
   billingProviderContract,
 } from "@alterx/shared-clients";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -181,6 +182,17 @@ describe("RazorpayBillingProvider", () => {
     expect(references.subscriptionRef).toBeNull();
   });
 
+  it("distinguishes failures before a provider write from an unknown submitted checkout",async()=>{
+    http.request=vi.fn(async request=>{requests.push(request);throw new Error("Read edge unavailable");});
+    await expect(provider.createCheckoutSubscription(tenantId,"plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).rejects.toBeInstanceOf(BillingOperationNotSubmittedError);
+    expect(requests.map(request=>request.method)).toEqual(["GET"]);
+    requests.length=0;
+    http.request=vi.fn(async request=>{requests.push(request);if(request.method==="GET")return {status:200,body:checkoutPlan()};throw new Error("Write response unavailable");});
+    try {await provider.createCheckoutSubscription(tenantId,"plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"});expect.fail("Write must fail");}
+    catch(error){expect(error).toBeInstanceOf(Error);expect(error).not.toBeInstanceOf(BillingOperationNotSubmittedError);}
+    expect(requests.map(request=>request.method)).toEqual(["GET","POST"]);
+  });
+
   it("checks configured amount and tenant card mandate before updating a subscription", async () => {
     http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:request.path==="/v1/plans/plan_basic"?checkoutPlan():
       request.method==="PATCH"?{...checkoutSubscription(),status:"active"}:{...checkoutSubscription(),status:"active",payment_method:"card",notes:{tenant_id:tenantId}}};});
@@ -192,7 +204,7 @@ describe("RazorpayBillingProvider", () => {
   it.each([{payment_method:"upi"},{payment_method:"emandate"},{status:"halted"},{notes:{tenant_id:"other"}},{id:"sub_foreign"}])(
     "refuses subscription update before a PATCH when its mandate or identity is unsupported: %j",async change=>{
       http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:{...checkoutSubscription(),status:"active",payment_method:"card",notes:{tenant_id:tenantId},...change}};});
-      await expect(provider.changeConfiguredSubscription(tenantId,"sub_123","plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).rejects.toThrow("authenticated or active card subscription");
+      await expect(provider.changeConfiguredSubscription(tenantId,"sub_123","plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).rejects.toBeInstanceOf(BillingOperationNotSubmittedError);
       expect(requests).toHaveLength(1);expect(requests[0]?.method).toBe("GET");
     });
 

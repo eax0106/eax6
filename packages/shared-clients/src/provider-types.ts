@@ -135,6 +135,14 @@ export interface BillingPlan {
   readonly active: boolean;
 }
 
+/** An adapter may emit this only before attempting any provider write. */
+export class BillingOperationNotSubmittedError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : "Billing operation was not submitted", { cause });
+    this.name = "BillingOperationNotSubmittedError";
+  }
+}
+
 export interface SubscriptionCheckoutInput {
   readonly internalPlanId: string;
   readonly expectedTotalMinor: number;

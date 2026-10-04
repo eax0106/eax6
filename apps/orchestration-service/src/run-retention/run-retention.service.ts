@@ -1,3 +1,4 @@
+import { eraseRunBillingReservations } from "../billing/billing-account.service";
 import type {
   OrchestrationTenantStore,
   OrchestrationTransactionLike,
@@ -126,6 +127,7 @@ export async function sweepRunHistory(tx: OrchestrationTransactionLike, tenantId
     );
     const ids = batch.rows.map((row) => row.id);
     if (ids.length === 0) return deleted;
+    await eraseRunBillingReservations(tx, tenantId, ids);
     // The dispatch queue's run foreign key has no cascade.
     await tx.query("DELETE FROM run_dispatch_queue WHERE tenant_id = $1 AND run_id = ANY($2::text[])", [tenantId, ids]);
     deleted += (await tx.query("DELETE FROM runs WHERE tenant_id = $1 AND id = ANY($2::text[])", [tenantId, ids])).rowCount;
