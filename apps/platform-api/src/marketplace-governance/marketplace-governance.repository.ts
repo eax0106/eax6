@@ -103,6 +103,16 @@ export class MarketplaceGovernanceRepository implements OnModuleDestroy {
     id: string,
     input: MarketplaceGovernanceActionRequest,
   ): Promise<MarketplaceGovernanceItem | undefined> {
+    await client.query("SELECT id FROM tool_manifests WHERE id=$1 FOR UPDATE", [id]);
+    if (input.action === "approve") {
+      const reviewed = await client.query(`SELECT 1 FROM tool_manifests m JOIN tool_versions v ON v.manifest_id=m.id
+        JOIN tool_scan_reports r ON r.id=v.latest_scan_report_id WHERE m.id=$1 AND v.status='published' AND r.verdict='clean'
+        AND jsonb_array_length(r.findings_json)=0 AND EXISTS (SELECT 1 FROM tool_versions first
+          JOIN tool_scan_reports reviewed ON reviewed.id=first.reviewed_scan_report_id
+          WHERE first.manifest_id=m.id AND first.review_decision='approved' AND first.reviewed_scan_report_id=first.latest_scan_report_id
+            AND reviewed.verdict='clean' AND jsonb_array_length(reviewed.findings_json)=0) LIMIT 1`, [id]);
+      if (!reviewed.rowCount) throw new MarketplaceGovernanceInvalidActionError("Tool publication requires a clean scan and recorded first-version staff review");
+    }
     const status = input.action === "approve"
       ? "published"
       : input.action === "takedown" ? "blocked" : "draft";

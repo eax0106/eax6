@@ -577,3 +577,5 @@ export { CompilerServiceClient, CompilerServiceClientError, type CompilerService
 export { CloudflareTurnstileVerifier } from "./cloudflare/turnstile-verifier";
 export { RedisPublicFormRateLimiter } from "./redis/public-form-rate-limiter";
 export { RedisPublicFormReceiptStore } from "./redis/public-form-receipt-store";
+export { OsvPackageScanProvider, parseOsvScanOutput } from "./osv/osv-package-scan-provider";
+export { S3PackageArtifactReader, type PackageArtifactReader } from "./osv/package-artifact";

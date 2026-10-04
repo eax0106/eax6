@@ -1,10 +1,11 @@
-import type { Ecosystem } from "./types";
-export type ScanSeverity = "info" | "low" | "medium" | "high" | "critical";
-export type ScanVerdict = "clean" | "findings" | "blocked" | "errored" | "unavailable";
-export interface PackageScanRequest { readonly tenantId: string; readonly manifestId: string; readonly manifestVersion: string; readonly artifactRef: string; readonly ecosystem: Ecosystem; }
-export interface ScanFinding { readonly rule: string; readonly severity: ScanSeverity; readonly locator: string; readonly detail: string; }
-export interface PackageScanReport { readonly verdict: ScanVerdict; readonly findings: readonly ScanFinding[]; readonly scannerVersion: string; readonly scannedAt: string; readonly durationMs: number; }
-export interface PackageScanProvider { scanPackage(request: PackageScanRequest): Promise<PackageScanReport>; }
+import type { PackageScanProvider, ScanFinding } from "@alterx/shared-clients";
+import { z } from "zod";
+export type { PackageScanProvider, PackageScanRequest, PackageScanReport, ScanFinding, ScanSeverity, ScanVerdict } from "@alterx/shared-clients";
+export const PackageScanReportSchema = z.object({
+  verdict: z.enum(["clean", "findings", "blocked", "errored", "unavailable"]),
+  findings: z.array(z.object({ rule: z.string().min(1), severity: z.enum(["info", "low", "medium", "high", "critical"]), locator: z.string().min(1), detail: z.string().min(1) }).strict()).max(10000),
+  scannerVersion: z.string().min(1).max(512), scannedAt: z.iso.datetime(), durationMs: z.number().int().nonnegative(),
+}).strict();
 // ENGINE-FIX-P3-10: no real scan provider is wired anywhere in this repo.
 // With an empty seed, every artifactRef used to fall through
 // `findings.length === 0 ? "blocked" : "findings"` -- an unconditional,

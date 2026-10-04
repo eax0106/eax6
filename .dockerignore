@@ -49,3 +49,7 @@ infrastructure/terraform/**/.terraform
 .vscode
 .idea
 **/*.log
+
+# Private acceptance scripts and local scanner fixtures never enter an image.
+.unlazy
+**/.unlazy
