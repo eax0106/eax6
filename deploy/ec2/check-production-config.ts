@@ -126,6 +126,7 @@ async function main(): Promise<void> {
     ["platform-api", "EVAL_FACADE_TOKEN", "orchestration-service", "EVAL_FACADE_TOKEN_SHA256"],
     ["platform-api", "DEPLOYMENT_ADMIN_SERVICE_TOKEN", "orchestration-service", "DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256"],
     ["platform-api", "CONNECTION_REGISTRY_SERVICE_TOKEN", "orchestration-service", "CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"],
+    ["platform-api", "BILLING_SYNC_SERVICE_TOKEN", "orchestration-service", "BILLING_SYNC_SERVICE_TOKEN_SHA256"],
     ["platform-api", "INTERNAL_SERVICE_TOKEN", "ads-core", "INTERNAL_SERVICE_TOKEN_SHA256"],
     ["tool-gateway", "INTERNAL_SERVICE_TOKEN", "orchestration-service", "INTERNAL_SERVICE_TOKEN_SHA256"],
   ];
@@ -148,6 +149,9 @@ async function main(): Promise<void> {
   }
   if (env("platform-api", "CONNECTION_REGISTRY_SERVICE_TOKEN_REF") !== "env:CONNECTION_REGISTRY_SERVICE_TOKEN") {
     failures.push("platform-api CONNECTION_REGISTRY_SERVICE_TOKEN_REF does not name the registry token");
+  }
+  if (env("platform-api", "BILLING_SYNC_SERVICE_TOKEN_REF") !== "env:BILLING_SYNC_SERVICE_TOKEN") {
+    failures.push("platform-api BILLING_SYNC_SERVICE_TOKEN_REF does not name the billing token");
   }
   const jwks = env("orchestration-service", "ACTOR_TOKEN_JWKS_URL") ?? "";
   if (!jwks.startsWith(`http://127.0.0.1:${env("platform-api", "PLATFORM_API_PORT")}/`)) {

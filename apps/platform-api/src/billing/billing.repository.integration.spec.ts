@@ -7,6 +7,7 @@ import type { BillingProvider, Subscription } from "@alterx/shared-clients";
 import { PostgresPlanDefinitionStore } from "../entitlements/plan-definition-store";
 import { BillingService } from "./billing.service";
 import { BillingRepository } from "./billing.repository";
+import { computeEtag } from "../concurrency/etag";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const tenantA = "00000000-0000-7000-8000-000000000001";
@@ -129,6 +130,69 @@ describe.skipIf(!databaseUrl)("BillingRepository PostgreSQL RLS", () => {
     await expect(service.getSubscription(tenantA)).rejects.toMatchObject({ response: { error_code: "BILLING_CHECKOUT_UNCONFIRMED" } });
     await expect(service.createSubscription(tenantA,input,"owner-fixture")).rejects.toMatchObject({ response: { error_code: "BILLING_SUBSCRIPTION_EXISTS" } });
     expect(calls).toBe(1);
+  });
+
+  it("recovers a lost checkout response through its persisted attempt without another POST or paid access", async () => {
+    const definition=await configuredPlan();const attempts:string[]=[];
+    const provider={createCheckoutSubscription:async(_tenant:string,_plan:string,input:{checkoutAttemptId:string})=>{
+      attempts.push(input.checkoutAttemptId);throw new Error("response lost");
+    },findCheckoutSubscription:async(_tenant:string,input:{checkoutAttemptId:string})=>{
+      expect(input.checkoutAttemptId).toBe(attempts[0]);return checkoutResource;
+    },getSubscription:async()=>({...checkoutResource,status:"active"})} as unknown as BillingProvider;
+    const service=new BillingService(repository,provider,new PostgresPlanDefinitionStore(pool));
+    await expect(service.createSubscription(tenantA,{plan_id:"basic",plan_version:definition.updatedAt.toISOString()},"owner-fixture")).rejects.toThrow();
+    const before=await repository.getProfile(tenantA);expect(before?.checkoutStartedAt).toBeInstanceOf(Date);
+    expect(await service.getSubscription(tenantA)).toMatchObject({id:checkoutResource.id,status:"created",planId:"basic"});
+    expect(attempts).toHaveLength(1);expect((await repository.getProfile(tenantA))?.checkoutAttemptId).toBeNull();
+    expect((await admin.query("SELECT * FROM entitlements WHERE tenant_id=$1",[tenantA])).rows).toEqual([]);
+  });
+
+  it("does not replace an authoritative callback when a delayed checkout response arrives", async () => {
+    const definition=await configuredPlan(),attempt=await repository.claimCheckout(tenantA,"owner-fixture",definition);
+    await repository.finishCheckout(tenantA,"system:checkout-recovery",attempt,checkoutResource);
+    await admin.query("UPDATE billing_profiles SET status='active' WHERE tenant_id=$1",[tenantA]);
+    expect(await repository.finishCheckout(tenantA,"owner-fixture",attempt,checkoutResource)).toMatchObject({status:"active"});
+    await expect(repository.finishCheckout(tenantB,"owner-fixture",attempt,checkoutResource)).rejects.toMatchObject({response:{error_code:"BILLING_PROFILE_INCONSISTENT"}});
+    expect((await admin.query("SELECT reason FROM billing_dunning_audits WHERE tenant_id=$1 AND reason='checkout_created'",[tenantA])).rows).toHaveLength(1);
+  });
+
+  async function activeSubscription() {
+    const definition=await configuredPlan(),attempt=await repository.claimCheckout(tenantA,"owner-fixture",definition);
+    await repository.finishCheckout(tenantA,"owner-fixture",attempt,checkoutResource);
+    await admin.query("UPDATE billing_profiles SET status='active' WHERE tenant_id=$1",[tenantA]);
+    return (await repository.getProfile(tenantA))!;
+  }
+
+  it("checks mutation If-Match against the locked row and never claims stale or missing versions", async () => {
+    const profile=await activeSubscription(),etag=computeEtag({},profile.updatedAt.toISOString());
+    await expect(repository.claimMutation(tenantA,"owner-fixture","cancel",undefined)).rejects.toMatchObject({response:{error_code:"PRECONDITION_REQUIRED"}});
+    await expect(repository.claimMutation(tenantA,"owner-fixture","cancel",'"stale"')).rejects.toMatchObject({response:{error_code:"PRECONDITION_FAILED"}});
+    const results=await Promise.allSettled(Array.from({length:5},()=>repository.claimMutation(tenantA,"owner-fixture","cancel",etag)));
+    expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+    expect((await repository.getProfile(tenantA))?.mutationKind).toBe("cancel");
+    expect((await admin.query("SELECT reason,actor_ref FROM billing_dunning_audits WHERE reason='cancel_claimed'",[])).rows).toEqual([{reason:"cancel_claimed",actor_ref:"owner-fixture"}]);
+    expect((await repository.getProfile(tenantB))).toBeNull();
+  });
+
+  it("keeps configured plan changes pending without overwriting the current snapshot or granting access", async () => {
+    const profile=await activeSubscription(),definition=(await new PostgresPlanDefinitionStore(pool).upsert("pro",{
+      maxWorkflows:10,maxProjects:5,maxRunsPerDay:50,maxConcurrentRuns:4,maxSandboxMinutesPerMonth:60,maxAdsStorageMb:1000,maxIntegrations:10,
+    },"stf_checkout",{currency:"INR",basePriceMinor:20000,razorpayPlanId:"plan_pro",includedCredits:300,extraCreditPriceMinor:60,creditsPerVerifiedRun:3},"fixture change")).record;
+    const claim=await repository.claimMutation(tenantA,"owner-fixture","change",computeEtag({},profile.updatedAt.toISOString()),definition);
+    expect(claim).toMatchObject({currentPlan:"basic",providerPlanRef:"plan_fixtureABC",pendingPlan:"pro",pendingProviderPlanRef:"plan_pro",mutationKind:"change"});
+    expect(claim.commercialSnapshot?.includedCredits).toBe(100);expect(claim.pendingCommercialSnapshot?.includedCredits).toBe(300);
+    await expect(repository.confirmMutationResponse(tenantA,"owner-fixture",claim.mutationAttemptId!,{...checkoutResource,id:"sub_foreign",planId:"plan_pro"})).rejects.toMatchObject({response:{error_code:"BILLING_PROFILE_INCONSISTENT"}});
+    expect(await repository.confirmMutationResponse(tenantA,"owner-fixture",claim.mutationAttemptId!,{...checkoutResource,planId:"plan_pro",status:"active"})).toMatchObject({currentPlan:"basic",pendingPlan:"pro"});
+    expect((await admin.query("SELECT internal_plan FROM billing_subscription_plans WHERE tenant_id=$1",[tenantA])).rows).toEqual([{internal_plan:"basic"}]);
+    expect((await admin.query("SELECT * FROM entitlements WHERE tenant_id=$1",[tenantA])).rows).toEqual([]);
+  });
+
+  it("rolls mutation and snapshot insertion back when the attributed audit fails", async () => {
+    const profile=await activeSubscription();
+    await admin.query(`CREATE FUNCTION reject_mutation_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'mutation audit unavailable'; END; $$;
+      CREATE TRIGGER reject_mutation_audit BEFORE INSERT ON billing_dunning_audits FOR EACH ROW EXECUTE FUNCTION reject_mutation_audit();`);
+    await expect(repository.claimMutation(tenantA,"owner-fixture","cancel",computeEtag({},profile.updatedAt.toISOString()))).rejects.toThrow("mutation audit unavailable");
+    expect(await repository.getProfile(tenantA)).toMatchObject({mutationAttemptId:null,mutationKind:null,updatedAt:profile.updatedAt});
   });
 
   it("stores references only and enforces default-deny plus tenant isolation", async () => {

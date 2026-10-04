@@ -1,3 +1,6 @@
+import { resolveRuntimeSecret } from "../config/runtime-secret";
+import { BillingPolicyModule } from "../billing/billing-policy.module";
+import { BillingPolicyService } from "../billing/billing-policy.service";
 import { engineAuditClientFromEnvironment } from "../audit/engine-audit-client";
 import { PlatformDb } from "../signup/platform-db";
 import { MembershipIdentityResolver } from "./membership-identity-resolver";
@@ -29,6 +32,7 @@ const ssoConfigStoreToken = Symbol("SsoConfigStore");
 const databasePoolToken = Symbol("DatabasePool");
 
 @Module({
+  imports: [BillingPolicyModule],
   controllers: [IdentityController],
   providers: [
     {
@@ -73,8 +77,8 @@ const databasePoolToken = Symbol("DatabasePool");
     },
     {
       provide: MembershipIdentityResolver,
-      useFactory: (pool: pg.Pool | undefined) => new MembershipIdentityResolver(pool ? new PlatformDb(pool) : undefined, engineAuditClientFromEnvironment()),
-      inject: [databasePoolToken],
+      useFactory: (pool: pg.Pool | undefined, billing: BillingPolicyService) => new MembershipIdentityResolver(pool ? new PlatformDb(pool) : undefined, engineAuditClientFromEnvironment(), billing),
+      inject: [databasePoolToken, BillingPolicyService],
     },
     {
       provide: IdentityService,
@@ -87,16 +91,7 @@ const databasePoolToken = Symbol("DatabasePool");
 })
 export class IdentityModule {}
 
-export async function resolveRuntimeSecret(reference: string): Promise<string> {
-  const environmentKey = reference.startsWith("env:")
-    ? reference.slice("env:".length)
-    : reference;
-  const value = process.env[environmentKey];
-  if (!value) {
-    throw new Error(`Secret reference unavailable: ${reference}`);
-  }
-  return value;
-}
+export { resolveRuntimeSecret } from "../config/runtime-secret";
 
 /**
  * The identity provider IDENTITY_PROVIDER selects. Exported so the EC2

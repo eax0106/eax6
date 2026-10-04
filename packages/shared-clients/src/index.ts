@@ -169,6 +169,7 @@ export {
   type SecretsProvider,
   type Subscription,
   type SubscriptionCheckoutInput,
+  type SubscriptionCheckoutLookup,
   type StatusPageIncident,
   type StatusPageIncidentRequest,
   type StatusPageProvider,

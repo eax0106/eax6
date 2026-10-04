@@ -3,6 +3,7 @@ import type { EntitlementLimits } from "../entitlements/types";
 import type { PlanDefinitionAuditAction } from "../entitlements/plan-definition-store";
 
 export interface PlanDefinitionView {
+  version: string;
   plan: string;
   limits: EntitlementLimits;
   commercial?: PlanCommercial | null;
@@ -27,6 +28,7 @@ export interface PlanDefinitionAuditView {
  * from "this plan still resolves through the deployed ConfigProvider".
  */
 export interface PlanPolicyView {
+  version: string;
   plan: string;
   limits: EntitlementLimits;
   commercial?: PlanCommercial | null;

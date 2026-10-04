@@ -33,9 +33,78 @@ ALTER TABLE plan_definition_audit ADD COLUMN commercial jsonb
 --> statement-breakpoint
 ALTER TABLE billing_profiles
   ADD COLUMN checkout_attempt_id uuid,
+  ADD COLUMN checkout_started_at timestamptz,
+  ADD COLUMN mutation_attempt_id uuid,
+  ADD COLUMN mutation_kind text CHECK (mutation_kind IN ('change','cancel')),
+  ADD COLUMN pending_plan text,
+  ADD COLUMN pending_provider_plan_ref text,
+  ADD COLUMN pending_commercial_snapshot jsonb CHECK (valid_plan_commercial(pending_commercial_snapshot)),
   ADD COLUMN gstin text CHECK (gstin IS NULL OR gstin ~ '^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$'),
   ADD COLUMN commercial_snapshot jsonb CHECK (valid_plan_commercial(commercial_snapshot)),
   ADD COLUMN provider_plan_ref text,
   ADD COLUMN last_provider_event_at bigint NOT NULL DEFAULT 0 CHECK (last_provider_event_at >= 0);
 --> statement-breakpoint
 ALTER TABLE billing_dunning_audits ADD COLUMN actor_ref text;
+
+--> statement-breakpoint
+CREATE TABLE billing_subscription_plans (
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  subscription_ref text NOT NULL,
+  provider_plan_ref text NOT NULL,
+  internal_plan text NOT NULL,
+  commercial_snapshot jsonb NOT NULL CHECK (valid_plan_commercial(commercial_snapshot)),
+  PRIMARY KEY (tenant_id,subscription_ref,provider_plan_ref)
+);
+
+--> statement-breakpoint
+CREATE TABLE billing_policy_state (
+  tenant_id uuid PRIMARY KEY REFERENCES tenants(id),
+  email_verified boolean NOT NULL DEFAULT false,
+  verified_by uuid REFERENCES users(id),
+  policy_hash text CHECK (policy_hash IS NULL OR policy_hash ~ '^[0-9a-f]{64}$'),
+  source_revision timestamptz,
+  policy_payload jsonb,
+  published_revision timestamptz
+);
+--> statement-breakpoint
+CREATE TABLE billing_credit_deliveries (
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  payment_ref text NOT NULL CHECK (payment_ref ~ '^pay_[A-Za-z0-9]{1,100}$'),
+  credits integer NOT NULL CHECK (credits BETWEEN 1 AND 1000000000),
+  provider_event_id text NOT NULL,
+  published_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+  PRIMARY KEY (tenant_id,payment_ref)
+);
+--> statement-breakpoint
+DO $$
+DECLARE target text;
+BEGIN
+  FOREACH target IN ARRAY ARRAY['billing_policy_state','billing_credit_deliveries','billing_subscription_plans'] LOOP
+    EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY',target);
+    EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY',target);
+    EXECUTE format($policy$CREATE POLICY billing_tenant_context ON %I
+      USING (tenant_id = NULLIF(current_setting('app.current_tenant_id',true),'')::uuid)
+      WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id',true),'')::uuid)$policy$,target);
+    EXECUTE format('CREATE TRIGGER billing_prevent_tenant_update BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION prevent_tenant_id_update()',target);
+  END LOOP;
+END;
+$$;
+--> statement-breakpoint
+GRANT SELECT ON billing_policy_state TO platform_provisioner;
+--> statement-breakpoint
+-- Bounded scheduler inventory contains tenant identifiers only; financial data
+-- stays behind ordinary tenant transactions.
+CREATE FUNCTION list_billing_sync_tenants(after_id uuid, batch_size integer)
+RETURNS TABLE(tenant_id uuid) LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path FROM CURRENT SET row_security TO off AS $$
+  SELECT b.tenant_id FROM billing_policy_state b JOIN tenants t ON t.id=b.tenant_id
+    WHERE (after_id IS NULL OR b.tenant_id>after_id) AND t.status='active'
+    ORDER BY b.tenant_id LIMIT LEAST(GREATEST(batch_size,1),100)
+$$;
+--> statement-breakpoint
+ALTER FUNCTION list_billing_sync_tenants(uuid,integer) OWNER TO platform_provisioner;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION list_billing_sync_tenants(uuid,integer) FROM PUBLIC;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION list_billing_sync_tenants(uuid,integer) TO platform_api;

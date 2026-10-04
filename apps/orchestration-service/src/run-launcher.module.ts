@@ -1,4 +1,5 @@
 import { BlackboardService } from "./blackboard/blackboard.service";
+import { EngineBillingAccountService } from "./billing/billing-account.service";
 import { parseRedisHostPort } from "./config/blackboard-environment";
 import { Module } from "@nestjs/common";
 import { ProvisioningClient, TemporalDurableExecutionProvider, RedisCacheProvider } from "@alterx/adapters";
@@ -62,6 +63,7 @@ import {
           buildRunBudgetGate(process.env),
           runLearningAuditClient(process.env),
           new BlackboardService(store, new RedisCacheProvider(parseRedisHostPort(dbConfig.redisUrl))),
+          new EngineBillingAccountService(store),
         );
       },
     },

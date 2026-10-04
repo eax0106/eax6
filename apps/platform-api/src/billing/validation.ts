@@ -23,7 +23,7 @@ const createSubscriptionSchema = z
   })
   .strict();
 const changeSubscriptionSchema = z
-  .object({ plan_id: providerRef })
+  .object({ plan_id: providerRef, plan_version: z.string().datetime() })
   .strict();
 const attachPaymentMethodSchema = z
   .object({ provider_token: providerRef })

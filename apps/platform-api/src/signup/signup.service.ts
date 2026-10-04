@@ -19,6 +19,7 @@ export class SignupService {
     private readonly idempotency: IdempotencyStore,
     private readonly onboardingInitializer: OnboardingInitializer,
     private readonly membershipResolver?: MembershipIdentityResolver,
+    private readonly billing?: Pick<import("../billing/billing-policy.service").BillingPolicyService, "recordVerifiedIdentity">,
   ) {}
 
   signup(request: SignupRequest): Promise<SignupLanding> {
@@ -89,6 +90,7 @@ export class SignupService {
             client,
           );
           await this.onboardingInitializer.initialize(tenantId, workspaceId, client);
+          await this.billing?.recordVerifiedIdentity(tenantId, userId, client);
           return entitlement;
         },
       );

@@ -164,6 +164,7 @@ export class RunOutcomeService {
     private readonly store: RunOutcomeTenantStore,
     private readonly verdictSink?: RunVerdictSink,
     private readonly budgetSettlement?: RunBudgetSettlement,
+    private readonly billingSettlement?: Pick<import("../billing/billing-account.service").EngineBillingAccountService, "settleTransaction">,
   ) {}
 
   /**
@@ -221,6 +222,7 @@ export class RunOutcomeService {
          FROM run_outcomes WHERE tenant_id = $1 AND run_id = $2`,
         [tenantId, runId],
       );
+      await this.billingSettlement?.settleTransaction(tx, tenantId, runId);
       return { outcome: stored.rows[0], workspaceId: run.workspace_id };
     });
     if (recorded.outcome !== undefined) {

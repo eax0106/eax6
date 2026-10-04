@@ -15,6 +15,7 @@ import type {
   SecretsProvider,
   Subscription,
   SubscriptionCheckoutInput,
+  SubscriptionCheckoutLookup,
 } from "@alterx/shared-clients";
 
 export interface BillingTenantReferences {
@@ -166,6 +167,7 @@ export class RazorpayBillingProvider implements BillingProvider {
     if (!/^plan_[A-Za-z0-9]{1,100}$/.test(planId) || !/^[a-z0-9][a-z0-9_-]{0,99}$/.test(input.internalPlanId) ||
       input.currency !== "INR" || !Number.isSafeInteger(input.expectedTotalMinor) || input.expectedTotalMinor <= 0 ||
       input.expectedTotalMinor > 1_180_000_000 ||
+      (input.checkoutAttemptId !== undefined && !checkoutAttempt(input.checkoutAttemptId)) ||
       (input.gstin !== undefined && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(input.gstin))) {
       throw malformedResource("checkout", "configuration", "is invalid");
     }
@@ -176,13 +178,45 @@ export class RazorpayBillingProvider implements BillingProvider {
     const subscription = mapSubscription(await this.call("POST", "/v1/subscriptions", {
       plan_id: planId, total_count: this.config.totalBillingCycles ?? 1_200,
       quantity: 1, customer_notify: true,
-      notes: { tenant_id: tenantId, alter_plan: input.internalPlanId, ...(input.gstin ? { gstin: input.gstin } : {}) },
+      notes: { tenant_id: tenantId, alter_plan: input.internalPlanId,
+        ...(input.checkoutAttemptId ? { alter_checkout_attempt: input.checkoutAttemptId } : {}),
+        ...(input.gstin ? { gstin: input.gstin } : {}) },
     }), tenantId);
     if (subscription.planId !== planId || !subscription.checkoutUrl) {
       throw malformedResource("checkout", "subscription", "has no matching hosted checkout");
     }
     // The billing service durably binds the result to its audited checkout claim.
     return subscription;
+  }
+
+  async findCheckoutSubscription(tenantId: string, input: SubscriptionCheckoutLookup): Promise<Subscription | null> {
+    const from = Math.floor(Date.parse(input.createdAfter) / 1000) - 300;
+    if (!checkoutAttempt(input.checkoutAttemptId) || !/^plan_[A-Za-z0-9]{1,100}$/.test(input.providerPlanId) ||
+        !Number.isSafeInteger(from) || from < 0 || from > Math.floor(this.now().getTime()/1000)) {
+      throw malformedResource("checkout", "lookup", "is invalid");
+    }
+    const to = Math.floor(this.now().getTime()/1000);
+    let found: Subscription | null = null;
+    for (let page = 0; page < 5; page++) {
+      const response = object(await this.call("GET", `/v1/subscriptions?plan_id=${encodeURIComponent(input.providerPlanId)}` +
+        `&from=${from}&to=${to}&count=100&skip=${page * 100}`));
+      if (!Array.isArray(response.items) || response.items.length > 100) {
+        throw malformedResource("checkout", "lookup", "has an invalid collection");
+      }
+      for (const item of response.items) {
+        const resource = object(item), notes = object(resource.notes ?? {});
+        if (notes.tenant_id !== tenantId || notes.alter_checkout_attempt !== input.checkoutAttemptId) continue;
+        const subscription = mapSubscription(resource, tenantId);
+        if (!/^sub_[A-Za-z0-9]{1,100}$/.test(subscription.id) || subscription.planId !== input.providerPlanId ||
+            !subscription.checkoutUrl || found) {
+          throw malformedResource("checkout", "lookup", "has conflicting subscriptions");
+        }
+        found = subscription;
+      }
+      if (response.items.length < 100) return found;
+    }
+    // An incomplete scan cannot establish a unique checkout or permit a retry.
+    throw malformedResource("checkout", "lookup", "exceeded its bounded scan");
   }
 
   async changeSubscription(
@@ -198,6 +232,26 @@ export class RazorpayBillingProvider implements BillingProvider {
       ),
       tenantId,
     );
+  }
+
+  async changeConfiguredSubscription(tenantId: string, subscriptionId: string, providerPlanId: string,
+    input: SubscriptionCheckoutInput): Promise<Subscription> {
+    if (!/^sub_[A-Za-z0-9]{1,100}$/.test(subscriptionId) || !/^plan_[A-Za-z0-9]{1,100}$/.test(providerPlanId) ||
+        input.currency !== "INR" || !Number.isSafeInteger(input.expectedTotalMinor) || input.expectedTotalMinor <= 0 ||
+        input.expectedTotalMinor > 1_180_000_000) throw malformedResource("subscription", "change", "is invalid");
+    const current = object(await this.call("GET", `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`));
+    if (current.id !== subscriptionId || !["authenticated","active"].includes(String(current.status)) ||
+        current.payment_method !== "card" || object(current.notes ?? {}).tenant_id !== tenantId) {
+      throw malformedResource("subscription", "change", "requires an authenticated or active card subscription belonging to the tenant");
+    }
+    const plan = mapPlan(await this.call("GET", `/v1/plans/${encodeURIComponent(providerPlanId)}`));
+    if (plan.id !== providerPlanId || !plan.active || plan.currency !== input.currency || plan.amount !== input.expectedTotalMinor) {
+      throw malformedResource("subscription", "change", "does not match configured amount and currency");
+    }
+    const result = mapSubscription(await this.call("PATCH", `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`,
+      {plan_id:providerPlanId,schedule_change_at:"now",quantity:1,customer_notify:true}),tenantId);
+    if (result.id !== subscriptionId || result.planId !== providerPlanId) throw malformedResource("subscription", "change", "returned an unrelated resource");
+    return result;
   }
 
   async cancelSubscription(tenantId: string): Promise<Subscription> {
@@ -585,6 +639,7 @@ function status(value: unknown): Subscription["status"] {
     value === "active" ||
     value === "pending" ||
     value === "halted" ||
+    value === "paused" ||
     value === "cancelled" ||
     value === "completed" ||
     value === "expired"
@@ -592,6 +647,10 @@ function status(value: unknown): Subscription["status"] {
     return value;
   }
   throw new RazorpayBillingError(502, "Razorpay returned an invalid status");
+}
+
+function checkoutAttempt(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function invoiceStatus(value: unknown): Invoice["status"] {

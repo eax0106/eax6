@@ -22,6 +22,8 @@ import {
   type PlanDefinitionAuditRecord,
   type PlanDefinitionRecord,
   type PlanDefinitionStore,
+  type PlanDefinitionWriteOptions,
+  type PlanDefinitionDeleteOptions,
 } from "../entitlements/plan-definition-store";
 import type {
   AbuseThresholds,
@@ -86,6 +88,7 @@ class FakePlanDefinitionStore implements PlanDefinitionStore {
     updatedBy: string,
     commercial?: PlanCommercial | null,
     auditReason?: string,
+    options?: PlanDefinitionWriteOptions,
   ): Promise<{ record: PlanDefinitionRecord; created: boolean }> {
     const created = !this.records.has(plan);
     const record: PlanDefinitionRecord = {
@@ -97,10 +100,13 @@ class FakePlanDefinitionStore implements PlanDefinitionStore {
     };
     this.records.set(plan, record);
     if (auditReason) await this.recordAudit(plan, created ? "created" : "updated", limits, auditReason, updatedBy, record.commercial);
+    await options?.beforeCommit?.(created);
     return { record, created };
   }
 
-  async remove(plan: string): Promise<boolean> {
+  async remove(plan: string,options?: PlanDefinitionDeleteOptions): Promise<boolean> {
+    const record=this.records.get(plan);
+    if(record && options){await this.recordAudit(plan,"deleted",record.limits,options.auditReason,options.staffUserId,record.commercial);await options.beforeCommit?.(false);}
     return this.records.delete(plan);
   }
 
@@ -213,6 +219,7 @@ describe("Admin policy plan routes", () => {
       commercial: null,
       updated_at: "2026-08-06T00:00:00.000Z",
       updated_by: staffUserId,
+      version: "2026-08-06T00:00:00.000Z",
     } satisfies PlanDefinitionView);
     expect(store.audits).toEqual([
       expect.objectContaining({
@@ -222,6 +229,14 @@ describe("Admin policy plan routes", () => {
         staffUserId,
       }),
     ]);
+  });
+
+  it("requires a plan write precondition and emits an ETag for the selected version",async()=>{
+    const response=await app.getHttpAdapter().getInstance().inject({method:"PUT",url:"/api/v1/admin/policy/plans/pro",
+      headers:{"x-test-staff":JSON.stringify(staff(["staff_admin"]))},payload:{limits:PRO_LIMITS,reason:"missing version"}});
+    expectProblem(response,428,"PRECONDITION_REQUIRED");expect(store.records.size).toBe(0);
+    const baseline=await request({method:"GET",url:"/api/v1/admin/policy/plans/free",staffContext:staff(["staff_admin"])});
+    expect(baseline.headers.etag).toBeTypeOf("string");
   });
 
   it("records an updated audit entry when the definition already exists", async () => {
@@ -259,6 +274,7 @@ describe("Admin policy plan routes", () => {
         commercial: null,
         updated_at: "2026-08-06T00:00:00.000Z",
         updated_by: staffUserId,
+        version: "2026-08-06T00:00:00.000Z",
       },
     ]);
   });
@@ -293,6 +309,7 @@ describe("Admin policy plan routes", () => {
       plan: "free",
       limits: BASELINE_LIMITS,
       source: "config_provider",
+      version: "absent",
       definition: null,
     } satisfies PlanPolicyView);
   });
@@ -517,6 +534,7 @@ describe("Admin policy plan routes", () => {
       url: options.url,
       payload: options.body as never,
       headers: {
+        ...(["PUT","DELETE"].includes(options.method)?{"if-match":"*"}:{}),
         ...(options.staffContext
           ? { "x-test-staff": JSON.stringify(options.staffContext) }
           : {}),
@@ -544,6 +562,6 @@ interface RequestOptions {
 
 interface TestResponse {
   statusCode: number;
-  headers: Record<string, string | string[] | undefined>;
+  headers: Record<string, string | string[] | number | undefined>;
   json(): unknown;
 }

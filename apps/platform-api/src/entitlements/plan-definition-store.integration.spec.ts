@@ -4,6 +4,7 @@ import { join } from "node:path";
 import pg from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { PostgresPlanDefinitionStore } from "./plan-definition-store";
+import { computeEtag } from "../concurrency/etag";
 import type { EntitlementLimits } from "./types";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
@@ -23,9 +24,11 @@ describe.skipIf(!databaseUrl)("plan_definitions PostgreSQL behaviour", () => {
   let pool: pg.Pool;
   let store: PostgresPlanDefinitionStore;
   let schemaName: string;
+  let roleName: string;
 
   beforeEach(async () => {
     schemaName = `plan_definitions_${randomUUID().replaceAll("-", "_")}`;
+    roleName = `plan_definition_role_${randomUUID().replaceAll("-", "_")}`;
     admin = new pg.Client({ connectionString: databaseUrl });
     await admin.connect();
     await admin.query(`CREATE SCHEMA "${schemaName}"`);
@@ -36,6 +39,10 @@ describe.skipIf(!databaseUrl)("plan_definitions PostgreSQL behaviour", () => {
        VALUES ('stf_test', 'auth0|plan-definitions-test', 'ops@example.com', ARRAY['staff_admin'])`,
     );
     const url = new URL(databaseUrl);
+    const password=randomUUID();await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}' NOBYPASSRLS NOSUPERUSER`);
+    await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
+    await admin.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA "${schemaName}" TO "${roleName}"`);
+    url.username=roleName;url.password=password;
     url.searchParams.set("options", `-c search_path=${schemaName}`);
     pool = new pg.Pool({ connectionString: url.toString() });
     store = new PostgresPlanDefinitionStore(pool);
@@ -45,6 +52,7 @@ describe.skipIf(!databaseUrl)("plan_definitions PostgreSQL behaviour", () => {
     await pool?.end();
     if (admin) {
       await admin.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+      await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
       await admin.end();
     }
   });
@@ -129,6 +137,27 @@ describe.skipIf(!databaseUrl)("plan_definitions PostgreSQL behaviour", () => {
         VALUES ('bad', $1::jsonb, $2::jsonb, 'stf_test')`, [JSON.stringify(LIMITS), JSON.stringify(commercial)]))
         .rejects.toThrow();
     }
+  });
+
+  it("enforces locked versions for plan edits including concurrent creation", async () => {
+    const results=await Promise.allSettled(Array.from({length:4},()=>store.upsert("pro",LIMITS,"stf_test",null,"create configured plan",{ifMatch:computeEtag({},"absent")})));
+    expect(results.filter(result=>result.status==="fulfilled")).toHaveLength(1);
+    const record=(await store.find("pro"))!,version=computeEtag({},record.updatedAt.toISOString());
+    await expect(store.upsert("pro",LIMITS,"stf_test",null,"missing precondition",{ifMatch:""})).rejects.toMatchObject({status:428});
+    await expect(store.upsert("pro",LIMITS,"stf_test",null,"stale precondition",{ifMatch:'"stale"'})).rejects.toMatchObject({status:412});
+    await store.upsert("pro",{...LIMITS,maxRunsPerDay:12},"stf_test",null,"current precondition",{ifMatch:version});
+    await expect(store.remove("pro",{staffUserId:"stf_test",auditReason:"stale deletion",ifMatch:version})).rejects.toMatchObject({status:412});
+    expect((await store.find("pro"))?.limits.maxRunsPerDay).toBe(12);
+  });
+
+  it("keeps update and deletion unchanged when durable admin audit delivery fails", async () => {
+    const {record}=await store.upsert("pro",LIMITS,"stf_test",null,"create");
+    const ifMatch=computeEtag({},record.updatedAt.toISOString()),beforeCommit=async()=>{throw new Error("admin audit unavailable");};
+    await expect(store.upsert("pro",{...LIMITS,maxRunsPerDay:1},"stf_test",null,"update",{ifMatch,beforeCommit})).rejects.toThrow("admin audit unavailable");
+    await expect(store.remove("pro",{ifMatch,staffUserId:"stf_test",auditReason:"delete",beforeCommit})).rejects.toThrow("admin audit unavailable");
+    expect((await store.find("pro"))?.limits).toEqual(LIMITS);expect((await store.history("pro",10)).map(row=>row.action)).toEqual(["created"]);
+    expect(await store.remove("pro",{ifMatch,staffUserId:"stf_test",auditReason:"delete",beforeCommit:async()=>undefined})).toBe(true);
+    expect((await store.history("pro",10)).map(row=>row.action)).toEqual(["deleted","created"]);
   });
 
   it("requires updated_by to reference a real staff user", async () => {

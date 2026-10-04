@@ -140,6 +140,13 @@ export interface SubscriptionCheckoutInput {
   readonly expectedTotalMinor: number;
   readonly currency: "INR";
   readonly gstin?: string;
+  readonly checkoutAttemptId?: string;
+}
+
+export interface SubscriptionCheckoutLookup {
+  readonly checkoutAttemptId: string;
+  readonly providerPlanId: string;
+  readonly createdAfter: string;
 }
 
 export interface Subscription {
@@ -152,6 +159,7 @@ export interface Subscription {
     | "active"
     | "pending"
     | "halted"
+    | "paused"
     | "cancelled"
     | "completed"
     | "expired";
@@ -226,6 +234,9 @@ export interface BillingProvider extends BaseProvider<"BillingProvider"> {
     planId: string,
     input: SubscriptionCheckoutInput,
   ): Promise<Subscription>;
+  findCheckoutSubscription?(tenantId: string, input: SubscriptionCheckoutLookup): Promise<Subscription | null>;
+  changeConfiguredSubscription?(tenantId: string, subscriptionId: string, providerPlanId: string,
+    input: SubscriptionCheckoutInput): Promise<Subscription>;
   changeSubscription(tenantId: string, planId: string): Promise<Subscription>;
   cancelSubscription(tenantId: string): Promise<Subscription>;
   listInvoices(

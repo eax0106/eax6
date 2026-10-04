@@ -39,7 +39,7 @@ const STORE = "platform-api";
 // the deletion registry disagree, in either direction.
 export const PLATFORM_TABLES = [
   "abuse_signals", "action_item_annotations", "billing_dunning_audits", "billing_dunning_states",
-  "billing_events", "billing_payment_method_refs", "billing_profiles",
+  "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "billing_events", "billing_payment_method_refs", "billing_profiles",
   "credential_refs", "credential_use_audits", "discovery_recommendations", "entitlements",
   "env_var_use_audits", "env_vars", "idempotency_keys", "installs", "jit_grant_audit",
   "jit_grants", "kyc_submissions", "listing_versions", "listings", "notification_digests",
@@ -59,7 +59,7 @@ export const PLATFORM_TABLES = [
 //   users                                   pseudonymised when no other tenant holds them
 //   the SKELETON_TABLES                     staff access records, kept 90 days
 export const PLATFORM_DELETE_ORDER = [
-  "abuse_signals", "billing_dunning_audits", "billing_dunning_states", "billing_events",
+  "billing_subscription_plans", "billing_credit_deliveries", "billing_policy_state", "abuse_signals", "billing_dunning_audits", "billing_dunning_states", "billing_events",
   "billing_payment_method_refs", "billing_profiles", "credential_use_audits",
   "credential_refs", "discovery_recommendations", "entitlements", "env_var_use_audits",
   "env_vars", "idempotency_keys", "kyc_submissions", "notification_digests",

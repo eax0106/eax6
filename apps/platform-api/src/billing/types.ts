@@ -19,10 +19,18 @@ export interface BillingProfileRecord {
   commercialSnapshot?: PlanCommercial | null;
   providerPlanRef?: string | null;
   checkoutAttemptId?: string | null;
+  checkoutStartedAt?: Date | null;
+  mutationAttemptId?: string | null;
+  mutationKind?: "change" | "cancel" | null;
+  pendingPlan?: string | null;
+  pendingProviderPlanRef?: string | null;
+  pendingCommercialSnapshot?: PlanCommercial | null;
 }
 
 export interface BillingSubscriptionView extends Subscription {
   readonly version: string;
+  readonly pendingOperation?: "change" | "cancel";
+  readonly pendingPlan?: string;
 }
 
 export interface CreateSubscriptionInput {
@@ -43,6 +51,7 @@ export interface ConfiguredBillingPlanView {
 
 export interface ChangeSubscriptionInput {
   plan_id: string;
+  plan_version: string;
 }
 
 export interface AttachPaymentMethodInput {

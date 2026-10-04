@@ -50,6 +50,7 @@ export const TABLES = [
   "webhook_endpoints", "webhook_endpoint_secrets", "trigger_integration_bindings",
   "escalations", "run_dispatch_queue", "side_effects",
   "budgets", "budget_usage", "budget_reservations",
+  "billing_accounts", "billing_credit_grants", "billing_run_reservations",
   "workspace_holds",
   "workspace_run_retention",
   "approval_step_policies",
@@ -72,6 +73,7 @@ export const TABLES = [
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
+  "billing_run_reservations", "billing_credit_grants", "billing_accounts",
   "conversation_messages",
   "connection_registry",
   "workspace_holds", "workspace_run_retention", "approval_step_policies", "budget_reservations", "budget_usage", "budgets", "approvals", "blackboard_checkpoints", "clarifications", "conversation_goal_states",

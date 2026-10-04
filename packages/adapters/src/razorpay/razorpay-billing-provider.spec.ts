@@ -142,6 +142,60 @@ describe("RazorpayBillingProvider", () => {
     expect(references.subscriptionRef).toBeNull();
   });
 
+  it("recovers one exact checkout attempt after scanning unrelated tenant and attempt resources", async () => {
+    const attempt = "cd7d61fa-7c2e-4c26-a4ba-4dfc415b7e37";
+    http.request = vi.fn(async request => {
+      requests.push(request);
+      return {status:200,body:{items:[
+        {...checkoutSubscription(),notes:{tenant_id:"other",alter_checkout_attempt:attempt}},
+        {...checkoutSubscription(),notes:{tenant_id:tenantId,alter_checkout_attempt:"other"}},
+        {...checkoutSubscription(),notes:{tenant_id:tenantId,alter_checkout_attempt:attempt}},
+      ]}};
+    });
+    expect(await provider.findCheckoutSubscription(tenantId,{checkoutAttemptId:attempt,providerPlanId:"plan_basic",createdAfter:"2026-01-01T00:00:00.000Z"}))
+      .toMatchObject({id:"sub_123",checkoutUrl:"https://rzp.io/rzp/fixture"});
+    expect(requests).toHaveLength(1);expect(requests[0]?.method).toBe("GET");
+    expect(requests[0]?.path).toContain("plan_id=plan_basic&from=1767225300&to=");
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it("records checkout attempt correlation in provider notes", async () => {
+    const attempt="cd7d61fa-7c2e-4c26-a4ba-4dfc415b7e37";
+    http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:request.method==="GET"?checkoutPlan():checkoutSubscription()};});
+    await provider.createCheckoutSubscription(tenantId,"plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR",checkoutAttemptId:attempt});
+    expect(requests[1]?.body?.notes).toEqual({tenant_id:tenantId,alter_plan:"basic",alter_checkout_attempt:attempt});
+  });
+
+  it("does not treat duplicate, malformed, foreign-plan or incomplete checkout lookup as proof", async () => {
+    const attempt="cd7d61fa-7c2e-4c26-a4ba-4dfc415b7e37",lookup={checkoutAttemptId:attempt,providerPlanId:"plan_basic",createdAfter:"2026-01-01T00:00:00.000Z"};
+    const match={...checkoutSubscription(),notes:{tenant_id:tenantId,alter_checkout_attempt:attempt}};
+    for (const body of [{items:[match,match]},{items:[{...match,plan_id:"plan_foreign"}]},{items:[{...match,short_url:"https://foreign.test/pay"}]},{items:"invalid"}]) {
+      http.request=vi.fn(async()=>({status:200,body}));
+      await expect(provider.findCheckoutSubscription(tenantId,lookup)).rejects.toThrow();
+    }
+    requests=[];http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:{items:Array.from({length:100},()=>({...checkoutSubscription(),notes:{tenant_id:"other"}}))}};});
+    await expect(provider.findCheckoutSubscription(tenantId,lookup)).rejects.toThrow("bounded scan");
+    expect(requests).toHaveLength(5);expect(requests[4]?.path).toContain("skip=400");
+    http.request=vi.fn(async()=>({status:200,body:{items:[]}}));
+    expect(await provider.findCheckoutSubscription(tenantId,lookup)).toBeNull();
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it("checks configured amount and tenant card mandate before updating a subscription", async () => {
+    http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:request.path==="/v1/plans/plan_basic"?checkoutPlan():
+      request.method==="PATCH"?{...checkoutSubscription(),status:"active"}:{...checkoutSubscription(),status:"active",payment_method:"card",notes:{tenant_id:tenantId}}};});
+    expect(await provider.changeConfiguredSubscription(tenantId,"sub_123","plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).toMatchObject({id:"sub_123",planId:"plan_basic",status:"active"});
+    expect(requests.map(request=>request.method+" "+request.path)).toEqual(["GET /v1/subscriptions/sub_123","GET /v1/plans/plan_basic","PATCH /v1/subscriptions/sub_123"]);
+    expect(requests[2]?.body).toEqual({plan_id:"plan_basic",schedule_change_at:"now",quantity:1,customer_notify:true});
+  });
+
+  it.each([{payment_method:"upi"},{payment_method:"emandate"},{status:"halted"},{notes:{tenant_id:"other"}},{id:"sub_foreign"}])(
+    "refuses subscription update before a PATCH when its mandate or identity is unsupported: %j",async change=>{
+      http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:{...checkoutSubscription(),status:"active",payment_method:"card",notes:{tenant_id:tenantId},...change}};});
+      await expect(provider.changeConfiguredSubscription(tenantId,"sub_123","plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).rejects.toThrow("authenticated or active card subscription");
+      expect(requests).toHaveLength(1);expect(requests[0]?.method).toBe("GET");
+    });
+
   it("runs subscription lifecycle and invoice pagination against Razorpay paths", async () => {
     expect(await provider.getSubscription(tenantId)).toBeNull();
     const created = await provider.createSubscription(

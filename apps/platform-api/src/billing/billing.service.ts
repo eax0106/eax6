@@ -40,17 +40,24 @@ export class BillingService {
     tenantId: string,
   ): Promise<BillingSubscriptionView | null> {
     const instance = "/api/v1/billing/subscription";
-    const profile = await this.repository.getProfile(tenantId);
-    if (profile?.checkoutAttemptId) throw new BillingHttpError(503,"BILLING_CHECKOUT_UNCONFIRMED",
-      "Checkout setup has not been confirmed; check its status before trying another purchase",instance);
+    let profile = await this.repository.getProfile(tenantId);
+    if (profile?.checkoutAttemptId) {
+      const recovered = profile.providerPlanRef && this.provider.findCheckoutSubscription
+        ? await this.provided(instance, () => this.provider.findCheckoutSubscription!(tenantId, {
+          checkoutAttemptId: profile!.checkoutAttemptId!, providerPlanId: profile!.providerPlanRef!,
+          createdAfter: (profile!.checkoutStartedAt ?? profile!.updatedAt).toISOString(),
+        })) : null;
+      if (!recovered) throw new BillingHttpError(503,"BILLING_CHECKOUT_UNCONFIRMED",
+        "Checkout setup has not been confirmed; refresh its status before trying another purchase",instance);
+      profile = await this.repository.finishCheckout(tenantId,"system:checkout-recovery",profile.checkoutAttemptId,recovered);
+    }
     if (!profile?.subscriptionRef) return null;
     const subscription = await this.provided(instance, () => this.provider.getSubscription(tenantId));
     if (!subscription || subscription.id !== profile.subscriptionRef ||
-        (profile.providerPlanRef && subscription.planId !== profile.providerPlanRef)) {
+        (profile.providerPlanRef && subscription.planId !== profile.providerPlanRef && subscription.planId !== profile.pendingProviderPlanRef)) {
       throw new BillingHttpError(502,"BILLING_PROFILE_INCONSISTENT","Billing profile is inconsistent",instance);
     }
-    return view({ ...subscription, planId: profile.currentPlan ?? subscription.planId,
-      status: profile.status as Subscription["status"] }, profile.updatedAt);
+    return profileView(subscription,profile);
   }
 
   async createSubscription(
@@ -73,10 +80,10 @@ export class BillingService {
     const attemptId = await this.repository.claimCheckout(tenantId,actorRef,definition,input.gstin);
     try {
       const subscription = await this.provided(instance, () => this.provider.createCheckoutSubscription!(tenantId,
-        definition.commercial!.razorpayPlanId!, { internalPlanId: definition.plan,
+        definition.commercial!.razorpayPlanId!, { internalPlanId: definition.plan, checkoutAttemptId: attemptId,
           expectedTotalMinor: amounts.totalMinor, currency: amounts.currency, ...(input.gstin ? { gstin: input.gstin } : {}) }));
       const profile = await this.repository.finishCheckout(tenantId,actorRef,attemptId,subscription);
-      return view({ ...subscription, planId: definition.plan, status: "created" },profile.updatedAt);
+      return view({ ...subscription, planId: definition.plan, status: profile.status as Subscription["status"] },profile.updatedAt);
     } catch (error) {
       await this.repository.failCheckout(tenantId,actorRef,attemptId);
       throw error;
@@ -86,30 +93,33 @@ export class BillingService {
   async changeSubscription(
     tenantId: string,
     input: ChangeSubscriptionInput,
+    actorRef: string,
+    ifMatch: string | undefined,
   ): Promise<BillingSubscriptionView> {
     const instance = "/api/v1/billing/subscription";
-    const subscription = await this.provided(instance, () =>
-      this.provider.changeSubscription(tenantId, input.plan_id),
-    );
-    const profile = await this.repository.syncSubscription(
-      tenantId,
-      subscription,
-    );
-    return view(subscription, profile.updatedAt);
+    const definition=await this.definitions.find(input.plan_id),amounts=checkoutAmounts(definition?.commercial);
+    if (!definition || !amounts || !definition.commercial?.razorpayPlanId) throw new BillingHttpError(503,"BILLING_PLAN_UNCONFIGURED","Plan checkout is unavailable until its launch configuration is set",instance);
+    if (definition.updatedAt.toISOString()!==input.plan_version) throw new BillingHttpError(412,"BILLING_PLAN_CHANGED","Plan changed; review its current price",instance);
+    if (!this.provider.changeConfiguredSubscription) throw new BillingHttpError(503,"BILLING_CHANGE_UNAVAILABLE","Configured subscription changes are unavailable",instance);
+    const claim=await this.repository.claimMutation(tenantId,actorRef,"change",ifMatch,definition);
+    const subscription=await this.provided(instance,()=>this.provider.changeConfiguredSubscription!(tenantId,claim.subscriptionRef!,definition.commercial!.razorpayPlanId!,
+      {internalPlanId:definition.plan,expectedTotalMinor:amounts.totalMinor,currency:amounts.currency}));
+    const profile=await this.repository.confirmMutationResponse(tenantId,actorRef,claim.mutationAttemptId!,subscription);
+    return profileView(subscription,profile);
   }
 
   async cancelSubscription(
     tenantId: string,
+    actorRef: string,
+    ifMatch: string | undefined,
   ): Promise<BillingSubscriptionView> {
     const instance = "/api/v1/billing/subscription";
+    const claim=await this.repository.claimMutation(tenantId,actorRef,"cancel",ifMatch);
     const subscription = await this.provided(instance, () =>
       this.provider.cancelSubscription(tenantId),
     );
-    const profile = await this.repository.syncSubscription(
-      tenantId,
-      subscription,
-    );
-    return view(subscription, profile.updatedAt);
+    const profile=await this.repository.confirmMutationResponse(tenantId,actorRef,claim.mutationAttemptId!,subscription);
+    return profileView(subscription,profile);
   }
 
   listInvoices(
@@ -166,4 +176,9 @@ function view(
   updatedAt: Date,
 ): BillingSubscriptionView {
   return { ...subscription, version: updatedAt.toISOString() };
+}
+
+function profileView(subscription: Subscription, profile: import("./types").BillingProfileRecord): BillingSubscriptionView {
+  return {...view({...subscription,planId:profile.currentPlan??subscription.planId,status:profile.status as Subscription["status"]},profile.updatedAt),
+    ...(profile.mutationKind ? {pendingOperation:profile.mutationKind}:{}),...(profile.pendingPlan?{pendingPlan:profile.pendingPlan}:{})};
 }

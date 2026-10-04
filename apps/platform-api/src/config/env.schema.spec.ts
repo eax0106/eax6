@@ -8,7 +8,9 @@ describe("platformApiEnvSchema", () => {
     const base = { DATABASE_URL: "postgres://localhost/platform_db", MARKETPLACE_DATABASE_URL: "postgres://localhost/platform_db",
       MARKETPLACE_SEARCH_CURSOR_SECRET: cursorSecret, SIGNING_KEY_PROVIDER: "mock", ENGINE_BASE_URL: "http://engine.test" };
     expect(() => validatePlatformApiEnv(base)).toThrow(/CONNECTION_REGISTRY_SERVICE_TOKEN_REF/);
-    expect(validatePlatformApiEnv({ ...base, CONNECTION_REGISTRY_SERVICE_TOKEN_REF: "env:CONNECTION_REGISTRY_SERVICE_TOKEN" }).ENGINE_BASE_URL).toBe(base.ENGINE_BASE_URL);
+    expect(() => validatePlatformApiEnv({ ...base, CONNECTION_REGISTRY_SERVICE_TOKEN_REF: "env:CONNECTION_REGISTRY_SERVICE_TOKEN" })).toThrow(/BILLING_SYNC_SERVICE_TOKEN_REF/);
+    expect(validatePlatformApiEnv({ ...base, CONNECTION_REGISTRY_SERVICE_TOKEN_REF: "env:CONNECTION_REGISTRY_SERVICE_TOKEN",
+      BILLING_SYNC_SERVICE_TOKEN_REF: "env:BILLING_SYNC_SERVICE_TOKEN" }).ENGINE_BASE_URL).toBe(base.ENGINE_BASE_URL);
   });
 
   it("requires a dedicated retention URL in real mode", () => {

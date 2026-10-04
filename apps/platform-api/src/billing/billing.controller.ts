@@ -118,22 +118,27 @@ export class BillingController {
   @Idempotent()
   changeSubscription(
     @Body() body: unknown,
+    @Headers("if-match") ifMatch: string | undefined,
     @ActorContext() actor: ActorContextType,
   ): Promise<BillingSubscriptionView> {
     return this.billing.changeSubscription(
       actor.tenant_id,
       parseChangeSubscription(body, "/api/v1/billing/subscription"),
+      actor.user_id,
+      ifMatch,
     );
   }
 
   @Delete("subscription")
   @RequireTenantRole("owner")
   @RequirePermission("billing:write")
+  @EtagConstrained()
   @Idempotent()
   cancelSubscription(
+    @Headers("if-match") ifMatch: string | undefined,
     @ActorContext() actor: ActorContextType,
   ): Promise<BillingSubscriptionView> {
-    return this.billing.cancelSubscription(actor.tenant_id);
+    return this.billing.cancelSubscription(actor.tenant_id,actor.user_id,ifMatch);
   }
 
   @Get("invoices")

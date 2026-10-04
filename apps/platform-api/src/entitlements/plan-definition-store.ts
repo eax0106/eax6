@@ -2,11 +2,24 @@ import { randomUUID } from "node:crypto";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import { PlanCommercialSchema, type PlanCommercial } from "./plan-commercial";
 import type { Pool } from "pg";
+import { computeEtag,ifMatchIncludes } from "../concurrency/etag";
 import { ENTITLEMENT_LIMIT_KEYS, type EntitlementLimits } from "./types";
 
 export const PLAN_DEFINITION_STORE = Symbol("PLAN_DEFINITION_STORE");
 
 export type PlanDefinitionAuditAction = "created" | "updated" | "deleted";
+
+export interface PlanDefinitionWriteOptions {
+  ifMatch: string;
+  beforeCommit?: (created: boolean) => Promise<unknown>;
+}
+export interface PlanDefinitionDeleteOptions extends PlanDefinitionWriteOptions {
+  staffUserId: string;
+  auditReason: string;
+}
+export class PlanDefinitionPreconditionError extends Error {
+  constructor(readonly status: 428 | 412) {super(status===428?"If-Match header is required":"Plan definition changed; refresh its current version");}
+}
 
 export interface PlanDefinitionRecord {
   plan: string;
@@ -44,8 +57,9 @@ export interface PlanDefinitionStore {
     staffUserId: string,
     commercial?: PlanCommercial | null,
     auditReason?: string,
+    options?: PlanDefinitionWriteOptions,
   ): Promise<{ record: PlanDefinitionRecord; created: boolean }>;
-  remove(plan: string): Promise<boolean>;
+  remove(plan: string,options?: PlanDefinitionDeleteOptions): Promise<boolean>;
   recordAudit(
     plan: string,
     action: PlanDefinitionAuditAction,
@@ -110,11 +124,18 @@ export class PostgresPlanDefinitionStore
     staffUserId: string,
     commercial?: PlanCommercial | null,
     auditReason?: string,
+    options?: PlanDefinitionWriteOptions,
   ): Promise<{ record: PlanDefinitionRecord; created: boolean }> {
     const configured = commercial === undefined ? undefined : commercial === null ? null : PlanCommercialSchema.parse(commercial);
-    const client = auditReason ? await this.pool.connect() : this.pool;
+    const transactional=Boolean(auditReason || options);
+    const client = transactional ? await this.pool.connect() : this.pool;
     try {
-      if (auditReason) await client.query("BEGIN");
+      if (transactional) await client.query("BEGIN");
+      if(options){
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`plan-definition:${plan}`]);
+        const locked=await client.query<PlanDefinitionRow>("SELECT * FROM plan_definitions WHERE plan=$1 FOR UPDATE",[plan]);
+        assertPlanPrecondition(options.ifMatch,locked.rows[0]);
+      }
       const result = await client.query<PlanDefinitionRow & { created: boolean }>(
         `INSERT INTO plan_definitions (plan, limits, updated_by, commercial)
          VALUES ($1, $2::jsonb, $3, $4::jsonb)
@@ -134,18 +155,36 @@ export class PostgresPlanDefinitionStore
           [`pda_${randomUUID()}`, plan, row.created ? "created" : "updated", JSON.stringify(limits), auditReason,
             staffUserId, record.commercial ? JSON.stringify(record.commercial) : null],
         );
-        await client.query("COMMIT");
       }
+      await options?.beforeCommit?.(row.created);
+      if(transactional)await client.query("COMMIT");
       return { record, created: row.created };
     } catch (error) {
-      if (auditReason) await client.query("ROLLBACK");
+      if (transactional) await client.query("ROLLBACK");
       throw error;
     } finally {
       if ("release" in client) client.release();
     }
   }
 
-  async remove(plan: string): Promise<boolean> {
+  async remove(plan: string,options?: PlanDefinitionDeleteOptions): Promise<boolean> {
+    if(options){
+      const client=await this.pool.connect();
+      try{
+        await client.query("BEGIN");
+        await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))",[`plan-definition:${plan}`]);
+        const locked=await client.query<PlanDefinitionRow>("SELECT * FROM plan_definitions WHERE plan=$1 FOR UPDATE",[plan]);
+        assertPlanPrecondition(options.ifMatch,locked.rows[0]);
+        if(!locked.rows[0]){await client.query("COMMIT");return false;}
+        const record=mapRow(locked.rows[0]);
+        await client.query("DELETE FROM plan_definitions WHERE plan=$1",[plan]);
+        await client.query(`INSERT INTO plan_definition_audit(id,plan,action,limits,commercial,reason,staff_user_id)
+          VALUES($1,$2,'deleted',$3::jsonb,$4::jsonb,$5,$6)`,[`pda_${randomUUID()}`,plan,JSON.stringify(record.limits),
+          record.commercial?JSON.stringify(record.commercial):null,options.auditReason,options.staffUserId]);
+        await options.beforeCommit?.(false);
+        await client.query("COMMIT");return true;
+      }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+    }
     const result = await this.pool.query(
       `DELETE FROM plan_definitions WHERE plan = $1`,
       [plan],
@@ -200,6 +239,11 @@ export class PostgresPlanDefinitionStore
   async onModuleDestroy(): Promise<void> {
     if (this.closePoolOnDestroy) await this.pool.end();
   }
+}
+
+function assertPlanPrecondition(ifMatch: string,row: PlanDefinitionRow | undefined): void {
+  if(!ifMatch)throw new PlanDefinitionPreconditionError(428);
+  if(!ifMatchIncludes(ifMatch,computeEtag({},row?.updated_at.toISOString()??"absent")))throw new PlanDefinitionPreconditionError(412);
 }
 
 function mapRow(row: PlanDefinitionRow): PlanDefinitionRecord {
