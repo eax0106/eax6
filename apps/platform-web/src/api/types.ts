@@ -1185,7 +1185,7 @@ export interface AdminTenant {
   // Live mode fills only what platform-api serves (task B1.1); the counts,
   // spend and slug are demo-mode data with no backend yet.
   slug?: string;
-  status: "active" | "suspended" | "restricted" | "trial" | "closed";
+  status: "active" | "suspended" | "trial" | "closed";
   plan?: string;
   memberCount?: number;
   workflowCount?: number;
@@ -1194,7 +1194,6 @@ export interface AdminTenant {
   createdAt: string;
   lastActiveAt?: string;
   region?: string;
-  riskState?: "normal" | "review" | "restricted";
 }
 
 export interface AdminUser {
@@ -1205,8 +1204,6 @@ export interface AdminUser {
   tenantIds: string[];
   createdAt: string;
   lastActiveAt?: string;
-  mfaEnabled?: boolean;
-  riskState?: "normal" | "review" | "restricted";
 }
 
 export interface AdminNote {
@@ -1258,7 +1255,7 @@ export interface ProviderDefinition {
   id: string;
   name: string;
   type: "model" | "compute" | "storage" | "email" | "messaging" | "other";
-  status: "healthy" | "degraded" | "outage" | "maintenance" | "disabled";
+  status: "healthy" | "degraded" | "outage" | "disabled";
   enabled: boolean;
   lastCheckedAt?: string;
   latencyMs?: number;

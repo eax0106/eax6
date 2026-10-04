@@ -27,20 +27,18 @@ export function UserList() {
               <TableHead className="text-slate-400">Name / Email</TableHead>
               <TableHead className="text-slate-400">Status</TableHead>
               <TableHead className="text-slate-400">Tenants</TableHead>
-              <TableHead className="text-slate-400">MFA</TableHead>
-              <TableHead className="text-slate-400 text-right">Risk</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={3} className="h-24 text-center text-slate-500">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto" />
                 </TableCell>
               </TableRow>
             ) : users?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={3} className="h-24 text-center text-slate-500">
                   No users found.
                 </TableCell>
               </TableRow>
@@ -60,14 +58,6 @@ export function UserList() {
                   </TableCell>
                   <TableCell>
                     <span className="text-slate-300">{u.tenantIds.length}</span>
-                  </TableCell>
-                  <TableCell>
-                    <span className={u.mfaEnabled === undefined ? "text-slate-500" : u.mfaEnabled ? "text-emerald-400" : "text-amber-400"}>
-                      {u.mfaEnabled === undefined ? "—" : u.mfaEnabled ? "Enabled" : "Disabled"}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {u.riskState ? <StatusBadge status={u.riskState} /> : <span className="text-slate-500">—</span>}
                   </TableCell>
                 </TableRow>
               ))

@@ -45,12 +45,4 @@ export class ProvidersService {
     return p
   }
 
-  async markMaintenance(id: string): Promise<ProviderDefinition> {
-    if (isLiveApi) throw new Error("Maintenance mode is not available: platform-api has no provider maintenance state")
-    await delay(400)
-    const p = MOCK_PROVIDERS.find(p => p.id === id)
-    if (!p) throw new Error("Not found")
-    p.status = "maintenance"
-    return p
-  }
 }
