@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { api } from "./client"
 describe("mock invitation lifecycle", () => {
   it("persists invitations only in selected workspace and changes versions on resend/revoke", async () => {
@@ -16,6 +16,20 @@ describe("mock invitation lifecycle", () => {
     const [revoked] = await api.getInvitations(workspace)
     expect(revoked!.status).toBe("revoked")
     await expect(api.resendInvite(workspace, invitation.id, revoked!.etag)).rejects.toThrow("cannot be resent")
+  })
+  it("uses one clock reading for invitation creation and expiry even when time advances", async () => {
+    const RealDate = Date
+    let tick = RealDate.parse("2026-10-05T00:00:00Z")
+    class AdvancingDate extends RealDate {
+      constructor(value?: string | number) { super(value ?? tick++) }
+      static now() { return tick++ }
+    }
+    vi.stubGlobal("Date", AdvancingDate)
+    try {
+      const invitation = await api.inviteMember("clock-boundary", "clock@acme.test", "viewer")
+      expect(invitation.updatedAt).toBe(invitation.createdAt)
+      expect(Date.parse(invitation.expiresAt) - Date.parse(invitation.createdAt)).toBe(7 * 86400000)
+    } finally { vi.unstubAllGlobals() }
   })
   it("persists fixed roles/removal and protects owner without changing another workspace", async () => {
     const workspace = "mock-role-lifecycle"
