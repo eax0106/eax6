@@ -4,8 +4,7 @@ import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Loader2, Plus } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 export function PoliciesList() {
   const { data: policies, isLoading } = useQuery({
@@ -18,9 +17,8 @@ export function PoliciesList() {
       <div className="flex items-center justify-between">
         <PageHeader 
           title="Platform Policies"
-          description="Manage global and tenant-specific platform policies."
+          description="Review configured platform policies. Changes go through reviewed configuration."
         />
-        <Button disabled><Plus className="w-4 h-4 mr-2" /> New Policy</Button>
       </div>
 
       <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
@@ -49,7 +47,7 @@ export function PoliciesList() {
               </TableRow>
             ) : (
               policies?.map((p) => (
-                <TableRow key={p.id} className="border-slate-800 hover:bg-slate-800/50 cursor-pointer">
+                <TableRow key={p.id} className="border-slate-800 hover:bg-slate-800/50">
                   <TableCell>
                     <div className="font-medium text-slate-200">{p.name}</div>
                     <div className="text-xs text-slate-500">{p.description}</div>

@@ -30,8 +30,8 @@ describe("live admin users", () => {
     fetchMock.mockResolvedValue(Response.json([row]))
     const [user] = await listUsers()
     expect(user).toMatchObject({ name: "person@example.com", tenantIds: ["t1", "t2"], status: "active" })
-    expect(user!.mfaEnabled).toBeUndefined()
-    expect(user!.riskState).toBeUndefined()
+    expect(user).not.toHaveProperty("mfaEnabled")
+    expect(user).not.toHaveProperty("riskState")
   })
 
   it("sends the reason with a suspension and a session revocation", async () => {

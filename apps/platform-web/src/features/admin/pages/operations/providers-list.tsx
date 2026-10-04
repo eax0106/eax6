@@ -1,12 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { isLiveApi } from "@/api/http"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Loader2, Power, PowerOff, ShieldAlert } from "lucide-react"
+import { Loader2, Power, PowerOff } from "lucide-react"
 
 export function ProvidersList() {
   const queryClient = useQueryClient()
@@ -23,11 +22,6 @@ export function ProvidersList() {
 
   const disableMutation = useMutation({
     mutationFn: (id: string) => api.admin.providers.disable(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.providers.list })
-  })
-
-  const markMaintenanceMutation = useMutation({
-    mutationFn: (id: string) => api.admin.providers.markMaintenance(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.providers.list })
   })
 
@@ -97,18 +91,6 @@ export function ProvidersList() {
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      {/* Live: platform-api has no maintenance state (B1.7). */}
-                      {!isLiveApi && p.status !== "maintenance" && (
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          title="Mark for Maintenance"
-                          onClick={() => markMaintenanceMutation.mutate(p.id)}
-                          className="h-8 w-8 text-amber-400 hover:bg-amber-400/10 hover:text-amber-300"
-                        >
-                          <ShieldAlert className="w-4 h-4" />
-                        </Button>
-                      )}
                       {p.enabled ? (
                         <Button 
                           variant="ghost" 

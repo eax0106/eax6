@@ -10,8 +10,7 @@ import { getStaffSession } from "@/api/staff-auth"
 import { Card } from "@/components/ui/card"
 import { StatusBadge } from "@/components/common/status-badge"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Users, Activity, AlertTriangle, Shield, CheckCircle2 } from "lucide-react"
+import { Loader2, ArrowLeft, Users, Activity, Shield, CheckCircle2 } from "lucide-react"
 
 export function TenantDetail() {
   const { tenantId } = useParams<{ tenantId: string }>()
@@ -90,12 +89,6 @@ export function TenantDetail() {
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
             {tenant.name}
             <StatusBadge status={tenant.status} />
-            {tenant.riskState && tenant.riskState !== "normal" && (
-              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                Risk: {tenant.riskState}
-              </Badge>
-            )}
           </h1>
           <p className="text-slate-400 mt-1">ID: {tenant.id}{tenant.slug ? ` • Slug: ${tenant.slug}` : ""}</p>
         </div>
