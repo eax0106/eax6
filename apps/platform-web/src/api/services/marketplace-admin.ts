@@ -36,27 +36,14 @@ const MOCK_REVIEWS: MarketplaceReviewItem[] = [
   { id: "mrev-3", listingName: "Support Bot Pro", sellerName: "Acme AI", assetType: "agent", risk: "medium", status: "approved", submittedAt: "2024-06-15T00:00:00Z", reviewer: { id: "u-sys", name: "System Admin" } }
 ]
 
-export interface ToolVersionReviewItem {
-  manifestId: string
-  tenantId: string
-  name: string
-  version: {
-    id: string; version: string; artifactRef: string; capabilities: readonly string[]; permissions: readonly string[]
-    status: string; scanReportId?: string | null
-    review?: { scanReportId: string; decision: "approved" | "rejected"; reviewedBy: string; reviewedAt: string; reason: string } | null
-  }
-  scan: {
-    id: string; verdict: "clean" | "findings" | "blocked" | "errored" | "unavailable"
-    findings: readonly { rule: string; severity: "info" | "low" | "medium" | "high" | "critical"; locator: string; detail: string }[]
-    scannerVersion: string; durationMs: number; scannedAt: string
-  }
-}
+import type { ToolVersionReviewItem } from "@alterx/shared-clients"
+export type { ToolVersionReviewItem } from "@alterx/shared-clients"
 
 export class MarketplaceAdminService {
   private readonly toolVersions: ToolVersionReviewItem[] = [{
     manifestId: "tlm_demo", tenantId: "ten_demo", name: "Demo CRM connector",
-    version: { id: "tlv_demo", version: "1.0.0", artifactRef: "s3://demo/connector.tgz?versionId=demo", capabilities: ["crm.read"], permissions: ["crm.contacts.read"], status: "review_pending", scanReportId: "scn_demo" },
-    scan: { id: "scn_demo", verdict: "clean", findings: [], scannerVersion: "demo", durationMs: 50, scannedAt: "2026-10-04T00:00:00.000Z" },
+    version: { id: "tlv_demo", manifestId: "tlm_demo", pinned: false, publishedAt: null, version: "1.0.0", artifactRef: "s3://demo/connector.tgz?versionId=demo", capabilities: ["crm.read"], permissions: ["crm.contacts.read"], status: "review_pending", scanReportId: "scn_demo" },
+    scan: { id: "scn_demo", toolVersionId: "tlv_demo", verdict: "clean", findings: [], scannerVersion: "demo", durationMs: 50, scannedAt: "2026-10-04T00:00:00.000Z" },
   }]
 
   async toolVersionReviewQueue(): Promise<ToolVersionReviewItem[]> {
@@ -78,9 +65,12 @@ export class MarketplaceAdminService {
       return structuredClone(current.version)
     }
     if (current.version.status !== "review_pending" || current.scan.verdict !== "clean" || current.scan.findings.length) throw new Error("Staff approval requires a complete clean scan")
-    current.version.status = decision === "approved" ? "published" : "scan_failed"
-    current.version.review = { scanReportId: item.scan.id, decision, reason: reason.trim(), reviewedBy: "stf_demo", reviewedAt: new Date().toISOString() }
-    return structuredClone(current.version)
+    const updated: ToolVersionReviewItem["version"] = { ...current.version,
+      status: decision === "approved" ? "published" : "scan_failed",
+      review: { scanReportId: item.scan.id, decision, reason: reason.trim(), reviewedBy: "stf_demo", reviewedAt: new Date().toISOString() },
+    }
+    this.toolVersions[this.toolVersions.indexOf(current)] = { ...current, version: updated }
+    return structuredClone(updated)
   }
 
   async reviewQueue(): Promise<MarketplaceReviewItem[]> {

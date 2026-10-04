@@ -7,7 +7,7 @@ vi.mock("./http", async (importOriginal) => ({
 
 import { listBillingIssues, listMarketplaceReviews, listSellerVerifications, reviewMarketplaceItem, reviewSellerVerification, listToolVersionReviews, reviewToolVersion } from "./live-admin-commerce"
 import { BillingOpsService } from "./services/billing-ops"
-import { MarketplaceAdminService } from "./services/marketplace-admin"
+import { MarketplaceAdminService, type ToolVersionReviewItem } from "./services/marketplace-admin"
 
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
@@ -96,7 +96,7 @@ describe("live admin marketplace and billing (B2.1, B2.2)", () => {
 
 
 describe("live first-tool-version review", () => {
-  const item = { manifestId: "tlm_manifest", tenantId: "ten_owner", name: "CRM", version: { id: "tlv_version", version: "1.0.0", artifactRef: "s3://fixture", capabilities: [], permissions: [], status: "review_pending", scanReportId: "scn_current" }, scan: { id: "scn_current", verdict: "clean" as const, findings: [], scannerVersion: "OSV-Scanner v2.6.0", durationMs: 1, scannedAt: "2026-10-04T00:00:00.000Z" } }
+  const item: ToolVersionReviewItem = { manifestId: "tlm_manifest", tenantId: "ten_owner", name: "CRM", version: { id: "tlv_version", manifestId: "tlm_manifest", pinned: false, publishedAt: null, version: "1.0.0", artifactRef: "s3://fixture", capabilities: [], permissions: [], status: "review_pending", scanReportId: "scn_current" }, scan: { id: "scn_current", toolVersionId: "tlv_version", verdict: "clean" as const, findings: [], scannerVersion: "OSV-Scanner v2.6.0", durationMs: 1, scannedAt: "2026-10-04T00:00:00.000Z" } }
   it("loads the exact scan and submits only decision, report and reason using staff cookies", async () => {
     fetchMock.mockResolvedValueOnce(Response.json([item]))
     expect(await listToolVersionReviews()).toEqual([item])

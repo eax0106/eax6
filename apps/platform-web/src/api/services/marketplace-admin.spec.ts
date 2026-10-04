@@ -16,7 +16,7 @@ describe("mock tool-version review mirrors live decisions", () => {
   })
   it("rejects without publishing and returns queue snapshots that cannot change authoritative state", async () => {
     const service = new MarketplaceAdminService(), [item] = await service.toolVersionReviewQueue()
-    item!.version.status = "published"
+    Object.assign(item!.version, { status: "published" })
     expect((await service.toolVersionReviewQueue())[0]!.version.status).toBe("review_pending")
     const result = await service.reviewToolVersion(item!, "rejected", "Package documentation insufficient")
     expect(result.status).toBe("scan_failed")

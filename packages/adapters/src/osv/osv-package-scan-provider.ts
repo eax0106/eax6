@@ -50,7 +50,7 @@ export function parseOsvScanOutput(raw: string, exit: number, root: string, ecos
 }
 
 export class OsvPackageScanProvider implements PackageScanProvider {
-  constructor(private readonly artifacts: PackageArtifactReader, private readonly executable = "osv-scanner") {}
+  constructor(private readonly artifacts: PackageArtifactReader, private readonly executable = "osv-scanner", private readonly executableSearchPath?: string) {}
 
   async scanPackage(request: PackageScanRequest): Promise<PackageScanReport> {
     const started = performance.now();
@@ -71,7 +71,7 @@ export class OsvPackageScanProvider implements PackageScanProvider {
         paths.push(path);
       }
       // No inherited service credentials or package-provided scanner configuration.
-      const options = { cwd: directory, env: { PATH: process.env["PATH"], HOME: directory }, timeout: 120_000, maxBuffer: 8 * 1024 * 1024, encoding: "utf8" as const };
+      const options = { cwd: directory, env: { ...(this.executableSearchPath === undefined ? {} : { PATH: this.executableSearchPath }), HOME: directory }, timeout: 120_000, maxBuffer: 8 * 1024 * 1024, encoding: "utf8" as const };
       const version = await execute(this.executable, ["--version"], options);
       const parsedVersion = /^osv-scanner version: (2\.\d+\.\d+)$/m.exec(version.stdout);
       if (!parsedVersion) throw new Error("OSV-Scanner v2 is required");

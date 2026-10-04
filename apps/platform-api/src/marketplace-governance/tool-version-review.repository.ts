@@ -4,9 +4,8 @@ import type { ToolVersion, ScanReport } from "../registry/types";
 import { registryVersionResource, type RegistryVersionRow } from "../registry/registry.repository";
 import { MarketplaceGovernanceHttpError } from "./problem";
 
-export interface ToolVersionReviewItem {
-  manifestId: string; tenantId: string; name: string; version: ToolVersion; scan: ScanReport;
-}
+import type { ToolVersionReviewItem } from "@alterx/shared-clients";
+
 export interface ToolVersionReviewInput { scanReportId: string; decision: "approved" | "rejected"; reason: string }
 
 @Injectable()

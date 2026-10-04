@@ -348,4 +348,4 @@ export {
   type MockSpeechToTextProvider,
   type MockSpeechToTextProviderOptions,
 } from "./mocks/speech-to-text-provider";
-export type { PackageEcosystem, PackageScanRequest, PackageScanReport, PackageScanProvider, ScanFinding, ScanSeverity, ScanVerdict } from "./package-scan";
+export type { PackageEcosystem, PackageScanRequest, PackageScanReport, PackageScanProvider, ScanFinding, ScanSeverity, ScanVerdict, RegistryToolVersion, RegistryScanReport, ToolVersionReviewItem } from "./package-scan";

@@ -1,6 +1,7 @@
 import { MiddlewareConsumer, Module, type NestModule } from "@nestjs/common";
 import { AdminAuditModule } from "../admin-audit";
 import { StaffAuthMiddleware, StaffModule } from "../staff";
+import { registryPackageScanConfiguration } from "../config/env.schema";
 import { sharedPool } from "../db/shared-pool";
 import { MarketplaceGovernanceController } from "./marketplace-governance.controller";
 import { MarketplaceGovernanceExceptionFilter } from "./marketplace-governance-exception.filter";
@@ -16,14 +17,12 @@ import { ToolVersionReviewService } from "./tool-version-review.service";
     {
       provide: MarketplaceGovernanceRepository,
       useFactory: () => new MarketplaceGovernanceRepository(
-        process.env.OPERATIONS_MARKETPLACE_DATABASE_URL
-          ? sharedPool(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL)
-          : undefined,
+        operationsMarketplacePool(),
         false,
       ),
     },
     MarketplaceGovernanceService,
-    { provide: ToolVersionReviewRepository, useFactory: () => new ToolVersionReviewRepository(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL ? sharedPool(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL) : undefined,false) },
+    { provide: ToolVersionReviewRepository, useFactory: () => new ToolVersionReviewRepository(operationsMarketplacePool(),false) },
     ToolVersionReviewService,
     MarketplaceGovernanceExceptionFilter,
   ],
@@ -32,4 +31,9 @@ export class MarketplaceGovernanceModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
     consumer.apply(StaffAuthMiddleware).forRoutes(MarketplaceGovernanceController);
   }
+}
+
+function operationsMarketplacePool() {
+  const { operationsDatabaseUrl } = registryPackageScanConfiguration();
+  return operationsDatabaseUrl ? sharedPool(operationsDatabaseUrl) : undefined;
 }
