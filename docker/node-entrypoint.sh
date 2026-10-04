@@ -1,8 +1,8 @@
 #!/bin/sh
 # Turns a service name into the command that service's Nx serve target runs, so
-# the nine Node services can share one image.
+# the ten Node services can share one image.
 #
-# Anything that is not one of the nine names is executed as given instead. That
+# Anything that is not one of the ten names is executed as given instead. That
 # keeps the image usable for the jobs that are not "serve a service": `sh` to
 # look around, and `pnpm --filter @alterx/platform-api db:migrate` to migrate a
 # schema, which is the reason the image keeps its dev dependencies at all.
@@ -12,7 +12,7 @@
 # src/tracing.ts today, and a list would go stale the first time a third does.
 set -eu
 
-SERVICES="audit-service background-workers cost-ledger-service model-gateway orchestration-service platform-api provisioning-service sandbox-service tool-gateway"
+SERVICES="audit-service background-workers cost-ledger-service model-gateway orchestration-service platform-api public-surface provisioning-service sandbox-service tool-gateway"
 
 is_service() {
   case " $SERVICES " in

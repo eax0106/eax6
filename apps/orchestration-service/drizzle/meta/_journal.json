@@ -372,6 +372,13 @@
       "when": 1787015642000,
       "tag": "0052_workflow_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1787015643000,
+      "tag": "0053_public_forms",
+      "breakpoints": true
     }
   ]
 }

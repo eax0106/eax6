@@ -14,6 +14,8 @@ import type {
   AuditEventHandler,
 } from "@alterx/shared-clients";
 import { replayActions, replayToken, storedReplayEvent, ReplayConfirmationError, type ReplayActor } from "../trigger-registry/event-replay.service";
+import type { BlackboardService } from "../blackboard/blackboard.service";
+import type { JsonValue } from "@alterx/shared-clients";
 import type { RunBudgetGate } from "../budgets/run-budget-gate";
 import type { RunOutcomeService } from "./run-outcome.service";
 import { DurableRunQueue } from "./durable-run-queue.service";
@@ -266,6 +268,7 @@ export class RunLauncherService {
     private readonly queue?: DurableRunQueue,
     private readonly budgetGate?: RunBudgetGate,
     private readonly audit?: AuditEventHandler,
+    private readonly triggerInput?: Pick<BlackboardService, "writeValue">,
   ) {}
 
   /**
@@ -956,6 +959,17 @@ export class RunLauncherService {
     const tenantIdWithPrefix = `ten_${tenantId}`;
     let handle: DurableWorkflowHandle;
     try {
+      let initialInputKey = row.replayed_from ? `replay.${row.id}` : undefined;
+      if (!initialInputKey && row.triggering_event_id && this.triggerInput) {
+        const event = await this.store.withTenant(tenantId, tx => tx.query<{ payload: JsonValue }>(
+          "SELECT payload FROM events WHERE tenant_id=$1 AND event_id=$2 AND source='alter.public-form' AND event_type='public_form.submitted'",
+          [tenantId, row.triggering_event_id],
+        ));
+        if (event.rows[0]) {
+          initialInputKey = `form.${row.id}`;
+          await this.triggerInput.writeValue({ tenantId: tenantIdWithPrefix, runId: row.id, key: initialInputKey, value: event.rows[0].payload });
+        }
+      }
       handle = await this.durable.startWorkflow({
         workflowId: row.id,
         workflowType: EXECUTOR_WORKFLOW_TYPE,
@@ -963,7 +977,7 @@ export class RunLauncherService {
           tenantId: tenantIdWithPrefix,
           runId: row.id,
           compiledDagJson: JSON.stringify(compiledDag),
-          ...(row.replayed_from ? { initialInputKey: `replay.${row.id}` } : {}),
+          ...(initialInputKey ? { initialInputKey } : {}),
         },
         executionTimeout: temporalDurationUntil(row.deadline_at),
       });

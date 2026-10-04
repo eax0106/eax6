@@ -29,6 +29,7 @@ export interface EngineResponse<TBody> {
 
 export interface EngineMutationOptions {
   idempotencyKey: string;
+  ifMatch?: string;
   /**
    * Overrides the client's default request timeout for one call. Only routes
    * that wait on the planner set it; everything else keeps the short default,

@@ -2971,6 +2971,15 @@ def test_tenant_isolation_golden_set_executes_for_real_where_wired(
         project_client,
     )
 
+    # Positive controls ensure the disclosed caller's current workspace reaches
+    # the real lookup. A blanket authorization/not-found response must fail.
+    own_run = run_visibility_client.seed_cross_tenant_run(
+        other_tenant_uuid=_EVAL_RUN_VISIBILITY_TENANT_ID.removeprefix("ten_")
+    )
+    assert run_visibility_client.get(f"/api/v1/runs/{own_run}/node-executions").status_code == 200
+    with run_visibility_client.stream("GET", f"/api/v1/runs/{own_run}/stream") as response:
+        assert response.status_code == 200
+
     try:
         summary = orchestrator.run("tenant-isolation", trigger="manual")
     finally:
@@ -3039,7 +3048,9 @@ def test_tenant_isolation_golden_set_executes_for_real_where_wired(
         # available. All 20 of 20 tenant-isolation cases HARD-7g targeted are
         # real; two of the 20 additionally need a live key, below.
         assert len(real_results) == 18
-        assert all(row.verdict == "pass" for row in real_results)
+        assert all(row.verdict == "pass" for row in real_results), [
+            row.details.get("operation") for row in real_results if row.verdict != "pass"
+        ]
 
         # Two operations are real but, like injection's LLM-dependent suites,
         # need a real live ANTHROPIC_API_KEY/OPENAI_API_KEY before they can

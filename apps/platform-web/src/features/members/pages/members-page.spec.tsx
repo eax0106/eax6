@@ -67,7 +67,7 @@ describe("live members UI", () => {
     renderPage(); await userEvent.click(screen.getByText("Select A"))
     expect(await screen.findByText(/delivery failed/)).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "Resend invitation" }))
-    expect(await screen.findByText(/approver · pending/)).toBeTruthy()
+    expect(await screen.findByText(/approver · Invited \(pending\)/)).toBeTruthy()
     await userEvent.click(screen.getByRole("button", { name: "Revoke invitation" }))
     expect(await screen.findByText(/approver · revoked/)).toBeTruthy()
     expect(calls.filter(call => call.method !== "GET").map(call => [call.method, call.etag])).toEqual([["POST", '"i1"'], ["DELETE", '"i2"']])

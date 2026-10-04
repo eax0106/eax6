@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import type { FastifyReply } from "fastify";
+import type { HostedFormSetup } from "@alterx/contracts";
 import { EtagConstrained, EtagResponseInterceptor } from "../concurrency";
 import type { EngineResponse } from "../engine";
 import { Idempotent } from "../idempotency";
@@ -46,6 +47,27 @@ const privilegedRoles = ["admin"] as const;
 @UseFilters(TriggerExceptionFilter)
 export class TriggerController {
   constructor(private readonly triggers: TriggerService) {}
+
+  @Get(":id/public-form")
+  @RequireWorkspaceRole(...readRoles)
+  @RequirePermission("workflows:read")
+  async publicForm(@Param("id") id: string, @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined, @Res({ passthrough: true }) reply: FastifyReply): Promise<HostedFormSetup> {
+    const instance = `/api/v1/triggers/${id}/public-form`;
+    return project(await this.triggers.publicForm(id, requireActor(actor, instance), traceparent), reply);
+  }
+
+  @Patch(":id/public-form/status")
+  @RequireWorkspaceRole(...privilegedRoles)
+  @RequirePermission("workflows:deploy")
+  @Idempotent()
+  async publicFormStatus(@Param("id") id: string, @Body() body: unknown, @ActorContext() actor: ActorContextType | undefined,
+    @Headers("traceparent") traceparent: string | undefined, @Headers("idempotency-key") idempotencyKey: string | undefined,
+    @Headers("if-match") ifMatch: string | undefined, @Res({ passthrough: true }) reply: FastifyReply): Promise<Trigger> {
+    const instance = `/api/v1/triggers/${id}/public-form/status`;
+    if (!ifMatch) throw new TriggerHttpError(428, "PRECONDITION_REQUIRED", "If-Match is required", instance);
+    return project(await this.triggers.setPublicFormStatus(id, parseSetTriggerStatus(body, instance), requireActor(actor, instance), traceparent, idempotencyKey!, ifMatch), reply);
+  }
 
   @Post()
   @HttpCode(201)
@@ -119,6 +141,7 @@ export class TriggerController {
     @Headers("traceparent") traceparent: string | undefined,
     @Headers("idempotency-key") idempotencyKey: string | undefined,
     @Res({ passthrough: true }) reply: FastifyReply,
+    @Headers("if-match") ifMatch?: string,
   ): Promise<TriggerVersion> {
     const instance = `/api/v1/triggers/${id}/versions`;
     return project(
@@ -128,6 +151,7 @@ export class TriggerController {
         requireActor(actor, instance),
         traceparent,
         idempotencyKey!,
+        ifMatch,
       ),
       reply,
     );

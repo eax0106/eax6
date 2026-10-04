@@ -50,7 +50,7 @@ export function MembersPage() {
       {invitations.isLoading && <p>Loading invitations…</p>}
       {invitations.data?.length === 0 && <p>No invitations.</p>}
       {invitations.data?.map(invitation => <div key={invitation.id} className="rounded-lg border border-border p-4 flex justify-between gap-4">
-        <div><p>{invitation.email}</p><p className="text-sm capitalize">{invitation.role} · {invitation.status.replace(/_/g, " ")}</p>
+        <div><p>{invitation.email}</p><p className="text-sm capitalize">{invitation.role} · {invitation.status === "pending" ? "Invited (pending)" : invitation.status.replace(/_/g, " ")}</p>
           <p className="text-xs text-text-secondary">Expires {new Date(invitation.expiresAt).toLocaleString()}</p></div>
         <InvitationActions invitation={invitation} workspaceId={workspaceId} />
       </div>)}

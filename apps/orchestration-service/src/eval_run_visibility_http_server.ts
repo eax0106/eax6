@@ -29,7 +29,7 @@ import { RunStreamEventService } from "./runs/run-stream-event.service";
  * seeded as "denied" before this fix; the real mechanism here is a
  * resource-visibility check, not an authorization denial).
  *
- * Production main.ts applies SessionGatewayGuard globally (APP_GUARD),
+ * Production main.ts applies Identity & Tenant Gateway globally (APP_GUARD),
  * which populates `request.actorContext` from a real, signed JWT --
  * that guard is not wired here (no real signing keys/JWKS reachable in
  * this environment). Instead, a real Fastify onRequest hook sets a
@@ -41,7 +41,7 @@ function evalAuthActorContext(tenantId: string): ActorContext {
     actor_type: "service",
     user_id: null,
     tenant_id: tenantId,
-    workspace_id: null,
+    workspace_id: `ws_${tenantId.slice("ten_".length)}`,
     roles: ["eval-harness"],
     permissions: ["*"],
     session_id: null,

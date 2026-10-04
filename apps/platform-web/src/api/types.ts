@@ -639,6 +639,7 @@ export type TriggerType = "manual" | "webhook" | "schedule" | "event" | "email"
 export type TriggerStatus = "configured" | "needs_configuration" | "error"
 
 export interface Trigger {
+  provider?: string | null
   id: string
   workflowId: string
   type: TriggerType

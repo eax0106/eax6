@@ -10,6 +10,7 @@ import {
 
 import { TriggerRegistryController } from "./trigger-registry/trigger-registry.controller";
 import { TriggerRegistryService } from "./trigger-registry/trigger-registry.service";
+import { loadPublicFormLinkEnvironment } from "./config/public-form-environment";
 import { TriggerEventDispatchService } from "./trigger-registry/trigger-event-dispatch.service";
 import { EventController } from "./trigger-registry/event.controller";
 import { EventQueryService } from "./trigger-registry/event-query.service";
@@ -115,6 +116,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
           store,
           undefined,
           durable as unknown as import("@alterx/shared-clients").CronScheduleManager,
+          loadPublicFormLinkEnvironment(),
         );
       },
     },

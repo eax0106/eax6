@@ -31,9 +31,9 @@ chmod +x "$work/stub/aws"
 docker run --rm -v "$work:/repo" -w /repo/deploy/ec2 -e PATH="/repo/stub:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
   -e HOST_UID="$(id -u)" -e HOST_GID="$(id -g)" \
   bash:5 bash -c 'apk add --no-cache openssl python3 >/dev/null; bash bootstrap.sh --env-only;
-    cp .db-roles.env .db-roles.first; bash bootstrap.sh --env-only;
+    cp .public-form.env .public-form.first; cp .db-roles.env .db-roles.first; bash bootstrap.sh --env-only;
     cp .session.env .session.first; bash bootstrap.sh --env-only;
-    chown "$HOST_UID:$HOST_GID" .env .env.base .db-roles.env .db-roles.first .session.env .session.first' >/dev/null
+    chown "$HOST_UID:$HOST_GID" .env .env.base .db-roles.env .db-roles.first .session.env .session.first .public-form.env .public-form.first' >/dev/null
 
 env_file="$work/deploy/ec2/.env"
 fail() { echo "FAIL $*"; exit 1; }
@@ -76,6 +76,11 @@ cmp -s "$work/deploy/ec2/.session.env" "$work/deploy/ec2/.session.first" || fail
 registry_hash="$(printf %s "$(value CONNECTION_REGISTRY_SERVICE_TOKEN)" | openssl dgst -sha256 -r | cut -d' ' -f1)"
 [[ "$(value CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256)" == "$registry_hash" ]] || fail "registry token fingerprint differs"
 [[ "$(stat -c %a "$roles_file" 2>/dev/null || stat -f %Lp "$roles_file")" == 600 ]] || fail ".db-roles.env is not 0600"
+[[ "$(value PUBLIC_SURFACE_DATABASE_URL)" == postgresql://public_surface:*@127.0.0.1:*/orchestration_db ]] || fail "Public Surface URL is not its dedicated role"
+[[ "$(value PUBLIC_FORM_TOKEN_KEY)" =~ ^[0-9a-f]{64}$ ]] || fail "form token key missing"
+[[ "$(value PUBLIC_FORM_BASE_URL)" == https://app.example.test ]] || fail "form origin differs from edge origin"
+[[ "$(value PUBLIC_SURFACE_REDIS_URL)" == "$(value REDIS_ENDPOINT)" ]] || fail "form rate store differs"
+cmp -s "$work/deploy/ec2/.public-form.env" "$work/deploy/ec2/.public-form.first" || fail "form credentials changed on re-run"
 # KEEP_ENV_AT=<path>: leave a copy of the generated .env for
 # check-production-config.ts (task 6.1d), which needs the repository's
 # dependencies and so runs on the host rather than in this container.
