@@ -80,6 +80,9 @@ describe("IdentityService", () => {
 
 function providerStub(): IdentityProvider {
   return {
+    createOrganizationInvitation: vi.fn().mockRejectedValue(new Error("Invitation unused by this session fixture")),
+    revokeOrganizationInvitation: vi.fn().mockRejectedValue(new Error("Invitation unused by this session fixture")),
+    requestPasswordReset: vi.fn().mockRejectedValue(new Error("Reset unused by this session fixture")),
     getOrCreateOrgForTenant: vi.fn(async () => "org"),
     loginRedirectUrl: vi.fn(async () => "https://identity.test"),
     handleCallback: vi.fn(async () => ({

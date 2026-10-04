@@ -4,6 +4,7 @@ import type {
   EngineEventStream,
   EngineSseMessage,
 } from "../engine";
+import { computeEtag } from "../concurrency";
 import { MembersService } from "../members/members.service";
 import type { ActorContext } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
@@ -44,14 +45,44 @@ describe("membership stream revocation", () => {
       sink: async () => undefined,
     });
     connection.start();
+    const row = {
+      id: "018f47a5-7b2c-7d10-8f11-123456789abe",
+      tenantId,
+      workspaceId: "018f47a5-7b2c-7d10-8f11-123456789abc",
+      userId: removedUserId,
+      role: "viewer",
+      scope: "workspace" as const,
+      email: "viewer@example.test",
+      name: "Viewer",
+      tenantOwner: false,
+    };
+    const query = vi.fn()
+      .mockResolvedValueOnce({ rows: [{ workspace_id: row.workspaceId }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{ organization: null }], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [{}], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [row], rowCount: 1 })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    let committed = false;
+    const publish = vi.spyOn(revocations, "publish");
+    revocations.subscribe(() => expect(committed).toBe(true));
+    const recordEvent = vi.fn().mockResolvedValue(undefined);
     const members = new MembersService(
       {
-        queryTenant: vi.fn().mockResolvedValue([{ userId: removedUserId }]),
+        withTenant: async (_tenant: string, operation: (client: unknown) => Promise<unknown>) => {
+          const result = await operation({ query });
+          committed = true;
+          return result;
+        },
       } as unknown as PlatformDb,
       revocations,
+      { recordEvent, getEvent: vi.fn() },
     );
 
-    await members.remove(adminActor(), "membership-id", "workspace");
+    await members.remove(adminActor(), row.id, "workspace", computeEtag(row));
+    expect(recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      action: "workspace.member.removed", target_ref: row.id,
+    }));
+    expect(publish).toHaveBeenCalledWith({ tenantId, userId: removedUserId });
     await connection.closed;
 
     expect(close).toHaveBeenCalledOnce();

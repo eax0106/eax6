@@ -4,6 +4,7 @@ import type { IssuedSession } from "../identity/identity.service";
 import type { MintedActorToken } from "../identity-broker/actor-token.types";
 
 export interface SignupRequest {
+  invitation?: string;
   code: string;
   redirectUri: string;
   codeVerifier: string;

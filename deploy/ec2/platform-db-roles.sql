@@ -50,7 +50,7 @@ BEGIN
     EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', target);
     EXECUTE format('REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM %I', target);
     FOREACH signature IN ARRAY CASE WHEN target = 'platform_app'
-      THEN ARRAY['public.resolve_existing_signup(text,uuid)']
+      THEN ARRAY['public.resolve_existing_signup(text,uuid)', 'public.resolve_workspace_invitation(text,text,text)', 'public.resolve_existing_organization_member(text,text)']
       ELSE ARRAY['public.admin_list_tenants()', 'public.admin_list_users(uuid)',
                  'public.admin_revoke_user_sessions(uuid)', 'public.admin_list_billing_issues()']
     END LOOP

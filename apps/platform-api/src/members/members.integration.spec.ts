@@ -77,8 +77,8 @@ describe.skipIf(!databaseUrl)("MembersService list, PostgreSQL", () => {
     const members = await service.list({ user_id: mine.userId, tenant_id: mine.tenantId, roles: ["owner"], permissions: [], session_id: "s" });
 
     expect(members.map((member) => [member.scope, member.role, member.email, member.name])).toEqual([
-      ["tenant", "owner", "owner@acme.test", "Ada Owner"],
       ["workspace", "admin", "owner@acme.test", "Ada Owner"],
     ]);
+    expect(members[0]).toMatchObject({ tenantOwner: true, userId: mine.userId, etag: expect.any(String) });
   });
 });

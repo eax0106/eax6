@@ -1,50 +1,40 @@
-# Gates: D16 optional hosted public form (C120)
+# Gates: D7 workspace invitations and fixed roles (C121)
 
-OWNS: apps/orchestration-service/src/eval_run_visibility_http_server.ts, apps/eval-service/tests/test_orchestrator_integration.py, apps/platform-api/src/engine/engine-client.ts, apps/platform-api/src/engine/engine-client.spec.ts, apps/platform-api/src/engine/types.ts, scripts/check-architecture-boundaries.sh, docker-compose.yml, .env.local.example, infrastructure/ec2-mvp/**, apps/orchestration-service/src/runs/run-launcher.service.ts, apps/orchestration-service/src/run-launcher.module.ts, apps/background-workers/src/canonical-events/public-form-native-driver.ts, apps/platform-web/src/api/hosted-form-mock.spec.ts, packages/adapters/src/redis/public-form-receipt-store.ts, packages/adapters/src/redis/public-form-receipt-store.spec.ts, apps/orchestration-service/src/config/public-form-environment.ts, apps/orchestration-service/src/ingress.module.ts, apps/orchestration-service/src/database/migration-files.spec.ts, packages/auth/src/public-form-token.ts, packages/auth/src/public-form-token.spec.ts, packages/auth/src/index.ts, apps/public-surface/**, packages/contracts/src/public-forms.ts, packages/contracts/src/public-forms.spec.ts, packages/contracts/src/index.ts, packages/contracts/src/triggers.ts, packages/shared-clients/src/public-forms.ts, packages/shared-clients/src/index.ts, packages/adapters/src/cloudflare/**, packages/adapters/src/redis/public-form-rate-limiter.ts, packages/adapters/src/redis/public-form-rate-limiter.spec.ts, packages/adapters/src/index.ts, apps/orchestration-service/src/trigger-registry/**, apps/orchestration-service/drizzle/0053_public_forms.sql, apps/orchestration-service/drizzle/rollback/0053_drop_public_forms.sql, apps/orchestration-service/drizzle/meta/_journal.json, apps/platform-api/src/triggers/**, apps/platform-web/src/api/live.ts, apps/platform-web/src/api/client.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/live-triggers.spec.ts, apps/platform-web/src/features/triggers/components/**, docker/Dockerfile.node, docker/node-entrypoint.sh, docker/README.md, deploy/ec2/**, infrastructure/local/engine-db-init.sh, infrastructure/terraform/**, scripts/check-engine-db-runtime-roles.sh, scripts/check-engine-test-discovery.mjs, scripts/gates/baseline.json, pnpm-lock.yaml, docs/public-forms.md, docs/work-queue.md
+OWNS: tests/integration/rbac/workspace-invitations.spec.ts, apps/platform-api/src/streaming/membership-revocation.integration.spec.ts, apps/platform-api/src/members/**, apps/platform-api/src/identity/**, apps/platform-api/src/signup/**, apps/platform-api/src/config/env.schema.ts, apps/platform-api/src/config/env.schema.spec.ts, apps/platform-api/src/db/migrations/0033_workspace_invitations.sql, apps/platform-api/src/db/migrations/rollback/0033_drop_workspace_invitations.sql, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-api/src/db/schema/**, apps/platform-api/src/db/db.migration.spec.ts, apps/platform-api/src/db/platform-db-schema-completeness.spec.ts, apps/platform-api/project.json, apps/platform-api/src/deletion/**, apps/platform-api/src/workspaces/**, packages/deletion-registry/src/**, apps/platform-web/src/api/**, apps/platform-web/src/features/members/**, apps/platform-web/src/features/settings/pages/security-settings.tsx, apps/platform-web/src/features/settings/pages/security-settings.spec.tsx, apps/platform-web/src/features/auth/**, apps/platform-web/src/layout/workspace-switcher.tsx, apps/platform-web/src/features/permissions/**, apps/platform-web/src/features/events/pages/event-detail.spec.tsx, apps/platform-web/src/features/connections/pages/whatsapp-channel.spec.tsx, apps/platform-web/src/features/roles/**, docs/members.md, docs/work-queue.md, scripts/gates/baseline.json, deploy/ec2/**, .env.local.example
 
-Scope: D16's hosted form is an explicit option alongside a user's own source, never created automatically. Its separate Public Surface process serves `/f/<token>` and accepts only validated, Turnstile-verified, rate-limited fields through the existing trigger event pipeline. Disabled/replaced/foreign forms cannot submit. No uploads. Reuse the shared D15 classifier. Preserve ordinary tenant RLS and downstream run permissions/budgets.
+Scope: D7 hybrid invites use Alter's tenant-scoped invitation record as authority and Auth0 organization invitations for delivery. Verified callback accepts a current unexpired invitation into its selected workspace and fixed role. Resend/revoke protect races. Existing five enforced workspace roles and tenant owner badge appear in live/mock UI; role changes are audited and cannot alter owner or demote/remove last admin. Password reset remains with selected identity provider. No custom roles or third-party message outside explicit invitation/reset action.
 
-- [x] G1: Authenticated authoring offers hosted form only by explicit choice, persists bounded form definitions on the trigger, returns its public link, and enforces role/current-version ownership when editing, disabling or replacing it
-  CHECK: node .unlazy/verify-authoring.mjs
-  EXPECT: public-form-authoring-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a2fd4dc9c3cfec511bd44868da8f70d3d015e194cf2f1faa92ffe30af573f70f; exit=0; EXPECT=matched; output-sha256=7a3e0650a89418e2252e65fe0e89ed990adfc0612bbc9999c370c304eb13e52c; output-bytes=135; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+- [x] G1: Ordinary PostgreSQL enforces invitation tenant/workspace scope, seven-day expiry, uniqueness and erasure; paired migration and rollback preserve other memberships
+  CHECK: node .unlazy/verify-store.mjs
+  EXPECT: members-store-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e293fe4f2013b792523da941c247926589fefad2b763f71019f20ef5a38851c3; exit=0; EXPECT=matched; output-sha256=8da992749e4935bcbc0a24826482560f9972e7c22c09386805d13d2794f3d369; output-bytes=227; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries
 
-- [x] G2: A real separate HTTP process renders only current enabled form fields safely; opaque token validation and ordinary PostgreSQL scope refuse unknown, changed, disabled and foreign definitions without exposing other trigger settings
-  CHECK: node .unlazy/verify-public.mjs
-  EXPECT: public-form-public-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=0301da0b730d6a41b0e3c483984abe22731b8b0b3aac45cab26471ce46b7e396; exit=0; EXPECT=matched; output-sha256=2d87c4ee0932babdb1e5fcc7f95234e80042c361681ef169fce283b97e46f4c8; output-bytes=80; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+- [x] G2: Auth0 organization invitation creation/cancellation and password-reset requests use documented provider APIs; mock mirrors lifecycle and unavailable/invalid provider responses never report sent
+  CHECK: node .unlazy/verify-provider.mjs
+  EXPECT: members-provider-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=a9138fd53cbdbdced2fb0327e33af41b55f416c953eb83e64e21a411f4a52f5d; exit=0; EXPECT=matched; output-sha256=5d051886709df51b3a267dbdc809fff9beaa0ca0f20b2c6f6801d38ea71d545a; output-bytes=78; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries
 
-- [x] G3: Production Turnstile adapter verifies the submitted token and expected form context; failed/expired/repeated/invalid verification cannot dispatch, and missing configuration cannot become success
-  CHECK: node .unlazy/verify-turnstile.mjs
-  EXPECT: public-form-turnstile-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1d45f50e01e80382c91e3b6b45557aea4d4df0338beded9ad7679aea8e6c7eb3; exit=0; EXPECT=matched; output-sha256=29b1f35839a3676da5073570069f6aedbc47fb341862522dc0e9313fa6fd443e; output-bytes=83; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+- [x] G3: Authenticated routes create/list/resend/revoke invitations only in managed workspaces; concurrent operations and failed delivery leave truthful statuses and attributed audit records
+  CHECK: node .unlazy/verify-invitations.mjs
+  EXPECT: members-invitations-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e7a3ae7714338fccbdf0691109880a04cd273bb5540da38064aa4a619eaebfe3; exit=0; EXPECT=matched; output-sha256=fb8ea16546dd07604c08819bf38225241bb5b07cdf13b0778fdad0d1352229a0; output-bytes=145; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries
 
-- [x] G4: Real atomic rate counters enforce independent form and visitor limits across concurrent requests before expensive work, malformed fields/uploads are refused, and the shared D15 classifier blocks classified injection or unavailable classification
-  CHECK: node .unlazy/verify-input.mjs
-  EXPECT: public-form-input-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=5762c1494768196e0d63741ed574273f0f92afd2a11a81769b1ca87588c0ad7a; exit=0; EXPECT=matched; output-sha256=3bd77f5237eeb07cdda0a0b4de5c44ba50bba7b8c08c1abaa8aba23c284edace; output-bytes=79; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+- [x] G4: Real callback accepts only verified matching identity into a current pending invitation, creates correct tenant/workspace membership once, and refuses revoked/expired/foreign invitations before issuing access
+  CHECK: node .unlazy/verify-callback.mjs
+  EXPECT: members-callback-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=dbe512bd959586642f274f6bebee65500f1ac19b209cd8e3b606e173811f4520; exit=0; EXPECT=matched; output-sha256=9edc248b2ad335619899bd7db23f0ffec6cf0f0c5dca4000ff2dd3d1cd017816; output-bytes=196; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries
 
-- [x] G5: A valid native form submission reaches the existing canonical trigger pipeline and creates an attributed event/run under ordinary PostgreSQL; retries do not duplicate runs and disabled/held workflows remain refused
-  CHECK: node .unlazy/verify-dispatch.mjs
-  EXPECT: public-form-dispatch-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=561626f4932cdf7de573ebd11538bcb234578bf71100674d92602250a42891b7; exit=0; EXPECT=matched; output-sha256=72957566d2b55f974eef12d512d7c5106f29a28a2bffc5958a16f6a58c67cfbf; output-bytes=82; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+- [x] G5: Workspace role updates/removal enforce five fixed roles, caller workspace admin rights, immutable tenant owner and last-admin protection under concurrency; audit and immediate access revocation persist
+  CHECK: node .unlazy/verify-roles.mjs
+  EXPECT: members-roles-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=8d8eb15810d3e567bf4a4068a5ac193736bd03d35c48755f4ad7bb37a5ccebbc; exit=0; EXPECT=matched; output-sha256=d3650d11d4367e842b07d32fccd60a4ea89776e71b176fa9ee4f61e767feaae1; output-bytes=87; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries
 
-- [x] G6: Live and mock setup controls preserve the own-source default, show/save hosted fields and public link only when selected, and surface failed/conflicting submissions without inventing success
+- [x] G6: Live/mock/rendered UI uses actual workspace, displays current members/pending invites and owner badge, supports five roles/resend/revoke/role changes/password reset, and keeps errors visible without fabricated success
   CHECK: node .unlazy/verify-web.mjs
-  EXPECT: public-form-web-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=ba2d1fc48e2c87260e09d02de37ca56d02abd443d485777f81f6543417f18ecb; exit=0; EXPECT=matched; output-sha256=e2c77546c83c50d55d42f3843e0eb88ec0aa6d0056860de480a882073599cacc; output-bytes=77; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+  EXPECT: members-web-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=216283b0acc4540ab3c6d6bc24ef57e9f7ff2576fe62a87bb18468cfa6f2f62a; exit=0; EXPECT=matched; output-sha256=941d90e64d63b22bafec85d1b0e079088f01d3301a6849bce9fea06c0230c9eb; output-bytes=154; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries
 
-- [x] G7: Distinct production mutations fail behavioral assertions and restored controls pass
-  CHECK: node .unlazy/negative-controls.mjs
-  EXPECT: public-form-controls-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=0168b52478281a9944b7970888c7b358f91a55f922d2e96861ff375b0a624cfb; exit=0; EXPECT=matched; output-sha256=3a06ac736f49ef191fe2c4297fe3be5e4d194bb98a049132de5c1c11b1590487; output-bytes=7060; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
-
-- [x] G8: Full affected suites/coverage and static checks, separate production boot/routing and least-privilege bindings, paired migration/rollback, CI discovery, architecture/RBAC/naming and zero new normalized AST findings pass
+- [x] G7: Distinct behavioral mutations are caught and restored controls plus full affected suites/coverage, migration/erasure/architecture/RBAC/CI/static checks and zero new normalized AST findings pass
   CHECK: node .unlazy/verify-final.mjs
-  EXPECT: public-form-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=69210057c89fbc5ec518ba42dd20d5837d9f23835f1de7c4e57ef0127d9880f4; exit=0; EXPECT=matched; output-sha256=885d7390c45fc291f3f8d7090f44a0781037c1924caabfca536939209d43fe6c; output-bytes=1666; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
-
-- [x] G9: Current workspace-scoped eval fixture proves own-run reads and foreign-run refusal through real controllers; full affected Eval suite, lint and type checks pass
-  CHECK: node .unlazy/verify-eval.mjs
-  EXPECT: public-form-eval-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=29c40c0d3e10d0e76ad0abb2b1683c026f26c3ea3c8874676829e6807df2d81c; exit=0; EXPECT=matched; output-sha256=a229c1b5ba6d29a300e889bf5b8f4815ad7c4cdf255bc512fc7b86b16c4bd033; output-bytes=106; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-public-form-c120; path=2b1f1cc87037/31 entries
+  EXPECT: members-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=70ed011a8764908675eead05322ef64eae686943552c5756b01805d69467f172; exit=0; EXPECT=matched; output-sha256=c516004127051d6228b2f253d2a93e29034030d47e87bf9461c28f43036fb053; output-bytes=1702; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-members-c121; path=2b1f1cc87037/31 entries

@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
-import { type WorkspaceRole } from "@/api/types"
+import { WORKSPACE_ROLES, type WorkspaceRole } from "@/api/types"
 import {
   Dialog,
   DialogContent,
@@ -24,10 +24,10 @@ interface InviteMemberDialogProps {
 
 export function InviteMemberDialog({ open, onOpenChange, workspaceId }: InviteMemberDialogProps) {
   const [email, setEmail] = React.useState("")
-  const [role, setRole] = React.useState<WorkspaceRole>("member")
+  const [role, setRole] = React.useState<WorkspaceRole>("viewer")
   const queryClient = useQueryClient()
 
-  const { mutate, isPending } = useMutation({
+  const { mutate, isPending, error, reset } = useMutation({
     mutationFn: (data: { email: string; role: WorkspaceRole }) => 
       api.inviteMember(workspaceId, data.email, data.role),
     onSuccess: () => {
@@ -35,15 +35,14 @@ export function InviteMemberDialog({ open, onOpenChange, workspaceId }: InviteMe
       toast.success("Invitation sent")
       onOpenChange(false)
       setEmail("")
-      setRole("member")
+      setRole("viewer")
     },
-    onError: () => {
-      toast.error("Failed to send invitation")
-    },
+    onError: () => { queryClient.invalidateQueries({ queryKey: queryKeys.members.all(workspaceId) }) },
   })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    reset()
     if (email.trim()) {
       mutate({ email, role })
     }
@@ -55,13 +54,16 @@ export function InviteMemberDialog({ open, onOpenChange, workspaceId }: InviteMe
         <DialogHeader>
           <DialogTitle>Invite Member</DialogTitle>
           <DialogDescription>
-            Send an invitation to join this workspace.
+            Send an invitation to join this workspace. Invitations expire after seven days.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-primary">Email address</label>
+            <label htmlFor="invite-email" className="text-sm font-medium text-text-primary">Email address</label>
             <Input 
+              id="invite-email"
+              maxLength={320}
+              disabled={isPending}
               type="email"
               autoFocus
               placeholder="teammate@company.com" 
@@ -71,20 +73,19 @@ export function InviteMemberDialog({ open, onOpenChange, workspaceId }: InviteMe
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-text-primary">Role</label>
-            <select 
+            <label htmlFor="invite-role" className="text-sm font-medium text-text-primary">Role</label>
+            <select id="invite-role" disabled={isPending}
               className="flex h-9 w-full rounded-md border border-border bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
               value={role}
               onChange={(e) => setRole(e.target.value as WorkspaceRole)}
             >
-              <option value="admin">Admin</option>
-              <option value="member">Member</option>
-              <option value="viewer">Viewer</option>
+              {WORKSPACE_ROLES.map(value => <option key={value} value={value}>{value[0].toUpperCase() + value.slice(1)}</option>)}
             </select>
             <p className="text-xs text-text-muted mt-1">
               Owners cannot be invited through this menu.
             </p>
           </div>
+          {error && <p role="alert" className="text-sm text-danger">{error.message}</p>}
           <DialogFooter className="pt-4">
             <Button variant="outline" type="button" onClick={() => onOpenChange(false)}>
               Cancel

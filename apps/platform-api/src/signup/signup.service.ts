@@ -1,3 +1,4 @@
+import type { MembershipIdentityResolver } from "../identity/membership-identity-resolver";
 import { v7 as uuidv7 } from "uuid";
 import type { EntitlementProvider } from "../entitlements/entitlement-provider.interface";
 import type { IdentityProvider } from "../identity/identity-provider.interface";
@@ -17,6 +18,7 @@ export class SignupService {
     private readonly persistence: SignupPersistence,
     private readonly idempotency: IdempotencyStore,
     private readonly onboardingInitializer: OnboardingInitializer,
+    private readonly membershipResolver?: MembershipIdentityResolver,
   ) {}
 
   signup(request: SignupRequest): Promise<SignupLanding> {
@@ -24,6 +26,7 @@ export class SignupService {
       code: request.code,
       redirectUri: request.redirectUri,
       codeVerifier: request.codeVerifier,
+      invitation: request.invitation,
     };
     return this.idempotency.execute(request.idempotencyKey, payload, async () => {
       const identity = await this.identityProvider.handleCallback({
@@ -40,10 +43,9 @@ export class SignupService {
         );
       }
 
-      const existing = await this.persistence.findExisting(
-        identity.identityRef,
-        identity.tenantId,
-      );
+      const existing = this.membershipResolver
+        ? await this.membershipResolver.resolve(identity, request.invitation)
+        : await this.persistence.findExisting(identity.identityRef, identity.tenantId);
       if (existing) {
         return this.landing(
           existing,

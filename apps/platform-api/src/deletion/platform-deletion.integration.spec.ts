@@ -110,6 +110,15 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
       await q(`INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES ($1, $2, $3, 'member')`, [randomUUID(), tenant, user]);
       await q(`INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES ($1, $2, $3, $4, $5)`, [randomUUID(), tenant, ws, user, role]);
     }
+    // Every invitation lifecycle state is tenant data, including accepted history.
+    for (const [tenant, ws, user] of [[A, wsA, u1], [B, wsB, u3]] as const) {
+      for (const status of ["pending", "accepted", "revoked", "delivery_failed"]) {
+        await q(`INSERT INTO workspace_invitations
+          (id,tenant_id,workspace_id,email,role,status,invited_by,provider_org_ref,provider_invitation_id,provider_ticket_hash,accepted_by,accepted_at)
+          VALUES (gen_random_uuid(),$1,$2,$3,'viewer',$4,$5,'org_erasure',$6,$7,$5,now())`,
+        [tenant, ws, `${status}@erasure.test`, status, user, randomUUID(), createHash("sha256").update(tenant + status).digest("hex")]);
+      }
+    }
     await q(`INSERT INTO user_sessions (id, user_id, tenant_id, refresh_token_hash, access_token_hash) VALUES ($1, $2, $3, 'r', 'a')`, [randomUUID(), u1, A]);
     // notifications
     for (const [tenant, ws, user] of [[A, wsA, u1], [B, wsB, u3]] as const) {
@@ -209,7 +218,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     const located = await service.locateSubjectData(ten(A));
     expect(located.map((item) => item.table).sort()).toEqual([...PLATFORM_TABLES].sort());
     const rows = Object.fromEntries(located.map((item) => [item.table, item.rowCount]));
-    expect(rows).toMatchObject({ tenants: 1, users: 2, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1 });
+    expect(rows).toMatchObject({ tenants: 1, users: 2, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1, workspace_invitations: 4 });
   });
 
   it("erases tenant A completely, leaves tenant B whole, and verification agrees", async () => {
@@ -219,10 +228,11 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(result.deletedRows).toBeGreaterThan(0);
     expect(result.deletedObjects).toBe(3); // credential, env var, connection: tenant A's own secrets
     expect(verified).toMatchObject({ deleted: true, remaining: [] });
-    for (const table of ["workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
+    for (const table of ["workspace_invitations", "workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
       expect(await count(table), table).toBe(0);
     }
     // tenant B is untouched
+    expect(await count("workspace_invitations", "tenant_id", B)).toBe(4);
     expect(await count("workspaces", "tenant_id", B)).toBe(1);
     expect(await count("credential_refs", "tenant_id", B)).toBe(1);
     expect(await count("orders", "tenant_id", B)).toBe(1);
@@ -377,12 +387,15 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     const wsA2 = "00000000-0000-7000-8000-00000000a102";
     await admin.query(`INSERT INTO workspaces (id, tenant_id, name, status) VALUES ($1, $2, 'A2', 'active')`, [wsA2, A]);
     await admin.query(`INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES ($1, $2, $3, $4, 'editor')`, [randomUUID(), A, wsA2, u1]);
+    await admin.query(`INSERT INTO workspace_invitations (id,tenant_id,workspace_id,email,role,status,invited_by,provider_org_ref)
+      VALUES (gen_random_uuid(),$1,$2,'other-workspace@erasure.test','viewer','delivery_failed',$3,'org_erasure')`, [A, wsA2, u1]);
     const wsId = `ws_${wsA}`;
 
     const located = await service.locateWorkspaceData(ten(A), wsId);
     const rowsOf = (table: string) => located.find((location) => location.table === table)?.rowCount;
     expect(rowsOf("workspaces")).toBe(1);
     expect(rowsOf("workspace_members")).toBe(2);
+    expect(rowsOf("workspace_invitations")).toBe(4);
     expect(rowsOf("oauth_connections")).toBe(1);
     expect(rowsOf("notification_reads")).toBe(1);
     // Tenant-wide and legal-hold tables are never part of a workspace.
@@ -393,6 +406,9 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     await expect(service.deleteWorkspaceData(ten(A), wsId, MANIFEST)).resolves.toMatchObject({ deletedObjects: 1 });
     await expect(service.verifyWorkspaceDeletion(ten(A), wsId, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
     expect(await count("workspaces", "id", wsA)).toBe(0);
+    expect(await count("workspace_invitations", "workspace_id", wsA)).toBe(0);
+    expect(await count("workspace_invitations", "workspace_id", wsA2)).toBe(1);
+    expect(await count("workspace_invitations", "tenant_id", B)).toBe(4);
     expect(await count("workspaces", "id", wsA2)).toBe(1);
     expect(Number((await one<{ n: string }>("SELECT count(*)::text AS n FROM workspace_members WHERE workspace_id = $1", [wsA2])).n)).toBe(1);
     expect(await count("tenant_members")).toBe(2);

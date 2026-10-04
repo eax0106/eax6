@@ -1,121 +1,102 @@
-import { randomUUID } from "node:crypto";
+import type { AuditEventHandler } from "@alterx/shared-clients";
+import type { PoolClient } from "pg";
+import { z } from "zod";
+import { computeEtag, ConcurrencyHttpError, ifMatchIncludes } from "../concurrency";
 import type { ActorContext } from "../rbac/types";
-import { tenantRoleAllows } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
-import { PlatformHttpError } from "../signup/problem";
-import {
-  streamRevocationBus,
-  type StreamRevocationBus,
-} from "../streaming/revocation";
+import { streamRevocationBus, type StreamRevocationBus } from "../streaming/revocation";
+import { FixedWorkspaceRole, lockManagedWorkspace, memberError, memberInstance, workspaceUuid } from "./workspace-authority";
+import type { InvitationView, WorkspaceInvitationsService } from "./workspace-invitations.service";
 
 export interface MemberView {
-  id: string;
-  tenantId: string;
-  workspaceId: string | null;
-  userId: string;
-  role: string;
-  scope: "tenant" | "workspace";
-  /** From the member's user record, so the list names people rather than ids. */
-  email?: string | null;
-  name?: string | null;
+  id: string; tenantId: string; workspaceId: string; userId: string; role: string;
+  scope: "workspace"; email: string; name: string | null; tenantOwner: boolean; etag: string;
 }
-
-export interface InviteMemberInput {
-  userId: string;
-  role: string;
-  workspaceId?: string;
-}
+type MemberRow = Omit<MemberView, "etag">;
+const selectMember = `SELECT m.id,m.tenant_id AS "tenantId",m.workspace_id AS "workspaceId",m.user_id AS "userId",m.role,
+  'workspace' AS scope,u.email,u.display_name AS name,(tm.role='owner') AS "tenantOwner"
+  FROM workspace_members m JOIN users u ON u.id=m.user_id
+  JOIN tenant_members tm ON tm.tenant_id=m.tenant_id AND tm.user_id=m.user_id`;
 
 export class MembersService {
-  constructor(
-    private readonly db: PlatformDb,
-    private readonly revocations: StreamRevocationBus = streamRevocationBus,
-  ) {}
+  constructor(private readonly db: PlatformDb, private readonly revocations: StreamRevocationBus = streamRevocationBus,
+    private readonly audit?: AuditEventHandler, private readonly invitations?: WorkspaceInvitationsService) {}
 
-  async list(actor: ActorContext): Promise<MemberView[]> {
-    const tenant = await this.db.queryTenant<MemberView>(
-      actor.tenant_id,
-      `SELECT m.id, m.tenant_id AS "tenantId", NULL::uuid AS "workspaceId",
-              m.user_id AS "userId", m.role, 'tenant' AS scope,
-              u.email, u.display_name AS name
-         FROM tenant_members m LEFT JOIN users u ON u.id = m.user_id
-        WHERE m.tenant_id = $1`,
-      [actor.tenant_id],
-    );
-    const workspace = await this.db.queryTenant<MemberView>(
-      actor.tenant_id,
-      `SELECT m.id, m.tenant_id AS "tenantId", m.workspace_id AS "workspaceId",
-              m.user_id AS "userId", m.role, 'workspace' AS scope,
-              u.email, u.display_name AS name
-         FROM workspace_members m LEFT JOIN users u ON u.id = m.user_id
-        WHERE m.tenant_id = $1`,
-      [actor.tenant_id],
-    );
-    return [...tenant, ...workspace];
+  async list(actor: ActorContext, workspaceId?: string): Promise<MemberView[]> {
+    const workspace = workspaceId ?? actor.workspace_id ?? (await this.db.queryTenant<{ id: string }>(actor.tenant_id,
+      `SELECT w.id FROM workspaces w WHERE w.tenant_id=$1 AND w.status='active' AND
+        (EXISTS(SELECT 1 FROM tenant_members tm WHERE tm.tenant_id=$1 AND tm.user_id=$2 AND tm.role='owner') OR
+         EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.tenant_id=$1 AND wm.workspace_id=w.id AND wm.user_id=$2)) ORDER BY w.created_at,w.id LIMIT 1`,
+      [actor.tenant_id, actor.user_id]))[0]?.id;
+    if (!workspace) return [];
+    const target = workspaceUuid(workspace);
+    return this.db.withTenant(actor.tenant_id, async client => {
+      const access = await client.query(`SELECT 1 FROM workspaces w WHERE w.tenant_id=$1 AND w.id=$3 AND w.status='active' AND
+        (EXISTS(SELECT 1 FROM tenant_members tm WHERE tm.tenant_id=$1 AND tm.user_id=$2 AND tm.role='owner') OR
+         EXISTS(SELECT 1 FROM workspace_members wm WHERE wm.tenant_id=$1 AND wm.workspace_id=$3 AND wm.user_id=$2))`, [actor.tenant_id, actor.user_id, target]);
+      if (!access.rowCount) memberError(403, "WORKSPACE_ACCESS_FORBIDDEN", "Workspace membership required");
+      const rows = await client.query<MemberRow>(selectMember + " WHERE m.tenant_id=$1 AND m.workspace_id=$2 ORDER BY u.display_name NULLS LAST,u.email,m.id", [actor.tenant_id, target]);
+      return rows.rows.map(memberView);
+    });
   }
 
-  async invite(actor: ActorContext, input: InviteMemberInput): Promise<MemberView> {
-    assertAdmin(actor);
-    if (!input.userId || !input.role) {
-      throw new PlatformHttpError(
-        400,
-        "INVALID_MEMBER_INVITE",
-        "userId and role required",
-        "/api/v1/members",
-      );
-    }
-    const workspace = Boolean(input.workspaceId);
-    const rows = await this.db.queryTenant<MemberView>(
-      actor.tenant_id,
-      workspace
-        ? `INSERT INTO workspace_members
-             (id, tenant_id, workspace_id, user_id, role)
-           VALUES ($1, $2, $3, $4, $5)
-           RETURNING id, tenant_id AS "tenantId",
-             workspace_id AS "workspaceId", user_id AS "userId", role,
-             'workspace' AS scope`
-        : `INSERT INTO tenant_members (id, tenant_id, user_id, role)
-           VALUES ($1, $2, $3, $4)
-           RETURNING id, tenant_id AS "tenantId", NULL::uuid AS "workspaceId",
-             user_id AS "userId", role, 'tenant' AS scope`,
-      workspace
-        ? [randomUUID(), actor.tenant_id, input.workspaceId, input.userId, input.role]
-        : [randomUUID(), actor.tenant_id, input.userId, input.role],
-    );
-    const member = rows[0];
-    if (!member) throw new Error("Member insert returned no row");
-    return member;
+  async invite(actor: ActorContext, body: unknown): Promise<InvitationView> {
+    if (!this.invitations) memberError(503, "INVITATIONS_UNAVAILABLE", "Invitation delivery is unavailable");
+    return this.invitations.create(actor, body);
   }
 
-  async remove(actor: ActorContext, memberId: string, scope: string): Promise<void> {
-    assertAdmin(actor);
-    const table = scope === "workspace" ? "workspace_members" : "tenant_members";
-    const removed = await this.db.queryTenant<{ userId: string }>(
-      actor.tenant_id,
-      `DELETE FROM ${table} WHERE id = $1 AND tenant_id = $2
-       RETURNING user_id AS "userId"`,
-      [memberId, actor.tenant_id],
-    );
-    const member = removed[0];
-    if (member) {
-      this.revocations.publish({
-        tenantId: actor.tenant_id,
-        userId: member.userId,
-      });
-    }
+  async updateRole(actor: ActorContext, memberId: string, body: unknown, ifMatch: string | undefined): Promise<MemberView> {
+    const parsed = z.object({ role: FixedWorkspaceRole }).strict().safeParse(body);
+    if (!parsed.success) memberError(400, "INVALID_MEMBER_ROLE", "One fixed workspace role required");
+    const row = await this.db.withTenant(actor.tenant_id, async client => {
+      const current = await this.lockMember(client, actor, memberId);
+      assertMutable(current, ifMatch);
+      if (current.role === "admin" && parsed.data.role !== "admin") await assertOtherAdmin(client, current);
+      await client.query("UPDATE workspace_members SET role=$3 WHERE tenant_id=$1 AND id=$2", [actor.tenant_id, current.id, parsed.data.role]);
+      await this.record(actor, current, "workspace.member.role_changed", { before: current.role, after: parsed.data.role });
+      return memberView({ ...current, role: parsed.data.role });
+    });
+    this.revocations.publish({ tenantId: actor.tenant_id, userId: row.userId });
+    return row;
+  }
+
+  async remove(actor: ActorContext, memberId: string, scope: string, ifMatch?: string): Promise<void> {
+    if (scope !== "workspace") memberError(400, "INVALID_MEMBER_SCOPE", "Only workspace memberships can be removed here");
+    const removed = await this.db.withTenant(actor.tenant_id, async client => {
+      const row = await this.lockMember(client, actor, memberId);
+      assertMutable(row, ifMatch);
+      if (row.role === "admin") await assertOtherAdmin(client, row);
+      await client.query("DELETE FROM workspace_members WHERE tenant_id=$1 AND id=$2", [actor.tenant_id, row.id]);
+      await this.record(actor, row, "workspace.member.removed", { role: row.role });
+      return row;
+    });
+    this.revocations.publish({ tenantId: actor.tenant_id, userId: removed.userId });
+  }
+
+  private async lockMember(client: PoolClient, actor: ActorContext, id: string): Promise<MemberRow> {
+    if (!z.string().uuid().safeParse(id).success) memberError(404, "MEMBER_NOT_FOUND", "Member not found");
+    const hint = await client.query<{ workspace_id: string }>("SELECT workspace_id FROM workspace_members WHERE tenant_id=$1 AND id=$2", [actor.tenant_id, id]);
+    if (!hint.rows[0]) memberError(404, "MEMBER_NOT_FOUND", "Member not found");
+    await lockManagedWorkspace(client, actor, hint.rows[0].workspace_id);
+    const result = await client.query<MemberRow>(selectMember + " WHERE m.tenant_id=$1 AND m.id=$2 FOR UPDATE OF m", [actor.tenant_id, id]);
+    return result.rows[0] ?? memberError(404, "MEMBER_NOT_FOUND", "Member not found");
+  }
+
+  private async record(actor: ActorContext, member: MemberRow, action: string, context: Record<string, string>): Promise<void> {
+    if (!this.audit) memberError(503, "MEMBERS_AUDIT_UNAVAILABLE", "Membership audit is unavailable");
+    await this.audit.recordEvent({ tenant_id: actor.tenant_id, actor_type: "user", actor_ref: actor.user_id, action,
+      target_type: "workspace_member", target_ref: member.id, result: "success", reason_code: "",
+      context_json: JSON.stringify({ workspaceId: member.workspaceId, ...context }), occurred_at: new Date().toISOString() });
   }
 }
 
-function assertAdmin(actor: ActorContext): void {
-  const allowed = actor.roles.some(
-    (role) => tenantRoleAllows(role, "admin"),
-  );
-  if (!allowed) {
-    throw new PlatformHttpError(
-      403,
-      "MEMBER_MANAGEMENT_FORBIDDEN",
-      "Owner or admin role required",
-      "/api/v1/members",
-    );
-  }
+function memberView(row: MemberRow): MemberView { return { ...row, etag: computeEtag(row) }; }
+function assertMutable(row: MemberRow, ifMatch: string | undefined): void {
+  if (row.tenantOwner) memberError(409, "TENANT_OWNER_IMMUTABLE", "Tenant owner's workspace membership cannot be changed");
+  if (!ifMatch) throw new ConcurrencyHttpError(428, "IF_MATCH_REQUIRED", "If-Match header required", memberInstance);
+  if (!ifMatchIncludes(ifMatch, computeEtag(row))) throw new ConcurrencyHttpError(412, "ETAG_MISMATCH", "Membership changed since it was read", memberInstance);
+}
+async function assertOtherAdmin(client: PoolClient, row: MemberRow): Promise<void> {
+  const other = await client.query("SELECT 1 FROM workspace_members WHERE tenant_id=$1 AND workspace_id=$2 AND role='admin' AND id<>$3 LIMIT 1", [row.tenantId, row.workspaceId, row.id]);
+  if (!other.rowCount) memberError(409, "LAST_WORKSPACE_ADMIN", "Workspace must retain an admin");
 }

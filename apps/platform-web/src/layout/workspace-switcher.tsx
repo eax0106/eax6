@@ -10,12 +10,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { type Workspace } from "@/api/types"
-import { mockWorkspaces } from "@/api/mock/data"
+import { api } from "@/api/client"
+import { isLiveApi } from "@/api/http"
+import { useQuery } from "@tanstack/react-query"
+import { useAuth } from "@/features/auth/hooks/useAuth"
+import { usePermissions, workspaceKey } from "@/features/permissions/hooks/usePermissions"
 import { CreateWorkspaceDialog } from "@/features/workspace/components/create-workspace-dialog"
 
 export function WorkspaceSwitcher() {
-  const [activeWorkspace, setActiveWorkspace] = React.useState<Workspace>(mockWorkspaces[0])
+  const { workspaceId, selectWorkspace, role } = usePermissions()
+  const user = useAuth(state => state.user)
+  const { data, error, isLoading } = useQuery({ queryKey: ["workspaces", user?.tenantId], queryFn: () => api.getWorkspaces() })
+  const workspaces = (data ?? []).filter(workspace => !isLiveApi || user?.tenantRole === "owner" ||
+    user?.workspaceRoles?.some(binding => workspaceKey(binding.workspaceId) === workspaceKey(workspace.id)))
+  const activeWorkspace = workspaces.find(workspace => workspaceKey(workspace.id) === workspaceKey(workspaceId)) ?? workspaces[0]
+  React.useEffect(() => { if (activeWorkspace && workspaceKey(activeWorkspace.id) !== workspaceKey(workspaceId)) selectWorkspace(activeWorkspace.id) }, [activeWorkspace, workspaceId, selectWorkspace])
   const [createModalOpen, setCreateModalOpen] = React.useState(false)
   const navigate = useNavigate()
 
@@ -34,18 +43,19 @@ export function WorkspaceSwitcher() {
           </Avatar>
           <div className="flex flex-col flex-1 text-left line-clamp-1">
             <span className="text-sm font-semibold text-text-primary leading-tight truncate">
-              {activeWorkspace.name}
+              {activeWorkspace?.name ?? (isLoading ? "Loading workspaces…" : "Select workspace")}
             </span>
-            <span className="text-xs text-text-muted capitalize">{activeWorkspace.role}</span>
+            <span className="text-xs text-text-muted capitalize">{role}</span>
           </div>
           <ChevronsUpDown className="h-4 w-4 text-text-muted shrink-0" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-[240px]" align="start" sideOffset={8}>
-        {mockWorkspaces.map((workspace) => (
+        {workspaces.map((workspace) => (
           <DropdownMenuItem
             key={workspace.id}
-            onClick={() => setActiveWorkspace(workspace)}
+            aria-label={workspace.name}
+            onClick={() => { selectWorkspace(workspace.id); if (isLiveApi) void useAuth.getState().validate() }}
             className="flex items-center justify-between"
           >
             <div className="flex items-center gap-2 truncate">
@@ -56,11 +66,12 @@ export function WorkspaceSwitcher() {
               </Avatar>
               <span className="truncate">{workspace.name}</span>
             </div>
-            {activeWorkspace.id === workspace.id && (
+            {activeWorkspace?.id === workspace.id && (
               <Check className="h-4 w-4 text-primary" />
             )}
           </DropdownMenuItem>
         ))}
+        {error && <p role="alert" className="p-2 text-sm text-danger">{error.message}</p>}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => navigate("/app/settings/workspace")}>
           <span className="text-text-primary">Workspace settings</span>

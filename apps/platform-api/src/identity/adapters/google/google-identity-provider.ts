@@ -5,6 +5,8 @@ import type {
   DeviceAuthorization,
   DeviceTokenResult,
   IdentityProvider,
+  IdentityInvitation,
+  OrganizationInvitationRequest,
   LoginRedirectRequest,
   MfaChallenge,
   MfaEnrollment,
@@ -41,12 +43,23 @@ export class GoogleIdentityProvider implements IdentityProvider {
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
+  async createOrganizationInvitation(_request: OrganizationInvitationRequest): Promise<IdentityInvitation> {
+    void _request; throw new Error("Workspace invitations require the Auth0 identity provider");
+  }
+  async revokeOrganizationInvitation(_organizationId: string, _invitationId: string): Promise<void> {
+    void _organizationId; void _invitationId; throw new Error("Workspace invitations require the Auth0 identity provider");
+  }
+  async requestPasswordReset(_email: string, _identityRef: string): Promise<void> {
+    void _email; void _identityRef; throw new Error("Change your password with your Google account");
+  }
+
   async getOrCreateOrgForTenant(tenantId: string, _name: string): Promise<string> {
     void _name;
     return tenantId;
   }
 
   async loginRedirectUrl(request: LoginRedirectRequest): Promise<string> {
+    if (request.invitation || request.organizationId) throw new Error("Organization invitations require the Auth0 identity provider");
     const url = new URL(GOOGLE_AUTHORIZE_URL);
     url.searchParams.set("response_type", "code");
     url.searchParams.set("client_id", this.options.clientId);
