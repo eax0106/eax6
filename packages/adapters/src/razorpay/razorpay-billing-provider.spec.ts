@@ -86,6 +86,62 @@ describe("RazorpayBillingProvider", () => {
     expect(JSON.stringify(requests)).not.toContain("cvv");
   });
 
+  it("creates hosted checkout only for the configured tax-inclusive provider plan", async () => {
+    http.request = vi.fn(async request => {
+      requests.push(request);
+      return { status: 200, body: request.method === "GET" ? checkoutPlan() : checkoutSubscription() };
+    });
+    const subscription = await provider.createCheckoutSubscription(tenantId, "plan_basic", {
+      internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR", gstin: "27ABCDE1234F1Z5",
+    });
+    expect(subscription).toMatchObject({ id: "sub_123", status: "created", checkoutUrl: "https://rzp.io/rzp/fixture" });
+    expect(requests.map(request => request.path)).toEqual(["/v1/plans/plan_basic", "/v1/subscriptions"]);
+    expect(requests[1]?.body).toEqual({ plan_id: "plan_basic", total_count: 1200, quantity: 1, customer_notify: true,
+      notes: { tenant_id: tenantId, alter_plan: "basic", gstin: "27ABCDE1234F1Z5" } });
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it.each([{ amount: 10003 }, { currency: "USD" }, { active: false }])(
+    "refuses a provider plan that differs from configured checkout: %j", async change => {
+      http.request = vi.fn(async request => {
+        requests.push(request);
+        return { status: 200, body: { ...checkoutPlan(), item: { ...checkoutPlan().item, ...change } } };
+      });
+      await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+        internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR",
+      })).rejects.toThrow("configured amount and currency");
+      expect(requests).toHaveLength(1);
+      expect(references.subscriptionRef).toBeNull();
+    },
+  );
+
+  it.each(["http://rzp.io/rzp/fixture", "https://foreign.test/checkout", "https://rzp.io:8443/rzp/a",
+    "https://user:pass@rzp.io/rzp/a", "https://rzp.io/rzp/a#secret", "javascript:alert(1)"])(
+    "refuses unsafe hosted checkout URL %s", async shortUrl => {
+      http.request = vi.fn(async request => ({ status: 200,
+        body: request.method === "GET" ? checkoutPlan() : { ...checkoutSubscription(), short_url: shortUrl } }));
+      await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+        internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR",
+      })).rejects.toThrow("Razorpay HTTPS checkout URL");
+      expect(references.subscriptionRef).toBeNull();
+    },
+  );
+
+  it("rejects absent or mismatched checkout resources and malformed input before creating references", async () => {
+    await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+      internalPlanId: "basic", expectedTotalMinor: 1.5, currency: "INR",
+    })).rejects.toThrow("configuration");
+    expect(http.request).not.toHaveBeenCalled();
+    for (const change of [{ short_url: null }, { plan_id: "plan_foreign" }]) {
+      http.request = vi.fn(async request => ({ status: 200,
+        body: request.method === "GET" ? checkoutPlan() : { ...checkoutSubscription(), ...change } }));
+      await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+        internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR",
+      })).rejects.toThrow("matching hosted checkout");
+    }
+    expect(references.subscriptionRef).toBeNull();
+  });
+
   it("runs subscription lifecycle and invoice pagination against Razorpay paths", async () => {
     expect(await provider.getSubscription(tenantId)).toBeNull();
     const created = await provider.createSubscription(
@@ -666,4 +722,13 @@ function contractProvider(): RazorpayBillingProvider {
     { request: async (request) => response(request) },
     () => new Date("2026-07-28T00:00:00.000Z"),
   );
+}
+
+function checkoutPlan() {
+  return { id: "plan_basic", interval: 1, period: "monthly",
+    item: { name: "Basic", description: null, amount: 11804, currency: "INR", active: true } };
+}
+function checkoutSubscription() {
+  return { id: "sub_123", plan_id: "plan_basic", status: "created", current_start: null,
+    current_end: null, customer_id: null, short_url: "https://rzp.io/rzp/fixture" };
 }

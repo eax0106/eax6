@@ -1,3 +1,5 @@
+import type { EntitlementLimits } from "../entitlements/types";
+import type { PlanCommercial } from "../entitlements/plan-commercial";
 import type {
   PaymentMethodRef,
   Subscription,
@@ -13,6 +15,10 @@ export interface BillingProfileRecord {
   currentPlan: string | null;
   createdAt: Date;
   updatedAt: Date;
+  gstin?: string | null;
+  commercialSnapshot?: PlanCommercial | null;
+  providerPlanRef?: string | null;
+  checkoutAttemptId?: string | null;
 }
 
 export interface BillingSubscriptionView extends Subscription {
@@ -21,7 +27,18 @@ export interface BillingSubscriptionView extends Subscription {
 
 export interface CreateSubscriptionInput {
   plan_id: string;
-  payment_method_ref: string;
+  plan_version: string;
+  gstin?: string;
+}
+
+export interface ConfiguredBillingPlanView {
+  id: string;
+  name: string;
+  version: string;
+  limits: EntitlementLimits;
+  commercial: PlanCommercial | null;
+  checkout: { basePriceMinor: number; gstPercent: 18; gstMinor: number; totalMinor: number;
+    currency: "INR"; gatewayFeeMinor: 0 } | null;
 }
 
 export interface ChangeSubscriptionInput {

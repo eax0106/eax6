@@ -12,6 +12,7 @@ import {
   expect,
   it,
 } from "vitest";
+import type { PlanCommercial } from "../entitlements/plan-commercial";
 import { RbacModule, type RbacRequest } from "../rbac";
 import { AdminAuditService } from "../admin-audit";
 import { CONFIG_PROVIDER, type ConfigProvider } from "../entitlements/config-provider.interface";
@@ -83,15 +84,19 @@ class FakePlanDefinitionStore implements PlanDefinitionStore {
     plan: string,
     limits: EntitlementLimits,
     updatedBy: string,
+    commercial?: PlanCommercial | null,
+    auditReason?: string,
   ): Promise<{ record: PlanDefinitionRecord; created: boolean }> {
     const created = !this.records.has(plan);
     const record: PlanDefinitionRecord = {
       plan,
       limits,
+      commercial: commercial === undefined ? this.records.get(plan)?.commercial ?? null : commercial,
       updatedAt: new Date("2026-08-06T00:00:00Z"),
       updatedBy,
     };
     this.records.set(plan, record);
+    if (auditReason) await this.recordAudit(plan, created ? "created" : "updated", limits, auditReason, updatedBy, record.commercial);
     return { record, created };
   }
 
@@ -105,6 +110,7 @@ class FakePlanDefinitionStore implements PlanDefinitionStore {
     limits: EntitlementLimits | null,
     reason: string,
     staffId: string,
+    commercial?: PlanCommercial | null,
   ): Promise<void> {
     this.sequence += 1;
     this.audits.push({
@@ -112,6 +118,7 @@ class FakePlanDefinitionStore implements PlanDefinitionStore {
       plan,
       action,
       limits,
+      commercial: commercial ?? null,
       reason,
       staffUserId: staffId,
       occurredAt: new Date("2026-08-06T00:00:00Z"),
@@ -203,6 +210,7 @@ describe("Admin policy plan routes", () => {
     expect(response.json()).toEqual({
       plan: "pro",
       limits: PRO_LIMITS,
+      commercial: null,
       updated_at: "2026-08-06T00:00:00.000Z",
       updated_by: staffUserId,
     } satisfies PlanDefinitionView);
@@ -248,6 +256,7 @@ describe("Admin policy plan routes", () => {
       {
         plan: "pro",
         limits: PRO_LIMITS,
+        commercial: null,
         updated_at: "2026-08-06T00:00:00.000Z",
         updated_by: staffUserId,
       },

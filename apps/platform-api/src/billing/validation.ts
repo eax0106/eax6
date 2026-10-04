@@ -18,7 +18,8 @@ const providerRef = z
 const createSubscriptionSchema = z
   .object({
     plan_id: providerRef,
-    payment_method_ref: providerRef,
+    plan_version: z.string().datetime(),
+    gstin: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/).optional(),
   })
   .strict();
 const changeSubscriptionSchema = z
@@ -32,7 +33,9 @@ export function parseCreateSubscription(
   input: unknown,
   instance: string,
 ): CreateSubscriptionInput {
-  return parse(createSubscriptionSchema, input, instance);
+  const parsed = parse(createSubscriptionSchema, input, instance);
+  return { plan_id: parsed.plan_id, plan_version: parsed.plan_version,
+    ...(parsed.gstin === undefined ? {} : { gstin: parsed.gstin }) };
 }
 
 export function parseChangeSubscription(

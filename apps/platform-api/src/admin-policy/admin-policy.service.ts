@@ -79,13 +79,8 @@ export class AdminPolicyService {
       plan,
       input.limits,
       staffUserId,
-    );
-    await this.definitions.recordAudit(
-      plan,
-      created ? "created" : "updated",
-      record.limits,
+      input.commercial,
       input.reason,
-      staffUserId,
     );
     await this.audit.record({
       actorType: "admin",
@@ -115,6 +110,7 @@ export class AdminPolicyService {
       existing.limits,
       input.reason,
       staffUserId,
+      existing.commercial,
     );
     await this.audit.record({
       actorType: "admin",
@@ -136,6 +132,7 @@ function toDefinitionView(record: PlanDefinitionRecord): PlanDefinitionView {
   return {
     plan: record.plan,
     limits: record.limits,
+    commercial: record.commercial ?? null,
     updated_at: record.updatedAt.toISOString(),
     updated_by: record.updatedBy,
   };
@@ -147,6 +144,7 @@ function toAuditView(record: PlanDefinitionAuditRecord): PlanDefinitionAuditView
     plan: record.plan,
     action: record.action,
     limits: record.limits,
+    commercial: record.commercial ?? null,
     reason: record.reason,
     staff_user_id: record.staffUserId,
     occurred_at: record.occurredAt.toISOString(),

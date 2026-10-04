@@ -14,6 +14,7 @@ import type {
   ProviderMetadata,
   SecretsProvider,
   Subscription,
+  SubscriptionCheckoutInput,
 } from "@alterx/shared-clients";
 
 export interface BillingTenantReferences {
@@ -154,6 +155,33 @@ export class RazorpayBillingProvider implements BillingProvider {
       providerCustomerRef: subscription.providerCustomerRef,
       subscriptionRef: subscription.id,
     });
+    return subscription;
+  }
+
+  async createCheckoutSubscription(
+    tenantId: string,
+    planId: string,
+    input: SubscriptionCheckoutInput,
+  ): Promise<Subscription> {
+    if (!/^plan_[A-Za-z0-9]{1,100}$/.test(planId) || !/^[a-z0-9][a-z0-9_-]{0,99}$/.test(input.internalPlanId) ||
+      input.currency !== "INR" || !Number.isSafeInteger(input.expectedTotalMinor) || input.expectedTotalMinor <= 0 ||
+      input.expectedTotalMinor > 1_180_000_000 ||
+      (input.gstin !== undefined && !/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(input.gstin))) {
+      throw malformedResource("checkout", "configuration", "is invalid");
+    }
+    const plan = mapPlan(await this.call("GET", `/v1/plans/${encodeURIComponent(planId)}`));
+    if (plan.id !== planId || !plan.active || plan.currency !== input.currency || plan.amount !== input.expectedTotalMinor) {
+      throw malformedResource("checkout", "plan", "does not match configured amount and currency");
+    }
+    const subscription = mapSubscription(await this.call("POST", "/v1/subscriptions", {
+      plan_id: planId, total_count: this.config.totalBillingCycles ?? 1_200,
+      quantity: 1, customer_notify: true,
+      notes: { tenant_id: tenantId, alter_plan: input.internalPlanId, ...(input.gstin ? { gstin: input.gstin } : {}) },
+    }), tenantId);
+    if (subscription.planId !== planId || !subscription.checkoutUrl) {
+      throw malformedResource("checkout", "subscription", "has no matching hosted checkout");
+    }
+    // The billing service durably binds the result to its audited checkout claim.
     return subscription;
   }
 
@@ -345,6 +373,7 @@ export function createFetchRazorpayHttpClient(
     request: async (request) => {
       const response = await fetch(`${baseUrl}${request.path}`, {
         method: request.method,
+        signal: AbortSignal.timeout(10_000),
         headers: {
           authorization: request.authorization,
           "content-type": "application/json",
@@ -387,7 +416,19 @@ function mapSubscription(value: unknown, tenantId: string): Subscription {
     currentPeriodStart: nullableEpoch(subscription.current_start),
     currentPeriodEnd: nullableEpoch(subscription.current_end),
     providerCustomerRef: nullableString(subscription.customer_id),
+    ...(subscription.short_url == null ? {} : { checkoutUrl: subscriptionCheckoutUrl(subscription.short_url) }),
   };
+}
+
+function subscriptionCheckoutUrl(value: unknown): string {
+  try {
+    if (typeof value !== "string" || value.length > 2048) throw new Error("invalid URL");
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.hostname !== "rzp.io" || url.port || url.username || url.password || url.hash || url.pathname === "/") throw new Error("invalid URL");
+    return url.href;
+  } catch {
+    throw malformedResource("subscription", "short_url", "must be a Razorpay HTTPS checkout URL");
+  }
 }
 
 function mapInvoice(value: unknown): Invoice {

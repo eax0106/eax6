@@ -168,6 +168,7 @@ export {
   type SecretReferenceId,
   type SecretsProvider,
   type Subscription,
+  type SubscriptionCheckoutInput,
   type StatusPageIncident,
   type StatusPageIncidentRequest,
   type StatusPageProvider,

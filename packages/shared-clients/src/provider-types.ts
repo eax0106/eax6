@@ -135,6 +135,13 @@ export interface BillingPlan {
   readonly active: boolean;
 }
 
+export interface SubscriptionCheckoutInput {
+  readonly internalPlanId: string;
+  readonly expectedTotalMinor: number;
+  readonly currency: "INR";
+  readonly gstin?: string;
+}
+
 export interface Subscription {
   readonly id: string;
   readonly tenantId: string;
@@ -151,6 +158,7 @@ export interface Subscription {
   readonly currentPeriodStart: string | null;
   readonly currentPeriodEnd: string | null;
   readonly providerCustomerRef: string | null;
+  readonly checkoutUrl?: string;
 }
 
 export interface Invoice {
@@ -212,6 +220,11 @@ export interface BillingProvider extends BaseProvider<"BillingProvider"> {
     tenantId: string,
     planId: string,
     paymentMethodRef: string,
+  ): Promise<Subscription>;
+  createCheckoutSubscription?(
+    tenantId: string,
+    planId: string,
+    input: SubscriptionCheckoutInput,
   ): Promise<Subscription>;
   changeSubscription(tenantId: string, planId: string): Promise<Subscription>;
   cancelSubscription(tenantId: string): Promise<Subscription>;

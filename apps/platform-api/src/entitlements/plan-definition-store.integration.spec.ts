@@ -96,6 +96,41 @@ describe.skipIf(!databaseUrl)("plan_definitions PostgreSQL behaviour", () => {
     ).rejects.toThrow();
   });
 
+  it("persists configured commercial values, preserves them on a limits-only edit and can unset them", async () => {
+    const commercial = { currency: "INR" as const, basePriceMinor: 10003, razorpayPlanId: "plan_fixture123",
+      includedCredits: 100, extraCreditPriceMinor: 50, creditsPerVerifiedRun: 2 };
+    await store.upsert("pro", LIMITS, "stf_test", commercial, "owner launch configuration");
+    expect((await store.find("pro"))?.commercial).toEqual(commercial);
+    expect((await store.history("pro", 1))[0]?.commercial).toEqual(commercial);
+    await store.upsert("pro", { ...LIMITS, maxRunsPerDay: 5 }, "stf_test", undefined, "lower daily cap");
+    expect((await store.find("pro"))?.commercial).toEqual(commercial);
+    await expect(store.upsert("other", LIMITS, "stf_test", commercial)).rejects.toThrow();
+    await store.upsert("pro", LIMITS, "stf_test", null, "disable checkout");
+    expect((await store.find("pro"))?.commercial).toBeNull();
+  });
+
+  it("rolls a configuration edit back if its append-only audit cannot persist", async () => {
+    await store.upsert("pro", LIMITS, "stf_test", null, "create");
+    await admin.query(`CREATE FUNCTION reject_plan_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'audit unavailable'; END; $$;
+      CREATE TRIGGER reject_plan_audit BEFORE INSERT ON plan_definition_audit
+        FOR EACH ROW EXECUTE FUNCTION reject_plan_audit();`);
+    await expect(store.upsert("pro", { ...LIMITS, maxRunsPerDay: 1 }, "stf_test", null, "update"))
+      .rejects.toThrow("audit unavailable");
+    expect((await store.find("pro"))?.limits).toEqual(LIMITS);
+  });
+
+  it("rejects malformed commercial values even through direct SQL", async () => {
+    for (const commercial of [{}, { currency: "USD" }, {
+      currency: "INR", basePriceMinor: -1, razorpayPlanId: null, includedCredits: null,
+      extraCreditPriceMinor: null, creditsPerVerifiedRun: null,
+    }]) {
+      await expect(admin.query(`INSERT INTO plan_definitions (plan, limits, commercial, updated_by)
+        VALUES ('bad', $1::jsonb, $2::jsonb, 'stf_test')`, [JSON.stringify(LIMITS), JSON.stringify(commercial)]))
+        .rejects.toThrow();
+    }
+  });
+
   it("requires updated_by to reference a real staff user", async () => {
     await expect(
       admin.query(
@@ -142,8 +177,11 @@ async function applyMigrations(client: pg.Client): Promise<void> {
   const directory = join(__dirname, "../db/migrations");
   const sql = [
     "0000_platform_db_identity_foundation.sql",
+    "0006_billing_profiles.sql",
+    "0007_billing_webhooks.sql",
     "0010_staff_plane.sql",
     "0014_plan_definitions.sql",
+    "0034_subscription_commercial.sql",
   ]
     .map((file) => readFileSync(join(directory, file), "utf8"))
     .join("\n--> statement-breakpoint\n");

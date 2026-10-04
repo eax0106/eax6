@@ -6,6 +6,8 @@ import type {
 } from "@alterx/adapters";
 import type { PaymentMethodRef, Subscription } from "@alterx/shared-clients";
 import type { Pool, PoolClient } from "pg";
+import type { PlanDefinitionRecord } from "../entitlements/plan-definition-store";
+import { BillingHttpError } from "./problem";
 import type { BillingProfileRecord } from "./types";
 
 interface BillingProfileRow {
@@ -18,6 +20,10 @@ interface BillingProfileRow {
   current_plan: string | null;
   created_at: Date;
   updated_at: Date;
+  gstin?: string | null;
+  commercial_snapshot?: import("../entitlements/plan-commercial").PlanCommercial | null;
+  provider_plan_ref?: string | null;
+  checkout_attempt_id?: string | null;
 }
 
 interface PaymentMethodRow {
@@ -128,6 +134,57 @@ export class BillingRepository
     });
   }
 
+  claimCheckout(tenantId: string, actorRef: string, definition: PlanDefinitionRecord, gstin?: string): Promise<string> {
+    return this.withTenant(tenantId, async client => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`billing-checkout:${tenantId}`]);
+      const configured = await client.query<{ updated_at: Date }>("SELECT updated_at FROM plan_definitions WHERE plan=$1 FOR SHARE",[definition.plan]);
+      if (configured.rows[0]?.updated_at.toISOString() !== definition.updatedAt.toISOString()) {
+        throw new BillingHttpError(412,"BILLING_PLAN_CHANGED","Plan changed; review its current price","/api/v1/billing/subscription");
+      }
+      const current = await client.query<BillingProfileRow>("SELECT * FROM billing_profiles WHERE tenant_id=$1 FOR UPDATE", [tenantId]);
+      const row = current.rows[0];
+      if (row && (row.checkout_attempt_id || (row.subscription_ref && !["cancelled", "completed", "expired"].includes(row.status)))) {
+        throw new BillingHttpError(409, "BILLING_SUBSCRIPTION_EXISTS", "Existing checkout or subscription must be resolved first", "/api/v1/billing/subscription");
+      }
+      const attemptId = randomUUID(), profileId = row?.id ?? randomUUID();
+      await client.query(`INSERT INTO billing_profiles (tenant_id,id,provider_id,status,current_plan,
+          gstin,commercial_snapshot,provider_plan_ref,checkout_attempt_id)
+        VALUES ($1,$2,'razorpay','checkout_creating',$3,$4,$5::jsonb,$6,$7)
+        ON CONFLICT (tenant_id) DO UPDATE SET status='checkout_creating',current_plan=$3,gstin=$4,
+          commercial_snapshot=$5::jsonb,provider_plan_ref=$6,checkout_attempt_id=$7,
+          subscription_ref=NULL,last_provider_event_at=0,updated_at=clock_timestamp()`,
+        [tenantId,profileId,definition.plan,gstin ?? null,JSON.stringify(definition.commercial),definition.commercial?.razorpayPlanId,attemptId]);
+      await client.query("UPDATE tenants SET billing_profile_id=$2,updated_at=clock_timestamp() WHERE id=$1", [tenantId,profileId]);
+      await this.auditCheckout(client,tenantId,attemptId,actorRef,"checkout_claimed");
+      return attemptId;
+    });
+  }
+
+  finishCheckout(tenantId: string, actorRef: string, attemptId: string, subscription: Subscription): Promise<BillingProfileRecord> {
+    return this.withTenant(tenantId, async client => {
+      const result = await client.query<BillingProfileRow>(`UPDATE billing_profiles SET subscription_ref=$3,
+          provider_customer_ref=$4,status='created',checkout_attempt_id=NULL,updated_at=clock_timestamp()
+        WHERE tenant_id=$1 AND checkout_attempt_id=$2 AND provider_plan_ref=$5
+        RETURNING *`, [tenantId,attemptId,subscription.id,subscription.providerCustomerRef,subscription.planId]);
+      if (!result.rows[0]) throw new BillingHttpError(409,"BILLING_CHECKOUT_CHANGED","Checkout state changed","/api/v1/billing/subscription");
+      await this.auditCheckout(client,tenantId,attemptId,actorRef,"checkout_created");
+      return mapProfile(result.rows[0]);
+    });
+  }
+
+  failCheckout(tenantId: string, actorRef: string, attemptId: string): Promise<void> {
+    return this.withTenant(tenantId, async client => {
+      const changed = await client.query(`UPDATE billing_profiles SET status='checkout_unconfirmed',updated_at=clock_timestamp()
+        WHERE tenant_id=$1 AND checkout_attempt_id=$2`, [tenantId,attemptId]);
+      if (changed.rowCount) await this.auditCheckout(client,tenantId,attemptId,actorRef,"checkout_unconfirmed");
+    });
+  }
+
+  private async auditCheckout(client: PoolClient, tenantId: string, attemptId: string, actorRef: string, reason: string): Promise<void> {
+    await client.query(`INSERT INTO billing_dunning_audits (tenant_id,id,provider_event_id,from_state,to_state,reason,actor_ref)
+      VALUES ($1,$2,$3,'active','active',$4,$5)`, [tenantId,randomUUID(),`checkout:${attemptId}`,reason,actorRef]);
+  }
+
   savePaymentMethod(
     tenantId: string,
     method: PaymentMethodRef,
@@ -211,5 +268,9 @@ function mapProfile(row: BillingProfileRow): BillingProfileRecord {
     currentPlan: row.current_plan,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    gstin: row.gstin ?? null,
+    commercialSnapshot: row.commercial_snapshot ?? null,
+    providerPlanRef: row.provider_plan_ref ?? null,
+    checkoutAttemptId: row.checkout_attempt_id ?? null,
   };
 }

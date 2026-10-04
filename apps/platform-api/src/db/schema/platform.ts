@@ -1,4 +1,5 @@
 import {
+  bigint,
   foreignKey,
   index,
   integer,
@@ -312,6 +313,11 @@ export const billingProfiles = pgTable(
     providerId: text("provider_id").notNull(),
     providerCustomerRef: text("provider_customer_ref"),
     subscriptionRef: text("subscription_ref"),
+    checkoutAttemptId: uuid("checkout_attempt_id"),
+    gstin: text("gstin"),
+    commercialSnapshot: jsonb("commercial_snapshot"),
+    providerPlanRef: text("provider_plan_ref"),
+    lastProviderEventAt: bigint("last_provider_event_at", { mode: "number" }).notNull().default(0),
     status: text("status").notNull(),
     currentPlan: text("current_plan"),
     createdAt,
@@ -388,6 +394,7 @@ export const billingDunningAudits = pgTable(
     fromState: text("from_state").notNull(),
     toState: text("to_state").notNull(),
     reason: text("reason").notNull(),
+    actorRef: text("actor_ref"),
     createdAt,
   },
   (table) => [

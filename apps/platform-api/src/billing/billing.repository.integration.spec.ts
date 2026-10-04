@@ -3,6 +3,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { BillingProvider, Subscription } from "@alterx/shared-clients";
+import { PostgresPlanDefinitionStore } from "../entitlements/plan-definition-store";
+import { BillingService } from "./billing.service";
 import { BillingRepository } from "./billing.repository";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
@@ -30,6 +33,7 @@ describe.skipIf(!databaseUrl)("BillingRepository PostgreSQL RLS", () => {
       [tenantA, tenantB],
     );
 
+    await admin.query(`INSERT INTO staff_users (id,identity_ref,email,roles) VALUES ('stf_checkout','auth0|fixture-checkout','staff@example.test',ARRAY['staff_admin'])`);
     const password = randomUUID();
     await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`);
     await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
@@ -52,6 +56,79 @@ describe.skipIf(!databaseUrl)("BillingRepository PostgreSQL RLS", () => {
       await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
       await admin.end();
     }
+  });
+
+  async function configuredPlan() {
+    return (await new PostgresPlanDefinitionStore(pool).upsert("basic", {
+      maxWorkflows: 3, maxProjects: 1, maxRunsPerDay: 10, maxConcurrentRuns: 1,
+      maxSandboxMinutesPerMonth: 30, maxAdsStorageMb: 500, maxIntegrations: 3,
+    }, "stf_checkout", { currency: "INR", basePriceMinor: 10003, razorpayPlanId: "plan_fixtureABC",
+      includedCredits: 100, extraCreditPriceMinor: 50, creditsPerVerifiedRun: 2 }, "fixture configuration")).record;
+  }
+
+  const checkoutResource: Subscription = { id: "sub_fixtureABC", tenantId: tenantA, planId: "plan_fixtureABC",
+    status: "created", currentPeriodStart: null, currentPeriodEnd: null, providerCustomerRef: null,
+    checkoutUrl: "https://rzp.io/rzp/fixture" };
+
+  it("claims one checkout under concurrency and durably binds the created result without granting paid access", async () => {
+    const definition = await configuredPlan();
+    let enter!: () => void, finish!: (value: Subscription) => void;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const result = new Promise<Subscription>(resolve => { finish = resolve; });
+    let calls = 0;
+    const provider = { createCheckoutSubscription: async () => { calls++; enter(); return result; } } as unknown as BillingProvider;
+    const service = new BillingService(repository,provider,new PostgresPlanDefinitionStore(pool));
+    const input = { plan_id: definition.plan, plan_version: definition.updatedAt.toISOString(), gstin: "27ABCDE1234F1Z5" };
+    const first = service.createSubscription(tenantA,input,"owner-fixture");
+    await entered;
+    await expect(service.createSubscription(tenantA,input,"owner-fixture")).rejects.toMatchObject({ response: { error_code: "BILLING_SUBSCRIPTION_EXISTS" } });
+    finish(checkoutResource);
+    expect(await first).toMatchObject({ planId: "basic", status: "created", checkoutUrl: checkoutResource.checkoutUrl });
+    expect(calls).toBe(1);
+    expect(await repository.getProfile(tenantA)).toMatchObject({ gstin: input.gstin, providerPlanRef: "plan_fixtureABC",
+      currentPlan: "basic", subscriptionRef: "sub_fixtureABC", status: "created", checkoutAttemptId: null });
+    expect(await repository.getProfile(tenantB)).toBeNull();
+    const audits = await admin.query("SELECT reason,actor_ref FROM billing_dunning_audits WHERE tenant_id=$1 ORDER BY created_at",[tenantA]);
+    expect(audits.rows).toEqual([{ reason: "checkout_claimed", actor_ref: "owner-fixture" }, { reason: "checkout_created", actor_ref: "owner-fixture" }]);
+    expect((await admin.query("SELECT * FROM entitlements WHERE tenant_id=$1",[tenantA])).rows).toHaveLength(0);
+  });
+
+  it("refuses unset or changed plan configuration before provider calls and preserves a concurrent version", async () => {
+    const definition = await configuredPlan();
+    let calls = 0;
+    const service = new BillingService(repository,{ createCheckoutSubscription: async () => { calls++; return checkoutResource; } } as unknown as BillingProvider,
+      new PostgresPlanDefinitionStore(pool));
+    await expect(service.createSubscription(tenantA,{ plan_id: "unset", plan_version: definition.updatedAt.toISOString() },"owner-fixture"))
+      .rejects.toMatchObject({ response: { error_code: "BILLING_PLAN_UNCONFIGURED" } });
+    await expect(service.createSubscription(tenantA,{ plan_id: "basic", plan_version: "2025-01-01T00:00:00.000Z" },"owner-fixture"))
+      .rejects.toMatchObject({ response: { error_code: "BILLING_PLAN_CHANGED" } });
+    await admin.query("UPDATE plan_definitions SET updated_at=updated_at+interval '1 second' WHERE plan='basic'");
+    await expect(repository.claimCheckout(tenantA,"owner-fixture",definition)).rejects.toMatchObject({ response: { error_code: "BILLING_PLAN_CHANGED" } });
+    expect(calls).toBe(0);
+    expect(await repository.getProfile(tenantA)).toBeNull();
+  });
+
+  it("rolls a checkout claim back when its attributed audit cannot be persisted", async () => {
+    const definition = await configuredPlan();
+    await admin.query(`CREATE FUNCTION reject_checkout_audit() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'audit unavailable'; END; $$;
+      CREATE TRIGGER reject_checkout_audit BEFORE INSERT ON billing_dunning_audits
+      FOR EACH ROW EXECUTE FUNCTION reject_checkout_audit();`);
+    await expect(repository.claimCheckout(tenantA,"owner-fixture",definition)).rejects.toThrow("audit unavailable");
+    expect(await repository.getProfile(tenantA)).toBeNull();
+  });
+
+  it("retains an unconfirmed provider operation and never blindly creates another subscription", async () => {
+    const definition = await configuredPlan();
+    let calls = 0;
+    const service = new BillingService(repository,{ createCheckoutSubscription: async () => { calls++; throw new Error("provider timeout"); } } as unknown as BillingProvider,
+      new PostgresPlanDefinitionStore(pool));
+    const input = { plan_id: "basic", plan_version: definition.updatedAt.toISOString() };
+    await expect(service.createSubscription(tenantA,input,"owner-fixture")).rejects.toMatchObject({ response: { error_code: "BILLING_PROVIDER_ERROR" } });
+    expect(await repository.getProfile(tenantA)).toMatchObject({ status: "checkout_unconfirmed", subscriptionRef: null });
+    await expect(service.getSubscription(tenantA)).rejects.toMatchObject({ response: { error_code: "BILLING_CHECKOUT_UNCONFIRMED" } });
+    await expect(service.createSubscription(tenantA,input,"owner-fixture")).rejects.toMatchObject({ response: { error_code: "BILLING_SUBSCRIPTION_EXISTS" } });
+    expect(calls).toBe(1);
   });
 
   it("stores references only and enforces default-deny plus tenant isolation", async () => {

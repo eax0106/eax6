@@ -1,9 +1,11 @@
+import type { PlanCommercial } from "../entitlements/plan-commercial";
 import type { EntitlementLimits } from "../entitlements/types";
 import type { PlanDefinitionAuditAction } from "../entitlements/plan-definition-store";
 
 export interface PlanDefinitionView {
   plan: string;
   limits: EntitlementLimits;
+  commercial?: PlanCommercial | null;
   updated_at: string;
   updated_by: string;
 }
@@ -13,6 +15,7 @@ export interface PlanDefinitionAuditView {
   plan: string;
   action: PlanDefinitionAuditAction;
   limits: EntitlementLimits | null;
+  commercial?: PlanCommercial | null;
   reason: string;
   staff_user_id: string;
   occurred_at: string;
@@ -26,12 +29,14 @@ export interface PlanDefinitionAuditView {
 export interface PlanPolicyView {
   plan: string;
   limits: EntitlementLimits;
+  commercial?: PlanCommercial | null;
   source: "plan_definition" | "config_provider";
   definition: PlanDefinitionView | null;
 }
 
 export interface UpsertPlanDefinitionInput {
   limits: EntitlementLimits;
+  commercial?: PlanCommercial | null;
   reason: string;
 }
 

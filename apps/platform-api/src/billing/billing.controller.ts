@@ -15,7 +15,6 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import type {
-  BillingPlan,
   Invoice,
   Page,
   PaymentMethodRef,
@@ -37,7 +36,7 @@ import {
   type BillingWebhookResult,
 } from "./billing-webhook.service";
 import { BillingService } from "./billing.service";
-import type { BillingSubscriptionView } from "./types";
+import type { BillingSubscriptionView, ConfiguredBillingPlanView } from "./types";
 import {
   parseAttachPaymentMethod,
   parseChangeSubscription,
@@ -82,7 +81,7 @@ export class BillingController {
   @Get("plans")
   @RequireTenantRole("admin")
   @RequirePermission("billing:read")
-  plans(): Promise<BillingPlan[]> {
+  plans(): Promise<ConfiguredBillingPlanView[]> {
     return this.billing.listPlans();
   }
 
@@ -108,6 +107,7 @@ export class BillingController {
     return this.billing.createSubscription(
       actor.tenant_id,
       parseCreateSubscription(body, "/api/v1/billing/subscription"),
+      actor.user_id,
     );
   }
 
