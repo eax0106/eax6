@@ -37,11 +37,12 @@ import type { ApprovalPolicyChange } from "./types"
 import * as workflowFolders from "./workflow-folders"
 import * as nodeOverrides from "./node-overrides"
 import * as live from "./live"
+import * as workspaceMembers from "./members"
 import * as liveDataExport from "./live-data-export"
 import * as liveMemorySettings from "./live-memory-settings"
 import { 
   mockWorkflows, mockRuns, mockDashboardSummary, 
-  mockWorkspaces, mockMembers, mockProfile, mockSessions, delay,
+  mockWorkspaces, mockProfile, mockSessions, delay,
   mockNodeTypes, mockProjects, mockArtifacts,
   mockHumanActions, mockHumanAnnotations, mockRecoveryEvents, mockWorkflowHealth,
   mockConversations, mockConversationMessages, mockTriggers, mockWebhooks, mockEvents, mockDashboardOverview,
@@ -50,7 +51,7 @@ import {
 } from "./mock/data"
 import { 
   type Workflow, type WorkflowSafeguards, type WorkflowVersion, type RunCostEstimate, type Run, type DashboardSummary, 
-  type Workspace, type PendingDeletionWorkspace, type Member, type WorkspaceRole, type TenantDataResidency,
+  type Workspace, type PendingDeletionWorkspace, type TenantDataResidency,
   type TenantDataResidencySettings,
   type Profile, type Session,
   type Project, type ProjectBrief, type ProjectClarification, type NodeTypeDefinition,
@@ -178,7 +179,8 @@ class ApiClient {
       id: `ws_${Date.now()}`,
       name: data.name,
       slug: data.slug,
-      role: "owner",
+      role: "admin",
+      tenantOwner: true,
       memberCount: 1,
       createdAt: new Date().toISOString()
     }
@@ -223,38 +225,14 @@ class ApiClient {
     mockWorkspaces.push(restored!.workspace)
   }
 
-  // Members
-  async getMembers(_workspaceId: string): Promise<Member[]> {
-    if (isLiveApi) return live.getMembers()
-    await delay(MOCK_DELAY)
-    return mockMembers
-  }
-
-  async inviteMember(_workspaceId: string, email: string, role: WorkspaceRole): Promise<Member> {
-    if (isLiveApi) return live.inviteMember(email, role)
-    await delay(MOCK_DELAY)
-    return {
-      id: `usr_${Date.now()}`,
-      name: email.split("@")[0],
-      email,
-      role,
-      status: "invited",
-      joinedAt: new Date().toISOString()
-    }
-  }
-
-  async updateMemberRole(_workspaceId: string, _memberId: string, _role: WorkspaceRole): Promise<void> {
-    await delay(MOCK_DELAY)
-  }
-
-  async removeMember(_workspaceId: string, _memberId: string): Promise<void> {
-    if (isLiveApi) return live.removeMember(_memberId)
-    await delay(MOCK_DELAY)
-  }
-
-  async resendInvite(_workspaceId: string, _memberId: string): Promise<void> {
-    await delay(MOCK_DELAY)
-  }
+  // Members and invitations share the same scoped live/mock lifecycle.
+  getMembers = workspaceMembers.getMembers
+  getInvitations = workspaceMembers.getInvitations
+  inviteMember = workspaceMembers.inviteMember
+  updateMemberRole = workspaceMembers.updateMemberRole
+  removeMember = workspaceMembers.removeMember
+  resendInvite = workspaceMembers.resendInvite
+  revokeInvite = workspaceMembers.revokeInvite
 
   // Settings: Profile
   async getProfile(): Promise<Profile> {
@@ -270,9 +248,7 @@ class ApiClient {
   }
 
   // Settings: Security
-  async changePassword(_data: any): Promise<void> {
-    await delay(MOCK_DELAY)
-  }
+  requestPasswordReset = workspaceMembers.requestPasswordReset
 
   // Settings: Sessions
   async getSessions(): Promise<Session[]> {

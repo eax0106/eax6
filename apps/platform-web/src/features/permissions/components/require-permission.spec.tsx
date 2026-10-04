@@ -2,7 +2,7 @@ import * as React from "react"
 import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 
-import { type WorkspaceRole } from "@/api/types"
+import { type UserRole } from "@/api/types"
 import { usePermissions } from "../hooks/usePermissions"
 import { RequirePermission } from "./require-permission"
 
@@ -28,7 +28,7 @@ import { RequirePermission } from "./require-permission"
 // runs it exactly once per mount; @testing-library/react's render() flushes
 // effects synchronously (act()-wrapped), so the role is applied before
 // render() returns.
-function Setter({ role }: { role: WorkspaceRole }) {
+function Setter({ role }: { role: UserRole }) {
   const { setMockRole } = usePermissions()
   React.useEffect(() => {
     setMockRole(role)
@@ -36,7 +36,7 @@ function Setter({ role }: { role: WorkspaceRole }) {
   return null
 }
 
-function setRole(role: WorkspaceRole) {
+function setRole(role: UserRole) {
   const { unmount } = render(<Setter role={role} />)
   unmount()
 }

@@ -1,7 +1,9 @@
+import type { TenantRole, WorkspaceRole } from "./types"
 import { apiGet, apiPost, mutationKey } from "./http"
 
 const verifierKey = "alterx_pkce_verifier"
 const stateKey = "alterx_pkce_state"
+const invitationKey = "alterx_pkce_invitation"
 
 export interface AuthSession {
   userId: string
@@ -12,6 +14,8 @@ export interface CurrentUser {
   tenantId: string
   email: string
   name: string
+  tenantRole?: TenantRole | null
+  workspaceRoles?: Array<{ workspaceId: string; role: WorkspaceRole }>
 }
 
 export async function getCurrentUser() {
@@ -19,6 +23,14 @@ export async function getCurrentUser() {
 }
 
 export async function startLogin() {
+  const parameters = new URL(window.location.href).searchParams
+  const invitation = parameters.get("invitation")
+  const organizationId = parameters.get("organization")
+  if ((invitation !== null || organizationId !== null) && (!invitation || invitation.length > 4096 || !organizationId || organizationId.length > 50)) {
+    throw new Error("Invalid invitation link")
+  }
+  sessionStorage.removeItem(invitationKey)
+  if (invitation) sessionStorage.setItem(invitationKey, invitation)
   const verifier = randomString(64)
   const state = randomString(32)
   const codeChallenge = await sha256Base64Url(verifier)
@@ -34,14 +46,14 @@ export async function startLogin() {
       "Accept": "application/json, application/problem+json",
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ redirectUri, state, codeChallenge }),
+    body: JSON.stringify({ redirectUri, state, codeChallenge, ...(invitation ? { invitation, organizationId } : {}) }),
   })
 
   if (response.ok) {
     const { url: location } = (await response.json()) as { url: string }
     const url = new URL(location)
     if (url.hostname === "mock.identity.local") {
-      await completeLogin({ code: "user:00000000-0000-7000-8000-000000000101", state })
+      await completeLogin({ code: invitation ? `invite:${invitation}` : "user:00000000-0000-7000-8000-000000000101", state })
       return
     }
     window.location.assign(location)
@@ -61,6 +73,7 @@ export async function completeLogin(query: { code?: string | null; state?: strin
     throw new Error("Invalid sign-in callback")
   }
 
+  const invitation = sessionStorage.getItem(invitationKey)
   const redirectUri = `${window.location.origin}/auth/callback`
   // /api/v1/signup finds-or-creates the user/tenant/workspace and issues the
   // session in one atomic, idempotent step, so it handles both first-time and
@@ -68,12 +81,13 @@ export async function completeLogin(query: { code?: string | null; state?: strin
   // the user already exists and has nowhere to provision a brand-new one.
   await apiPost<AuthSession>(
     "/api/v1/signup",
-    { code: query.code, redirectUri, codeVerifier: verifier },
+    { code: query.code, redirectUri, codeVerifier: verifier, ...(invitation ? { invitation } : {}) },
     { idempotencyKey: mutationKey("signup") },
   )
 
   sessionStorage.removeItem(verifierKey)
   sessionStorage.removeItem(stateKey)
+  sessionStorage.removeItem(invitationKey)
 }
 
 export async function refreshSession() {

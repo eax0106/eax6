@@ -1,3 +1,6 @@
+import { engineAuditClientFromEnvironment } from "../audit/engine-audit-client";
+import { PlatformDb } from "../signup/platform-db";
+import { MembershipIdentityResolver } from "./membership-identity-resolver";
 import { Module } from "@nestjs/common";
 import pg from "pg";
 import {
@@ -69,13 +72,18 @@ const databasePoolToken = Symbol("DatabasePool");
       inject: [sessionStoreToken, ssoConfigStoreToken],
     },
     {
+      provide: MembershipIdentityResolver,
+      useFactory: (pool: pg.Pool | undefined) => new MembershipIdentityResolver(pool ? new PlatformDb(pool) : undefined, engineAuditClientFromEnvironment()),
+      inject: [databasePoolToken],
+    },
+    {
       provide: IdentityService,
-      useFactory: (identityProvider: IdentityProvider, sessionStore: SessionStore) =>
-        new IdentityService(identityProvider, sessionStore),
-      inject: [IDENTITY_PROVIDER, sessionStoreToken],
+      useFactory: (identityProvider: IdentityProvider, sessionStore: SessionStore, resolver: MembershipIdentityResolver) =>
+        new IdentityService(identityProvider, sessionStore, undefined, resolver),
+      inject: [IDENTITY_PROVIDER, sessionStoreToken, MembershipIdentityResolver],
     },
   ],
-  exports: [IDENTITY_PROVIDER, IdentityService, UserProfileRepository],
+  exports: [IDENTITY_PROVIDER, IdentityService, UserProfileRepository, MembershipIdentityResolver],
 })
 export class IdentityModule {}
 

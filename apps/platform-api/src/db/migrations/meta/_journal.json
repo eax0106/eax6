@@ -257,6 +257,13 @@
     {
       "idx": 36,
       "version": "7",
+      "when": 1790078400000,
+      "tag": "0033_workspace_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
       "when": 1790247600000,
       "tag": "0034_subscription_commercial",
       "breakpoints": true

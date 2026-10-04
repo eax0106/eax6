@@ -128,6 +128,7 @@ describe("Auth0IdentityProvider edge behavior", () => {
     ).resolves.toEqual({
       userId: "auth0|fallback",
       tenantId: "org-fallback",
+      organizationId: "org-fallback",
       identityRef: "auth0|fallback",
       email: "fallback@example.com",
       emailVerified: false,

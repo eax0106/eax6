@@ -2,7 +2,7 @@ import * as React from "react"
 import { cleanup, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it } from "vitest"
 
-import { type WorkspaceRole } from "@/api/types"
+import { type UserRole } from "@/api/types"
 import { usePermissions } from "../hooks/usePermissions"
 import { PermissionGate } from "./permission-gate"
 
@@ -12,7 +12,7 @@ import { PermissionGate } from "./permission-gate"
 // used instead, and the setter runs from useEffect (not the render body) to
 // avoid an infinite render loop from zustand's set() always producing a new
 // state reference.
-function Setter({ role }: { role: WorkspaceRole }) {
+function Setter({ role }: { role: UserRole }) {
   const { setMockRole } = usePermissions()
   React.useEffect(() => {
     setMockRole(role)
@@ -20,7 +20,7 @@ function Setter({ role }: { role: WorkspaceRole }) {
   return null
 }
 
-function setRole(role: WorkspaceRole) {
+function setRole(role: UserRole) {
   const { unmount } = render(<Setter role={role} />)
   unmount()
 }

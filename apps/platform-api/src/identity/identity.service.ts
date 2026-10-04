@@ -9,6 +9,7 @@ import type {
 } from "./identity-provider.interface";
 import { IdentityHttpError } from "./problem";
 import { hashToken, type SessionStore } from "./session-store";
+import type { MembershipIdentityResolver } from "./membership-identity-resolver";
 import type { LoginDto } from "./dto/auth.dto";
 import {
   streamRevocationBus,
@@ -34,16 +35,25 @@ export class IdentityService {
     private readonly identityProvider: IdentityProvider,
     private readonly sessionStore: SessionStore,
     private readonly revocations: StreamRevocationBus = streamRevocationBus,
+    private readonly membershipResolver?: MembershipIdentityResolver,
   ) {}
 
   loginRedirectUrl(request: LoginDto): Promise<string> {
     return this.identityProvider.loginRedirectUrl(request);
   }
 
+  async requestPasswordReset(email: string, identityRef: string): Promise<void> {
+    if (!identityRef.startsWith("auth0|") && !identityRef.startsWith("mock|")) {
+      throw new IdentityHttpError(400, "PROVIDER_PASSWORD_REQUIRED", "Change your password with your sign-in provider");
+    }
+    await this.identityProvider.requestPasswordReset(email, identityRef);
+  }
+
   async handleCallback(input: {
     code: string;
     redirectUri: string;
     codeVerifier: string;
+    invitation?: string;
     deviceInfo?: Record<string, unknown>;
     ip?: string;
   }): Promise<IssuedSession> {
@@ -53,6 +63,11 @@ export class IdentityService {
       codeVerifier: input.codeVerifier,
     });
 
+    if (this.membershipResolver) {
+      const member = await this.membershipResolver.resolve(identity, input.invitation);
+      if (!member) throw new IdentityHttpError(403, "SIGNUP_REQUIRED", "Complete signup before signing in");
+      return this.issueSession(member.userId, member.tenantId, input.deviceInfo, input.ip);
+    }
     return this.issueSession(identity.userId, identity.tenantId, input.deviceInfo, input.ip);
   }
 

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type {
   AuthenticatedIdentity,
@@ -5,6 +6,8 @@ import type {
   DeviceAuthorization,
   DeviceTokenResult,
   IdentityProvider,
+  IdentityInvitation,
+  OrganizationInvitationRequest,
   LoginRedirectRequest,
   MfaChallenge,
   MfaEnrollment,
@@ -21,6 +24,8 @@ import {
 export class MockIdentityProvider implements IdentityProvider {
   private readonly orgs = new Map<string, string>();
   private readonly identities = new Map<string, AuthenticatedIdentity>();
+  private readonly invitations = new Map<string, { invitation: IdentityInvitation; email: string; revoked: boolean }>();
+  readonly passwordResetRequests: string[] = [];
   private readonly devicePolls = new Map<string, number>();
 
   constructor(
@@ -28,13 +33,34 @@ export class MockIdentityProvider implements IdentityProvider {
     private readonly ssoConfigStore: SsoConfigStore = new InMemorySsoConfigStore(),
   ) {}
 
+  async createOrganizationInvitation(request: OrganizationInvitationRequest): Promise<IdentityInvitation> {
+    z.object({ organizationId: z.string().min(1).max(50), email: z.string().email().max(320), inviterName: z.string().trim().min(1).max(300) }).strict().parse(request);
+    const ticket = randomUUID(), id = `uinv_${randomUUID()}`, url = new URL("https://mock.identity.local/login");
+    url.searchParams.set("organization", request.organizationId); url.searchParams.set("invitation", ticket);
+    const invitation = { id, organizationId: request.organizationId, invitationUrl: url.href, expiresAt: new Date(Date.now() + 604800000).toISOString() };
+    this.invitations.set(ticket, { invitation, email: request.email.toLowerCase(), revoked: false });
+    return { ...invitation };
+  }
+
+  async revokeOrganizationInvitation(organizationId: string, invitationId: string): Promise<void> {
+    const entry = [...this.invitations.values()].find(value => value.invitation.id === invitationId && value.invitation.organizationId === organizationId);
+    if (entry) entry.revoked = true;
+  }
+
+  async requestPasswordReset(email: string, identityRef: string): Promise<void> {
+    z.string().email().max(320).parse(email);
+    if (!identityRef.startsWith("auth0|") && !identityRef.startsWith("mock|")) throw new Error("Change your password with your sign-in provider");
+    this.passwordResetRequests.push(email);
+  }
+
   async getOrCreateOrgForTenant(tenantId: string, name: string): Promise<string> {
     const existing = this.orgs.get(tenantId);
     if (existing) {
       return existing;
     }
 
-    const orgId = `org_${name.toLowerCase().replaceAll(/\s+/g, "_")}_${tenantId.slice(0, 8)}`;
+    void name;
+    const orgId = `org_${tenantId.replaceAll("-", "")}`;
     this.orgs.set(tenantId, orgId);
     return orgId;
   }
@@ -50,6 +76,11 @@ export class MockIdentityProvider implements IdentityProvider {
     if (request.organizationId) {
       url.searchParams.set("organization", request.organizationId);
     }
+    if (request.invitation) {
+      const entry = this.invitations.get(request.invitation);
+      if (!entry || entry.revoked || Date.parse(entry.invitation.expiresAt) <= Date.now() || entry.invitation.organizationId !== request.organizationId) throw new Error("Invitation is unavailable");
+      url.searchParams.set("invitation", request.invitation);
+    }
     if (request.connection) {
       url.searchParams.set("connection", request.connection);
     }
@@ -58,6 +89,15 @@ export class MockIdentityProvider implements IdentityProvider {
   }
 
   async handleCallback(request: CallbackRequest): Promise<AuthenticatedIdentity> {
+    if (request.code.startsWith("invite:")) {
+      const entry = this.invitations.get(request.code.slice(7));
+      if (!entry || entry.revoked || Date.parse(entry.invitation.expiresAt) <= Date.now()) throw new Error("Invitation is unavailable");
+      const identityRef = `mock|${entry.email}`;
+      const current = [...this.identities.values()].find(value => value.identityRef === identityRef);
+      const identity = { userId: current?.userId ?? randomUUID(), tenantId: entry.invitation.organizationId, organizationId: entry.invitation.organizationId,
+        identityRef, email: entry.email, emailVerified: true, displayName: entry.email.split("@")[0]! };
+      this.identities.set(identity.userId, identity); return identity;
+    }
     const userId = request.code.startsWith("user:")
       ? request.code.slice("user:".length)
       : "00000000-0000-7000-8000-000000000101";

@@ -8,12 +8,16 @@ export function SignIn() {
   const navigate = useNavigate()
   const { signIn } = useAuth()
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [error, setError] = React.useState("")
 
   async function onSignIn() {
     setIsSubmitting(true)
+    setError("")
     try {
       await signIn()
       navigate("/app/dashboard")
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to sign in")
     } finally {
       setIsSubmitting(false)
     }
@@ -24,10 +28,11 @@ export function SignIn() {
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl">Sign in</CardTitle>
         <CardDescription>
-          Continue with Google to access your workspace
+          Continue with your identity provider to access your workspace
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {error && <p role="alert" className="text-danger mb-3">{error}</p>}
         <Button
           variant="outline"
           type="button"
@@ -35,7 +40,7 @@ export function SignIn() {
           loading={isSubmitting}
           onClick={onSignIn}
         >
-          Continue with Google
+          Continue with identity provider
         </Button>
       </CardContent>
       <CardFooter className="flex flex-col text-center">

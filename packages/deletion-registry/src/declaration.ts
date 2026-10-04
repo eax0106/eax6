@@ -98,6 +98,7 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "platform_db", schema: "public", table: "workflow_safeguards", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "workspace_connector_configs", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "workspace_exports", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
+  { database: "platform_db", schema: "public", table: "workspace_invitations", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "workspace_members", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "workspaces", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "orchestration_db", schema: "public", table: "budget_reservations", owner: "orchestration-service", erasure: { kind: "provider", provider: "orchestration-service" } },

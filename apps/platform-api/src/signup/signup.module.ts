@@ -1,3 +1,4 @@
+import { MembershipIdentityResolver } from "../identity/membership-identity-resolver";
 import { Module } from "@nestjs/common";
 import { sharedPool } from "../db/shared-pool";
 import {
@@ -50,6 +51,7 @@ import { SignupService } from "./signup.service";
         PlatformDb,
         ProcessLocalSignupIdempotencyStore,
         ONBOARDING_INITIALIZER,
+        MembershipIdentityResolver,
       ],
       useFactory: (
         identityProvider: IdentityProvider,
@@ -59,6 +61,7 @@ import { SignupService } from "./signup.service";
         persistence: PlatformDb,
         idempotency: IdempotencyStore,
         onboardingInitializer: OnboardingInitializer,
+        resolver: MembershipIdentityResolver,
       ) =>
         new SignupService(
           identityProvider,
@@ -68,6 +71,7 @@ import { SignupService } from "./signup.service";
           persistence,
           idempotency,
           onboardingInitializer,
+          resolver,
         ),
     },
   ],

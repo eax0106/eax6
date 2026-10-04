@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   foreignKey,
@@ -112,6 +113,28 @@ export const workspaceMembers = pgTable(
     ),
   ],
 );
+
+export const workspaceInvitations = pgTable("workspace_invitations", {
+  id: uuid("id").primaryKey(),
+  tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
+  workspaceId: uuid("workspace_id").notNull(),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  status: text("status").notNull().default("delivery_failed"),
+  invitedBy: uuid("invited_by").notNull().references(() => users.id),
+  providerOrgRef: text("provider_org_ref").notNull(),
+  deliveryAttemptId: uuid("delivery_attempt_id"),
+  providerInvitationId: text("provider_invitation_id"),
+  providerTicketHash: text("provider_ticket_hash"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull().default(sql`now()+interval '7 days'`),
+  acceptedBy: uuid("accepted_by").references(() => users.id),
+  acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+  createdAt, updatedAt,
+}, table => [
+  foreignKey({ columns: [table.tenantId, table.workspaceId], foreignColumns: [workspaces.tenantId, workspaces.id], name: "workspace_invitations_workspace_fk" }),
+  uniqueIndex("workspace_invitations_pending_email_unique").on(table.tenantId, table.workspaceId, table.email).where(sql`${table.status}='pending'`),
+  uniqueIndex("workspace_invitations_ticket_unique").on(table.providerTicketHash).where(sql`${table.providerTicketHash} IS NOT NULL`),
+]);
 
 export const entitlements = pgTable("entitlements", {
   id: uuid("id").primaryKey(),

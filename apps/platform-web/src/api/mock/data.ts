@@ -122,15 +122,15 @@ export const mockDashboardSummary: DashboardSummary = {
 import { type Workspace, type Member, type Session, type Profile } from "../types"
 
 export const mockWorkspaces: Workspace[] = [
-  { id: "ws_1", name: "AlterX", slug: "alterx", role: "owner", memberCount: 4, createdAt: "2024-01-01T00:00:00Z" },
+  { id: "ws_1", name: "AlterX", slug: "alterx", role: "admin", tenantOwner: true, memberCount: 4, createdAt: "2024-01-01T00:00:00Z" },
   { id: "ws_2", name: "Acme AI", slug: "acme-ai", role: "admin", memberCount: 12, createdAt: "2024-02-15T00:00:00Z" },
-  { id: "ws_3", name: "Personal", slug: "personal", role: "owner", memberCount: 1, createdAt: "2024-03-10T00:00:00Z" },
+  { id: "ws_3", name: "Personal", slug: "personal", role: "admin", tenantOwner: true, memberCount: 1, createdAt: "2024-03-10T00:00:00Z" },
 ]
 
 export const mockMembers: Member[] = [
-  { id: "usr_1", name: "Ameen", email: "ameen@example.com", role: "owner", status: "active", joinedAt: "2024-01-01T00:00:00Z" },
+  { id: "usr_1", name: "Ameen", email: "ameen@example.com", role: "admin", tenantOwner: true, status: "active", joinedAt: "2024-01-01T00:00:00Z" },
   { id: "usr_2", name: "Sarah Chen", email: "sarah@acme.ai", role: "admin", status: "active", joinedAt: "2024-01-05T00:00:00Z" },
-  { id: "usr_3", name: "Daniel Kim", email: "daniel@acme.ai", role: "member", status: "active", joinedAt: "2024-02-20T00:00:00Z" },
+  { id: "usr_3", name: "Daniel Kim", email: "daniel@acme.ai", role: "editor", status: "active", joinedAt: "2024-02-20T00:00:00Z" },
   { id: "usr_4", name: "Priya Rao", email: "priya@acme.ai", role: "viewer", status: "invited", joinedAt: "2024-03-01T00:00:00Z" },
 ]
 

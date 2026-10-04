@@ -49,17 +49,23 @@ tenant_a="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 tenant_b="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 user_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
 workspace_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+invitation_id="$(python3 -c 'import uuid; print(uuid.uuid4())')"
+organization_id="org_${tenant_a//-/}"
+ticket_hash="$(python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())' "$invitation_id")"
 cleanup() {
   # Only this check's generated fixture IDs, in the migration-owner transaction.
-  psql_as "$url" -c "BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM workspace_members WHERE user_id = '$user_id'; DELETE FROM tenant_members WHERE user_id = '$user_id'; DELETE FROM workspaces WHERE id = '$workspace_id'; DELETE FROM users WHERE id = '$user_id'; DELETE FROM tenants WHERE id IN ('$tenant_a', '$tenant_b'); COMMIT;" >/dev/null 2>&1 || true
+  psql_as "$url" -c "BEGIN; SET LOCAL session_replication_role = replica; DELETE FROM workspace_invitations WHERE id = '$invitation_id'; DELETE FROM workspace_members WHERE user_id = '$user_id'; DELETE FROM tenant_members WHERE user_id = '$user_id'; DELETE FROM workspaces WHERE id = '$workspace_id'; DELETE FROM users WHERE id = '$user_id'; DELETE FROM tenants WHERE id IN ('$tenant_a', '$tenant_b'); COMMIT;" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 psql_as "$url" -c "
   INSERT INTO tenants (id, name, status) VALUES ('$tenant_a', 'roles-check-a', 'active'), ('$tenant_b', 'roles-check-b', 'active');
+  UPDATE tenants SET identity_org_ref='$organization_id' WHERE id='$tenant_a';
   INSERT INTO users (id, identity_ref, email, status) VALUES ('$user_id', 'check|$user_id', 'roles-check@example.test', 'active');
   INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES (gen_random_uuid(), '$tenant_a', '$user_id', 'owner'), (gen_random_uuid(), '$tenant_b', '$user_id', 'member');
   INSERT INTO workspaces (id, tenant_id, name, status) VALUES ('$workspace_id', '$tenant_a', 'roles-check', 'active');
-  INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES (gen_random_uuid(), '$tenant_a', '$workspace_id', '$user_id', 'admin');" >/dev/null
+  INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role) VALUES (gen_random_uuid(), '$tenant_a', '$workspace_id', '$user_id', 'admin');
+  INSERT INTO workspace_invitations (id,tenant_id,workspace_id,email,role,status,invited_by,provider_org_ref,provider_invitation_id,provider_ticket_hash)
+    VALUES ('$invitation_id','$tenant_a','$workspace_id','invitee@roles-check.test','approver','pending','$user_id','$organization_id','uinv_roles_check','$ticket_hash');" >/dev/null
 
 members="tenant_members WHERE user_id = '$user_id'"
 [[ "$(psql_as "$app" -c "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")" == f ]] \
@@ -72,8 +78,22 @@ members="tenant_members WHERE user_id = '$user_id'"
   || fail "tenant data update unavailable"
 [[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_signup('check|$user_id', '$tenant_a') WHERE \"userId\" = '$user_id' AND \"workspaceId\" = '$workspace_id'")" == 1 ]] \
   || fail "tenant signup lookup unavailable"
-[[ "$(psql_as "$app" -c "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND p.oid <> 'resolve_existing_signup(text,uuid)'::regprocedure AND has_function_privilege(current_user,p.oid,'EXECUTE')")" == 0 ]] \
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND p.oid NOT IN ('resolve_existing_signup(text,uuid)'::regprocedure,'resolve_workspace_invitation(text,text,text)'::regprocedure,'resolve_existing_organization_member(text,text)'::regprocedure) AND has_function_privilege(current_user,p.oid,'EXECUTE')")" == 0 ]] \
   || fail "tenant function grant check failed"
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM workspace_invitations WHERE id='$invitation_id'")" == 0 ]] \
+  || fail "invitation rows require tenant context"
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_workspace_invitation('$organization_id','invitee@roles-check.test','$ticket_hash') WHERE \"invitationId\"='$invitation_id' AND \"workspaceId\"='$workspace_id'")" == 1 ]] \
+  || fail "exact invitation bootstrap unavailable"
+for context in "'$organization_id','other@roles-check.test','$ticket_hash'" "'org_wrong','invitee@roles-check.test','$ticket_hash'" "'$organization_id','invitee@roles-check.test','invalid-hash'"; do
+  [[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_workspace_invitation($context)")" == 0 ]] \
+    || fail "invitation bootstrap accepted mismatched context"
+done
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_organization_member('check|$user_id','$organization_id') WHERE \"userId\"='$user_id' AND \"workspaceId\"='$workspace_id'")" == 1 ]] \
+  || fail "exact organization membership bootstrap unavailable"
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_organization_member('check|unknown','$organization_id')")" == 0 ]] \
+  || fail "organization bootstrap accepted unknown identity"
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_organization_member('check|$user_id','org_wrong')")" == 0 ]] \
+  || fail "organization bootstrap accepted wrong organization"
 for call in 'admin_list_tenants()' "admin_list_users('$user_id')" "admin_revoke_user_sessions('$user_id')" 'admin_list_billing_issues()'; do
   if psql_as "$app" -c "SELECT $call" >/dev/null 2>&1; then
     fail "tenant and staff function grants must differ"

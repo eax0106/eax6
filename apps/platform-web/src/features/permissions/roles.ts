@@ -1,6 +1,6 @@
-import { type Permission, type WorkspaceRole } from "@/api/types"
+import { type Permission, type UserRole } from "@/api/types"
 
-export const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   owner: [
     "workspace.manage",
     "member.read",
@@ -87,7 +87,8 @@ export const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
     "data.export",
     "data.delete",
   ],
-  member: [
+  editor: [
+    "billing.read",
     "member.read",
     "role.read",
     "workflow.read",
@@ -98,9 +99,6 @@ export const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
     "project.create",
     "run.read",
     "human_action.read",
-    "human_action.claim",
-    "human_action.decide",
-    "human_action.annotate",
     "knowledge.read",
     "connection.read",
     "conversation.read",
@@ -111,6 +109,15 @@ export const ROLE_PERMISSIONS: Record<WorkspaceRole, Permission[]> = {
     "knowledge.test_retrieval",
     "credential.read",
     "channel.read",
+  ],
+  operator: [
+    "member.read", "role.read", "workflow.read", "workflow.update", "workflow.run",
+    "project.read", "run.read", "human_action.read", "human_action.claim", "human_action.decide",
+    "knowledge.read", "connection.read", "conversation.read", "trigger.read", "event.read", "billing.read",
+  ],
+  approver: [
+    "member.read", "role.read", "workflow.read", "project.read", "run.read", "human_action.read",
+    "human_action.decide", "knowledge.read", "connection.read", "conversation.read", "event.read", "billing.read",
   ],
   viewer: [
     "member.read",
