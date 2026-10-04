@@ -77,7 +77,9 @@ export const platformApiEnvSchema = z
     OAUTH_STATE_TTL_SECONDS: z.string().regex(/^[1-9]\d*$/).optional(),
     AWS_REGION: z.string().min(1).optional(),
     MARKETPLACE_OBJECT_STORAGE_PROVIDER: z.enum(["s3", "mock"]).default("mock"),
-    REGISTRY_SCAN_PROVIDER: z.enum(["sandbox", "mock"]).default("mock"),
+    REGISTRY_SCAN_PROVIDER: z.literal("osv").default("osv"),
+    REGISTRY_PACKAGE_BUCKET: z.string().regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/).optional(),
+    OSV_SCANNER_EXECUTABLE: z.string().min(1).optional(),
   })
   .superRefine((env, context) => {
     if (env.ENGINE_BASE_URL) {
@@ -147,9 +149,6 @@ export const platformApiEnvSchema = z
     }
     if (env.MARKETPLACE_OBJECT_STORAGE_PROVIDER === "s3" && !env.AWS_REGION) {
       context.addIssue({ code: "custom", path: ["AWS_REGION"], message: "AWS_REGION required when MARKETPLACE_OBJECT_STORAGE_PROVIDER=s3" });
-    }
-    if (env.REGISTRY_SCAN_PROVIDER === "sandbox") {
-      context.addIssue({ code: "custom", path: ["REGISTRY_SCAN_PROVIDER"], message: "REGISTRY_SCAN_PROVIDER=sandbox is unavailable until SCAN-1" });
     }
     if (env.STATUS_PAGE_PROVIDER === "atlassian") {
       requireFields(
@@ -263,4 +262,8 @@ export function validatePlatformApiEnv(env: NodeJS.ProcessEnv): PlatformApiEnv {
   }
 
   return parsed.data;
+}
+
+export function registryPackageScanConfiguration(env: NodeJS.ProcessEnv = process.env) {
+  return { operationsDatabaseUrl: env.OPERATIONS_MARKETPLACE_DATABASE_URL, executableSearchPath: env.PATH, bucket: env.REGISTRY_PACKAGE_BUCKET, region: env.AWS_REGION ?? "ap-south-1", executable: env.OSV_SCANNER_EXECUTABLE ?? "osv-scanner" };
 }

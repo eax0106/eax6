@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./http"
-import type { MarketplaceReviewItem, SellerVerification } from "./services/marketplace-admin"
+import type { MarketplaceReviewItem, SellerVerification, ToolVersionReviewItem } from "./services/marketplace-admin"
 import type { BillingIssue } from "./services/billing-ops"
 
 // Admin console, marketplace moderation and billing operations (tasks B2.1,
@@ -106,4 +106,16 @@ function mapIssue(value: unknown): BillingIssue {
 export async function listBillingIssues(): Promise<BillingIssue[]> {
   const body = await apiGet<unknown>("/api/v1/admin/billing/issues")
   return (Array.isArray(body) ? body : []).map(mapIssue)
+}
+
+// First tool version: the API attributes staff from the authenticated session.
+export function listToolVersionReviews(): Promise<ToolVersionReviewItem[]> {
+  return apiGet<ToolVersionReviewItem[]>("/api/v1/admin/marketplace/governance/tools/review-queue")
+}
+
+export function reviewToolVersion(item: ToolVersionReviewItem, decision: "approved" | "rejected", reason: string): Promise<ToolVersionReviewItem["version"]> {
+  return apiPost<ToolVersionReviewItem["version"]>(
+    `/api/v1/admin/marketplace/governance/tools/${encodeURIComponent(item.manifestId)}/versions/${encodeURIComponent(item.version.id)}/review`,
+    { scanReportId: item.scan.id, decision, reason: reason.trim() },
+  )
 }

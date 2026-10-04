@@ -1,7 +1,7 @@
 import { isLiveApi } from "../http"
 import * as live from "../live-admin-commerce"
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+import { delay } from "../mock/data"
 
 export interface MarketplaceReviewItem {
   id: string
@@ -36,7 +36,43 @@ const MOCK_REVIEWS: MarketplaceReviewItem[] = [
   { id: "mrev-3", listingName: "Support Bot Pro", sellerName: "Acme AI", assetType: "agent", risk: "medium", status: "approved", submittedAt: "2024-06-15T00:00:00Z", reviewer: { id: "u-sys", name: "System Admin" } }
 ]
 
+import type { ToolVersionReviewItem } from "@alterx/shared-clients"
+export type { ToolVersionReviewItem } from "@alterx/shared-clients"
+
 export class MarketplaceAdminService {
+  private readonly toolVersions: ToolVersionReviewItem[] = [{
+    manifestId: "tlm_demo", tenantId: "ten_demo", name: "Demo CRM connector",
+    version: { id: "tlv_demo", manifestId: "tlm_demo", pinned: false, publishedAt: null, version: "1.0.0", artifactRef: "s3://demo/connector.tgz?versionId=demo", capabilities: ["crm.read"], permissions: ["crm.contacts.read"], status: "review_pending", scanReportId: "scn_demo" },
+    scan: { id: "scn_demo", toolVersionId: "tlv_demo", verdict: "clean", findings: [], scannerVersion: "demo", durationMs: 50, scannedAt: "2026-10-04T00:00:00.000Z" },
+  }]
+
+  async toolVersionReviewQueue(): Promise<ToolVersionReviewItem[]> {
+    if (isLiveApi) return live.listToolVersionReviews()
+    await delay(100)
+    return structuredClone(this.toolVersions.filter(item => item.version.status === "review_pending"))
+  }
+
+  async reviewToolVersion(item: ToolVersionReviewItem, decision: "approved" | "rejected", reason: string): Promise<ToolVersionReviewItem["version"]> {
+    if (isLiveApi) return live.reviewToolVersion(item, decision, reason)
+    await delay(100)
+    const current = this.toolVersions.find(value => value.manifestId === item.manifestId && value.version.id === item.version.id)
+    if (!current) throw new Error("Tool version was not found")
+    if (!reason.trim()) throw new Error("Review reason is required")
+    if (current.scan.id !== item.scan.id || current.version.scanReportId !== item.scan.id) throw new Error("The scan changed; reload before reviewing")
+    const prior = current.version.review
+    if (prior) {
+      if (prior.decision !== decision || prior.reason !== reason.trim()) throw new Error("This scan already has a different recorded staff decision")
+      return structuredClone(current.version)
+    }
+    if (current.version.status !== "review_pending" || current.scan.verdict !== "clean" || current.scan.findings.length) throw new Error("Staff approval requires a complete clean scan")
+    const updated: ToolVersionReviewItem["version"] = { ...current.version,
+      status: decision === "approved" ? "published" : "scan_failed",
+      review: { scanReportId: item.scan.id, decision, reason: reason.trim(), reviewedBy: "stf_demo", reviewedAt: new Date().toISOString() },
+    }
+    this.toolVersions[this.toolVersions.indexOf(current)] = { ...current, version: updated }
+    return structuredClone(updated)
+  }
+
   async reviewQueue(): Promise<MarketplaceReviewItem[]> {
     if (isLiveApi) return live.listMarketplaceReviews()
     await delay(300)
