@@ -5,8 +5,7 @@ import { queryKeys } from "@/api/query-keys"
 import { Card } from "@/components/ui/card"
 import { StatusBadge } from "@/components/common/status-badge"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Loader2, ArrowLeft, Shield, AlertTriangle, Lock, Unlock } from "lucide-react"
+import { Loader2, ArrowLeft, Shield, Lock, Unlock } from "lucide-react"
 
 export function UserDetail() {
   const { userId } = useParams<{ userId: string }>()
@@ -68,12 +67,6 @@ export function UserDetail() {
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-3">
             {user.name}
             <StatusBadge status={user.status} />
-            {user.riskState && user.riskState !== "normal" && (
-              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                <AlertTriangle className="w-3 h-3 mr-1" />
-                Risk: {user.riskState}
-              </Badge>
-            )}
           </h1>
           <p className="text-slate-400 mt-1">{user.email} • ID: {user.id}</p>
         </div>
@@ -102,10 +95,11 @@ export function UserDetail() {
           <p className="text-lg font-medium text-slate-200 mt-1">{new Date(user.createdAt).toLocaleDateString()}</p>
         </Card>
         <Card className="p-4 bg-slate-900 border-slate-800">
-          <p className="text-sm text-slate-400">MFA Status</p>
-          <p className={`text-lg font-medium mt-1 ${user.mfaEnabled === undefined ? "text-slate-500" : user.mfaEnabled ? "text-emerald-400" : "text-amber-400"}`}>
-            {user.mfaEnabled === undefined ? "—" : user.mfaEnabled ? "Enabled" : "Disabled"}
-          </p>
+          <p className="text-sm text-slate-400">Identity security</p>
+          <a href="https://manage.auth0.com/dashboard" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+            Open Auth0 dashboard
+          </a>
+          <p className="text-sm text-slate-400 mt-1">Select this user's Auth0 tenant to review MFA and identity risk.</p>
         </Card>
       </div>
 

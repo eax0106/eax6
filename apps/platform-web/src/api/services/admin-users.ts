@@ -5,9 +5,9 @@ import * as live from "../live-admin-users"
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const MOCK_USERS: AdminUser[] = [
-  { id: "usr-1", name: "Alice Administrator", email: "alice@acme.ai", status: "active", tenantIds: ["ten-1"], createdAt: "2024-01-15T00:00:00Z", lastActiveAt: new Date().toISOString(), mfaEnabled: true, riskState: "normal" },
-  { id: "usr-2", name: "Bob Developer", email: "bob@acme.ai", status: "active", tenantIds: ["ten-1"], createdAt: "2024-02-10T00:00:00Z", lastActiveAt: new Date().toISOString(), mfaEnabled: true, riskState: "normal" },
-  { id: "usr-3", name: "Eve Suspicious", email: "eve@stark.com", status: "suspended", tenantIds: ["ten-2"], createdAt: "2024-08-01T00:00:00Z", lastActiveAt: "2024-08-05T00:00:00Z", mfaEnabled: false, riskState: "restricted" }
+  { id: "usr-1", name: "Alice Administrator", email: "alice@acme.ai", status: "active", tenantIds: ["ten-1"], createdAt: "2024-01-15T00:00:00Z", lastActiveAt: new Date().toISOString() },
+  { id: "usr-2", name: "Bob Developer", email: "bob@acme.ai", status: "active", tenantIds: ["ten-1"], createdAt: "2024-02-10T00:00:00Z", lastActiveAt: new Date().toISOString() },
+  { id: "usr-3", name: "Eve Suspicious", email: "eve@stark.com", status: "suspended", tenantIds: ["ten-2"], createdAt: "2024-08-01T00:00:00Z", lastActiveAt: "2024-08-05T00:00:00Z" }
 ]
 
 const MOCK_NOTES: Record<string, AdminNote[]> = {
@@ -57,7 +57,7 @@ export class AdminUsersService {
     await delay(400)
     const idx = MOCK_USERS.findIndex(u => u.id === id)
     if (idx === -1) throw new Error("Not found")
-    MOCK_USERS[idx] = { ...MOCK_USERS[idx], status: "suspended", riskState: "restricted" }
+    MOCK_USERS[idx] = { ...MOCK_USERS[idx], status: "suspended" }
     await this.addNote(id, `Suspended. Reason: ${reason}`)
     return MOCK_USERS[idx]
   }
@@ -67,7 +67,7 @@ export class AdminUsersService {
     await delay(400)
     const idx = MOCK_USERS.findIndex(u => u.id === id)
     if (idx === -1) throw new Error("Not found")
-    MOCK_USERS[idx] = { ...MOCK_USERS[idx], status: "active", riskState: "normal" }
+    MOCK_USERS[idx] = { ...MOCK_USERS[idx], status: "active" }
     await this.addNote(id, `Restored. Reason: ${reason}`)
     return MOCK_USERS[idx]
   }

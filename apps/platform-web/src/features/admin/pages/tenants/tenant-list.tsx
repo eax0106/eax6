@@ -29,19 +29,18 @@ export function TenantList() {
               <TableHead className="text-slate-400">Plan</TableHead>
               <TableHead className="text-slate-400 text-right">Members</TableHead>
               <TableHead className="text-slate-400 text-right">30d Runs</TableHead>
-              <TableHead className="text-slate-400 text-right">Risk</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={5} className="h-24 text-center text-slate-500">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto" />
                 </TableCell>
               </TableRow>
             ) : tenants?.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-slate-500">
+                <TableCell colSpan={5} className="h-24 text-center text-slate-500">
                   No tenants found.
                 </TableCell>
               </TableRow>
@@ -64,9 +63,6 @@ export function TenantList() {
                   </TableCell>
                   <TableCell className="text-right text-slate-300">{t.memberCount ?? "—"}</TableCell>
                   <TableCell className="text-right text-slate-300">{t.runCount30d?.toLocaleString() ?? "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <StatusBadge status={t.riskState || "normal"} />
-                  </TableCell>
                 </TableRow>
               ))
             )}
