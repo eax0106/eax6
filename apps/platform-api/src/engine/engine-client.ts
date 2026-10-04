@@ -90,6 +90,7 @@ export class EngineClient {
     return this.request("POST", path, context, {
       body,
       idempotencyKey: options.idempotencyKey,
+      ...(options.ifMatch === undefined ? {} : { ifMatch: options.ifMatch }),
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     });
   }

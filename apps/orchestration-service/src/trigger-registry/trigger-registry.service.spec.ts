@@ -114,7 +114,7 @@ function createFakeStore(): {
             };
           }
 
-          if (sql.startsWith("SELECT type, status, workspace_id FROM triggers")) {
+          if (sql.startsWith("SELECT type, status, workspace_id, provider, workflow_id FROM triggers")) {
             const [tenantId, triggerId] = values as [string, string];
             const row = triggers.get(triggerId);
             const match =

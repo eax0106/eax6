@@ -1,3 +1,4 @@
+import { HostedFormDefinitionSchema, HostedFormSetupSchema, WorkspaceIdSchema, type HostedFormDefinition, type HostedFormSetup } from "@alterx/contracts"
 import { CreateWorkflowChatRequestSchema, SendWorkflowChatMessageSchema, WorkflowChatResourceSchema, WorkflowChatMessageSchema, WorkflowChatExchangeSchema } from "@alterx/contracts"
 import { apiDelete, apiGet, apiGetWithEtag, apiPatch, apiPost, apiPut, mutationKey } from "./http"
 import { compileDag } from "./compile-dag"
@@ -826,6 +827,36 @@ export async function createTrigger(data: Partial<Trigger>): Promise<Trigger> {
   return mapTrigger(body.trigger ?? body)
 }
 
+export async function getHostedForm(id: string): Promise<HostedFormSetup> {
+  return HostedFormSetupSchema.parse(await apiGet(`/api/v1/triggers/${encodeURIComponent(id)}/public-form`))
+}
+
+export async function createHostedForm(workflowId: string, workflowVersionId: string, definition: HostedFormDefinition): Promise<Trigger> {
+  const form = HostedFormDefinitionSchema.parse(definition)
+  const workflow = await apiGet<AnyRecord>(`/api/v1/workflows/${encodeURIComponent(workflowId)}`)
+  const raw = workflow.workspaceId ?? workflow.workspace_id
+  const workspaceId = WorkspaceIdSchema.parse(typeof raw === "string" && !raw.startsWith("ws_") ? `ws_${raw}` : raw)
+  const result = await apiPost<AnyRecord>("/api/v1/triggers", {
+    workflowId, workspaceId, workflowVersionId, name: form.title, type: "webhook",
+    provider: "alter_public_form", config: { publicForm: form },
+  }, { idempotencyKey: mutationKey("hosted-form-create") })
+  const trigger = mapTrigger(result.trigger ?? result)
+  return trigger
+}
+
+export async function updateHostedForm(id: string, definition: HostedFormDefinition, workflowVersionId: string, ifMatch: string): Promise<HostedFormSetup> {
+  await apiPost(`/api/v1/triggers/${encodeURIComponent(id)}/versions`, {
+    workflowVersionId, config: { publicForm: HostedFormDefinitionSchema.parse(definition) },
+  }, { idempotencyKey: mutationKey("hosted-form-edit"), ifMatch })
+  return getHostedForm(id)
+}
+
+export async function setHostedFormStatus(id: string, status: "enabled" | "disabled" | "archived", ifMatch: string): Promise<Trigger> {
+  return mapTrigger(await apiPatch(`/api/v1/triggers/${encodeURIComponent(id)}/public-form/status`, { status }, {
+    idempotencyKey: mutationKey("hosted-form-status"), ifMatch,
+  }))
+}
+
 export async function updateTrigger(id: string, data: Partial<Trigger>): Promise<Trigger> {
   if (data.enabled === undefined) {
     throw new Error("Trigger updates require an enabled state")
@@ -1535,6 +1566,7 @@ function mapTrigger(value: unknown): Trigger {
   return {
     id: asString(item.id ?? item.trigger_id),
     workflowId: asString(item.workflowId ?? item.workflow_id),
+    provider: item.provider ?? null,
     type: (item.type === "cron" ? "schedule" : String(item.type ?? "webhook")) as Trigger["type"],
     name: String(item.name ?? "Trigger"),
     enabled: status === "enabled" || Boolean(item.enabled),

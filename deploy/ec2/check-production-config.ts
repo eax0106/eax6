@@ -59,6 +59,16 @@ async function main(): Promise<void> {
   const { identityTenantGatewayEnvironment, buildWorstCaseEstimator } = await import(
     "../../apps/orchestration-service/src/orchestration-infrastructure.module"
   );
+  const { loadPublicSurfaceEnvironment } = await import("../../apps/public-surface/src/config/environment");
+  const { loadPublicFormLinkEnvironment } = await import("../../apps/orchestration-service/src/config/public-form-environment");
+  await check("public-surface", "hosted form environment", () => {
+    const form = loadPublicSurfaceEnvironment(process.env);
+    if (form.database.authentication !== "static" || new URL(form.database.connectionString).username !== "public_surface") throw new Error("Public Surface requires its dedicated runtime role");
+    if (form.trustProxy === false) throw new Error("Public Surface must recognize its loopback edge");
+  });
+  await check("orchestration-service", "hosted form authoring environment", () => {
+    if (!loadPublicFormLinkEnvironment(process.env)) throw new Error("Hosted form authoring is not configured");
+  });
   const { loadToolGatewayEnvironment } = await import("../../apps/tool-gateway/src/config/environment");
   await check("tool-gateway", "environment", () => loadToolGatewayEnvironment(process.env));
 
@@ -100,6 +110,9 @@ async function main(): Promise<void> {
 
   // Pairs whose halves live in different containers: each must agree.
   const env = (service: string, key: string) => services[service]?.environment?.[key] ?? undefined;
+  for (const key of ["PUBLIC_FORM_TOKEN_KEY", "PUBLIC_FORM_BASE_URL"]) {
+    if (env("public-surface", key) !== env("orchestration-service", key)) failures.push(`Public Surface and authoring ${key} differ`);
+  }
   for (const key of ["APPCONFIG_APPLICATION_ID", "APPCONFIG_ENVIRONMENT_ID", "APPCONFIG_CONFIGURATION_PROFILE_ID"]) {
     if (!env("orchestration-service", key) || env("orchestration-service", key) !== env("model-gateway", key)) {
       failures.push(`orchestration-service ${key} must match model-gateway`);
@@ -116,6 +129,9 @@ async function main(): Promise<void> {
     ["platform-api", "INTERNAL_SERVICE_TOKEN", "ads-core", "INTERNAL_SERVICE_TOKEN_SHA256"],
     ["tool-gateway", "INTERNAL_SERVICE_TOKEN", "orchestration-service", "INTERNAL_SERVICE_TOKEN_SHA256"],
   ];
+  for (const [service, key] of [["public-surface", "PUBLIC_SURFACE_PORT"], ["platform-api", "PLATFORM_API_PORT"], ["orchestration-service", "ORCHESTRATION_PORT"]]) {
+    if (env("caddy", key) !== env(service, key)) failures.push(`caddy ${key} must match ${service}'s host-network port`);
+  }
   if (env("tool-gateway", "ENGINE_BASE_URL") !== `http://127.0.0.1:${env("orchestration-service", "ORCHESTRATION_PORT")}`) failures.push("tool-gateway ENGINE_BASE_URL must use orchestration-service's host-network port");
   for (const [caller, tokenKey, receiver, hashKey] of pairs) {
     const token = env(caller, tokenKey);

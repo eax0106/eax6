@@ -531,6 +531,31 @@ importers:
         specifier: 7.8.2
         version: 7.8.2
 
+  apps/public-surface:
+    dependencies:
+      '@alterx/adapters':
+        specifier: workspace:*
+        version: link:../../packages/adapters
+      '@alterx/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@alterx/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      fastify:
+        specifier: 5.12.5
+        version: 5.12.5
+      zod:
+        specifier: 4.1.12
+        version: 4.1.12
+    devDependencies:
+      '@testcontainers/postgresql':
+        specifier: 12.0.4
+        version: 12.0.4
+      testcontainers:
+        specifier: 12.0.4
+        version: 12.0.4
+
   apps/sandbox-service:
     dependencies:
       '@alterx/adapters':

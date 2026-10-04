@@ -450,3 +450,5 @@ export * from "./workflow-plan";
 
 export * from "./workflow-folders";
 export * from "./node-overrides";
+
+export { HostedFormFieldSchema, HostedFormDefinitionSchema, PublicFormTokenClaimsSchema, HostedFormSetupSchema, hostedFormValuesSchema, type HostedFormField, type HostedFormDefinition, type PublicFormTokenClaims, type HostedFormSetup } from "./public-forms";

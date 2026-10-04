@@ -1,14 +1,14 @@
 # Container images
 
-Six images cover the fourteen deployable services. `platform-web` is not here:
+Six images cover the fifteen deployable services. `platform-web` is not here:
 it ships as a static bundle, not a container.
 
 | Image | Built from | Covers |
 |---|---|---|
-| `node` | `Dockerfile.node` | all nine Node services |
+| `node` | `Dockerfile.node` | all ten Node services |
 | `ads-core`, `eval-service`, `intelligence-service`, `memory-service`, `verification-service` | `Dockerfile.python` | one Python service each |
 
-The nine Node services share one image because they share a build and a runtime;
+The ten Node services share one image because they share a build and a runtime;
 the five Python services do not, because each resolves its own `uv.lock`.
 
 ## Where the images come from

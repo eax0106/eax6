@@ -31,6 +31,7 @@ export class TriggerEventNotFoundError extends Error {
 interface DispatchLookupRow extends Record<string, unknown> {
   readonly workspace_id: string;
   readonly status: string;
+  readonly provider?: string | null;
   readonly workflow_id: string;
   readonly active_version: number | null;
   readonly wfv_id: string | null;
@@ -100,7 +101,7 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
 
     const dispatch = await this.store.withTenant(tenantId, async (tx) => {
       const lookup = await tx.query<DispatchLookupRow>(
-        `SELECT t.workspace_id, t.status, t.workflow_id,
+        `SELECT t.workspace_id, t.status, t.workflow_id, t.provider,
                 tv.version AS active_version, tv.workflow_version_id AS wfv_id,
                 wv.compiled_dag
          FROM triggers t
@@ -122,6 +123,9 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
       }
       if (row.active_version === null || row.wfv_id === null) {
         return { kind: "noop" as const, reason: "no-active-version" as const };
+      }
+      if (row.provider === "alter_public_form" && row.active_version !== request.trigger_version) {
+        return { kind: "noop" as const, reason: "retired-public-form" as const };
       }
       if (row.workspace_id !== workspaceIdInput.slice("ws_".length)) {
         throw new TriggerEventValidationError(

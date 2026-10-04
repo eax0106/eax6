@@ -1,3 +1,5 @@
+import { useState } from "react"
+import { HostedFormSetupPanel } from "./hosted-form-setup"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Play, Webhook, Clock, Zap, Settings, CheckCircle2, AlertCircle, Mail, Loader2, Trash2 } from "lucide-react"
 import { toast } from "sonner"
@@ -12,6 +14,7 @@ interface TriggerListProps {
 
 export function TriggerList({ workflowId }: TriggerListProps) {
   const queryClient = useQueryClient()
+  const [setup, setSetup] = useState<{ triggerId?: string } | null>(null)
   
   const { data: triggers, isLoading } = useQuery({
     queryKey: queryKeys.triggers.list(workflowId),
@@ -20,6 +23,10 @@ export function TriggerList({ workflowId }: TriggerListProps) {
 
   const toggleTrigger = useMutation({
     mutationFn: async ({ id, enable }: { id: string, enable: boolean }) => {
+      if (triggers?.find(t => t.id === id)?.provider === "alter_public_form") {
+        const current = await api.getHostedForm(id)
+        return api.setHostedFormStatus(id, enable ? "enabled" : "disabled", current.etag)
+      }
       return enable ? api.enableTrigger(id) : api.disableTrigger(id)
     },
     onSuccess: () => {
@@ -42,7 +49,12 @@ export function TriggerList({ workflowId }: TriggerListProps) {
   })
 
   const removeTrigger = useMutation({
-    mutationFn: (id: string) => api.removeTrigger(id),
+    mutationFn: async (id: string) => {
+      if (triggers?.find(t => t.id === id)?.provider === "alter_public_form") {
+        const current = await api.getHostedForm(id)
+        await api.setHostedFormStatus(id, "archived", current.etag)
+      } else await api.removeTrigger(id)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.triggers.list(workflowId) })
       toast.success("Trigger removed")
@@ -55,14 +67,16 @@ export function TriggerList({ workflowId }: TriggerListProps) {
 
   if (isLoading) return <div className="p-8 flex justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
 
+  const setupPanel = setup && <HostedFormSetupPanel workflowId={workflowId} {...setup} onClose={() => setSetup(null)} />
+
   if (!triggers?.length) {
     return (
-      <div className="text-center p-8 border border-border border-dashed rounded-xl bg-surface-base">
+      <div>{setupPanel}<div className="text-center p-8 border border-border border-dashed rounded-xl bg-surface-base">
         <Zap className="h-8 w-8 mx-auto text-muted-foreground mb-3" />
         <p className="text-sm text-foreground">No triggers configured.</p>
         <p className="text-sm text-muted-foreground mt-1">Add a trigger to start this workflow automatically.</p>
-        <Button variant="outline" className="mt-4">Add Trigger</Button>
-      </div>
+        <Button variant="outline" className="mt-4" onClick={() => setSetup({})}>Add Trigger</Button>
+      </div></div>
     )
   }
 
@@ -77,9 +91,10 @@ export function TriggerList({ workflowId }: TriggerListProps) {
 
   return (
     <div className="space-y-4">
+      {setupPanel}
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-medium">Configured Triggers</h3>
-        <Button variant="outline" size="sm">Add Trigger</Button>
+        <Button variant="outline" size="sm" onClick={() => setSetup({})}>Add Trigger</Button>
       </div>
 
       <div className="grid gap-3">
@@ -108,12 +123,12 @@ export function TriggerList({ workflowId }: TriggerListProps) {
                 variant="ghost" 
                 size="sm"
                 onClick={() => testTrigger.mutate(t.id)}
-                disabled={testTrigger.isPending || t.status === "needs_configuration"}
+                disabled={t.provider === "alter_public_form" || testTrigger.isPending || t.status === "needs_configuration"}
               >
                 <Play className="h-4 w-4 mr-2" />
                 Test
               </Button>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" aria-label={`Settings for ${t.name}`} disabled={t.provider !== "alter_public_form"} onClick={() => setSetup({ triggerId: t.id })}>
                 <Settings className="h-4 w-4" />
               </Button>
               <Button

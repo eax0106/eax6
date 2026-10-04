@@ -13,6 +13,7 @@ checked_apps=(
   "apps/verification-service"
   "apps/memory-service"
   "apps/eval-service"
+  "apps/public-surface"
   "apps/background-workers"
   "apps/cost-ledger-service"
 )

@@ -1,0 +1,16 @@
+{
+  "name": "@alterx/public-surface",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@alterx/adapters": "workspace:*",
+    "@alterx/auth": "workspace:*",
+    "@alterx/contracts": "workspace:*",
+    "fastify": "5.12.5",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@testcontainers/postgresql": "12.0.4",
+    "testcontainers": "12.0.4"
+  }
+}

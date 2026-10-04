@@ -86,6 +86,11 @@ done
 touch .audit-retention.env
 grep -q '^AUDIT_RETENTION_DB_PASSWORD=' .audit-retention.env || printf 'AUDIT_RETENTION_DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" >>.audit-retention.env
 . ./.audit-retention.env
+touch .public-form.env
+for key in PUBLIC_SURFACE_DB_PASSWORD PUBLIC_FORM_TOKEN_KEY; do
+  grep -q "^$key=" .public-form.env || printf '%s=%s\n' "$key" "$(openssl rand -hex 32)" >>.public-form.env
+done
+. ./.public-form.env
 sha256() { printf %s "$1" | openssl dgst -sha256 -r | cut -d' ' -f1; }
 
 if [[ "$local_mode" != 1 ]]; then
@@ -161,6 +166,11 @@ expand() {
     # Inside the environment's own parameter path, which the host role can read.
     printf 'SELECTION_BINDING_FAIL_CLOSED_PARAM=/alter/%s/orchestration/selection-binding-fail-closed\n' "$ALTER_ENV"
   fi
+  printf 'PUBLIC_SURFACE_DB_PASSWORD=%s\nPUBLIC_FORM_TOKEN_KEY=%s\n' "$PUBLIC_SURFACE_DB_PASSWORD" "$PUBLIC_FORM_TOKEN_KEY"
+  printf 'PUBLIC_FORM_BASE_URL=https://%s\nPUBLIC_SURFACE_PORT=3021\n' "$ALTER_DOMAIN"
+  printf 'PUBLIC_FORM_TURNSTILE_SITE_KEY=%s\nPUBLIC_FORM_TURNSTILE_SECRET_REF=%s\n' "$PUBLIC_FORM_TURNSTILE_SITE_KEY" "$PUBLIC_FORM_TURNSTILE_SECRET_REF"
+  printf 'PUBLIC_SURFACE_DATABASE_AUTHENTICATION=static\nPUBLIC_SURFACE_DATABASE_URL=postgresql://public_surface:%s@127.0.0.1:%s/orchestration_db\n' "$PUBLIC_SURFACE_DB_PASSWORD" "${seen[ENGINE_DB_PORT]}"
+  printf 'PUBLIC_SURFACE_REDIS_URL=%s\n' "${seen[REDIS_ENDPOINT]}"
   printf 'ALTER_DOMAIN=%s\nALTER_REGISTRY=%s\nALTER_IMAGE_TAG=%s\n' "$ALTER_DOMAIN" "$ALTER_REGISTRY" "$ALTER_IMAGE_TAG"
   # platform-api's Engine clients (apps/platform-api/src/engine/config.ts) and
   # the token pairs behind them; each side reads its half.
@@ -249,6 +259,9 @@ log "platform_db runtime roles"
 platform_db_roles
 log "engine_db runtime role"
 engine_db_runtime_role
+log "public surface database role"
+compose exec -T engine-db psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 \
+  -v public_surface_password="$PUBLIC_SURFACE_DB_PASSWORD" <public-surface-role.sql >/dev/null
 log "audit retention database role"
 compose exec -T engine-db psql -U postgres -d postgres -X -q -v ON_ERROR_STOP=1 \
   -v retention_password="$AUDIT_RETENTION_DB_PASSWORD" <audit-retention-role.sql >/dev/null
@@ -295,6 +308,7 @@ for pair in \
   model-gateway:MODEL_GATEWAY_PORT tool-gateway:TOOL_GATEWAY_PORT \
   sandbox-service:SANDBOX_SERVICE_PORT provisioning-service:PROVISIONING_SERVICE_PORT \
   orchestration-service:ORCHESTRATION_PORT platform-api:PLATFORM_API_PORT \
+  public-surface:PUBLIC_SURFACE_PORT \
   ads-core:ADS_CORE_PORT intelligence-service:INTELLIGENCE_SERVICE_PORT \
   verification-service:VERIFICATION_SERVICE_PORT memory-service:MEMORY_SERVICE_PORT \
   eval-service:EVAL_SERVICE_PORT; do

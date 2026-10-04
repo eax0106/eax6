@@ -104,6 +104,12 @@ describe("EngineClient", () => {
     expect(fetchImpl.mock.calls[2]![1].headers).not.toHaveProperty("X-Alter-Tenant-Id");
   });
 
+  it("preserves a caller's If-Match on a version-creation POST", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, { version: 2 }));
+    const client = new EngineClient(config, authProvider, fetchImpl, noDelay);
+    await client.post("/api/v1/triggers/trg_1/versions", { config: {} }, context, { idempotencyKey: "version-1", ifMatch: '"form-v1"' });
+    expect(fetchImpl.mock.calls[0]![1]).toMatchObject({ method: "POST", headers: { "If-Match": '"form-v1"', "Idempotency-Key": "version-1" } });
+  });
   it("forwards mutation concurrency and idempotency headers", async () => {
     const fetchImpl = vi
       .fn()
