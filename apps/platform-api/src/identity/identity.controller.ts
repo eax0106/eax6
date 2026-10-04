@@ -61,10 +61,14 @@ export class IdentityController {
         throw new IdentityHttpError(400, "INVALID_CALLBACK", "Callback fields missing");
       }
 
+      if (query.invitation !== undefined && (typeof query.invitation !== "string" || !query.invitation || query.invitation.length > 4096)) {
+        throw new IdentityHttpError(400, "INVALID_INVITATION", "Valid invitation context required");
+      }
       const session = await this.identityService.handleCallback({
         code: query.code,
         redirectUri: query.redirect_uri,
         codeVerifier: query.code_verifier,
+        ...(query.invitation !== undefined ? { invitation: query.invitation } : {}),
         deviceInfo: {
           userAgent: request.headers["user-agent"],
         },
@@ -139,6 +143,7 @@ export class IdentityController {
         tenantId: session.tenantId,
         email: profile.email,
         name: profile.display_name,
+        ...await this.userProfileRepository.workspaceAccess(session.tenantId, session.userId),
       });
     });
   }
@@ -154,6 +159,18 @@ export class IdentityController {
         session.id,
       );
       reply.send({ revoked });
+    });
+  }
+
+  @Post("password-reset")
+  @RequireTenantRole("member")
+  async requestPasswordReset(@Req() request: FastifyRequest, @Res() reply: FastifyReply): Promise<void> {
+    await this.safe(reply, "/api/v1/auth/password-reset", async () => {
+      const session = await this.requireSession(request);
+      const profile = await this.userProfileRepository.findById(session.userId);
+      if (!profile) throw new IdentityHttpError(404, "USER_NOT_FOUND", "User profile not found");
+      await this.identityService.requestPasswordReset(profile.email, profile.identity_ref);
+      reply.status(200).send({ requested: true });
     });
   }
 
@@ -179,6 +196,7 @@ export class IdentityController {
         tenantId: session.tenantId,
         email: profile.email,
         name: profile.display_name,
+        ...await this.userProfileRepository.workspaceAccess(session.tenantId, session.userId),
       });
     });
   }

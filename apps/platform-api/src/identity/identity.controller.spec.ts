@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IdentityModule } from "./identity.module";
+import { MembershipIdentityResolver } from "./membership-identity-resolver";
+import { MockIdentityProvider } from "./adapters/mock/mock-identity-provider";
+import { IDENTITY_PROVIDER, IdentityModule } from "./identity.module";
 import { UserProfileRepository } from "./user-profile.repository";
 
 describe("IdentityController", () => {
@@ -19,6 +21,10 @@ describe("IdentityController", () => {
 
     const moduleRef = await Test.createTestingModule({
       imports: [IdentityModule],
+    }).overrideProvider(MembershipIdentityResolver).useValue({
+      // Cookie/controller unit fixture; native invitation specs prove database resolution.
+      resolve: async (identity: { userId: string; tenantId: string }) => ({ userId: identity.userId, tenantId: identity.tenantId,
+        workspaceId: "00000000-0000-7000-8000-000000000101", tenantRole: "member", workspaceRole: "viewer" }),
     }).compile();
 
     app = moduleRef.createNestApplication<NestFastifyApplication>(
@@ -350,6 +356,7 @@ describe("IdentityController", () => {
     const repository = app.get(UserProfileRepository);
     const update = vi.spyOn(repository, "updateDisplayName").mockResolvedValueOnce({
       id: "00000000-0000-7000-8000-000000000210",
+      identity_ref: "auth0|ada",
       email: "ada@acme.test",
       display_name: "Ada",
     });
@@ -377,6 +384,25 @@ describe("IdentityController", () => {
     expect(response.json()).toMatchObject({ error_code: "USER_NOT_FOUND" });
   });
 
+  it("requests provider password reset only for the authenticated profile email", async () => {
+    const session = await createSession("00000000-0000-7000-8000-000000000211");
+    vi.spyOn(app.get(UserProfileRepository), "findById").mockResolvedValue({ id: "00000000-0000-7000-8000-000000000211", identity_ref: "mock|ada", email: "ada@company.test", display_name: "Ada" });
+    const response = await app.getHttpAdapter().getInstance().inject({ method: "POST", url: "/api/v1/auth/password-reset", headers: { cookie: `alter_access=${session.access}` }, payload: { email: "foreign@company.test", userId: "another-user", password: "never-stored" } });
+    expect(response.statusCode).toBe(200); expect(response.json()).toEqual({ requested: true });
+    expect(app.get<MockIdentityProvider>(IDENTITY_PROVIDER).passwordResetRequests).toEqual(["ada@company.test"]);
+  });
+  it("refuses anonymous/social/missing-profile reset and keeps provider failure visible", async () => {
+    const http = app.getHttpAdapter().getInstance(), provider = app.get<MockIdentityProvider>(IDENTITY_PROVIDER);
+    expect((await http.inject({ method: "POST", url: "/api/v1/auth/password-reset" })).statusCode).toBe(401);
+    const session = await createSession("00000000-0000-7000-8000-000000000212"), headers = { cookie: `alter_access=${session.access}` };
+    expect((await http.inject({ method: "POST", url: "/api/v1/auth/password-reset", headers })).statusCode).toBe(404);
+    const profile = vi.spyOn(app.get(UserProfileRepository), "findById").mockResolvedValue({ id: "00000000-0000-7000-8000-000000000212", identity_ref: "google-oauth2|ada", email: "ada@company.test", display_name: "Ada" });
+    const social = await http.inject({ method: "POST", url: "/api/v1/auth/password-reset", headers }); expect(social.statusCode).toBe(400); expect(social.json()).toMatchObject({ error_code: "PROVIDER_PASSWORD_REQUIRED" });
+    profile.mockResolvedValue({ id: "00000000-0000-7000-8000-000000000212", identity_ref: "mock|ada", email: "ada@company.test", display_name: "Ada" });
+    vi.spyOn(provider, "requestPasswordReset").mockRejectedValueOnce(new Error("provider unavailable"));
+    const failed = await http.inject({ method: "POST", url: "/api/v1/auth/password-reset", headers }); expect(failed.statusCode).toBe(500); expect(failed.json()).not.toHaveProperty("requested");
+    expect(provider.passwordResetRequests).toEqual([]);
+  });
   async function createSession(userId: string): Promise<{ access: string; refresh: string }> {
     const response = await app.getHttpAdapter().getInstance().inject({
       method: "GET",

@@ -5,6 +5,7 @@ import { PlatformHttpError } from "./problem";
 import { SignupService } from "./signup.service";
 
 interface SignupBody {
+  invitation?: string;
   code?: string;
   redirectUri?: string;
   codeVerifier?: string;
@@ -30,10 +31,14 @@ export class SignupController {
         "/api/v1/signup",
       );
     }
+    if (body.invitation !== undefined && (typeof body.invitation !== "string" || !body.invitation || body.invitation.length > 4096)) {
+      throw new PlatformHttpError(400, "INVALID_INVITATION", "Valid invitation context required", "/api/v1/signup");
+    }
     const landing = await this.signupService.signup({
       code: body.code,
       redirectUri: body.redirectUri,
       codeVerifier: body.codeVerifier,
+      ...(body.invitation !== undefined ? { invitation: body.invitation } : {}),
       idempotencyKey: idempotencyKey ?? "",
       deviceInfo: { userAgent: request.headers["user-agent"] },
       ip: request.ip,

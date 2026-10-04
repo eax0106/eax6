@@ -15,6 +15,7 @@ export type SsoConfig =
 export interface LoginRedirectRequest {
   tenantId?: string;
   organizationId?: string;
+  invitation?: string;
   redirectUri: string;
   state: string;
   codeChallenge: string;
@@ -51,6 +52,7 @@ export interface AuthenticatedIdentity {
   userId: string;
   tenantId: string;
   identityRef: string;
+  organizationId?: string;
   email: string;
   emailVerified: boolean;
   phoneVerified?: boolean;
@@ -68,7 +70,23 @@ export interface MfaChallenge {
   status: "pending" | "verified" | "rejected";
 }
 
+export interface OrganizationInvitationRequest {
+  organizationId: string;
+  email: string;
+  inviterName: string;
+}
+
+export interface IdentityInvitation {
+  id: string;
+  organizationId: string;
+  invitationUrl: string;
+  expiresAt: string;
+}
+
 export interface IdentityProvider {
+  createOrganizationInvitation(request: OrganizationInvitationRequest): Promise<IdentityInvitation>;
+  revokeOrganizationInvitation(organizationId: string, invitationId: string): Promise<void>;
+  requestPasswordReset(email: string, identityRef: string): Promise<void>;
   getOrCreateOrgForTenant(tenantId: string, name: string): Promise<string>;
   loginRedirectUrl(request: LoginRedirectRequest): Promise<string>;
   handleCallback(request: CallbackRequest): Promise<AuthenticatedIdentity>;

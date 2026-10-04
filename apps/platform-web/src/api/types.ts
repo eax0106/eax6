@@ -11,6 +11,7 @@ export interface Workspace {
   slug: string
   avatarUrl?: string
   role: WorkspaceRole
+  tenantOwner?: boolean
   memberCount: number
   createdAt: string
 }
@@ -114,7 +115,10 @@ export interface DashboardSummary {
   recentRuns: Run[]
 }
 
-export type WorkspaceRole = "owner" | "admin" | "member" | "viewer"
+export const WORKSPACE_ROLES = ["admin", "editor", "operator", "approver", "viewer"] as const
+export type WorkspaceRole = typeof WORKSPACE_ROLES[number]
+/** Tenant owner is a badge and permission source, never an assignable workspace role. */
+export type UserRole = WorkspaceRole | "owner"
 
 export type MemberStatus = "active" | "invited" | "suspended"
 
@@ -125,7 +129,23 @@ export interface Member {
   role: WorkspaceRole
   status: MemberStatus
   joinedAt: string
+  workspaceId?: string
+  userId?: string
+  tenantOwner?: boolean
+  etag?: string
   avatarUrl?: string
+}
+
+export interface WorkspaceInvitation {
+  id: string
+  workspaceId: string
+  email: string
+  role: WorkspaceRole
+  status: "delivering" | "pending" | "delivery_failed" | "accepted" | "revoked" | "expired"
+  expiresAt: string
+  createdAt: string
+  updatedAt: string
+  etag: string
 }
 
 export type Permission =

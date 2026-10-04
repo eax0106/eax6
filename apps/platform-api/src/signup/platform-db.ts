@@ -20,11 +20,25 @@ export class PlatformDb implements SignupPersistence {
     return result.rows[0] ?? null;
   }
 
+  async resolveInvitation(organization: string, email: string, ticketHash: string): Promise<{ invitationId: string; tenantId: string; workspaceId: string } | null> {
+    const result = await this.pool.query<{ invitationId: string; tenantId: string; workspaceId: string }>(
+      "SELECT * FROM resolve_workspace_invitation($1,$2,$3)", [organization, email, ticketHash]);
+    return result.rows[0] ?? null;
+  }
+
+  async resolveOrganizationMember(identityRef: string, organization: string): Promise<ExistingSignup | null> {
+    const result = await this.pool.query<ExistingSignup>("SELECT * FROM resolve_existing_organization_member($1,$2)", [identityRef, organization]);
+    return result.rows[0] ?? null;
+  }
+
   async createSignup<T>(
     input: CreateSignupInput,
     beforeCommit: (client: PoolClient) => Promise<T>,
   ): Promise<T> {
     return this.transaction(input.tenantId, async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", ["identity:" + input.identityRef]);
+      const existing = await client.query("SELECT 1 FROM users WHERE identity_ref=$1", [input.identityRef]);
+      if (existing.rowCount) throw new Error("Identity already registered; retry sign-in");
       await client.query(
         `INSERT INTO tenants (id, name, status, identity_org_ref)
          VALUES ($1, $2, 'active', $3)`,

@@ -253,6 +253,13 @@
       "when": 1790074800000,
       "tag": "0032_connection_sync_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1790078400000,
+      "tag": "0033_workspace_invitations",
+      "breakpoints": true
     }
   ]
 }

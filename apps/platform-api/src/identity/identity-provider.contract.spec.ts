@@ -1,3 +1,4 @@
+import { createSign, generateKeyPairSync } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { Auth0IdentityProvider } from "./adapters/auth0/auth0-identity-provider";
 import { MockIdentityProvider } from "./adapters/mock/mock-identity-provider";
@@ -6,6 +7,12 @@ import { InMemorySessionStore } from "./session-store";
 import { InMemorySsoConfigStore } from "./sso-config-store";
 
 function auth0FetchStub(): typeof fetch {
+  const pair = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const now = Math.floor(Date.now() / 1000);
+  const head = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "contract-id" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ iss: "https://tenant.auth0.test/", aud: "client-id", sub: "auth0|123", org_id: "00000000-0000-7000-8000-000000000001", iat: now, exp: now + 60 })).toString("base64url");
+  const signed = head + "." + payload;
+  const idToken = signed + "." + createSign("RSA-SHA256").update(signed).sign(pair.privateKey).toString("base64url");
   return (async (input: string | URL | Request) => {
     const url = input.toString();
     if (url.includes("/api/v2/organizations?")) {
@@ -15,8 +22,9 @@ function auth0FetchStub(): typeof fetch {
       return json({ id: "org_test" });
     }
     if (url.endsWith("/oauth/token")) {
-      return json({ access_token: "auth0-access" });
+      return json({ access_token: "auth0-access", id_token: idToken });
     }
+    if (url.endsWith("/.well-known/jwks.json")) return json({ keys: [{ ...pair.publicKey.export({ format: "jwk" }), kid: "contract-id", alg: "RS256", use: "sig" }] });
     if (url.endsWith("/userinfo")) {
       return json({
         sub: "auth0|123",

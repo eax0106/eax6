@@ -13,7 +13,6 @@ import type {
   DashboardSummary,
   IncomingEvent,
   EventReplayPreview,
-  Member,
   NodeTypeDefinition,
   Profile,
   Project,
@@ -210,22 +209,6 @@ export async function restoreWorkspace(id: string): Promise<void> {
   await apiPost<unknown>(`/api/v1/workspaces/${encodeURIComponent(id)}/actions/restore`, {}, {
     idempotencyKey: mutationKey("workspace-restore"),
   })
-}
-
-export async function getMembers(): Promise<Member[]> {
-  const body = await apiGet<unknown>("/api/v1/members")
-  return asArray(body, "members").map(mapMember)
-}
-
-export async function inviteMember(email: string, role: WorkspaceRole): Promise<Member> {
-  const body = await apiPost<unknown>("/api/v1/members", { email, role }, {
-    idempotencyKey: mutationKey("member-invite"),
-  })
-  return mapMember(body)
-}
-
-export async function removeMember(memberId: string): Promise<void> {
-  await apiDelete(`/api/v1/members/${encodeURIComponent(memberId)}`)
 }
 
 export async function getProfile(fallback: Profile): Promise<Profile> {
@@ -1380,20 +1363,6 @@ function mapTenantDataResidency(
   }
 }
 
-function mapMember(value: unknown): Member {
-  const item = value as AnyRecord
-  const email = String(item.email ?? item.invited_email ?? "")
-  return {
-    id: asString(item.id ?? item.user_id ?? item.memberId),
-    name: String(item.name ?? item.displayName ?? item.display_name ?? email.split("@")[0] ?? "Member"),
-    email,
-    role: mapRole(item.role),
-    status: String(item.status ?? "active") as Member["status"],
-    joinedAt: asDate(item.joinedAt ?? item.joined_at ?? item.createdAt ?? item.created_at),
-    avatarUrl: item.avatarUrl ?? item.avatar_url,
-  }
-}
-
 function mapSession(value: unknown): Session {
   const item = value as AnyRecord
   return {
@@ -1582,9 +1551,9 @@ function etagFromWorkspace(value: unknown) {
 }
 
 function mapRole(value: unknown): WorkspaceRole {
-  return value === "owner" || value === "admin" || value === "member" || value === "viewer"
+  return value === "admin" || value === "editor" || value === "operator" || value === "approver" || value === "viewer"
     ? value
-    : "member"
+    : "viewer"
 }
 
 function mapWorkflowStatus(value: unknown): Workflow["status"] {

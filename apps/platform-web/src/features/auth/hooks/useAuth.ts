@@ -19,6 +19,8 @@ export const useAuth = create<AuthState>((set) => ({
   signIn: async () => {
     if (isLiveApi) {
       await startLogin()
+      const user = await getCurrentUser()
+      set({ user, validated: true })
     }
     localStorage.setItem("alterx_auth", "true")
     set({ isAuthenticated: true })
