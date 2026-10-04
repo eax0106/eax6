@@ -102,12 +102,13 @@ EOF
 }
 
 generate_values() {
-  local platform admin audit intel cost orch token token_sha cursor registry
+  local platform admin audit intel cost orch token token_sha cursor registry billing
   platform="$(gen_hex 16)"; admin="$(gen_hex 16)"; audit="$(gen_hex 16)"
   intel="$(gen_hex 16)"; cost="$(gen_hex 16)"; orch="$(gen_hex 16)"
   token="$(gen_hex 32)"; token_sha="$(printf %s "$token" | sha256_of)"
   cursor="$(gen_hex 32)"
   registry="$(gen_hex 32)"
+  billing="$(gen_hex 32)"
   printf 'PLATFORM_DB_PASSWORD=%s\n' "$platform"
   printf 'PLATFORM_RETENTION_DB_PASSWORD=%s\n' "$(gen_hex 24)"
   printf 'ENGINE_DB_ADMIN_PASSWORD=%s\n' "$admin"
@@ -120,6 +121,8 @@ generate_values() {
   printf 'INTERNAL_SERVICE_TOKEN_SHA256=%s\n' "$token_sha"
   printf 'CONNECTION_REGISTRY_SERVICE_TOKEN=%s\n' "$registry"
   printf 'CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256=%s\n' "$(printf %s "$registry" | sha256_of)"
+  printf 'BILLING_SYNC_SERVICE_TOKEN=%s\n' "$billing"
+  printf 'BILLING_SYNC_SERVICE_TOKEN_SHA256=%s\n' "$(printf %s "$billing" | sha256_of)"
   printf 'MARKETPLACE_SEARCH_CURSOR_SECRET=%s\n' "$cursor"
   printf 'ADS_DB_PASSWORD=%s\n' "ads_core_local"
   printf 'MEMORY_DB_PASSWORD=%s\n' "$audit"   # engine-db-init.sh: = AUDIT_DB_PASSWORD
@@ -170,6 +173,7 @@ render() {
   . "$values"
   set -u
   CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256="$(printf %s "$CONNECTION_REGISTRY_SERVICE_TOKEN" | sha256_of)"
+  BILLING_SYNC_SERVICE_TOKEN_SHA256="$(printf %s "$BILLING_SYNC_SERVICE_TOKEN" | sha256_of)"
   : > "$out.tmp.$$"
   while IFS= read -r line; do
     case "$line" in
@@ -201,6 +205,8 @@ render() {
     val="${val//<sha256-of-the-token-above>/$INTERNAL_SERVICE_TOKEN_SHA256}"
     val="${val//<generate-connection-registry-token>/$CONNECTION_REGISTRY_SERVICE_TOKEN}"
     val="${val//<sha256-of-connection-registry-token>/$CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256}"
+    val="${val//<generate-billing-sync-token>/$BILLING_SYNC_SERVICE_TOKEN}"
+    val="${val//<sha256-of-billing-sync-token>/$BILLING_SYNC_SERVICE_TOKEN_SHA256}"
     val="${val//<generate-32-byte-hex-secret>/$MARKETPLACE_SEARCH_CURSOR_SECRET}"
     # ORCHESTRATION_DB_PASSWORD line + its URL use a bare sentinel:
     val="${val//replace-me-with-a-random-value/$ORCHESTRATION_DB_PASSWORD}"
@@ -251,6 +257,11 @@ verify_file() {
   tok_sha="$(awk -F= '$1=="CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256"{print $2}' "$f")"
   if [ -z "$tok" ] || [ "$tok_sha" != "$(printf %s "$tok" | sha256_of)" ]; then
     echo "verify: connection registry token and fingerprint differ" >&2; return 1
+  fi
+  tok="$(awk -F= '$1=="BILLING_SYNC_SERVICE_TOKEN"{print $2}' "$f")"
+  tok_sha="$(awk -F= '$1=="BILLING_SYNC_SERVICE_TOKEN_SHA256"{print $2}' "$f")"
+  if [ -z "$tok" ] || [ "$tok_sha" != "$(printf %s "$tok" | sha256_of)" ]; then
+    echo "verify: billing sync token and fingerprint differ" >&2; return 1
   fi
   local audit mem ads
   audit="$(awk -F= '$1=="AUDIT_DB_PASSWORD"{print $2; exit}' "$f")"

@@ -1,4 +1,4 @@
-import { resolveRuntimeSecret } from "../config/runtime-secret";
+import { resolveEnvironmentSecret } from "@alterx/shared-clients";
 import { BillingPolicyModule } from "../billing/billing-policy.module";
 import { BillingPolicyService } from "../billing/billing-policy.service";
 import { engineAuditClientFromEnvironment } from "../audit/engine-audit-client";
@@ -91,7 +91,9 @@ const databasePoolToken = Symbol("DatabasePool");
 })
 export class IdentityModule {}
 
-export { resolveRuntimeSecret } from "../config/runtime-secret";
+export async function resolveRuntimeSecret(reference: string): Promise<string> {
+  return resolveEnvironmentSecret(reference, process.env);
+}
 
 /**
  * The identity provider IDENTITY_PROVIDER selects. Exported so the EC2

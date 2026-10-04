@@ -1,4 +1,4 @@
-import { resolveRuntimeSecret } from "../config/runtime-secret";
+import { resolveEnvironmentSecret } from "@alterx/shared-clients";
 
 export class BillingPolicyClient {
   constructor(private readonly baseUrl: string, private readonly resolveToken: () => Promise<string>, private readonly fetchImpl: typeof fetch=fetch) {}
@@ -18,5 +18,9 @@ export function billingPolicyClientFromEnvironment(environment: NodeJS.ProcessEn
   if(!environment.ENGINE_BASE_URL)return undefined;
   const reference=environment.BILLING_SYNC_SERVICE_TOKEN_REF;
   if(!reference)throw new Error("BILLING_SYNC_SERVICE_TOKEN_REF required with engine URL");
-  return new BillingPolicyClient(environment.ENGINE_BASE_URL,()=>resolveRuntimeSecret(reference));
+  return new BillingPolicyClient(environment.ENGINE_BASE_URL,async()=>resolveEnvironmentSecret(reference,environment));
+}
+
+export function billingPolicyDependenciesFromEnvironment(environment: NodeJS.ProcessEnv=process.env) {
+  return {databaseUrl: environment.DATABASE_URL, client: billingPolicyClientFromEnvironment(environment)};
 }

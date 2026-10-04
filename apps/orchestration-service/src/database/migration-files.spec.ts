@@ -71,6 +71,7 @@ describe("orchestration migration files", () => {
       "0051_workflow_chat.sql",
       "0052_workflow_folders.sql",
       "0053_public_forms.sql",
+      "0054_billing_accounts.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -131,6 +132,7 @@ describe("orchestration migration files", () => {
       "0051_restore_workflow_chat.sql",
       "0052_restore_workflow_folders.sql",
       "0053_drop_public_forms.sql",
+      "0054_drop_billing_accounts.sql",
     ]);
   });
 
@@ -153,12 +155,21 @@ describe("orchestration migration files", () => {
     },
   );
 
-  it("defines immutability function once and reuses it for all thirty-seven protected tables", () => {
+  it("defines immutability function once and guards existing and billing tables", () => {
     const allSql = migrationSql.map(({ sql }) => sql).join("\n");
 
     expect(allSql.match(/CREATE OR REPLACE FUNCTION reject_tenant_id_change/g))
       .toHaveLength(1);
-    expect(allSql.match(/EXECUTE FUNCTION reject_tenant_id_change\(\)/g))
+    const billingSql = migrationSql.find(({ file }) => file === "0054_billing_accounts.sql")?.sql;
+    expect(billingSql).toContain(
+      "FOREACH target IN ARRAY ARRAY['billing_accounts','billing_credit_grants','billing_run_reservations'] LOOP",
+    );
+    expect(billingSql).toContain(
+      "CREATE TRIGGER billing_reject_tenant_change BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION reject_tenant_id_change()",
+    );
+    const existingSql = migrationSql.filter(({ file }) => file !== "0054_billing_accounts.sql")
+      .map(({ sql }) => sql).join("\n");
+    expect(existingSql.match(/EXECUTE FUNCTION reject_tenant_id_change\(\)/g))
       .toHaveLength(37);
   });
 

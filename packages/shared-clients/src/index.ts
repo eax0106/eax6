@@ -352,3 +352,5 @@ export {
   type MockSpeechToTextProviderOptions,
 } from "./mocks/speech-to-text-provider";
 export type { PackageEcosystem, PackageScanRequest, PackageScanReport, PackageScanProvider, ScanFinding, ScanSeverity, ScanVerdict, RegistryToolVersion, RegistryScanReport, ToolVersionReviewItem } from "./package-scan";
+
+export { resolveEnvironmentSecret } from "./environment-secret";

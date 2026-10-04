@@ -143,6 +143,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
 
   it("erases one workspace from the live schema and leaves the tenant's other workspace (D2)", async () => {
     const other = "018f4d6e-2b4a-7a3e-8c1a-1234567890e9";
+    await service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST);
     await seedAll(adminStore, TENANT_A, "x", other);
     await seedAll(adminStore, TENANT_A, "w");
 

@@ -9,7 +9,7 @@ import { BillingPolicyClient } from "../engine/billing-policy-client";
 import type { EntitlementProvider } from "../entitlements/entitlement-provider.interface";
 import { BillingWebhookRepository } from "./billing-webhook.repository";
 
-/** Source truth and pending deliveries survive restarts; engine operations are idempotent. */
+/** @driver startBillingPolicyPublication is called by the Nest module lifecycle; durable deliveries retry after restart. */
 export class BillingPolicyService implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private draining=false;
@@ -17,7 +17,8 @@ export class BillingPolicyService implements OnModuleInit, OnModuleDestroy {
   private readonly logger=new Logger(BillingPolicyService.name);
   constructor(private readonly pool: Pool, private readonly config: ConfigProvider, private readonly definitions: PlanDefinitionStore,
     private readonly client?: BillingPolicyClient,private readonly entitlements?: EntitlementProvider) {}
-  onModuleInit(): void {
+  onModuleInit(): void { this.startBillingPolicyPublication(); }
+  private startBillingPolicyPublication(): void {
     if(!this.client)return;
     this.timer=setInterval(()=>{void this.drain();},1000);this.timer.unref();void this.drain();
   }
