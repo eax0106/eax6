@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type { HostedFormSetup } from "@alterx/contracts";
 import type { JsonValue } from "@alterx/shared-clients";
 import {
   EngineClient,
@@ -27,6 +28,17 @@ import {
 
 export class TriggerService {
   constructor(private readonly engine: EngineClient) {}
+
+  publicForm(triggerId: string, actor: ActorContext, traceparent: string | undefined): Promise<EngineResponse<HostedFormSetup>> {
+    const instance = `/api/v1/triggers/${triggerId}/public-form`, id = parseTriggerId(triggerId, instance);
+    return this.engine.get(`/api/v1/triggers/${encodeURIComponent(id)}/public-form`, callerContext(actor, traceparent, instance));
+  }
+
+  setPublicFormStatus(triggerId: string, input: SetTriggerStatusInput, actor: ActorContext, traceparent: string | undefined,
+    idempotencyKey: string, ifMatch: string): Promise<EngineResponse<Trigger>> {
+    const instance = `/api/v1/triggers/${triggerId}/public-form/status`, id = parseTriggerId(triggerId, instance);
+    return this.engine.patch(`/api/v1/triggers/${encodeURIComponent(id)}/public-form/status`, jsonBody(input), callerContext(actor, traceparent, instance), { idempotencyKey, ifMatch });
+  }
 
   create(
     input: CreateTriggerInput,
@@ -78,6 +90,7 @@ export class TriggerService {
     actor: ActorContext,
     traceparent: string | undefined,
     idempotencyKey: string,
+    ifMatch?: string,
   ): Promise<EngineResponse<TriggerVersion>> {
     const instance = `/api/v1/triggers/${triggerId}/versions`;
     const id = parseTriggerId(triggerId, instance);
@@ -85,7 +98,7 @@ export class TriggerService {
       `/api/v1/triggers/${encodeURIComponent(id)}/versions`,
       jsonBody(input),
       callerContext(actor, traceparent, instance),
-      { idempotencyKey },
+      { idempotencyKey, ...(ifMatch === undefined ? {} : { ifMatch }) },
     );
   }
 

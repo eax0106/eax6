@@ -70,6 +70,7 @@ describe("orchestration migration files", () => {
       "0050_create_connection_registry.sql",
       "0051_workflow_chat.sql",
       "0052_workflow_folders.sql",
+      "0053_public_forms.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -129,6 +130,7 @@ describe("orchestration migration files", () => {
       "0050_drop_connection_registry.sql",
       "0051_restore_workflow_chat.sql",
       "0052_restore_workflow_folders.sql",
+      "0053_drop_public_forms.sql",
     ]);
   });
 

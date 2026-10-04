@@ -4,6 +4,7 @@ import {
   Body,
   Controller,
   Get,
+  Headers,
   HttpException,
   Param,
   Patch,
@@ -20,6 +21,7 @@ import {
   TriggerRegistryService,
   TriggerStateTransitionError,
   TriggerValidationError,
+  PublicFormPreconditionError,
   type RegisterTriggerRequest,
   type TriggerStatus,
   type TriggerType,
@@ -66,12 +68,16 @@ export class TriggerRegistryController {
   ) {
     const tenantId = requiredTenantId(request);
     try {
+      if (body.provider === "alter_public_form") {
+        if (typeof body.workspaceId !== "string" || workspaceReadScope(request).workspaceId?.replace(/^ws_/, "") !== body.workspaceId.replace(/^ws_/, "")) throw new TriggerValidationError("Hosted form workspace must match the authenticated caller");
+      }
       const registerRequest: RegisterTriggerRequest = {
         tenantId,
         workspaceId: body.workspaceId,
         workflowId: body.workflowId,
         name: body.name,
         type: body.type,
+        ...(typeof request.actorContext?.user_id !== "string" ? {} : { actorId: request.actorContext.user_id }),
         ...(body.provider === undefined ? {} : { provider: body.provider }),
         ...(body.workflowVersionId === undefined
           ? {}
@@ -89,12 +95,17 @@ export class TriggerRegistryController {
     @Req() request: IdentityTenantGatewayRequest,
     @Param("id") triggerId: string,
     @Body() body: CreateTriggerVersionBody,
+    @Headers("if-match") ifMatch?: string,
   ) {
     const tenantId = requiredTenantId(request);
     try {
+      const workspaceId = workspaceReadScope(request).workspaceId;
       return await this.service.createTriggerVersion({
         tenantId,
         triggerId,
+        ...(workspaceId === undefined ? {} : { workspaceId }),
+        ...(ifMatch === undefined ? {} : { ifMatch }),
+        ...(typeof request.actorContext?.user_id !== "string" ? {} : { actorId: request.actorContext.user_id }),
         ...(body.workflowVersionId === undefined
           ? {}
           : { workflowVersionId: body.workflowVersionId }),
@@ -175,9 +186,29 @@ export class TriggerRegistryController {
     const triggers = await this.service.listTriggers(tenantId, workflowId, workspaceReadScope(request).workspaceId);
     return { triggers };
   }
+
+  @Get(":id/public-form")
+  async publicForm(@Req() request: IdentityTenantGatewayRequest, @Param("id") triggerId: string) {
+    try { return await this.service.getPublicForm(requiredTenantId(request), triggerId, workspaceReadScope(request).workspaceId); }
+    catch (error: unknown) { throw mapTriggerError(error, request.url); }
+  }
+
+  @Patch(":id/public-form/status")
+  async publicFormStatus(@Req() request: IdentityTenantGatewayRequest, @Param("id") triggerId: string,
+    @Body() body: SetTriggerStatusBody, @Headers("if-match") ifMatch?: string) {
+    try {
+      const tenantId = requiredTenantId(request), workspaceId = workspaceReadScope(request).workspaceId;
+      await this.service.getPublicForm(tenantId, triggerId, workspaceId);
+      return await this.service.setTriggerStatus(tenantId, triggerId, body.status, {
+        ...(workspaceId === undefined ? {} : { workspaceId }), ...(ifMatch === undefined ? {} : { ifMatch }),
+        ...(typeof request.actorContext?.user_id !== "string" ? {} : { actorId: request.actorContext.user_id }),
+      });
+    } catch (error: unknown) { throw mapTriggerError(error, request.url); }
+  }
 }
 
 function mapTriggerError(error: unknown, requestUrl: string | undefined): HttpException {
+  if (error instanceof PublicFormPreconditionError) return new HttpException({ ...conflictProblem(requestUrl, error.message), status: error.status }, error.status);
   if (error instanceof TriggerNotFoundError) {
     return new HttpException(notFoundProblem(requestUrl, error.message), 404);
   }
