@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 
 vi.mock("@/api/http", async importOriginal => ({ ...await importOriginal<typeof import("@/api/http")>(), isLiveApi: true }))
+import { installLiveWorkspaceSession, clearLiveWorkspaceSession } from "@/features/permissions/testing/session"
 import { EventDetail } from "./event-detail"
 
 const event = { event_id: "evt_fixture", event_type: "order.received", received_at: "2026-10-01T00:00:00Z", workflow_id: "wf_fixture", payload_inline: { order: "stored-17" } }
@@ -16,8 +17,8 @@ const fetcher = vi.fn(async (url: string, _init?: RequestInit) => new Response(J
     : url.endsWith("/replay") ? preview : event),
 { status: url.endsWith("/replay-for-real") && fail ? 409 : 200, headers: { "content-type": "application/json" } }))
 
-beforeEach(() => { fail = false; fetcher.mockClear(); vi.stubGlobal("fetch", fetcher) })
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+beforeEach(() => { installLiveWorkspaceSession(); fail = false; fetcher.mockClear(); vi.stubGlobal("fetch", fetcher) })
+afterEach(() => { cleanup(); clearLiveWorkspaceSession(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 function mount() {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
     <MemoryRouter initialEntries={[`/events/${event.event_id}`]}><Routes><Route path="/events/:eventId" element={<EventDetail />} /></Routes></MemoryRouter>

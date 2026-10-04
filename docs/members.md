@@ -53,3 +53,9 @@ include invitation history. Native tests use real PostgreSQL through an ordinary
 role and real HTTP through session/RBAC guards; only provider/audit edges are
 controlled. The live Auth0 account and email delivery still require account
 configuration and are not exercised by the local test suite.
+
+Local acceptance: seven gates passed, including twenty distinct failing/restored
+fault controls. The full platform suite passed 1,741 tests with 21 conditional
+skips and coverage enforcement; database integration passed 98 with one skip,
+and web passed 384. Production role grants and public routing checks also ran.
+These measurements do not establish delivery by a live Auth0 account.

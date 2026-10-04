@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { usePermissions } from "@/features/permissions/hooks/usePermissions"
+import { installLiveWorkspaceSession, clearLiveWorkspaceSession } from "@/features/permissions/testing/session"
 
 vi.mock("@/api/http", async importOriginal => ({ ...await importOriginal<typeof import("@/api/http")>(), isLiveApi: true }))
 import { WhatsAppChannelPage } from "./whatsapp-channel"
@@ -19,12 +19,10 @@ const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
   return new Response(JSON.stringify(body), { status: url.endsWith("/test-send") && rejectSend ? 400 : 200, headers: { "content-type": "application/json" } })
 })
 function role(value: "owner" | "viewer") {
-  const hook = renderHook(usePermissions)
-  act(() => hook.result.current.setMockRole(value))
-  hook.unmount()
+  act(() => installLiveWorkspaceSession(value))
 }
 beforeEach(() => { rejectSend = false; withDate = false; role("owner"); fetcher.mockClear(); vi.stubGlobal("fetch", fetcher) })
-afterEach(() => { cleanup(); role("owner"); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(() => { cleanup(); clearLiveWorkspaceSession(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 function mount() {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}>
     <WhatsAppChannelPage />
