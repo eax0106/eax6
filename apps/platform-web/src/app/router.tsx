@@ -175,6 +175,10 @@ const MarketplaceAdmin = lazy(() =>
     default: MarketplaceAdmin,
   })),
 )
+const BenchmarkHistoryPage = lazy(() =>
+  import("@/features/admin/pages/platform/benchmark-history").then(({ BenchmarkHistoryPage }) => ({ default: BenchmarkHistoryPage })),
+)
+
 const FeatureFlagsPage = lazy(() =>
   import("@/features/admin/pages/platform/feature-flags").then(({ FeatureFlagsPage }) => ({
     default: FeatureFlagsPage,
@@ -399,6 +403,7 @@ export const router = createBrowserRouter([
       { path: "security", element: <LiveFeatureGate feature="admin-security"><SecurityQueue /></LiveFeatureGate> },
       { path: "billing", element: <LiveFeatureGate feature="admin-billing"><BillingOpsQueue /></LiveFeatureGate> },
       { path: "marketplace", element: <LiveFeatureGate feature="admin-marketplace"><MarketplaceAdmin /></LiveFeatureGate> },
+      { path: "benchmark-history", element: <BenchmarkHistoryPage /> },
       { path: "feature-flags", element: <LiveFeatureGate feature="admin-feature-flags"><FeatureFlagsPage /></LiveFeatureGate> },
     ]
   },

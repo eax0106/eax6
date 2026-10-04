@@ -1,0 +1,44 @@
+import {randomUUID} from "node:crypto";
+import {readdirSync,readFileSync} from "node:fs";
+import {resolve} from "node:path";
+import {FastifyAdapter,type NestFastifyApplication} from "@nestjs/platform-fastify";
+import {Test} from "@nestjs/testing";
+import pg from "pg";
+import {afterAll,beforeAll,describe,expect,it,vi} from "vitest";
+import {RbacModule} from "../rbac";
+import {StaffAuthMiddleware} from "../staff/staff.middleware";
+import {StaffRepository} from "../staff/staff.repository";
+import {StaffService} from "../staff/staff.service";
+import type {AdminAuditService} from "../admin-audit";
+import {EvalFacadeClient} from "../engine";
+import {BenchmarksController} from "./benchmarks.controller";
+import {BenchmarksService} from "./benchmarks.service";
+import {EvalHistoryClient} from "./history.client";
+const database=process.env.DATABASE_URL;
+describe.skipIf(!database).sequential("history current staff cookie and ordinary PostgreSQL",()=>{
+ let admin:pg.Client,pool:pg.Pool,app:NestFastifyApplication,schema:string,role:string;
+ const upstream=vi.fn(async()=>Response.json({data:[],nextCursor:null}));
+ const cookie={cookie:"alter_staff_access=history-valid-test-token"};
+ beforeAll(async()=>{
+  schema="history_"+randomUUID().replaceAll("-","_");role="history_"+randomUUID().replaceAll("-","_");
+  admin=new pg.Client({connectionString:database});await admin.connect();await admin.query(`CREATE SCHEMA ${schema}`);await admin.query(`SET search_path TO ${schema},public`);
+  const dir=resolve("apps/platform-api/src/db/migrations");for(const name of readdirSync(dir).filter(name=>name.endsWith(".sql")).sort())for(const sql of readFileSync(resolve(dir,name),"utf8").split("--> statement-breakpoint"))if(sql.trim())await admin.query(sql);
+  await admin.query("INSERT INTO staff_users(id,identity_ref,email,roles) VALUES('stf_history','auth0|history','history@staff.test',ARRAY['staff_admin'])");
+  const password=randomUUID();await admin.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOSUPERUSER NOBYPASSRLS`);await admin.query(`GRANT USAGE ON SCHEMA ${schema} TO ${role}`);await admin.query(`GRANT SELECT ON staff_users TO ${role}`);
+  const url=new URL(database!);url.username=role;url.password=password;url.searchParams.set("options",`-c search_path=${schema}`);pool=new pg.Pool({connectionString:url.href});
+  vi.stubEnv("AUTH0_STAFF_DOMAIN","history.staff.test");vi.stubGlobal("fetch",vi.fn(async(_url,options?:RequestInit)=>new Headers(options?.headers).get("authorization")==="Bearer history-valid-test-token"?Response.json({sub:"auth0|history",email:"history@staff.test"}):Response.json({error:"expired"},{status:401})));
+  const staff=new StaffService(new StaffRepository(pool),{} as AdminAuditService),middleware=new StaffAuthMiddleware(staff);
+  const module=await Test.createTestingModule({imports:[RbacModule],controllers:[BenchmarksController],providers:[BenchmarksService,{provide:EvalFacadeClient,useValue:{}},{provide:EvalHistoryClient,useValue:new EvalHistoryClient({baseUrl:"http://history.test",tokenRef:"env:test",timeoutMs:1000},async()=>"history-service-test-token",upstream)}]}).compile();
+  app=module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());app.getHttpAdapter().getInstance().addHook("preHandler",async(request,reply)=>middleware.use(request as unknown as Parameters<StaffAuthMiddleware["use"]>[0],reply,()=>{}));await app.init();await app.getHttpAdapter().getInstance().ready();
+ },60000);
+ afterAll(async()=>{await app?.close();await pool?.end();if(admin){await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.query(`DROP ROLE IF EXISTS ${role}`);await admin.end();}vi.unstubAllGlobals();vi.unstubAllEnvs();},60000);
+ it("reads history with real staff membership and rejects expired, deactivated and removed roles immediately",async()=>{
+  expect((await pool.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows).toEqual([{rolsuper:false,rolbypassrls:false}]);
+  const get=(headers:Record<string,string>={})=>app.inject({method:"GET",url:"/api/v1/admin/benchmarks/runs?limit=5",headers});
+  expect((await get(cookie)).statusCode).toBe(200);expect(upstream).toHaveBeenCalledTimes(1);
+  for(const headers of [{},{cookie:"alter_staff_access=expired-test-token"}])expect((await get(headers)).statusCode).toBe(403);
+  await admin.query("UPDATE staff_users SET roles=ARRAY['staff_support'] WHERE id='stf_history'");expect((await get(cookie)).statusCode).toBe(403);
+  await admin.query("UPDATE staff_users SET roles=ARRAY['staff_security'] WHERE id='stf_history'");expect((await get(cookie)).statusCode).toBe(200);
+  await admin.query("UPDATE staff_users SET deactivated_at=now() WHERE id='stf_history'");expect((await get(cookie)).statusCode).toBe(403);expect(upstream).toHaveBeenCalledTimes(2);
+ });
+});

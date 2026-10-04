@@ -175,3 +175,7 @@ policy from #212 lifted for it only when its live adapter is verified.
 Removed the restricted tenant state and action from demo data and the client, provider maintenance action, user MFA/risk displays, invented tenant risk badges, and list-page policy creation controls. User identity security links to the Auth0 dashboard. Suspension, session revocation and provider enable/disable remain. This completes the removal portion of D26; tenant detail data, append-only notes, review assignment, billing operations and tenant deployment actions remain separate required work.
 
 Proof: eight live/demo render and action tests; seven failures on the original UI with eight passing after restoration; all 392 web tests pass; web typecheck, lint and build, architecture boundaries and normalized AST checks pass with no new findings.
+
+### C124 — D25 staff golden-set history
+
+Admin golden-set history now reads actual eval-service run records through service authentication and the existing ordinary global-evaluation RLS context. Current staff admin/security roles can view original golden-set versions, scores, timestamps, exact-name filters and stable bounded pages. The page shows loading, empty and unavailable states without invented results. Production configuration validates the eval-service listener. Tenant datasets, actual safe Simulate execution, per-case verification and billing, erasure and the customer Benchmarks area remain separate D25 work.
