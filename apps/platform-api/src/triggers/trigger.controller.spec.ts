@@ -482,6 +482,24 @@ describe("TriggerController routes", () => {
     );
   });
 
+  it("serves hosted definition through the real HTTP controller and preserves caller context", async () => {
+    const result = await request("GET", `/api/v1/triggers/${triggerId}/public-form`, viewer, { traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" });
+    expect(result.statusCode).toBe(200); expect(result.json()).toMatchObject({ triggerVersionId, definition: { title: "Inquiry" } });
+    expect(engine.get).toHaveBeenCalledWith(`/api/v1/triggers/${triggerId}/public-form`, expect.objectContaining({ userId: viewer.user_id, tenantId: viewer.tenant_id, workspaceId: viewer.workspace_id }));
+    expectProblem(await request("GET", `/api/v1/triggers/${triggerId}/public-form`), 403, "RBAC_ROLE_DENIED");
+    expectProblem(await request("GET", "/api/v1/triggers/bad/public-form", viewer), 400, "INVALID_TRIGGER_REQUEST");
+  });
+
+  it("protects hosted status route roles and requires the displayed form precondition", async () => {
+    const path = `/api/v1/triggers/${triggerId}/public-form/status`, etag = '"public-form-current-draft"';
+    expectProblem(await request("PATCH", path, admin, { key: "form-no-etag", body: { status: "enabled" } }), 428, "PRECONDITION_REQUIRED");
+    expectProblem(await request("PATCH", path, { ...viewer, permissions: ["workflows:deploy"] }, { key: "form-viewer", ifMatch: etag, body: { status: "enabled" } }), 403, "RBAC_ROLE_DENIED");
+    expectProblem(await request("PATCH", path, admin, { key: "form-invalid", ifMatch: etag, body: { status: "paused" } }), 400, "INVALID_TRIGGER_REQUEST");
+    const result = await request("PATCH", path, admin, { key: "form-enable", ifMatch: etag, body: { status: "enabled" } });
+    expect(result.statusCode).toBe(200); expect(result.json()).toMatchObject({ status: "enabled" });
+    expect(engine.patch).toHaveBeenCalledWith(path, { status: "enabled" }, expect.objectContaining({ userId: admin.user_id, workspaceId: admin.workspace_id }), { idempotencyKey: "form-enable", ifMatch: etag });
+  });
+
   function request(
     method: "GET" | "POST" | "PATCH",
     url: string,
@@ -551,6 +569,8 @@ class TriggerEngine {
   ): Promise<EngineResponse<unknown>> {
     void context;
     this.throwIfFailed("GET", path);
+    if (path.endsWith("/public-form")) return { status: 200, body: { definition: { title: "Inquiry", fields: [{ name: "email", label: "Email", type: "email", required: true }] },
+      workflowVersionId, triggerVersionId, version: 1, publicUrl: "https://forms.test/f/capability", status: this.trigger.status, etag: '"public-form-current-draft"' } };
     return path.startsWith("/api/v1/triggers?")
       ? { status: 200, body: { triggers: [this.trigger] } }
       : path === "/api/v1/triggers"

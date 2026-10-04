@@ -314,6 +314,7 @@ export class TriggerRegistryService {
     requireNonEmpty("triggerId", request.triggerId);
     requireValidWorkflowVersionId(request.workflowVersionId);
     const tenantId = bareTenantUuid(request.tenantId);
+    let workflowVersionId = request.workflowVersionId;
 
     const created = await this.store.withTenant(tenantId, async (tx) => {
       const triggerResult = await tx.query<{
@@ -333,10 +334,11 @@ export class TriggerRegistryService {
       if (triggerRow.provider === "alter_public_form") {
         if (!this.publicForms) throw new TriggerValidationError("Hosted forms are not configured");
         if (!request.workspaceId || bareWorkspaceUuid(request.workspaceId) !== triggerRow.workspace_id) throw new TriggerNotFoundError(request.triggerId);
-        await requirePublicFormWorkflowVersion(tx, tenantId, triggerRow.workflow_id, request.workflowVersionId);
         if (!request.ifMatch) throw new PublicFormPreconditionError(428);
-        const active = await tx.query<{ id: string }>("SELECT id FROM trigger_versions WHERE tenant_id=$1 AND trigger_id=$2 AND status='active' ORDER BY version DESC LIMIT 1", [tenantId, request.triggerId]);
+        const active = await tx.query<{ id: string; workflow_version_id: string | null }>("SELECT id, workflow_version_id FROM trigger_versions WHERE tenant_id=$1 AND trigger_id=$2 AND status='active' ORDER BY version DESC LIMIT 1", [tenantId, request.triggerId]);
         if (request.ifMatch !== `"public-form-${active.rows[0]?.id}-${triggerRow.status}"`) throw new PublicFormPreconditionError(412);
+        workflowVersionId ??= active.rows[0]?.workflow_version_id ?? undefined;
+        await requirePublicFormWorkflowVersion(tx, tenantId, triggerRow.workflow_id, workflowVersionId);
         requirePublicFormActor(request.actorId);
       }
       const config = buildVersionConfig(triggerRow.type, request.config, triggerRow.provider);
@@ -366,7 +368,7 @@ export class TriggerRegistryService {
           tenantId,
           request.triggerId,
           nextVersion,
-          request.workflowVersionId ?? null,
+          workflowVersionId ?? null,
           JSON.stringify(config),
         ],
       );
@@ -379,7 +381,7 @@ export class TriggerRegistryService {
           tenantId: request.tenantId,
           triggerId: request.triggerId,
           version: nextVersion,
-          workflowVersionId: request.workflowVersionId ?? null,
+          workflowVersionId: workflowVersionId ?? null,
           config,
           status: "active" as const,
           nextFireAt,
@@ -415,8 +417,8 @@ export class TriggerRegistryService {
     if (!workspaceId) throw new TriggerNotFoundError(triggerId);
     const workspace = bareWorkspaceUuid(workspaceId), tenant = bareTenantUuid(tenantId);
     const current = await this.store.withTenant(tenant, async tx => {
-      const result = await tx.query<{ id: string; config: unknown; version: number; status: TriggerStatus }>(
-        `SELECT v.id, v.config, v.version, t.status FROM triggers t
+      const result = await tx.query<{ id: string; config: unknown; version: number; status: TriggerStatus; workflow_version_id: string | null }>(
+        `SELECT v.id, v.config, v.version, t.status, v.workflow_version_id FROM triggers t
          JOIN trigger_versions v ON v.tenant_id=t.tenant_id AND v.trigger_id=t.id AND v.status='active'
          WHERE t.tenant_id=$1 AND t.id=$2 AND t.workspace_id=$3 AND t.type='webhook' AND t.provider='alter_public_form'
          ORDER BY v.version DESC LIMIT 1`, [tenant, triggerId, workspace]);
@@ -425,7 +427,7 @@ export class TriggerRegistryService {
     if (!current) throw new TriggerNotFoundError(triggerId);
     const definition = HostedFormDefinitionSchema.parse((current.config as Record<string, unknown>).publicForm);
     const token = this.publicForms.codec.mint({ tenantId, triggerId, triggerVersionId: current.id });
-    return { definition, publicUrl: `${this.publicForms.baseUrl}/f/${token}`, triggerVersionId: current.id, version: current.version, status: current.status, etag: `"public-form-${current.id}-${current.status}"` };
+    return { definition, workflowVersionId: current.workflow_version_id, publicUrl: `${this.publicForms.baseUrl}/f/${token}`, triggerVersionId: current.id, version: current.version, status: current.status, etag: `"public-form-${current.id}-${current.status}"` };
   }
 
   async setTriggerStatus(
@@ -450,9 +452,10 @@ export class TriggerRegistryService {
         active_version: number | null;
         active_config: unknown;
         active_version_id: string | null;
+        active_workflow_version_id: string | null;
       }>(
         `SELECT t.id, t.workspace_id, t.workflow_id, t.name, t.type, t.status,
-                t.provider, tv.version AS active_version, tv.id AS active_version_id, tv.config AS active_config
+                t.provider, tv.version AS active_version, tv.id AS active_version_id, tv.config AS active_config, tv.workflow_version_id AS active_workflow_version_id
          FROM triggers t
          LEFT JOIN trigger_versions tv
            ON tv.tenant_id = t.tenant_id AND tv.trigger_id = t.id
@@ -470,6 +473,7 @@ export class TriggerRegistryService {
         requirePublicFormActor(caller.actorId);
         if (!caller.ifMatch) throw new PublicFormPreconditionError(428);
         if (caller.ifMatch !== `"public-form-${row.active_version_id}-${row.status}"`) throw new PublicFormPreconditionError(412);
+        if (targetStatus === "enabled" && !row.active_workflow_version_id) throw new TriggerValidationError("Select a workflow version before enabling the hosted form");
       }
       assertValidStatusTransition(row.status, targetStatus);
 

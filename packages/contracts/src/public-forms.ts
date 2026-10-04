@@ -1,5 +1,5 @@
 import { z } from "./zod";
-import { TenantIdSchema, TriggerIdSchema } from "./ids";
+import { TenantIdSchema, TriggerIdSchema, WorkflowVersionIdSchema } from "./ids";
 
 const field = {
   name: z.string().regex(/^[A-Za-z][A-Za-z0-9_]{0,63}$/).refine(name => !["constructor", "prototype", "__proto__"].includes(name), "Reserved field name"),
@@ -40,6 +40,7 @@ export type PublicFormTokenClaims = z.infer<typeof PublicFormTokenClaimsSchema>;
 export const HostedFormSetupSchema = z.object({
   definition: HostedFormDefinitionSchema, publicUrl: z.string().url(),
   triggerVersionId: PublicFormTokenClaimsSchema.shape.triggerVersionId,
+  workflowVersionId: WorkflowVersionIdSchema.nullable().optional(),
   version: z.number().int().positive(), status: z.enum(["draft", "enabled", "disabled", "archived"]),
   etag: z.string().min(1),
 }).strict();

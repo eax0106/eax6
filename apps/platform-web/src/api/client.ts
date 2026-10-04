@@ -1,3 +1,4 @@
+import { HostedFormDefinitionSchema, type HostedFormDefinition, type HostedFormSetup } from "@alterx/contracts"
 
 import { usageService, budgetsService, costEstimatesService } from "./services/usage"
 import { runRetentionService } from "./services/run-retention"
@@ -64,6 +65,7 @@ const MOCK_DELAY = 600
 const mockPendingDeletion: { workspace: Workspace; deletionDueAt: string }[] = []
 
 class ApiClient {
+  private readonly hostedForms = new Map<string, HostedFormSetup>()
   getNodeOverrideOptions = nodeOverrides.getNodeOverrideOptions
   compareNodeOverride = nodeOverrides.compareNodeOverride
   getWorkflowFolders = workflowFolders.getWorkflowFolders
@@ -954,6 +956,58 @@ class ApiClient {
     }
     mockTriggers.push(t)
     return t
+  }
+
+  async getHostedForm(id: string): Promise<HostedFormSetup> {
+    if (isLiveApi) return live.getHostedForm(id)
+    await delay(MOCK_DELAY)
+    const form = this.hostedForms.get(id)
+    if (!form) throw new Error("Hosted form not found")
+    return structuredClone(form)
+  }
+
+  async createHostedForm(workflowId: string, workflowVersionId: string, definition: HostedFormDefinition): Promise<Trigger> {
+    if (isLiveApi) return live.createHostedForm(workflowId, workflowVersionId, definition)
+    await delay(MOCK_DELAY)
+    const form = HostedFormDefinitionSchema.parse(definition)
+    const id = `trg_${crypto.randomUUID().replace(/^(.{14})./, (_, prefix: string) => `${prefix}7`)}`
+    const trigger: Trigger = { id, workflowId, provider: "alter_public_form", type: "webhook", name: form.title, enabled: false,
+      status: "configured", config: { publicForm: form }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    const versionId = `trv_${crypto.randomUUID().replace(/^(.{14})./, (_, prefix: string) => `${prefix}7`)}`
+    const setup: HostedFormSetup = { definition: form, workflowVersionId, triggerVersionId: versionId, version: 1, status: "draft",
+      publicUrl: `https://forms.example.test/f/mock-${versionId}`, etag: `"public-form-${versionId}-draft"` }
+    mockTriggers.push(trigger)
+    this.hostedForms.set(id, setup)
+    return structuredClone(trigger)
+  }
+
+  async updateHostedForm(id: string, definition: HostedFormDefinition, workflowVersionId: string, ifMatch: string): Promise<HostedFormSetup> {
+    if (isLiveApi) return live.updateHostedForm(id, definition, workflowVersionId, ifMatch)
+    await delay(MOCK_DELAY)
+    const current = this.hostedForms.get(id)
+    if (!current) throw new Error("Hosted form not found")
+    if (current.etag !== ifMatch) throw new Error("Form changed. Reload before saving.")
+    const versionId = `trv_${crypto.randomUUID().replace(/^(.{14})./, (_, prefix: string) => `${prefix}7`)}`
+    const setup = { ...current, definition: HostedFormDefinitionSchema.parse(definition), workflowVersionId,
+      version: current.version + 1, triggerVersionId: versionId, publicUrl: `https://forms.example.test/f/mock-${versionId}`,
+      etag: `"public-form-${versionId}-${current.status}"` }
+    this.hostedForms.set(id, setup)
+    return structuredClone(setup)
+  }
+
+  async setHostedFormStatus(id: string, status: "enabled" | "disabled" | "archived", ifMatch: string): Promise<Trigger> {
+    if (isLiveApi) return live.setHostedFormStatus(id, status, ifMatch)
+    await delay(MOCK_DELAY)
+    const current = this.hostedForms.get(id)
+    const trigger = mockTriggers.find(t => t.id === id)
+    if (!current || !trigger) throw new Error("Hosted form not found")
+    if (current.etag !== ifMatch) throw new Error("Form changed. Reload before saving.")
+    if (current.status === "archived") throw new Error("Form is archived")
+    this.hostedForms.set(id, { ...current, status, etag: `"public-form-${current.triggerVersionId}-${status}"` })
+    trigger.enabled = status === "enabled"
+    trigger.status = status === "archived" ? "needs_configuration" : "configured"
+    if (status === "archived") mockTriggers.splice(mockTriggers.indexOf(trigger), 1)
+    return structuredClone(trigger)
   }
 
   async updateTrigger(id: string, data: Partial<Trigger>): Promise<Trigger> {

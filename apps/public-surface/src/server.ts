@@ -3,8 +3,8 @@ import { randomBytes } from "node:crypto";
 import { PublicFormHttpError, type PublicFormService } from "./public-form.service";
 import { renderPublicForm } from "./render-form";
 
-export function createPublicSurfaceServer(service: PublicFormService, siteKey: string, origin: string, readiness: () => Promise<void>) {
-  const app = Fastify({ logger: false, bodyLimit: 40 * 1024, trustProxy: false, requestTimeout: 30000, routerOptions: { maxParamLength: 128 } });
+export function createPublicSurfaceServer(service: PublicFormService, siteKey: string, origin: string, readiness: () => Promise<void>, trustProxy: false | string[] = false) {
+  const app = Fastify({ logger: false, bodyLimit: 40 * 1024, trustProxy, requestTimeout: 30000, routerOptions: { maxParamLength: 128 } });
   app.addHook("onRequest", async (_request, reply) => {
     reply.header("cache-control", "no-store").header("referrer-policy", "no-referrer").header("x-content-type-options", "nosniff");
   });

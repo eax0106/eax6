@@ -11,7 +11,7 @@ vi.mock("./http", () => ({
 }))
 
 import { apiGet, apiGetWithEtag, apiPatch, apiPost } from "./http"
-import { disableTrigger, getTriggers, removeTrigger, testTrigger } from "./live"
+import { disableTrigger, getTriggers, removeTrigger, testTrigger, getHostedForm, createHostedForm, updateHostedForm, setHostedFormStatus } from "./live"
 
 const triggerId = "trg_018f47a5-7b2c-7d10-8f11-123456789abc"
 const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc"
@@ -91,5 +91,37 @@ describe("live trigger management", () => {
       { status: "disabled" },
       { idempotencyKey: "trigger-status-test-key", ifMatch: '"trigger-v1"' },
     )
+  })
+})
+
+const definition = { title: "Lead form", fields: [{ name: "email", label: "Email", type: "email" as const, required: true }] }
+const versionId = "wfv_018f47a5-7b2c-7d10-8f11-123456789abc"
+const setup = { definition, publicUrl: "https://forms.example.com/f/opaque", triggerVersionId: "trv_018f47a5-7b2c-7d10-8f11-123456789abd", workflowVersionId: versionId, status: "draft", version: 1, etag: '"form-v1"' }
+
+describe("live hosted form authoring", () => {
+  it("uses the workflow's real workspace and explicitly selects the hosted provider", async () => {
+    vi.mocked(apiGet).mockResolvedValueOnce({ workspaceId: "018f47a5-7b2c-7d10-8f11-123456789abe" }).mockResolvedValueOnce(setup)
+    vi.mocked(apiPost).mockResolvedValue({ trigger: { ...trigger, type: "webhook", provider: "alter_public_form", status: "draft" } })
+    expect(await createHostedForm(workflowId, versionId, definition)).toMatchObject({ provider: "alter_public_form", enabled: false })
+    expect(apiPost).toHaveBeenCalledWith("/api/v1/triggers", { workflowId, workflowVersionId: versionId, workspaceId: "ws_018f47a5-7b2c-7d10-8f11-123456789abe", name: "Lead form", type: "webhook", provider: "alter_public_form", config: { publicForm: definition } }, { idempotencyKey: "hosted-form-create-test-key" })
+  })
+  it("refuses missing workspace or malformed current form instead of manufacturing a link", async () => {
+    vi.mocked(apiGet).mockResolvedValue({})
+    await expect(createHostedForm(workflowId, versionId, definition)).rejects.toThrow()
+    expect(apiPost).not.toHaveBeenCalled()
+    await expect(getHostedForm(triggerId)).rejects.toThrow()
+  })
+  it("edits an immutable version with its displayed ETag and returns the server's new link", async () => {
+    vi.mocked(apiGet).mockResolvedValue(setup)
+    expect(await updateHostedForm(triggerId, definition, versionId, setup.etag)).toEqual(setup)
+    expect(apiPost).toHaveBeenCalledWith(`/api/v1/triggers/${triggerId}/versions`, { workflowVersionId: versionId, config: { publicForm: definition } }, { idempotencyKey: "hosted-form-edit-test-key", ifMatch: setup.etag })
+  })
+  it("keeps stale edits and refused status writes failed without fetching a success link", async () => {
+    vi.mocked(apiPost).mockRejectedValue(new Error("Form changed"))
+    await expect(updateHostedForm(triggerId, definition, versionId, setup.etag)).rejects.toThrow("Form changed")
+    expect(apiGet).not.toHaveBeenCalled()
+    vi.mocked(apiPatch).mockRejectedValue(new Error("Permission denied"))
+    await expect(setHostedFormStatus(triggerId, "enabled", setup.etag)).rejects.toThrow("Permission denied")
+    expect(apiPatch).toHaveBeenCalledWith(`/api/v1/triggers/${triggerId}/public-form/status`, { status: "enabled" }, { idempotencyKey: "hosted-form-status-test-key", ifMatch: setup.etag })
   })
 })

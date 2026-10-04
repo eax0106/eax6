@@ -34,4 +34,19 @@ NODE
   }
 done
 echo "estimation-negative-controls-ok"
+for key in PUBLIC_FORM_TOKEN_KEY PUBLIC_FORM_BASE_URL PUBLIC_FORM_TURNSTILE_SITE_KEY PUBLIC_FORM_TURNSTILE_SECRET_REF PUBLIC_SURFACE_DATABASE_URL PUBLIC_SURFACE_REDIS_URL; do
+  node - "$work/compose.json" "$work/negative.json" "$key" <<'NODE'
+const fs = require('node:fs');
+const [source, target, key] = process.argv.slice(2);
+const config = JSON.parse(fs.readFileSync(source, 'utf8'));
+delete config.services['public-surface'].environment[key];
+fs.writeFileSync(target, JSON.stringify(config));
+NODE
+  if (cd "$repo" && pnpm exec tsx --tsconfig apps/platform-api/tsconfig.app.json deploy/ec2/check-production-config.ts "$work/negative.json") >"$work/negative.log" 2>&1; then
+    echo "FAIL missing Public Surface $key was accepted"; exit 1
+  fi
+  grep -Fq 'FAIL public-surface hosted form environment:' "$work/negative.log" || { echo "FAIL missing Public Surface $key did not reach its configuration check"; exit 1; }
+done
+echo "public-form-boot-controls-ok"
+(cd "$repo" && node deploy/ec2/check-public-form-routing.mjs)
 echo "production-boot-ok"

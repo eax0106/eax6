@@ -31,6 +31,7 @@ locals {
     "model-gateway",
     "orchestration-service",
     "platform-api",
+    "public-surface",
     "provisioning-service",
     "sandbox-service",
     "tool-gateway",
@@ -41,12 +42,12 @@ check "image_catalog_covers_every_deployable_service" {
   assert {
     condition = (
       length(local.images) == 6 &&
-      length(local.node_services) == 9 &&
+      length(local.node_services) == 10 &&
       length(setintersection(local.images, local.node_services)) == 0 &&
       !contains(local.images, "platform-web") &&
       !contains(local.node_services, "platform-web")
     )
-    error_message = "ECR must hold six images -- the shared Node image plus one per Python service -- covering all fourteen deployable services and excluding platform-web."
+    error_message = "ECR must hold six images -- the shared Node image plus one per Python service -- covering all fifteen deployable services and excluding platform-web."
   }
 }
 

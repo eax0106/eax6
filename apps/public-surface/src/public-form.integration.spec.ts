@@ -75,6 +75,18 @@ describe.sequential("ordinary PostgreSQL and native public form HTTP", () => {
     await expect(store.withTenant(tenant, tx => tx.query("SELECT * FROM workflows"))).rejects.toThrow("permission denied");
     await expect(store.withTenant(tenant, tx => tx.query("UPDATE triggers SET status='disabled'"))).rejects.toThrow("permission denied");
   });
+  it("rejects accidental broad data and administrative grants before the public process can start", async () => {
+    await admin.withTenant(tenant, tx => tx.query("GRANT SELECT ON events TO public_surface"));
+    try { await expect(repository.verifyRuntimeRole()).rejects.toThrow("dedicated restricted"); }
+    finally { await admin.withTenant(tenant, tx => tx.query("REVOKE SELECT ON events FROM public_surface")); }
+    await admin.withTenant(tenant, tx => tx.query("GRANT SELECT(name) ON triggers TO public_surface"));
+    try { await expect(repository.verifyRuntimeRole()).rejects.toThrow("dedicated restricted"); }
+    finally { await admin.withTenant(tenant, tx => tx.query("REVOKE SELECT(name) ON triggers FROM public_surface")); }
+    await admin.withTenant(tenant, tx => tx.query("ALTER ROLE public_surface CREATEROLE"));
+    try { await expect(repository.verifyRuntimeRole()).rejects.toThrow("dedicated restricted"); }
+    finally { await admin.withTenant(tenant, tx => tx.query("ALTER ROLE public_surface NOCREATEROLE")); }
+    await expect(repository.verifyRuntimeRole()).resolves.toBeUndefined();
+  });
   it("accepts through actual verifier/classifier/publisher adapters and preserves one submission across retries", async () => {
     const input = valid(), before = delivered.length;
     expect((await post(input)).status).toBe(202); expect((await post(input)).status).toBe(202);
@@ -83,6 +95,23 @@ describe.sequential("ordinary PostgreSQL and native public form HTTP", () => {
     expect(detail).toMatchObject({ source: "alter.public-form", event_type: "public_form.submitted", tenant_id: claims.tenantId, workspace_id: `ws_${workspace}`, trigger_id: trigger, trigger_version: 1, payload: input.values });
     expect((await post({ ...input, values: { ...input.values, note: "Different input" } })).status).toBe(409);
     expect(modelInvoke.mock.calls.at(-1)![0]).toMatchObject({ tenant_id: claims.tenantId, model_alias: "FAST" });
+  });
+  it("enforces real HTTP visitor limits and trusts forwarded visitors only from its configured loopback edge", async () => {
+    for (const trusted of [false, ["127.0.0.1", "::1"]] as const) {
+      const page = new RedisPublicFormRateLimiter(`redis://${redis.getHost()}:${redis.getMappedPort(6379)}/${trusted === false ? 1 : 2}`, "public-form:page", { form: 10, visitor: 1, windowSeconds: 60 });
+      const own = createPublicSurfaceServer(new PublicFormService(codec, repository, { page, submit: submitRate },
+        new CloudflareTurnstileVerifier(async () => "fixture-only", "forms.example.com", challengeFetch),
+        new PromptInjectionClassifier({ invoke: modelInvoke }), receipts,
+        new EventBridgeEventPublisher({ region: "ap-south-1", busName: "fixture" }, { send: async () => ({ FailedEntryCount: 0 }) }), "fixture-visitor-hmac-key"),
+        "fixture-site-key", "https://forms.example.com", async () => repository.verifyRuntimeRole(), trusted === false ? false : [...trusted]);
+      try {
+        await own.listen({ host: "127.0.0.1", port: 0 });
+        const address = `http://127.0.0.1:${(own.server.address() as { port: number }).port}/f/${codec.mint(claims)}`;
+        expect((await fetch(address, { headers: { "x-forwarded-for": "203.0.113.1" } })).status).toBe(200);
+        expect((await fetch(address, { headers: { "x-forwarded-for": "203.0.113.2" } })).status).toBe(trusted === false ? 429 : 200);
+        expect((await fetch(address, { headers: { "x-forwarded-for": "203.0.113.1" } })).status).toBe(429);
+      } finally { await own.close(); await page.close(); }
+    }
   });
   it("refuses fields, uploads, spoofed metadata, origin and body limits before model invocation", async () => {
     const before = modelInvoke.mock.calls.length;

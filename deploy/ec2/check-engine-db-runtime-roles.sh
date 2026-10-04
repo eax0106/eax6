@@ -18,4 +18,8 @@ grep -Fq 'CREATE POLICY "webhook_endpoint_secrets_public_resolver"' "$migration"
 grep -Fq "rolname = 'orchestration_service'" "$migration"
 grep -Fq "REVOKE ALL ON FUNCTION resolve_webhook_endpoint(text) FROM PUBLIC" "$migration"
 grep -Fq 'GRANT EXECUTE ON FUNCTION resolve_webhook_endpoint(text) TO "orchestration_service"' "$migration"
+grep -Fq 'ALTER ROLE public_surface WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS' "$init"
+grep -Fq '<public-surface-role.sql' "$bootstrap"
+grep -Fq 'CREATE POLICY public_forms_trigger_scope' "$root/apps/orchestration-service/drizzle/0053_public_forms.sql"
+grep -Fq 'TO public_surface' "$root/apps/orchestration-service/drizzle/0053_public_forms.sql"
 echo engine-db-runtime-roles-ok

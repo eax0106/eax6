@@ -19,7 +19,7 @@ export function createProductionPublicSurface(config: ReturnType<typeof loadPubl
   const service = new PublicFormService(config.codec, repository, { page, submit },
     new CloudflareTurnstileVerifier(() => secrets.getSecret(config.turnstileSecretRef), config.hostname), new PromptInjectionClassifier(model), receipts, publisher, config.tokenKey);
   const ready = async () => { await repository.verifyRuntimeRole(); await receipts.probe(); };
-  const app = createPublicSurfaceServer(service, config.siteKey, config.origin, ready);
+  const app = createPublicSurfaceServer(service, config.siteKey, config.origin, ready, config.trustProxy);
   app.addHook("onClose", async () => { publisher.close(); await Promise.all([page.close(), submit.close(), receipts.close(), store.close()]); });
   return { app, ready };
 }

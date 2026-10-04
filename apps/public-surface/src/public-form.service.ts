@@ -11,6 +11,7 @@ export class PublicFormHttpError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
+/** @driver createPublicSurfaceServer */
 export class PublicFormService {
   constructor(private readonly codec: PublicFormTokenCodec, private readonly repository: Pick<PublicFormRepository, "get">,
     private readonly rates: { page: Pick<RedisPublicFormRateLimiter, "consume">; submit: Pick<RedisPublicFormRateLimiter, "consume"> },

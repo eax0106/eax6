@@ -7,6 +7,7 @@ set -eu
 # through docker-compose.yml makes that visible rather than silent.
 : "${AUDIT_DB_PASSWORD:?AUDIT_DB_PASSWORD is required}"
 : "${AUDIT_RETENTION_DB_PASSWORD:?AUDIT_RETENTION_DB_PASSWORD is required}"
+: "${PUBLIC_SURFACE_DB_PASSWORD:=}"
 : "${ORCHESTRATION_DB_PASSWORD:=$AUDIT_DB_PASSWORD}"
 : "${INTELLIGENCE_DB_PASSWORD:=$AUDIT_DB_PASSWORD}"
 : "${COST_DB_PASSWORD:=$AUDIT_DB_PASSWORD}"
@@ -21,6 +22,7 @@ psql \
   --dbname postgres \
   --set=audit_db_password="$AUDIT_DB_PASSWORD" \
   --set=audit_retention_db_password="$AUDIT_RETENTION_DB_PASSWORD" \
+  --set=public_surface_db_password="$PUBLIC_SURFACE_DB_PASSWORD" \
   --set=orchestration_db_password="$ORCHESTRATION_DB_PASSWORD" \
   --set=intelligence_db_password="$INTELLIGENCE_DB_PASSWORD" \
   --set=cost_db_password="$COST_DB_PASSWORD" \
@@ -70,6 +72,13 @@ WHERE NOT EXISTS (
 ALTER DATABASE orchestration_db OWNER TO orchestration_service;
 REVOKE CONNECT, TEMPORARY ON DATABASE orchestration_db FROM PUBLIC;
 GRANT CONNECT, TEMPORARY ON DATABASE orchestration_db TO orchestration_service;
+
+SELECT format('CREATE ROLE public_surface LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD %L', :'public_surface_db_password')
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'public_surface') \gexec
+ALTER ROLE public_surface WITH LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS PASSWORD :'public_surface_db_password';
+GRANT CONNECT ON DATABASE orchestration_db TO public_surface;
+-- Migration 0053 supplies only scoped SELECT columns after the tables exist.
+
 
 SELECT format(
   'CREATE ROLE intelligence_service LOGIN PASSWORD %L',

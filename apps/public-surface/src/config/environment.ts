@@ -18,9 +18,11 @@ export function loadPublicSurfaceEnvironment(environment: NodeJS.ProcessEnv = pr
     host: requireValue(environment, "PUBLIC_SURFACE_DATABASE_HOST"), port: parsePort(environment.PUBLIC_SURFACE_DATABASE_PORT, "PUBLIC_SURFACE_DATABASE_PORT", 5432),
     database: requireValue(environment, "PUBLIC_SURFACE_DATABASE_NAME") };
   else throw new Error("PUBLIC_SURFACE_DATABASE_AUTHENTICATION must be static or iam");
+  const proxy = environment.PUBLIC_SURFACE_TRUST_PROXY ?? "none";
+  if (!["none", "loopback"].includes(proxy)) throw new Error("Public Surface proxy must be none or loopback");
   const redisUrl = requireValue(environment, "PUBLIC_SURFACE_REDIS_URL");
   if (!["redis:", "rediss:"].includes(new URL(redisUrl).protocol)) throw new Error("Public Surface requires Redis");
-  return { tokenKey, codec, database, region, redisUrl, origin: origin.origin, hostname: origin.hostname,
+  return { trustProxy: proxy === "loopback" ? ["127.0.0.1", "::1"] : false as const, tokenKey, codec, database, region, redisUrl, origin: origin.origin, hostname: origin.hostname,
     siteKey: requireValue(environment, "PUBLIC_FORM_TURNSTILE_SITE_KEY"), turnstileSecretRef: requireValue(environment, "PUBLIC_FORM_TURNSTILE_SECRET_REF"),
     modelGatewayAddress: requireValue(environment, "MODEL_GATEWAY_ADDRESS"), busName: requireValue(environment, "EVENTBRIDGE_BUS_NAME"),
     eventBridgeEndpoint: environment.EVENTBRIDGE_ENDPOINT?.trim() || undefined,

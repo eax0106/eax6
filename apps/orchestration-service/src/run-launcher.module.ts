@@ -1,5 +1,7 @@
+import { BlackboardService } from "./blackboard/blackboard.service";
+import { parseRedisHostPort } from "./config/blackboard-environment";
 import { Module } from "@nestjs/common";
-import { ProvisioningClient, TemporalDurableExecutionProvider } from "@alterx/adapters";
+import { ProvisioningClient, TemporalDurableExecutionProvider, RedisCacheProvider } from "@alterx/adapters";
 
 import { RunLauncherService } from "./runs/run-launcher.service";
 import { DurableRunQueue } from "./runs/durable-run-queue.service";
@@ -59,6 +61,7 @@ import {
           new DurableRunQueue(store),
           buildRunBudgetGate(process.env),
           runLearningAuditClient(process.env),
+          new BlackboardService(store, new RedisCacheProvider(parseRedisHostPort(dbConfig.redisUrl))),
         );
       },
     },

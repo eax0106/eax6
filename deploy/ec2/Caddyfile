@@ -2,6 +2,9 @@
 # Caddy obtains and renews the certificate for ALTER_DOMAIN itself.
 {$ALTER_DOMAIN} {
 	encode gzip
+	handle /f/* {
+		reverse_proxy 127.0.0.1:{$PUBLIC_SURFACE_PORT}
+	}
 	handle /v1/webhooks/ses {
 		reverse_proxy 127.0.0.1:{$ORCHESTRATION_PORT}
 	}
