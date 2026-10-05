@@ -5,11 +5,18 @@ import {
   type CheckReleaseGateResponse,
   type RunEvaluationResponse,
 } from "../engine";
+import { EvalHistoryClient, historyQuerySchema } from "./history.client";
 import { BenchmarksHttpError } from "./problem";
 
 @Injectable()
 export class BenchmarksService {
-  constructor(private readonly evalFacade: EvalFacadeClient) {}
+  constructor(private readonly evalFacade: EvalFacadeClient, private readonly history: EvalHistoryClient) {}
+
+  listRuns(query: unknown, traceparent?: string) {
+    const parsed = historyQuerySchema.safeParse(query);
+    if (!parsed.success) throw new BenchmarksHttpError(400,"BENCHMARKS_VALIDATION_FAILED","Invalid history query","/api/v1/admin/benchmarks/runs");
+    return this.history.list(parsed.data,traceparent);
+  }
 
   run(
     body: unknown,
