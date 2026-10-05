@@ -15,7 +15,6 @@ import {
   UseInterceptors,
 } from "@nestjs/common";
 import type {
-  BillingPlan,
   Invoice,
   Page,
   PaymentMethodRef,
@@ -37,7 +36,7 @@ import {
   type BillingWebhookResult,
 } from "./billing-webhook.service";
 import { BillingService } from "./billing.service";
-import type { BillingSubscriptionView } from "./types";
+import type { BillingSubscriptionView, ConfiguredBillingPlanView } from "./types";
 import {
   parseAttachPaymentMethod,
   parseChangeSubscription,
@@ -82,7 +81,7 @@ export class BillingController {
   @Get("plans")
   @RequireTenantRole("admin")
   @RequirePermission("billing:read")
-  plans(): Promise<BillingPlan[]> {
+  plans(): Promise<ConfiguredBillingPlanView[]> {
     return this.billing.listPlans();
   }
 
@@ -94,6 +93,13 @@ export class BillingController {
     @ActorContext() actor: ActorContextType,
   ): Promise<BillingSubscriptionView | null> {
     return this.billing.getSubscription(actor.tenant_id);
+  }
+
+  @Get("credits")
+  @RequireTenantRole("admin")
+  @RequirePermission("billing:read")
+  credits(@ActorContext() actor:ActorContextType):Promise<{balance:string;reserved:string;available:string}> {
+    return this.billing.getCredits(actor.tenant_id);
   }
 
   @Post("subscription")
@@ -108,6 +114,7 @@ export class BillingController {
     return this.billing.createSubscription(
       actor.tenant_id,
       parseCreateSubscription(body, "/api/v1/billing/subscription"),
+      actor.user_id,
     );
   }
 
@@ -118,22 +125,27 @@ export class BillingController {
   @Idempotent()
   changeSubscription(
     @Body() body: unknown,
+    @Headers("if-match") ifMatch: string | undefined,
     @ActorContext() actor: ActorContextType,
   ): Promise<BillingSubscriptionView> {
     return this.billing.changeSubscription(
       actor.tenant_id,
       parseChangeSubscription(body, "/api/v1/billing/subscription"),
+      actor.user_id,
+      ifMatch,
     );
   }
 
   @Delete("subscription")
   @RequireTenantRole("owner")
   @RequirePermission("billing:write")
+  @EtagConstrained()
   @Idempotent()
   cancelSubscription(
+    @Headers("if-match") ifMatch: string | undefined,
     @ActorContext() actor: ActorContextType,
   ): Promise<BillingSubscriptionView> {
-    return this.billing.cancelSubscription(actor.tenant_id);
+    return this.billing.cancelSubscription(actor.tenant_id,actor.user_id,ifMatch);
   }
 
   @Get("invoices")

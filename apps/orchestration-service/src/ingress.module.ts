@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { EngineBillingAccountService } from "./billing/billing-account.service";
 import {
   AwsSecretsManagerProvider,
   ConversationDispatchClient,
@@ -154,7 +155,7 @@ import { loadSesDeliveryEnvironment, SES_DELIVERY_ENVIRONMENT } from "./config/s
       useFactory: (launcher: RunLauncherService) => {
         const dbConfig = identityTenantGatewayEnvironment(process.env);
         const store = orchestrationStore(dbConfig);
-        return new TriggerEventDispatchService(store, launcher, buildRunBudgetGate(process.env));
+        return new TriggerEventDispatchService(store, launcher, buildRunBudgetGate(process.env), new EngineBillingAccountService(store));
       },
     },
     {

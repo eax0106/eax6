@@ -15,14 +15,29 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe("live billing (B2.7, B2.8)", () => {
-  it("starts a subscription with the chosen plan and payment method, idempotently", async () => {
+  it("starts hosted checkout with the reviewed plan version and GSTIN, idempotently", async () => {
     fetchMock.mockResolvedValue(Response.json({ id: "sub_1", planId: "plan_pro", status: "created" }, { status: 201 }))
-    await billingService.subscribe("plan_pro", "token_abc")
+    await billingService.subscribe("pro", "2026-10-05T00:00:00.000Z","27ABCDE1234F1Z5")
     const [url, init] = fetchMock.mock.calls[0]!
     expect(String(url)).toContain("/api/v1/billing/subscription")
     expect(init!.method).toBe("POST")
-    expect(JSON.parse(String(init!.body))).toEqual({ plan_id: "plan_pro", payment_method_ref: "token_abc" })
+    expect(JSON.parse(String(init!.body))).toEqual({plan_id:"pro",plan_version:"2026-10-05T00:00:00.000Z",gstin:"27ABCDE1234F1Z5"})
     expect(new Headers(init!.headers).get("Idempotency-Key")).toMatch(/^billing-subscribe/)
+  })
+
+  it("retains the displayed ETag for change and cancellation without refreshing away a stale version",async()=>{
+    fetchMock.mockImplementation(async()=>Response.json({id:"sub_1",version:"original"},{headers:{ETag:'"displayed"'}}))
+    const current=await billingService.getSubscription()
+    expect(current?.etag).toBe('"displayed"')
+    await billingService.changePlan("pro","2026-10-05T00:00:00.000Z",current?.etag)
+    expect(new Headers(fetchMock.mock.calls[1]![1]?.headers).get("If-Match")).toBe('"displayed"')
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({plan_id:"pro",plan_version:"2026-10-05T00:00:00.000Z"})
+    await billingService.cancelSubscription(current?.etag)
+    expect(fetchMock.mock.calls[2]![1]?.method).toBe("DELETE")
+    expect(new Headers(fetchMock.mock.calls[2]![1]?.headers).get("If-Match")).toBe('"displayed"')
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    await expect(billingService.cancelSubscription(undefined)).rejects.toThrow("Refresh the current subscription")
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it("passes the provider's hosted invoice link through", async () => {

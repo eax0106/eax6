@@ -2,6 +2,7 @@ import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import type { KycDocumentRef, KycSubmission } from "@alterx/shared-clients";
 import type { Pool, PoolClient } from "pg";
 import type { EarningsSummary, PayoutRecord, PublisherRecord, PublisherVerificationStatus } from "./types";
+import { PublisherHttpError } from "./publisher.problem";
 
 interface PublisherRow { id: string; tenant_id: string; verification_status: PublisherVerificationStatus; created_at: Date }
 interface KycRow { id: string; tenant_id: string; documents_json: readonly KycDocumentRef[]; status: KycSubmission["status"]; rejection_reason: string | null; submitted_at: Date; reviewed_at: Date | null }
@@ -52,6 +53,20 @@ export class PublisherRepository implements OnModuleDestroy {
       if (!row) return undefined;
       await client.query("UPDATE publishers SET verification_status = $2 WHERE tenant_id = $1", [tenantId, status === "approved" ? "verified" : "rejected"]);
       return submission(row);
+    });
+  }
+
+  submitFreeListing(tenantId: string, listingId: string): Promise<string> {
+    return this.withTenant(tenantId, async client => {
+      const instance = `/api/v1/publisher/listings/${listingId}/actions/submit`;
+      const { rows } = await client.query<{ status: string; price_minor: string }>(
+        "SELECT status, price_minor FROM listings WHERE tenant_id = $1 AND id = $2 FOR UPDATE", [tenantId, listingId]);
+      const listing = rows[0];
+      if (!listing) throw new PublisherHttpError(404, "PUBLISHER_LISTING_NOT_FOUND", "Publisher listing was not found.", instance);
+      if (listing.price_minor !== "0") throw new PublisherHttpError(409, "PUBLISHER_FREE_ONLY", "Only free listings can be submitted in v1.", instance);
+      if (!["draft", "private_testing"].includes(listing.status)) throw new PublisherHttpError(409, "PUBLISHER_INVALID_PIPELINE_TRANSITION", `Cannot transition listing from ${listing.status} to submitted.`, instance);
+      await client.query("UPDATE listings SET status = 'submitted', updated_at = clock_timestamp() WHERE tenant_id = $1 AND id = $2", [tenantId, listingId]);
+      return "submitted";
     });
   }
 

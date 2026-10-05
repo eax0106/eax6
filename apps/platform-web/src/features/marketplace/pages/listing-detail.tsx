@@ -26,16 +26,17 @@ export function ListingDetailPage() {
   })
 
   const installMutation = useMutation({
-    mutationFn: () => listing?.pricing.type === "free" ? api.marketplace.install(listingId!) : api.marketplace.purchase(listingId!),
+    mutationFn: () => api.marketplace.install(listingId!),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.marketplace.myAssets })
-      alert(isLiveApi ? "Installed successfully." : listing?.pricing.type === "free" ? "Installed successfully (Mock)" : "Purchase complete. Template added to My Assets (Mock).")
+      alert(isLiveApi ? "Installed successfully." : "Installed successfully (Mock)")
       navigate("/app/marketplace/my-assets")
     }
   })
 
   if (isLoading) return <div className="animate-pulse">Loading listing...</div>
   if (listingError || !listing) return <div role="alert" className="text-destructive">Could not load this listing: {listingError?.message ?? "Listing unavailable"}</div>
+  if (listing.pricing.type !== "free") return <div role="alert">This listing is unavailable. Marketplace listings are free-only in v1.</div>
 
   return (
     <div className="space-y-8 max-w-4xl">
@@ -113,14 +114,13 @@ export function ListingDetailPage() {
             <Button 
               className="w-full mb-4" 
               size="lg" 
-              disabled={installMutation.isPending || (isLiveApi && listing.pricing.type === "paid")}
+              disabled={installMutation.isPending}
               onClick={() => installMutation.mutate()}
             >
               {installMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
-              {listing.pricing.type === "free" ? "Install Now" : "Purchase"}
+              Install Now
             </Button>
             
-            {isLiveApi && listing.pricing.type === "paid" && <p className="text-sm text-muted-foreground mb-4">Paid checkout is coming soon.</p>}
             {installMutation.error && <p role="alert" className="text-sm text-destructive mb-4">{installMutation.error.message}</p>}
             {!isLiveApi && <div className="space-y-3 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">

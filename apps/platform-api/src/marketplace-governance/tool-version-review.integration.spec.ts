@@ -47,7 +47,7 @@ describe.skipIf(!databaseUrl)("first-version staff review: ordinary PostgreSQL a
     vi.stubEnv("AUTH0_STAFF_DOMAIN","staff.example.test");
     vi.stubEnv("MARKETPLACE_SEARCH_CURSOR_SECRET","native-review-cursor-secret");
     for (const key of ["ENGINE_BASE_URL","ADS_CORE_BASE_URL","COST_LEDGER_BASE_URL","AUDIT_SERVICE_BASE_URL","ENGINE_M2M_TOKEN_URL"]) vi.stubEnv(key,"http://127.0.0.1:1");
-    for (const key of ["EVAL_FACADE_TOKEN_REF","DEPLOYMENT_ADMIN_SERVICE_TOKEN_REF","AUDIT_QUERY_SERVICE_TOKEN_REF","ENGINE_M2M_AUDIENCE","ENGINE_M2M_CLIENT_ID","ENGINE_M2M_CLIENT_SECRET_REF","CONNECTION_REGISTRY_SERVICE_TOKEN_REF"]) vi.stubEnv(key,"native-unused-reference");
+    for (const key of ["EVAL_FACADE_TOKEN_REF","DEPLOYMENT_ADMIN_SERVICE_TOKEN_REF","AUDIT_QUERY_SERVICE_TOKEN_REF","ENGINE_M2M_AUDIENCE","ENGINE_M2M_CLIENT_ID","ENGINE_M2M_CLIENT_SECRET_REF","CONNECTION_REGISTRY_SERVICE_TOKEN_REF","BILLING_SYNC_SERVICE_TOKEN_REF"]) vi.stubEnv(key,"native-unused-reference");
     const realFetch=globalThis.fetch;
     // Identity-provider edge only. StaffService, staff lookup, middleware and RBAC stay real.
     vi.stubGlobal("fetch", async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {

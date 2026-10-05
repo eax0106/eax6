@@ -1,4 +1,6 @@
 import { Module } from "@nestjs/common";
+import { BillingAccountController, BILLING_SYNC_TOKEN_HASH } from "./billing/billing-account.controller";
+import { EngineBillingAccountService } from "./billing/billing-account.service";
 import { AwsSecretsManagerProvider, EvalServiceClient } from "@alterx/adapters";
 import { loadServiceTokenFingerprint } from "./config/service-token-fingerprint";
 
@@ -40,8 +42,11 @@ import {
     EvalFacadeController,
     DeploymentAdminController,
     ConnectionRegistryController,
+    BillingAccountController,
   ],
   providers: [
+    { provide: BILLING_SYNC_TOKEN_HASH, useFactory: () => loadServiceTokenFingerprint(process.env, "BILLING_SYNC_SERVICE_TOKEN_SHA256") },
+    { provide: EngineBillingAccountService, useFactory: () => new EngineBillingAccountService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     {
       provide: CONNECTION_LOOKUP_TOKEN_HASH,
       useFactory: () => loadServiceTokenFingerprint(process.env, "INTERNAL_SERVICE_TOKEN_SHA256"),

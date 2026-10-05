@@ -135,6 +135,28 @@ export interface BillingPlan {
   readonly active: boolean;
 }
 
+/** An adapter may emit this only before attempting any provider write. */
+export class BillingOperationNotSubmittedError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : "Billing operation was not submitted", { cause });
+    this.name = "BillingOperationNotSubmittedError";
+  }
+}
+
+export interface SubscriptionCheckoutInput {
+  readonly internalPlanId: string;
+  readonly expectedTotalMinor: number;
+  readonly currency: "INR";
+  readonly gstin?: string;
+  readonly checkoutAttemptId?: string;
+}
+
+export interface SubscriptionCheckoutLookup {
+  readonly checkoutAttemptId: string;
+  readonly providerPlanId: string;
+  readonly createdAfter: string;
+}
+
 export interface Subscription {
   readonly id: string;
   readonly tenantId: string;
@@ -145,12 +167,14 @@ export interface Subscription {
     | "active"
     | "pending"
     | "halted"
+    | "paused"
     | "cancelled"
     | "completed"
     | "expired";
   readonly currentPeriodStart: string | null;
   readonly currentPeriodEnd: string | null;
   readonly providerCustomerRef: string | null;
+  readonly checkoutUrl?: string;
 }
 
 export interface Invoice {
@@ -213,6 +237,14 @@ export interface BillingProvider extends BaseProvider<"BillingProvider"> {
     planId: string,
     paymentMethodRef: string,
   ): Promise<Subscription>;
+  createCheckoutSubscription?(
+    tenantId: string,
+    planId: string,
+    input: SubscriptionCheckoutInput,
+  ): Promise<Subscription>;
+  findCheckoutSubscription?(tenantId: string, input: SubscriptionCheckoutLookup): Promise<Subscription | null>;
+  changeConfiguredSubscription?(tenantId: string, subscriptionId: string, providerPlanId: string,
+    input: SubscriptionCheckoutInput): Promise<Subscription>;
   changeSubscription(tenantId: string, planId: string): Promise<Subscription>;
   cancelSubscription(tenantId: string): Promise<Subscription>;
   listInvoices(

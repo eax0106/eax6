@@ -97,10 +97,10 @@ describe("BillingWebhookRepository", () => {
     expect(release).toHaveBeenCalledOnce();
   });
 
-  it("uses billing profile plan when no dunning row exists", async () => {
+  it("uses actual current entitlement when no dunning row exists", async () => {
     query.mockImplementation(async (sql: string) => {
-      if (sql.includes("billing_profiles")) {
-        return result([{ current_plan: "plan_pro" }]);
+      if (sql.includes("FROM entitlements")) {
+        return result([{ plan: "plan_pro", access_state: "active" }]);
       }
       return result([]);
     });
