@@ -64,9 +64,6 @@ import { SellerLayout } from "@/features/seller/layout/seller-layout"
 import { SellerDashboardPage } from "@/features/seller/pages/seller-dashboard"
 import { SellerListingsPage } from "@/features/seller/pages/seller-listings"
 import { NewListingPage } from "@/features/seller/pages/new-listing"
-import { EarningsPage } from "@/features/seller/pages/earnings"
-import { PayoutsPage } from "@/features/seller/pages/payouts"
-import { KycPage } from "@/features/seller/pages/kyc"
 import { NotificationCentrePage } from "@/features/notifications/pages/notification-centre"
 import { NotificationPreferencesPage } from "@/features/settings/pages/notification-preferences"
 import { DataResidencySettings } from "@/features/settings/pages/data-residency"
@@ -325,9 +322,6 @@ export const router = createBrowserRouter([
           { path: "", element: <SellerDashboardPage /> },
           { path: "listings", element: <SellerListingsPage /> },
           { path: "listings/new", element: <NewListingPage /> },
-          { path: "earnings", element: <EarningsPage /> },
-          { path: "payouts", element: <PayoutsPage /> },
-          { path: "kyc", element: <KycPage /> },
         ]
       },
       { 

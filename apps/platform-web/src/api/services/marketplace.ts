@@ -1,5 +1,5 @@
 import { type MarketplaceListing, type MarketplaceAssetInstallation, type MarketplaceReview } from "../types"
-import { apiGet, apiPost, isLiveApi, mutationKey } from "../http"
+import { ApiHttpError, apiGet, apiPost, isLiveApi, mutationKey } from "../http"
 
 interface ListingRecord {
   id: string
@@ -42,6 +42,7 @@ function mapListing(row: ListingRecord): MarketplaceListing {
   if (row.status !== "published") throw new Error("This listing is not published")
   const priceMinor = Number(row.priceMinor ?? 0)
   if (!Number.isSafeInteger(priceMinor) || priceMinor < 0) throw new Error("Invalid marketplace price")
+  if (priceMinor !== 0) throw new Error("Marketplace listings are free-only in v1")
   return {
     id: row.id,
     slug: row.id,
@@ -51,15 +52,7 @@ function mapListing(row: ListingRecord): MarketplaceListing {
     assetType: row.type,
     category: row.type.replaceAll("_", " "),
     seller: { id: row.tenantId ?? "", displayName: "" },
-    pricing:
-      priceMinor === 0
-        ? { type: "free" }
-        : {
-            type: "paid",
-            price: priceMinor / 100,
-            currency: row.currency ?? "INR",
-            priceMinor: String(priceMinor),
-          },
+    pricing: { type: "free" },
     tags: [],
     status: "published",
     createdAt: row.createdAt,
@@ -79,10 +72,14 @@ async function liveListings(filters?: { q?: string }): Promise<MarketplaceListin
   const q = filters?.q?.trim()
   if (q) {
     const result = await apiGet<{ data: { id: string }[] }>(`/api/v1/search?q=${encodeURIComponent(q)}&kind=listing&limit=50`)
-    return Promise.all(result.data.map(async (hit) => mapListing(await apiGet<ListingRecord>(`/api/v1/marketplace/listings/${encodeURIComponent(hit.id)}`))))
+    const rows = await Promise.all(result.data.map(async (hit) => {
+      try { return await apiGet<ListingRecord>(`/api/v1/marketplace/listings/${encodeURIComponent(hit.id)}`) }
+      catch (error) { if (error instanceof ApiHttpError && error.status === 404) return null; throw error }
+    }))
+    return rows.filter((row): row is ListingRecord => row !== null && Number(row.priceMinor ?? 0) === 0).map(mapListing)
   }
   const result = await apiGet<{ data: ListingRecord[] }>("/api/v1/marketplace/listings?status=published&limit=200")
-  return result.data.map(mapListing)
+  return result.data.filter(row => Number(row.priceMinor ?? 0) === 0).map(mapListing)
 }
 
 async function liveInstall(id: string): Promise<{ success: true }> {
@@ -100,7 +97,7 @@ async function liveInstall(id: string): Promise<{ success: true }> {
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-const mockListings: MarketplaceListing[] = [
+const mockCatalog: MarketplaceListing[] = [
   {
     id: "mkt_1",
     slug: "customer-support-triage",
@@ -175,6 +172,8 @@ const mockListings: MarketplaceListing[] = [
   }
 ]
 
+const mockListings = mockCatalog.filter(listing => listing.pricing.type === "free")
+
 const mockMyAssets: MarketplaceAssetInstallation[] = [
   {
     id: "inst_1",
@@ -234,13 +233,13 @@ export const marketplaceService = {
   },
   install: async (_id: string) => {
     if (isLiveApi) return liveInstall(_id)
+    if (!mockListings.some(listing => listing.id === _id)) throw new Error("Free listing not found")
     await delay(1200)
     return { success: true }
   },
   purchase: async (_id: string) => {
-    if (isLiveApi) throw new Error("Paid Marketplace checkout is not available yet")
-    await delay(1500)
-    return { success: true }
+    void _id
+    throw new Error("Marketplace listings are free-only in v1")
   },
   myAssets: {
     list: async (): Promise<MarketplaceAssetInstallation[]> => {

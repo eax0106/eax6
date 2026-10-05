@@ -17,6 +17,7 @@ import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply } from "fastify";
 
 import { BudgetExceededError } from "../budgets/budget.service";
+import { BillingAdmissionError } from "../billing/billing-account.service";
 import { RunEstimateService } from "../budgets/run-estimate.service";
 import {
   RunLauncherService,
@@ -261,6 +262,11 @@ export class RunsController {
 export function mapRunError(error: unknown, requestUrl: string | undefined): HttpException {
 
   if (error instanceof HttpException) return error;
+  if (error instanceof BillingAdmissionError) {
+    const status = ["BILLING_POLICY_UNAVAILABLE", "BILLING_PRICE_UNCONFIGURED"].includes(error.code) ? 503
+      : error.code === "EMAIL_VERIFICATION_REQUIRED" || error.code === "BILLING_ACCOUNT_SUSPENDED" ? 403 : 409;
+    return new HttpException(problem(requestUrl, status, error.code, error.message, "runs.billing-admission", status === 503), status);
+  }
   if (error instanceof RunValidationError) {
     return badRequest(requestUrl, error.message);
   }

@@ -20,7 +20,10 @@ export const PUBLISHING_TRANSITIONS: Readonly<Record<ListingStatus, readonly Lis
 @Injectable()
 export class PublisherService {
   constructor(private readonly repository: PublisherRepository, private readonly kyc: KycProvider) {}
-  submitVerification(tenantId: string, input: SubmitVerificationInput) { return this.kyc.submitVerification(tenantId, input.documents); }
+  submitVerification(_tenantId: string, _input: SubmitVerificationInput) {
+    void _tenantId; void _input;
+    throw new PublisherHttpError(409, "PUBLISHER_KYC_UNAVAILABLE", "Identity documents are not collected for free listings in v1.", "/api/v1/publisher/verification");
+  }
   verificationStatus(tenantId: string) { return this.kyc.getVerificationStatus(tenantId); }
   payouts(tenantId: string) { return this.repository.listPayouts(tenantId); }
   earnings(tenantId: string) { return this.repository.earnings(tenantId); }
@@ -32,11 +35,8 @@ export class PublisherService {
   }
 
   async submitListing(tenantId: string, listingId: string) {
-    const publisher = await this.repository.getPublisher(tenantId);
-    if (publisher?.verificationStatus !== "verified") {
-      throw new PublisherHttpError(403, "PUBLISHER_VERIFICATION_REQUIRED", "Publisher verification is required before listing submission.", `/api/v1/publisher/listings/${listingId}/actions/submit`);
-    }
-    return this.applyTransition(tenantId, listingId, "submitted");
+    const status = await this.repository.submitFreeListing(tenantId, listingId);
+    return { listingId, status };
   }
 
   async transitionListing(tenantId: string, listingId: string, input: ListingTransitionInput | ListingStatus) {

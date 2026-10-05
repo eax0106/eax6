@@ -1,3 +1,5 @@
+import type { EntitlementLimits } from "../entitlements/types";
+import type { PlanCommercial } from "../entitlements/plan-commercial";
 import type {
   PaymentMethodRef,
   Subscription,
@@ -13,19 +15,45 @@ export interface BillingProfileRecord {
   currentPlan: string | null;
   createdAt: Date;
   updatedAt: Date;
+  gstin?: string | null;
+  commercialSnapshot?: PlanCommercial | null;
+  providerPlanRef?: string | null;
+  checkoutAttemptId?: string | null;
+  checkoutStartedAt?: Date | null;
+  mutationAttemptId?: string | null;
+  mutationKind?: "change" | "cancel" | null;
+  pendingPlan?: string | null;
+  pendingProviderPlanRef?: string | null;
+  pendingCommercialSnapshot?: PlanCommercial | null;
 }
 
 export interface BillingSubscriptionView extends Subscription {
   readonly version: string;
+  readonly pendingOperation?: "change" | "cancel";
+  readonly pendingPlan?: string;
+  readonly checkoutSnapshot?: ConfiguredBillingPlanView["checkout"];
+  readonly gstin?: string | null;
 }
 
 export interface CreateSubscriptionInput {
   plan_id: string;
-  payment_method_ref: string;
+  plan_version: string;
+  gstin?: string;
+}
+
+export interface ConfiguredBillingPlanView {
+  id: string;
+  name: string;
+  version: string;
+  limits: EntitlementLimits;
+  commercial: PlanCommercial | null;
+  checkout: { basePriceMinor: number; gstPercent: 18; gstMinor: number; totalMinor: number;
+    currency: "INR"; gatewayFeeMinor: 0 } | null;
 }
 
 export interface ChangeSubscriptionInput {
   plan_id: string;
+  plan_version: string;
 }
 
 export interface AttachPaymentMethodInput {

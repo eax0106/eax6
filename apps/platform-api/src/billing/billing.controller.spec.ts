@@ -11,6 +11,11 @@ import type {
 import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fastify";
 import { Test } from "@nestjs/testing";
 import type { FastifyRequest } from "fastify";
+import { randomUUID } from "node:crypto";
+import { readdirSync,readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import pg from "pg";
+import { PLAN_DEFINITION_STORE,PostgresPlanDefinitionStore } from "../entitlements/plan-definition-store";
 import {
   afterAll,
   beforeAll,
@@ -28,11 +33,8 @@ import {
 } from "../concurrency";
 import {
   IdempotencyExceptionFilter,
-  IdempotencyHttpError,
   IdempotencyInterceptor,
   PgIdempotencyStore,
-  type IdempotencyExecution,
-  type StoredHttpResponse,
 } from "../idempotency";
 import {
   RbacModule,
@@ -47,9 +49,12 @@ import { BillingController } from "./billing.controller";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
 import { BILLING_PROVIDER } from "./tokens";
+import { IdentityService } from "../identity/identity.service";
+import type { IdentityProvider } from "../identity/identity-provider.interface";
+import { PgSessionStore } from "../identity/session-store";
+import { PlatformDb } from "../signup/platform-db";
 import {
   billingDeferredCapabilities,
-  type BillingProfileRecord,
 } from "./types";
 
 const tenantId = "018f47a5-7b2c-7d10-8f11-123456789abc";
@@ -66,11 +71,13 @@ const admin: ActorContextType = {
   permissions: ["billing:read"],
 };
 
-describe("billing routes", () => {
+describe.skipIf(!process.env.DATABASE_URL)("billing routes with ordinary PostgreSQL RLS", () => {
   let app: NestFastifyApplication;
-  const repository = new MemoryBillingRepository();
+  let repository: BillingRepository,definitions:PostgresPlanDefinitionStore,store:PgIdempotencyStore;
+  let databaseAdmin:pg.Client,pool:pg.Pool,schema:string,role:string;
+  let identity:IdentityService,sessions:PgSessionStore;
+  const versions:Record<string,string>={};
   const provider = new MemoryBillingProvider();
-  const store = new MemoryIdempotencyStore();
   const webhookService = {
     receive: vi.fn(async () => ({
       accepted: true as const,
@@ -81,6 +88,20 @@ describe("billing routes", () => {
   };
 
   beforeAll(async () => {
+    schema=`billing_http_${randomUUID().replaceAll("-","_")}`;role=`billing_http_${randomUUID().replaceAll("-","_")}`;
+    databaseAdmin=new pg.Client({connectionString:process.env.DATABASE_URL});await databaseAdmin.connect();
+    await databaseAdmin.query(`CREATE SCHEMA ${schema}`);await databaseAdmin.query(`SET search_path TO ${schema}`);
+    const directory=resolve("apps/platform-api/src/db/migrations");
+    for(const name of readdirSync(directory).filter(name=>name.endsWith(".sql")).sort())for(const statement of readFileSync(resolve(directory,name),"utf8").split("--> statement-breakpoint"))if(statement.trim())await databaseAdmin.query(statement);
+    const password=randomUUID();await databaseAdmin.query(`CREATE ROLE ${role} LOGIN PASSWORD '${password}' NOBYPASSRLS NOSUPERUSER`);
+    await databaseAdmin.query(`GRANT USAGE ON SCHEMA ${schema} TO ${role}`);await databaseAdmin.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA ${schema} TO ${role}`);
+    const url=new URL(process.env.DATABASE_URL!);url.username=role;url.password=password;url.searchParams.set("options",`-c search_path=${schema}`);pool=new pg.Pool({connectionString:url.href});
+    await databaseAdmin.query("INSERT INTO tenants(id,name,status) VALUES($1,'Billing HTTP','active')",[tenantId]);
+    await databaseAdmin.query("INSERT INTO staff_users(id,identity_ref,email,roles) VALUES('stf_http','auth0|billing-http','billing-http@example.test',ARRAY['staff_admin'])");
+    repository=new BillingRepository(pool);definitions=new PostgresPlanDefinitionStore(pool);store=new PgIdempotencyStore(pool,3600000);
+    for(const plan of ["basic","pro"]){const result=await definitions.upsert(plan,{maxWorkflows:3,maxProjects:1,maxRunsPerDay:25,maxConcurrentRuns:1,maxSandboxMinutesPerMonth:30,maxAdsStorageMb:500,maxIntegrations:3},"stf_http",
+      {currency:"INR",basePriceMinor:10000,razorpayPlanId:`plan_${plan}`,includedCredits:100,extraCreditPriceMinor:50,creditsPerVerifiedRun:2},"HTTP fixture configuration");versions[plan]=result.record.updatedAt.toISOString();}
+    sessions=new PgSessionStore(pool);identity=new IdentityService({} as IdentityProvider,sessions);
     const moduleRef = await Test.createTestingModule({
       imports: [RbacModule],
       controllers: [BillingController],
@@ -98,6 +119,7 @@ describe("billing routes", () => {
         EtagResponseInterceptor,
         ConcurrencyExceptionFilter,
         { provide: BillingRepository, useValue: repository },
+        { provide: PLAN_DEFINITION_STORE,useValue:definitions },
         { provide: BILLING_PROVIDER, useValue: provider },
         { provide: PgIdempotencyStore, useValue: store },
         {
@@ -105,7 +127,7 @@ describe("billing routes", () => {
           useExisting: BillingEtagResolver,
         },
       ],
-    }).compile();
+    }).overrideProvider(IdentityService).useValue(identity).overrideProvider(PlatformDb).useValue(new PlatformDb(pool)).compile();
     app = moduleRef.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
       { rawBody: true },
@@ -124,16 +146,15 @@ describe("billing routes", () => {
     );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
-  });
+  },60000);
 
-  beforeEach(() => {
-    repository.clear();
+  beforeEach(async () => {
+    await databaseAdmin.query("UPDATE tenants SET billing_profile_id=NULL;DELETE FROM billing_dunning_audits;DELETE FROM billing_dunning_states;DELETE FROM billing_subscription_plans;DELETE FROM billing_credit_deliveries;DELETE FROM billing_profiles;DELETE FROM idempotency_keys");
     provider.clear();
-    store.clear();
     webhookService.receive.mockClear();
   });
 
-  afterAll(async () => app.close());
+  afterAll(async () => {await app?.close();await pool?.end();if(databaseAdmin){await databaseAdmin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await databaseAdmin.query(`DROP ROLE IF EXISTS ${role}`);await databaseAdmin.end();}});
 
   it("relays exact raw webhook bytes without bearer auth", async () => {
     const payload = '{"id":"event_1", "amount":100}';
@@ -183,6 +204,40 @@ describe("billing routes", () => {
     ).toThrow(BillingHttpError);
   });
 
+  it("uses real session cookies, current database memberships and ordinary RLS for purchase and tenant isolation",async()=>{
+    const userA=randomUUID(),userB=randomUUID(),otherTenant=randomUUID();
+    await databaseAdmin.query("INSERT INTO tenants(id,name,status) VALUES($1,'Other buyer','active')",[otherTenant]);
+    for(const [user,tenant] of [[userA,tenantId],[userB,otherTenant]]){
+      await databaseAdmin.query("INSERT INTO users(id,identity_ref,email,status) VALUES($1,$2,$3,'active')",[user,`mock|${user}`,`${user}@example.test`]);
+      await databaseAdmin.query("INSERT INTO tenant_members(id,tenant_id,user_id,role) VALUES(gen_random_uuid(),$1,$2,'owner')",[tenant,user]);
+    }
+    const a=await identity.issueSignupSession(userA,tenantId),b=await identity.issueSignupSession(userB,otherTenant);
+    const payload={plan_id:"basic",plan_version:versions.basic};
+    const bought=await app.inject({method:"POST",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${a.accessToken}`,"idempotency-key":"native-cookie-buy"},payload});
+    expect(bought.statusCode).toBe(201);expect(bought.json()).toMatchObject({tenantId,planId:"basic",status:"created"});
+    const replay=await app.inject({method:"POST",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${a.accessToken}`,"idempotency-key":"native-cookie-buy"},payload});
+    expect(replay.json()).toEqual(bought.json());expect(provider.createCheckoutSubscription).toHaveBeenCalledTimes(1);
+    const foreign=await app.inject({method:"GET",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${b.accessToken}`}});
+    expect(foreign.statusCode).toBe(200);expect(foreign.json()).toBeNull();expect(await repository.getProfile(otherTenant)).toBeNull();
+    const actor=(await databaseAdmin.query("SELECT actor_ref FROM billing_dunning_audits WHERE reason='checkout_claimed' AND tenant_id=$1",[tenantId])).rows[0];
+    expect(actor).toEqual({actor_ref:userA});
+    await databaseAdmin.query("UPDATE tenant_members SET role='member' WHERE tenant_id=$1 AND user_id=$2",[tenantId,userA]);
+    const denied=await app.inject({method:"DELETE",url:"/api/v1/billing/subscription",headers:{cookie:`alter_access=${a.accessToken}`,"if-match":'*',"idempotency-key":"native-member-cancel"}});
+    expect(denied.statusCode).toBe(403);
+    await sessions.revoke(tenantId,userA,a.sessionId);
+    const revoked=await app.inject({method:"GET",url:"/api/v1/billing/plans",headers:{cookie:`alter_access=${a.accessToken}`}});
+    expect(revoked.statusCode).toBe(403);
+    expect((await app.inject({method:"POST",url:"/api/v1/billing/subscription",headers:{"idempotency-key":"anonymous-buy"},payload})).statusCode).toBe(403);
+    expect(provider.createCheckoutSubscription).toHaveBeenCalledTimes(1);
+  });
+
+  it("classifies the actual credit read and returns an explicit unavailable error without account synchronization",async()=>{
+    const response=await request("GET","/api/v1/billing/credits",admin);
+    expect(response.statusCode).toBe(503);expect(response.json()).toMatchObject({error_code:"BILLING_CREDITS_UNAVAILABLE"});
+    expect((await request("GET","/api/v1/billing/credits",{...admin,permissions:[]})).statusCode).toBe(403);
+    expect((await request("GET","/api/v1/billing/credits",{...admin,roles:["member"]})).statusCode).toBe(403);
+  });
+
   it("serves plans, subscription, invoices, and payment methods", async () => {
     expect((await request("GET", "/api/v1/billing/plans", admin)).statusCode).toBe(
       200,
@@ -206,8 +261,8 @@ describe("billing routes", () => {
     const created = await create();
     expect(created.statusCode).toBe(201);
     expect(created.json()).toMatchObject({
-      planId: "plan_basic",
-      status: "active",
+      planId: "basic",
+      status: "created",
     });
     const detail = await request(
       "GET",
@@ -252,25 +307,23 @@ describe("billing routes", () => {
     expect(response.json()).toBeNull();
   });
 
-  it("rejects provider subscriptions missing a local billing profile", async () => {
+  it("does not expose an unbound provider subscription as a tenant purchase", async () => {
     provider.subscription = subscription(tenantId, "plan_basic", "active");
     const response = await request(
       "GET",
       "/api/v1/billing/subscription",
       admin,
     );
-    expect(response.statusCode).toBe(502);
-    expect(response.json()).toMatchObject({
-      error_code: "BILLING_PROFILE_INCONSISTENT",
-    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toBeNull();
   });
 
   it("replays subscription create without a second provider charge", async () => {
     const options = {
       headers: { "idempotency-key": "subscription-replay" },
       payload: {
-        plan_id: "plan_basic",
-        payment_method_ref: "token_reference_1",
+        plan_id: "basic",
+        plan_version: versions.basic,
       },
     };
     const first = await request(
@@ -288,7 +341,8 @@ describe("billing routes", () => {
     expect(replay.statusCode).toBe(first.statusCode);
     expect(replay.json()).toEqual(first.json());
     expect(replay.headers["idempotency-replayed"]).toBe("true");
-    expect(provider.createSubscription).toHaveBeenCalledOnce();
+    expect(first.statusCode).toBe(201);
+    expect(provider.createCheckoutSubscription).toHaveBeenCalledOnce();
   });
 
   it("returns 412 for stale subscription If-Match before provider mutation", async () => {
@@ -302,15 +356,16 @@ describe("billing routes", () => {
           "idempotency-key": "change-stale",
           "if-match": '"stale"',
         },
-        payload: { plan_id: "plan_pro" },
+        payload: { plan_id: "pro",plan_version:versions.pro },
       },
     );
     expect(response.statusCode).toBe(412);
-    expect(provider.changeSubscription).not.toHaveBeenCalled();
+    expect(provider.changeConfiguredSubscription).not.toHaveBeenCalled();
   });
 
   it("changes and cancels subscriptions with owner scope", async () => {
     await create();
+    await databaseAdmin.query("UPDATE billing_profiles SET status='active' WHERE tenant_id=$1",[tenantId]);
     const detail = await request(
       "GET",
       "/api/v1/billing/subscription",
@@ -325,18 +380,22 @@ describe("billing routes", () => {
           "idempotency-key": "change-1",
           "if-match": String(detail.headers.etag),
         },
-        payload: { plan_id: "plan_pro" },
+        payload: { plan_id: "pro",plan_version:versions.pro },
       },
     );
     expect(changed.statusCode).toBe(200);
-    expect(changed.json()).toMatchObject({ planId: "plan_pro" });
+    expect(changed.json()).toMatchObject({ planId: "basic",pendingPlan:"pro",pendingOperation:"change" });
+    // Provider callback reconciliation is exercised through signed HTTP in the cross-service suite.
+    await databaseAdmin.query("UPDATE billing_profiles SET current_plan=pending_plan,provider_plan_ref=pending_provider_plan_ref,commercial_snapshot=pending_commercial_snapshot,mutation_attempt_id=NULL,mutation_kind=NULL,pending_plan=NULL,pending_provider_plan_ref=NULL,pending_commercial_snapshot=NULL,updated_at=clock_timestamp() WHERE tenant_id=$1",[tenantId]);
+    const refreshed=await request("GET","/api/v1/billing/subscription",owner);
     const cancelled = await request(
       "DELETE",
       "/api/v1/billing/subscription",
       owner,
-      { headers: { "idempotency-key": "cancel-1" } },
+      { headers: { "idempotency-key": "cancel-1","if-match":String(refreshed.headers.etag) } },
     );
-    expect(cancelled.json()).toMatchObject({ status: "cancelled" });
+    expect(cancelled.statusCode).toBe(200);
+    expect(cancelled.json()).toMatchObject({ status: "active",pendingOperation:"cancel" });
   });
 
   it("enforces admin read and owner write roles plus permissions", async () => {
@@ -454,7 +513,6 @@ describe("billing routes", () => {
 
   it("maps provider failures to problem+json for every surface", async () => {
     for (const testCase of [
-      ["GET", "/api/v1/billing/plans", admin, undefined],
       ["GET", "/api/v1/billing/subscription", admin, undefined],
       ["GET", "/api/v1/billing/invoices", admin, undefined],
       ["GET", "/api/v1/billing/payment-methods", admin, undefined],
@@ -466,6 +524,10 @@ describe("billing routes", () => {
       ],
     ] as const) {
       provider.failNext = true;
+      if(testCase[1]==="/api/v1/billing/subscription") {
+        const definition=(await definitions.find("basic"))!,attempt=await repository.claimCheckout(tenantId,owner.user_id,definition);
+        await repository.finishCheckout(tenantId,owner.user_id,attempt,subscription(tenantId,"plan_basic","created"));
+      }
       const response = await request(testCase[0], testCase[1], testCase[2], {
         headers: { "idempotency-key": `failure-${testCase[1]}` },
         ...(testCase[3] === undefined ? {} : { payload: testCase[3] }),
@@ -499,8 +561,8 @@ describe("billing routes", () => {
     return request("POST", "/api/v1/billing/subscription", owner, {
       headers: { "idempotency-key": `create-${crypto.randomUUID()}` },
       payload: {
-        plan_id: "plan_basic",
-        payment_method_ref: "token_reference_1",
+        plan_id: "basic",
+        plan_version: versions.basic,
       },
     });
   }
@@ -559,6 +621,12 @@ class MemoryBillingProvider implements BillingProvider {
       return (this.subscription = subscription(tenant, planId, "active"));
     },
   );
+  createCheckoutSubscription=vi.fn(async(tenant:string,planId:string):Promise<Subscription>=>{
+    this.maybeFail();return (this.subscription={...subscription(tenant,planId,"created"),checkoutUrl:"https://rzp.io/i/httpfixture"});
+  });
+  changeConfiguredSubscription=vi.fn(async(tenant:string,_subscriptionId:string,planId:string):Promise<Subscription>=>{
+    this.maybeFail();return (this.subscription=subscription(tenant,planId,"active"));
+  });
   changeSubscription = vi.fn(
     async (tenant: string, planId: string): Promise<Subscription> => {
       this.maybeFail();
@@ -680,6 +748,8 @@ class MemoryBillingProvider implements BillingProvider {
     this.methods = [];
     this.failNext = false;
     this.createSubscription.mockClear();
+    this.createCheckoutSubscription.mockClear();
+    this.changeConfiguredSubscription.mockClear();
     this.changeSubscription.mockClear();
   }
   private maybeFail(): void {
@@ -687,68 +757,6 @@ class MemoryBillingProvider implements BillingProvider {
       this.failNext = false;
       throw new Error("provider down");
     }
-  }
-}
-
-class MemoryBillingRepository {
-  profile: BillingProfileRecord | null = null;
-  version = 0;
-
-  async getProfile(): Promise<BillingProfileRecord | null> {
-    return this.profile;
-  }
-  async syncSubscription(
-    tenant: string,
-    value: Subscription,
-  ): Promise<BillingProfileRecord> {
-    this.version += 1;
-    return (this.profile = {
-      tenantId: tenant,
-      id: "018f47a5-7b2c-7d10-8f11-123456789abe",
-      providerId: "memory",
-      providerCustomerRef: value.providerCustomerRef,
-      subscriptionRef: value.id,
-      status: value.status,
-      currentPlan: value.planId,
-      createdAt: new Date("2026-07-28T00:00:00.000Z"),
-      updatedAt: new Date(`2026-07-28T00:00:0${this.version}.000Z`),
-    });
-  }
-  clear(): void {
-    this.profile = null;
-    this.version = 0;
-  }
-}
-
-class MemoryIdempotencyStore {
-  private readonly responses = new Map<
-    string,
-    StoredHttpResponse & { fingerprint: string }
-  >();
-
-  async execute(
-    execution: IdempotencyExecution,
-    operation: () => Promise<StoredHttpResponse>,
-  ) {
-    if (!execution.key) {
-      throw new IdempotencyHttpError(
-        400,
-        "IDEMPOTENCY_KEY_REQUIRED",
-        "Idempotency-Key header required",
-        execution.instance,
-      );
-    }
-    const key = `${execution.tenantId}:${execution.key}`;
-    const existing = this.responses.get(key);
-    if (existing) {
-      return { status: existing.status, body: existing.body, replayed: true };
-    }
-    const response = await operation();
-    this.responses.set(key, { ...response, fingerprint: execution.fingerprint });
-    return { ...response, replayed: false };
-  }
-  clear(): void {
-    this.responses.clear();
   }
 }
 

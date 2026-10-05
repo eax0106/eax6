@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PlanCommercialSchema } from "../entitlements/plan-commercial";
 import { ENTITLEMENT_LIMIT_KEYS } from "../entitlements/types";
 import { AdminPolicyHttpError } from "./problem";
 import type {
@@ -28,6 +29,7 @@ const limitsSchema = z
 const upsertSchema = z
   .object({
     limits: limitsSchema,
+    commercial: PlanCommercialSchema.nullable().optional(),
     reason: z.string().trim().min(1).max(500),
   })
   .strict();

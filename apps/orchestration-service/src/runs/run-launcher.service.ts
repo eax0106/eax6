@@ -17,6 +17,7 @@ import { replayActions, replayToken, storedReplayEvent, ReplayConfirmationError,
 import type { BlackboardService } from "../blackboard/blackboard.service";
 import type { JsonValue } from "@alterx/shared-clients";
 import type { RunBudgetGate } from "../budgets/run-budget-gate";
+import type { EngineBillingAccountService } from "../billing/billing-account.service";
 import type { RunOutcomeService } from "./run-outcome.service";
 import { DurableRunQueue } from "./durable-run-queue.service";
 import { isWorkspaceHeld } from "../workspace-holds/workspace-holds.service";
@@ -269,6 +270,7 @@ export class RunLauncherService {
     private readonly budgetGate?: RunBudgetGate,
     private readonly audit?: AuditEventHandler,
     private readonly triggerInput?: Pick<BlackboardService, "writeValue">,
+    private readonly billing?: Pick<EngineBillingAccountService, "reserve">,
   ) {}
 
   /**
@@ -368,6 +370,7 @@ export class RunLauncherService {
           replay === undefined ? null : JSON.stringify(replayActions(version.compiledDag)), replay?.requestKey ?? null, replay?.confirmationToken ?? null],
       );
       const row = inserted.rows[0]!;
+      await this.billing?.reserve(tx, { tenantId, runId });
       // D3: a run over budget is refused here, and its row rolls back with it.
       await this.budgetGate?.reserve(tx, {
         tenantId,
@@ -454,6 +457,7 @@ export class RunLauncherService {
           timeoutMs,
         ],
       );
+      await this.billing?.reserve(tx, { tenantId, runId });
       return inserted.rows[0]!;
     });
 
