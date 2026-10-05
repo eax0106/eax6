@@ -8,7 +8,8 @@ capability description with the live model and record the new provenance.
 
 Per tenant, under that tenant's row security. A dry run (the default) only
 counts; a real run spends one embedding call per stale row, so it is run
-deliberately, never on a schedule.
+deliberately, never on a schedule. Every run reports an upper-bound cost, and a
+real run refuses to start when that estimate exceeds its ceiling (D30: USD 1).
 
     uv run python -m src.capability_registry.reembed --tenant ten_... [--apply]
 """
@@ -52,11 +53,28 @@ WHERE tenant_id = CAST(:tenant_id AS uuid) AND id = :id
 )
 
 
+# D30 approved spend ceiling for one run, in US dollars.
+MAX_RUN_USD = 1.0
+# Titan Text Embeddings v2 list price per input token (USD 0.00002 per 1,000).
+# One token per character is a deliberate upper bound.
+_USD_PER_INPUT_TOKEN = 0.00002 / 1000
+
+
+class SpendCeilingError(RuntimeError):
+    pass
+
+
+def estimate_reembed_usd(descriptions: list[str]) -> float:
+    """Upper-bound cost of embedding each description once."""
+    return sum(len(description) for description in descriptions) * _USD_PER_INPUT_TOKEN
+
+
 @dataclass(frozen=True)
 class ReembedResult:
     model_id: str
     stale: int
     reembedded: int
+    estimated_usd: float
 
 
 async def reembed_stale_capabilities(
@@ -67,8 +85,11 @@ async def reembed_stale_capabilities(
     live_model_id: str,
     apply: bool,
     limit: int = 500,
+    max_usd: float = MAX_RUN_USD,
 ) -> ReembedResult:
     """Re-embed up to ``limit`` of one tenant's stale rows; count only unless ``apply``."""
+    if max_usd > MAX_RUN_USD:
+        raise SpendCeilingError(f"ceiling USD {max_usd} exceeds the approved USD {MAX_RUN_USD}")
     tenant_uuid = tenant_id.removeprefix("ten_")
     await session.execute(_SET_TENANT, {"tenant_id": tenant_uuid})
     rows = (
@@ -76,8 +97,16 @@ async def reembed_stale_capabilities(
             _STALE_ROWS, {"tenant_id": tenant_uuid, "model_id": live_model_id, "limit": limit}
         )
     ).all()
+    estimated_usd = estimate_reembed_usd([row.capability_description for row in rows])
     if not apply:
-        return ReembedResult(model_id=live_model_id, stale=len(rows), reembedded=0)
+        return ReembedResult(
+            model_id=live_model_id, stale=len(rows), reembedded=0, estimated_usd=estimated_usd
+        )
+    if estimated_usd > max_usd:
+        raise SpendCeilingError(
+            f"estimated USD {estimated_usd:.6f} for {len(rows)} rows exceeds the "
+            f"USD {max_usd} ceiling; nothing re-embedded"
+        )
 
     reembedded = 0
     for row in rows:
@@ -107,11 +136,16 @@ async def reembed_stale_capabilities(
         )
         reembedded += 1
     await session.commit()
-    return ReembedResult(model_id=live_model_id, stale=len(rows), reembedded=reembedded)
+    return ReembedResult(
+        model_id=live_model_id,
+        stale=len(rows),
+        reembedded=reembedded,
+        estimated_usd=estimated_usd,
+    )
 
 
 async def _main(
-    tenant_id: str, apply: bool, limit: int
+    tenant_id: str, apply: bool, limit: int, max_usd: float
 ) -> None:  # pragma: no cover - operator entry
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -128,14 +162,26 @@ async def _main(
     probe = await client.embed(tenant_id=tenant_id, text="capability")
     engine = create_async_engine(settings.intelligence_db_url)
     async with async_sessionmaker(engine, expire_on_commit=False)() as session:
-        result = await reembed_stale_capabilities(
+        plan = await reembed_stale_capabilities(
             session,
             client,
             tenant_id=tenant_id,
             live_model_id=probe.model_id,
-            apply=apply,
+            apply=False,
             limit=limit,
         )
+        print(json.dumps({"plan": plan.__dict__, "apply": apply, "max_usd": max_usd}))
+        result = plan
+        if apply:
+            result = await reembed_stale_capabilities(
+                session,
+                client,
+                tenant_id=tenant_id,
+                live_model_id=probe.model_id,
+                apply=True,
+                limit=limit,
+                max_usd=max_usd,
+            )
     await engine.dispose()
     print(json.dumps(result.__dict__))
 
@@ -145,5 +191,8 @@ if __name__ == "__main__":  # pragma: no cover - operator entry
     parser.add_argument("--tenant", required=True)
     parser.add_argument("--apply", action="store_true", help="re-embed; without it, only count")
     parser.add_argument("--limit", type=int, default=500)
+    parser.add_argument(
+        "--max-usd", type=float, default=MAX_RUN_USD, help="refuse when the estimate exceeds this"
+    )
     arguments = parser.parse_args()
-    asyncio.run(_main(arguments.tenant, arguments.apply, arguments.limit))
+    asyncio.run(_main(arguments.tenant, arguments.apply, arguments.limit, arguments.max_usd))
