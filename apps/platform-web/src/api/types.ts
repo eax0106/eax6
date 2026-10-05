@@ -1,3 +1,4 @@
+import type { CreditPurchaseView } from "@alterx/contracts"
 import type { WorkflowChatMessage, WorkflowChatResource } from "@alterx/contracts"
 import type { CompiledDag } from "@alterx/contracts"
 
@@ -940,6 +941,8 @@ export interface BillingSubscription {
   checkoutSnapshot?: BillingPlan["checkout"];
   gstin?: string | null;
 }
+
+export type BillingCreditPurchase = CreditPurchaseView & { etag: string }
 
 export interface BillingCreditBalance {balance:string;reserved:string;available:string}
 

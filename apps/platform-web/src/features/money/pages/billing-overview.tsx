@@ -7,6 +7,7 @@ import { api } from "@/api/client"
 import { isLiveApi } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
 import { usePermissions } from "@/features/permissions/hooks/usePermissions"
+import { CreditPurchaseCard } from "./credit-purchase"
 import { formatProviderMoney,hostedCheckoutUrl } from "../provider-pricing"
 
 export function BillingOverviewPage() {
@@ -45,5 +46,6 @@ export function BillingOverviewPage() {
         <p className="text-sm text-muted-foreground">Credits are consumed only after a completed run passes verification. Failed and incomplete runs consume no credits.</p>
       </CardContent></Card>
     </div>
+    <CreditPurchaseCard plan={plan} subscription={current}/>
   </div>
 }
