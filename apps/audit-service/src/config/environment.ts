@@ -16,6 +16,7 @@ interface AuditEnvironmentBase {
   readonly platformApiDeletionBaseUrl: string;
   readonly costDeletionBaseUrl: string;
   readonly intelligenceDeletionBaseUrl: string;
+  readonly evalDeletionBaseUrl: string;
   readonly memoryDeletionBaseUrl: string;
   readonly deletionPseudonymKeyReference: string;
   readonly deletionServiceTokenReference: string;
@@ -109,6 +110,7 @@ export function loadAuditEnvironment(
     platformApiDeletionBaseUrl: requireValue(environment, "PLATFORM_API_DELETION_BASE_URL"),
     costDeletionBaseUrl: requireValue(environment, "COST_DELETION_BASE_URL"),
     intelligenceDeletionBaseUrl: requireValue(environment, "INTELLIGENCE_DELETION_BASE_URL"),
+    evalDeletionBaseUrl: requireValue(environment, "EVAL_DELETION_BASE_URL"),
     memoryDeletionBaseUrl: requireValue(environment, "MEMORY_DELETION_BASE_URL"),
     deletionPseudonymKeyReference: requireValue(environment, "DELETION_PSEUDONYM_KEY_REF"),
     deletionServiceTokenReference: requireValue(environment, "DELETION_SERVICE_TOKEN_REF"),

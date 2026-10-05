@@ -70,6 +70,7 @@ async function bootstrap(): Promise<void> {
         costBaseUrl: environment.costDeletionBaseUrl,
         intelligenceBaseUrl: environment.intelligenceDeletionBaseUrl,
         memoryBaseUrl: environment.memoryDeletionBaseUrl,
+        evalBaseUrl: environment.evalDeletionBaseUrl,
         serviceToken,
         serviceTokenHash,
         pseudonymKey,
