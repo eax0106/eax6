@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Headers, HttpCode, Param, Post, Req, UseFilters } from "@nestjs/common";
+import { Body, Controller, Get, Headers, HttpCode, Optional, Param, Post, Req, UseFilters } from "@nestjs/common";
 import { RequireStaffRole } from "../rbac/decorators";
 import type { RbacRequest } from "../rbac/types";
 import { StaffService } from "../staff";
 import { AdminTenantsExceptionFilter } from "./admin-tenants-exception.filter";
 import { AdminTenantsService } from "./admin-tenants.service";
+import { AdminTenantActivityService } from "./admin-tenant-activity.service";
 import { AdminTenantHttpError } from "./problem";
 import type {
   AdminTenantActionView,
@@ -35,6 +36,7 @@ export class AdminTenantsController {
   constructor(
     private readonly tenants: AdminTenantsService,
     private readonly staff: StaffService,
+    @Optional() private readonly activity?: AdminTenantActivityService,
   ) {}
 
   @Post()
@@ -94,6 +96,15 @@ export class AdminTenantsController {
     const id = parseTenantId(tenantId, instance);
     await this.requireTenantRead(request, grantId, id, instance);
     return this.tenants.actions(id);
+  }
+
+  @Get(":tenantId/activity")
+  @RequireStaffRole(...readRoles)
+  async tenantActivity(@Param("tenantId") tenantId: string, @Headers("x-alter-support-grant") grantId: string | undefined, @Req() request: RbacRequest) {
+    const instance = `/api/v1/admin/tenants/${tenantId}/activity`, id = parseTenantId(tenantId, instance);
+    await this.requireTenantRead(request, grantId, id, instance);
+    if (!this.activity) throw new AdminTenantHttpError(503, "TENANT_ACTIVITY_UNAVAILABLE", "Tenant activity unavailable", instance);
+    return this.activity.read(id, requireStaff(request, instance).staff_user_id);
   }
 
   @Post(":tenantId/notes")
