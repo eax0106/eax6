@@ -84,6 +84,7 @@ export class PlatformDeletionService implements DeletionProvider, WorkspaceDelet
     private readonly store: ErasureStore,
     private readonly secrets: MutableSecretsProvider,
     private readonly retentionStore?: ErasureStore,
+    private readonly administrationStore: ErasureStore = store,
   ) {}
 
   async locateSubjectData(tenantId: string): Promise<readonly SubjectDataLocation[]> {
@@ -165,7 +166,7 @@ export class PlatformDeletionService implements DeletionProvider, WorkspaceDelet
     // The erasure is committed; only now do the secrets go, without a recovery window.
     let pseudonymised = 0;
     if (phase.members.length > 0) {
-      pseudonymised = await this.store.withoutTenant(async (tx) =>
+      pseudonymised = await this.administrationStore.withoutTenant(async (tx) =>
         Number((await tx.query<{ n: number }>("SELECT pseudonymise_orphan_users($1::uuid[]) AS n", [phase.members])).rows[0]?.n ?? 0),
       );
     }
@@ -283,7 +284,7 @@ export class PlatformDeletionService implements DeletionProvider, WorkspaceDelet
   }
 
   async listSubjectIds(): Promise<readonly string[]> {
-    return this.store.withoutTenant(async (tx) => {
+    return this.administrationStore.withoutTenant(async (tx) => {
       const result = await tx.query<{ id: string }>("SELECT list_platform_tenant_ids()::text AS id");
       return result.rows.map((row) => `ten_${row.id}`);
     });

@@ -3,6 +3,7 @@ import { sharedPool } from "../db/shared-pool";
 import { EntitlementsModule } from "../entitlements/entitlements.module";
 import { CONFIG_PROVIDER, type ConfigProvider } from "../entitlements/config-provider.interface";
 import { PLAN_DEFINITION_STORE, type PlanDefinitionStore } from "../entitlements/plan-definition-store";
+import { billingOperationsDatabaseFromEnvironment } from "./config";
 import { BillingPolicyService } from "./billing-policy.service";
 import { billingPolicyDependenciesFromEnvironment } from "../engine/billing-policy-client";
 import { ENTITLEMENT_PROVIDER,type EntitlementProvider } from "../entitlements/entitlement-provider.interface";
@@ -10,7 +11,7 @@ import { ENTITLEMENT_PROVIDER,type EntitlementProvider } from "../entitlements/e
   provide:BillingPolicyService,inject:[CONFIG_PROVIDER,PLAN_DEFINITION_STORE,ENTITLEMENT_PROVIDER],
   useFactory:(config:ConfigProvider,definitions:PlanDefinitionStore,entitlements:EntitlementProvider)=>{
     const {databaseUrl,client}=billingPolicyDependenciesFromEnvironment();
-    return new BillingPolicyService(sharedPool(databaseUrl),config,definitions,client,entitlements);
+    return new BillingPolicyService(sharedPool(databaseUrl),config,definitions,client,entitlements,sharedPool(billingOperationsDatabaseFromEnvironment(process.env)));
   },
 }],exports:[BillingPolicyService]})
 export class BillingPolicyModule {}
