@@ -35,7 +35,7 @@ function verdict(value: "pass" | "fail", score = value === "pass" ? 0.9 : 0.2): 
 }
 
 function setup(options: { dag?: CompiledDag; verdicts?: ScoreNodeInlineResponse[]; invoke?: () => Promise<unknown> } = {}) {
-  const invoke = vi.fn(options.invoke ?? (async () => ({
+  const invoke = vi.fn<(request: { input_json: string; tenant_id: string; run_id: string }) => Promise<unknown>>(options.invoke ?? (async () => ({
     output_json: JSON.stringify({ subject: "Welcome, Asha", body: "Hello Asha" }),
     usage_json: JSON.stringify({ input_tokens: 120, output_tokens: 30 }),
     estimated_cost_usd: "0.0004",
@@ -72,7 +72,7 @@ describe("BenchmarkCaseSimulator", () => {
     const result = await simulator.simulateCase(caseRequest);
 
     expect(invoke).toHaveBeenCalledTimes(1);
-    const modelRequest = invoke.mock.calls[0]![0] as { input_json: string; tenant_id: string; run_id: string };
+    const modelRequest = invoke.mock.calls[0]![0];
     expect(modelRequest.tenant_id).toBe(tenantId);
     expect(modelRequest.run_id).toBe(result.simulationRunId);
     expect(modelRequest.input_json).toContain("benchmark.case_1");
