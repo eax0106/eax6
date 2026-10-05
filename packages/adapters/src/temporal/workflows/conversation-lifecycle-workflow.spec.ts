@@ -141,6 +141,9 @@ describe.sequential("conversationLifecycleWorkflow", () => {
       });
       const firstRunId = handle.firstExecutionRunId;
 
+      // Wait for the first workflow task before testing rollover; buffered-start behavior is a separate case.
+      await expect(handle.query("status")).resolves.toBe("active");
+
       await handle.signal("message", message("rollover-1"));
       await handle.signal("message", message("rollover-2"));
 
