@@ -154,6 +154,8 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     await q(`INSERT INTO orders (id, tenant_id, listing_id, listing_version_id, amount_minor, currency, status, idempotency_key) VALUES ('ord_1', $1, 'lst_1', 'lsv_1', 5000, 'INR', 'paid', 'k1'), ('ord_2', $2, 'lst_1', 'lsv_1', 7000, 'INR', 'paid', 'k2')`, [A, B]);
     await q(`INSERT INTO payouts (id, tenant_id, order_id, publisher_id, total_minor, seller_share_minor, platform_share_minor, status) VALUES ('pay_1', $1, 'ord_1', 'pub_1', 5000, 4000, 1000, 'processed')`, [A]);
     await q(`INSERT INTO payout_ledger (id, tenant_id, payout_id, entry_type, amount_minor) VALUES ('led_1', $1, 'pay_1', 'payout_created', 4000)`, [A]);
+    await q(`INSERT INTO marketplace_governance_events(id,tenant_id,resource_type,resource_id,actor_type,actor_ref,action,previous_status,next_status,reason,resource_revision)
+      VALUES ('mge_00000000-0000-7000-8000-000000009001',$1,'listing','lst_1','staff','stf_1','needs_changes','human_review','needs_changes','Correct fields',1)`,[A]);
     // staff access records: kept 90 days
     await q(`INSERT INTO staff_users (id, identity_ref, email, roles) VALUES ('stf_1', 'auth0|s', 's@example.test', ARRAY['staff_support'])`);
     await q(`INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action, reason) VALUES ('taa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [A]);
@@ -161,7 +163,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
   }
 
   it("names every table exactly once between the delete order and the special cases", () => {
-    const special = ["action_item_annotations", "payout_ledger", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
+    const special = ["action_item_annotations", "payout_ledger", "marketplace_governance_events", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
     expect([...PLATFORM_DELETE_ORDER, ...special].sort()).toEqual([...PLATFORM_TABLES].sort());
     expect(new Set(PLATFORM_DELETE_ORDER).size).toBe(PLATFORM_DELETE_ORDER.length);
   });
@@ -234,7 +236,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(result.deletedRows).toBeGreaterThan(0);
     expect(result.deletedObjects).toBe(3); // credential, env var, connection: tenant A's own secrets
     expect(verified).toMatchObject({ deleted: true, remaining: [] });
-    for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "workspace_invitations", "workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
+    for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "workspace_invitations", "workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "marketplace_governance_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
       expect(await count(table), table).toBe(0);
     }
     for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans"]) expect(await count(table,"tenant_id",B),table).toBe(1);
@@ -370,6 +372,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
       await admin.query(`INSERT INTO tenant_erasure_manifests (manifest_id, tenant_id) VALUES ($1, $2)`, [MANIFEST, B]);
       await expect(call("erase_tenant_action_annotations", A, MANIFEST)).rejects.toThrow("no active erasure manifest");
       await expect(call("erase_tenant_payout_ledger", A, MANIFEST)).rejects.toThrow("no active erasure manifest");
+      await expect(call("erase_tenant_marketplace_governance", A, MANIFEST)).rejects.toThrow("no active erasure manifest");
       expect(await count("action_item_annotations")).toBe(1);
       expect(await count("payout_ledger")).toBe(1);
     });
@@ -380,6 +383,23 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
       const result = await pool.query<{ n: number }>("SELECT erase_tenant_action_annotations($1::uuid, $2) AS n", [A, MANIFEST]);
       expect(result.rows[0]!.n).toBe(1);
       expect(await count("action_item_annotations", "tenant_id", B)).toBe(1);
+    });
+
+    it("erases governance reasons only through its dedicated function and preserves the other tenant",async()=>{
+      await admin.query(`INSERT INTO marketplace_governance_events(id,tenant_id,resource_type,resource_id,actor_type,actor_ref,action,previous_status,next_status,reason,resource_revision)
+        VALUES('mge_00000000-0000-7000-8000-000000009002',$1,'listing','lst_other','staff','stf_1','needs_changes','human_review','needs_changes','Other seller reason',1)`,[B]);
+      await admin.query("INSERT INTO tenant_erasure_manifests(manifest_id,tenant_id) VALUES($1,$2)",[MANIFEST,A]);
+      const client=await pool.connect();try{
+        await client.query("BEGIN");await client.query("SELECT set_config('app.current_tenant_id',$1,true)",[A]);
+        expect((await client.query("DELETE FROM marketplace_governance_events WHERE tenant_id=$1",[A])).rowCount).toBe(0);
+        expect((await client.query("UPDATE marketplace_governance_events SET reason='Modified' WHERE tenant_id=$1",[A])).rowCount).toBe(0);
+      }finally{await client.query("ROLLBACK");client.release();}
+      expect((await pool.query("SELECT erase_tenant_marketplace_governance($1::uuid,$2) AS n",[A,MANIFEST])).rows[0].n).toBe(1);
+      expect(await count("marketplace_governance_events")).toBe(0);expect(await count("marketplace_governance_events","tenant_id",B)).toBe(1);
+      const policy=await one<{prosecdef:boolean;owner:string;public_execute:boolean;proconfig:string[]}>(`SELECT p.prosecdef,pg_get_userbyid(p.proowner) AS owner,p.proconfig,
+        has_function_privilege('public',p.oid,'EXECUTE') AS public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname=$1 AND p.proname='erase_tenant_marketplace_governance'`,[schemaName]);
+      expect(policy).toMatchObject({prosecdef:true,owner:"platform_erasure",public_execute:false});expect(policy.proconfig).toEqual([`search_path=${schemaName}, pg_temp`]);
     });
 
     it("no manifest is left able to authorise a later erasure of the same tenant", async () => {

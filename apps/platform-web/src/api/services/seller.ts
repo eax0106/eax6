@@ -1,5 +1,7 @@
 import { type SellerProfile, type MarketplaceListing, type MarketplacePayout, type SellerEarnings } from "../types"
-import { apiGet, apiPost, isLiveApi } from "../http"
+import { MarketplaceGovernanceItemSchema, type MarketplaceGovernanceItem } from "@alterx/contracts"
+import { demoGovernance, demoGovernanceWrite } from "../mock/marketplace-governance"
+import { apiGet, apiPost, apiPatch, isLiveApi } from "../http"
 
 interface SellerListingRow {
   id: string
@@ -114,7 +116,8 @@ export const sellerService = {
     list: async (): Promise<MarketplaceListing[]> => {
       if (isLiveApi) return ownListings()
       await delay(400)
-      return mockSellerListings
+      return [...mockSellerListings,...[...demoGovernance.values()].map(item => ({id:item.id,slug:item.id,title:item.name,shortDescription:item.description??"",description:item.description??"",assetType:"workflow_template" as const,
+        category:"Demo",seller:{id:"me",displayName:"Demo seller"},pricing:{type:"free" as const},tags:[],status:item.status as MarketplaceListing["status"],createdAt:item.updated_at,updatedAt:item.updated_at}))]
     },
     create: async (data: any): Promise<MarketplaceListing> => {
       if (data.pricing && data.pricing.type !== "free") throw new Error("Marketplace listings are free-only in v1")
@@ -144,11 +147,29 @@ export const sellerService = {
         updatedAt: new Date().toISOString()
       }
     },
-    update: async (_id: string, data: any) => {
+    review: async (id: string): Promise<MarketplaceGovernanceItem> => {
+      if (isLiveApi) return MarketplaceGovernanceItemSchema.parse(await apiGet(`/api/v1/publisher/reviews/listing/${encodeURIComponent(id)}`))
+      const item=demoGovernance.get(id)
+      if (!item) throw new Error("Review resource was not found")
+      return structuredClone(item)
+    },
+    update: async (id: string, data: {title:string;description:string;reason:string;etag?:string;pricing?:MarketplaceListing["pricing"]}): Promise<MarketplaceGovernanceItem> => {
       if (data.pricing && data.pricing.type !== "free") throw new Error("Marketplace listings are free-only in v1")
-      if (isLiveApi) throw new Error("Listing edits are not available in this Seller Console yet")
-      await delay(500)
-      return { ...mockSellerListings[0], ...data }
+      if (!data.reason.trim() || data.reason.trim().length > 1000 || !data.title.trim() || data.title.trim().length > 255 || data.description.length > 2000) throw new Error("Provide valid listing changes and a reason")
+      if (isLiveApi) {
+        if (!data.etag) throw new Error("Reload review before editing")
+        return MarketplaceGovernanceItemSchema.parse(await apiPatch(`/api/v1/publisher/reviews/listing/${encodeURIComponent(id)}`,
+          {name:data.title.trim(),description:data.description,reason:data.reason.trim()},{ifMatch:data.etag}))
+      }
+      return demoGovernanceWrite(id,data.etag,"edit",data.reason,data.title.trim(),data.description)
+    },
+    resubmit: async (id:string,reason:string,etag?:string): Promise<MarketplaceGovernanceItem> => {
+      if (!reason.trim() || reason.trim().length > 1000) throw new Error("Resubmission reason must contain 1 to 1000 characters")
+      if (isLiveApi) {
+        if (!etag) throw new Error("Reload review before resubmitting")
+        return MarketplaceGovernanceItemSchema.parse(await apiPost(`/api/v1/publisher/reviews/listing/${encodeURIComponent(id)}/actions/resubmit`,{reason:reason.trim()},{ifMatch:etag}))
+      }
+      return demoGovernanceWrite(id,etag,"resubmit",reason)
     },
     submit: async (_id: string) => {
       if (isLiveApi) return apiPost(`/api/v1/publisher/listings/${encodeURIComponent(_id)}/actions/submit`, {})

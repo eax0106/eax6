@@ -11,6 +11,7 @@ export const PUBLISHING_TRANSITIONS: Readonly<Record<ListingStatus, readonly Lis
   submitted: ["automated_review", "private_testing", "removed"],
   automated_review: ["human_review", "published", "private_testing", "removed"],
   human_review: ["published", "private_testing", "removed"],
+  needs_changes: [],
   published: ["suspended", "deprecated", "removed"],
   suspended: ["published", "deprecated", "removed"],
   deprecated: ["removed"],

@@ -16,7 +16,7 @@ export class ToolVersionReviewRepository implements OnModuleDestroy {
     const rows = await this.requirePool().query<RegistryVersionRow & { name: string; tenant_id: string; scan_json: Record<string, unknown> }>(`
       SELECT v.*,m.name,m.tenant_id,row_to_json(r) AS scan_json FROM tool_versions v
       JOIN tool_manifests m ON m.id=v.manifest_id JOIN tool_scan_reports r ON r.id=v.latest_scan_report_id
-      WHERE v.status='review_pending' AND m.trust_level<>'blocked' ORDER BY r.scanned_at,v.id LIMIT 200`);
+      WHERE v.status='review_pending' AND m.trust_level<>'blocked' AND m.status<>'needs_changes' ORDER BY r.scanned_at,v.id LIMIT 200`);
     return rows.rows.map(row => ({ manifestId:row.manifest_id,tenantId:row.tenant_id,name:row.name,version:registryVersionResource(row),scan:{
       id:String(row.scan_json.id),toolVersionId:row.id,verdict:row.scan_json.verdict as ScanReport["verdict"], findings:row.scan_json.findings_json as ScanReport["findings"],
       scannerVersion:String(row.scan_json.scanner_version),durationMs:Number(row.scan_json.duration_ms),scannedAt:new Date(String(row.scan_json.scanned_at)).toISOString(),
@@ -30,10 +30,11 @@ export class ToolVersionReviewRepository implements OnModuleDestroy {
     const invalid = (status: number, detail: string) => new MarketplaceGovernanceHttpError(status,"TOOL_REVIEW_CONFLICT",detail,instance);
     try {
       await c.query("BEGIN");
-      const owners = await c.query<{ tenant_id: string | null; trust_level: string }>("SELECT tenant_id,trust_level FROM tool_manifests WHERE id=$1 FOR UPDATE", [manifestId]);
+      const owners = await c.query<{ tenant_id: string | null; trust_level: string; status: string }>("SELECT tenant_id,trust_level,status FROM tool_manifests WHERE id=$1 FOR UPDATE", [manifestId]);
       const rows = await c.query<RegistryVersionRow>("SELECT * FROM tool_versions WHERE manifest_id=$1 AND id=$2 FOR UPDATE", [manifestId,versionId]);
       const row = rows.rows[0],owner = owners.rows[0];
       if (!row || !owner || !owner.tenant_id || owner.trust_level === "blocked") throw invalid(404,"Tool version was not found");
+      if (owner.status === "needs_changes") throw invalid(409,"The seller must resubmit requested changes before version review");
       if (row.latest_scan_report_id !== input.scanReportId) throw invalid(409,"The scan changed; reload before reviewing");
       if (row.reviewed_scan_report_id === input.scanReportId) {
         if (row.review_decision !== input.decision || row.review_reason !== input.reason || row.reviewed_by !== staffUserId) throw invalid(409,"This scan already has a different recorded staff decision");

@@ -166,7 +166,7 @@ export class MarketplaceRepository implements OnModuleDestroy {
              price_minor = COALESCE($8, price_minor),
              updated_at = clock_timestamp()
          WHERE tenant_id = $1 AND id = $2
-           AND ($8::bigint IS NULL OR status IN ('draft', 'private_testing'))
+           AND ($8::bigint IS NULL OR status IN ('draft', 'private_testing', 'needs_changes'))
          RETURNING *`,
         [
           tenantId,

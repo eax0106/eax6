@@ -14,7 +14,16 @@ interface RevocationRow { id: string; manifest_id: string; tool_version_id: stri
   createManifest(tenantId: string, id: string, input: CreateManifestInput) { return this.withTenant(tenantId, async (c) => manifest((await c.query(`INSERT INTO tool_manifests (id, tenant_id, name, ecosystem, description, trust_level, publisher_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`, [id, tenantId, input.name, input.ecosystem, input.description ?? null, input.trust_level, input.publisher_id ?? null])).rows[0])); }
   versions(tenantId: string, manifestId: string) { return this.withTenant(tenantId, async (c) => (await c.query("SELECT * FROM tool_versions WHERE manifest_id = $1 ORDER BY published_at DESC NULLS LAST, version DESC", [manifestId])).rows.map(version)); }
   getVersion(tenantId: string, manifestId: string, id: string) { return this.withTenant(tenantId, async (c) => { const r = await c.query("SELECT * FROM tool_versions WHERE manifest_id = $1 AND id = $2", [manifestId, id]); return r.rows[0] ? version(r.rows[0]) : undefined; }); }
-  createVersion(tenantId: string, id: string, manifestId: string, input: CreateVersionInput) { return this.withTenant(tenantId, async (c) => version((await c.query(`INSERT INTO tool_versions (id, manifest_id, version, artifact_ref, capabilities_json, permissions_json, pinned) VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7) RETURNING *`, [id, manifestId, input.version, input.artifact_ref, JSON.stringify(input.capabilities), JSON.stringify(input.permissions), input.pinned ?? false])).rows[0])); }
+  createVersion(tenantId: string, id: string, manifestId: string, input: CreateVersionInput) {
+    return this.withTenant(tenantId, async c => {
+      const owner = await c.query("SELECT id FROM tool_manifests WHERE id=$1 AND tenant_id=$2 AND trust_level<>'blocked' FOR UPDATE",[manifestId,tenantId]);
+      if (!owner.rowCount) throw new RegistryScanStateError(404,"Tool manifest was not found");
+      const result = await c.query(`INSERT INTO tool_versions (id,manifest_id,version,artifact_ref,capabilities_json,permissions_json,pinned)
+        VALUES ($1,$2,$3,$4,$5::jsonb,$6::jsonb,$7) RETURNING *`,[id,manifestId,input.version,input.artifact_ref,JSON.stringify(input.capabilities),JSON.stringify(input.permissions),input.pinned??false]);
+      await c.query("UPDATE tool_manifests SET updated_at=clock_timestamp() WHERE id=$1",[manifestId]);
+      return version(result.rows[0]);
+    });
+  }
   latestReport(tenantId: string, versionId: string) { return this.withTenant(tenantId, async (c) => { const r = await c.query("SELECT r.* FROM tool_scan_reports r JOIN tool_versions v ON v.latest_scan_report_id=r.id WHERE v.id=$1", [versionId]); return r.rows[0] ? report(r.rows[0]) : undefined; }); }
 
   beginScan(tenantId: string, manifestId: string, versionId: string): Promise<ToolVersion> {
@@ -26,13 +35,14 @@ interface RevocationRow { id: string; manifest_id: string; tool_version_id: stri
       if (!row) throw new RegistryScanStateError(404,"Tool version was not found");
       if (!["draft","scan_failed","scan_unavailable","review_pending"].includes(row.status)) throw new RegistryScanStateError(409,"Tool version cannot start another scan in its current state");
       const result = await c.query<VersionRow>("UPDATE tool_versions SET status='scanning' WHERE id=$1 RETURNING *", [versionId]);
+      await c.query("UPDATE tool_manifests SET updated_at=clock_timestamp() WHERE id=$1",[manifestId]);
       return version(result.rows[0]!);
     });
   }
 
   completeScan(tenantId: string, manifestId: string, versionId: string, reportId: string, scan: PackageScanReport): Promise<ToolVersion> {
     return this.withTenant(tenantId, async c => {
-      const owner = await c.query("SELECT id,trust_level FROM tool_manifests WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId,manifestId]);
+      const owner = await c.query("SELECT id,trust_level,status FROM tool_manifests WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId,manifestId]);
       const rows = await c.query<VersionRow>("SELECT * FROM tool_versions WHERE manifest_id=$1 AND id=$2 FOR UPDATE", [manifestId,versionId]);
       const row = rows.rows[0];
       if (!owner.rowCount || !row) throw new RegistryScanStateError(404,"Tool version was not found");
@@ -44,14 +54,15 @@ interface RevocationRow { id: string; manifest_id: string; tool_version_id: stri
           AND r.verdict='clean' AND jsonb_array_length(r.findings_json)=0 LIMIT 1`, [manifestId]);
       const clean = scan.verdict === "clean" && scan.findings.length === 0;
       const status = row.status === "revoked" || owner.rows[0]!.trust_level === "blocked" ? "revoked"
-        : clean ? (first.rowCount ? "published" : "review_pending") : scan.verdict === "unavailable" ? "scan_unavailable" : "scan_failed";
+        : clean ? (first.rowCount && owner.rows[0]!.status !== "needs_changes" ? "published" : "review_pending") : scan.verdict === "unavailable" ? "scan_unavailable" : "scan_failed";
       const updated = await c.query<VersionRow>(`UPDATE tool_versions SET latest_scan_report_id=$2,status=$3,
         published_at=CASE WHEN $3='published' THEN clock_timestamp() ELSE published_at END WHERE id=$1 RETURNING *`, [versionId,reportId,status]);
       if (status === "published") await c.query("UPDATE tool_manifests SET status='published',updated_at=clock_timestamp() WHERE id=$1 AND tenant_id=$2", [manifestId,tenantId]);
+      if (status !== "published") await c.query("UPDATE tool_manifests SET updated_at=clock_timestamp() WHERE id=$1",[manifestId]);
       return version(updated.rows[0]!);
     });
   }
-  revoke(tenantId: string, id: string, manifestId: string, versionId: string, reason: string, revokedBy: string) { return this.withTenant(tenantId, async (c) => { await c.query("SELECT id FROM tool_manifests WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [manifestId,tenantId]); const prior = await c.query("SELECT * FROM tool_revocations WHERE tool_version_id = $1", [versionId]); if (prior.rows[0]) return revocation(prior.rows[0]); await c.query("UPDATE tool_versions SET status = 'revoked' WHERE id = $1", [versionId]); await c.query(`UPDATE tool_manifests SET status = CASE WHEN EXISTS (SELECT 1 FROM tool_versions WHERE manifest_id = $1 AND status = 'published') THEN 'published' ELSE 'draft' END, updated_at = clock_timestamp() WHERE tenant_id = $2 AND id = $1`, [manifestId, tenantId]); return revocation((await c.query(`INSERT INTO tool_revocations (id, tenant_id, manifest_id, tool_version_id, reason, revoked_by, propagated_at) VALUES ($1,$2,$3,$4,$5,$6,clock_timestamp()) RETURNING *`, [id, tenantId, manifestId, versionId, reason, revokedBy])).rows[0]); }); }
+  revoke(tenantId: string, id: string, manifestId: string, versionId: string, reason: string, revokedBy: string) { return this.withTenant(tenantId, async (c) => { await c.query("SELECT id FROM tool_manifests WHERE id=$1 AND tenant_id=$2 FOR UPDATE", [manifestId,tenantId]); const prior = await c.query("SELECT * FROM tool_revocations WHERE tool_version_id = $1", [versionId]); if (prior.rows[0]) return revocation(prior.rows[0]); await c.query("UPDATE tool_versions SET status = 'revoked' WHERE id = $1", [versionId]); await c.query(`UPDATE tool_manifests SET status = CASE WHEN status='needs_changes' THEN 'needs_changes' WHEN EXISTS (SELECT 1 FROM tool_versions WHERE manifest_id = $1 AND status = 'published') THEN 'published' ELSE 'draft' END, updated_at = clock_timestamp() WHERE tenant_id = $2 AND id = $1`, [manifestId, tenantId]); return revocation((await c.query(`INSERT INTO tool_revocations (id, tenant_id, manifest_id, tool_version_id, reason, revoked_by, propagated_at) VALUES ($1,$2,$3,$4,$5,$6,clock_timestamp()) RETURNING *`, [id, tenantId, manifestId, versionId, reason, revokedBy])).rows[0]); }); }
   async onModuleDestroy() { if (this.closePoolOnDestroy) await this.pool.end(); }
   private async withTenant<T>(tenantId: string, action: (client: PoolClient) => Promise<T>): Promise<T> { const c = await this.pool.connect(); try { await c.query("BEGIN"); await c.query("SELECT set_config('app.current_tenant_id', $1, true)", [tenantId]); const value = await action(c); await c.query("COMMIT"); return value; } catch (error) { await c.query("ROLLBACK"); throw error; } finally { c.release(); } }
 }

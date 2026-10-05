@@ -1,7 +1,6 @@
 import * as React from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
-import { isLiveApi } from "@/api/http"
 import type { MarketplaceReviewItem, SellerVerification, ToolVersionReviewItem } from "@/api/services/marketplace-admin"
 import { queryKeys } from "@/api/query-keys"
 import { PageHeader } from "@/components/common/page-header"
@@ -14,13 +13,14 @@ import { Loader2, Check, X, AlertTriangle } from "lucide-react"
 export function MarketplaceAdmin() {
   const queryClient = useQueryClient()
   
-  const { data: reviews, isLoading } = useQuery({
+  const [reasons, setReasons] = React.useState<Record<string, string>>({})
+  const { data: reviews, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: queryKeys.admin.marketplace.reviewQueue,
     queryFn: () => api.admin.marketplace.reviewQueue()
   })
 
   const reviewMutation = useMutation({
-    mutationFn: ({ item, action }: { item: MarketplaceReviewItem, action: "approve" | "reject" | "changes_requested" | "suspend" }) => api.admin.marketplace.reviewListing(item.id, action, undefined, item.resourceType),
+    mutationFn: ({ item, action }: { item: MarketplaceReviewItem, action: "approve" | "reject" | "changes_requested" | "suspend" }) => api.admin.marketplace.reviewListing(item.id, action, reasons[item.id]?.trim(), item.resourceType, item.etag),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.admin.marketplace.reviewQueue })
   })
 
@@ -31,6 +31,11 @@ export function MarketplaceAdmin() {
         description="Review submitted assets, agents, and workflows for public listing."
       />
 
+      {isError && <p role="alert">{(error as Error).message}</p>}
+      {reviewMutation.isError && <p role="alert">{(reviewMutation.error as Error).message}</p>}
+      <Button variant="outline" disabled={isFetching || reviewMutation.isPending} onClick={() => void refetch()}>Reload review queue</Button>
+      {reviews && reviews.length >= 200 && <p className="text-sm text-slate-400">Showing 200 highest-risk review items.</p>}
+      <p className="text-sm text-slate-400">Risk orders review. Staff decide publication after inspecting current evidence.</p>
       <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-950/50">
@@ -38,7 +43,7 @@ export function MarketplaceAdmin() {
               <TableHead className="text-slate-400">Listing</TableHead>
               <TableHead className="text-slate-400">Seller</TableHead>
               <TableHead className="text-slate-400">Type</TableHead>
-              <TableHead className="text-slate-400">{isLiveApi ? "Trust" : "Risk Score"}</TableHead>
+              <TableHead className="text-slate-400">Risk Score</TableHead>
               <TableHead className="text-slate-400">Status</TableHead>
               <TableHead className="text-slate-400 text-right">Actions</TableHead>
             </TableRow>
@@ -62,6 +67,7 @@ export function MarketplaceAdmin() {
                   <TableCell>
                     <div className="font-medium text-slate-200">{r.listingName}</div>
                     <div className="text-xs text-slate-500">{new Date(r.submittedAt).toLocaleDateString()}</div>
+                    {r.reviewNotes?.map(note => <p key={note.id} className="text-xs text-slate-400 mt-2">{note.actor_ref} · {note.action.replaceAll("_", " ")}: {note.reason}</p>)}
                   </TableCell>
                   <TableCell>
                     <span className="text-slate-300">{r.sellerName}</span>
@@ -72,17 +78,13 @@ export function MarketplaceAdmin() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {!r.risk ? (
-                      <span className="text-sm text-slate-400">{r.trustLevel?.replaceAll("_", " ") ?? "—"}</span>
-                    ) : (
-                    <Badge variant="outline" className={
-                      r.risk === "high" ? "bg-red-500/10 text-red-400 border-red-500/20" :
-                      r.risk === "medium" ? "bg-amber-500/10 text-amber-400 border-amber-500/20" :
-                      "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                    }>
-                      {r.risk.toUpperCase()}
-                    </Badge>
-                    )}
+                    {r.riskDetails ? <div className="space-y-2">
+                      <p>{r.riskDetails.score}/100{r.riskDetails.incomplete ? " · Missing signals" : ""}</p>
+                      <ul className="text-xs text-slate-400 space-y-1">{r.riskDetails.reasons.map((reason, index) => <li key={`${reason.signal}-${index}`}>
+                        {reason.detail} · +{reason.points}{!reason.observed ? " · Not observed" : ""}
+                        {reason.evidence.length > 0 && <span className="block break-all">{reason.evidence.join(", ")}</span>}
+                      </li>)}</ul>
+                    </div> : <span className="text-sm text-slate-400">{r.risk?.toUpperCase() ?? "Unavailable"}</span>}
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className={
@@ -95,18 +97,18 @@ export function MarketplaceAdmin() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
+                    {r.status === "pending_review" && <Input aria-label={`Review reason for ${r.id}`} maxLength={1000} value={reasons[r.id] ?? ""}
+                      onChange={event => setReasons(current => ({...current, [r.id]: event.target.value}))} placeholder="Explain decision or requested changes" className="mb-2" />}
                     <div className="flex justify-end gap-2">
                       {r.status === "pending_review" && (
                         <>
-                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ item: r, action: "approve" })} className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
+                          <Button variant="ghost" size="sm" disabled={r.resourceType === "tool_manifest" || reviewMutation.isPending || !reasons[r.id]?.trim() || reasons[r.id]!.trim().length > 1000} title={r.resourceType === "tool_manifest" ? "Approve the current clean tool version below" : undefined} onClick={() => reviewMutation.mutate({ item: r, action: "approve" })} className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
                             <Check className="w-4 h-4 mr-2" /> Approve
                           </Button>
-                          {!isLiveApi && (
-                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ item: r, action: "changes_requested" })} className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10">
+                          <Button variant="ghost" size="sm" disabled={reviewMutation.isPending || !reasons[r.id]?.trim() || reasons[r.id]!.trim().length > 1000} onClick={() => reviewMutation.mutate({ item: r, action: "changes_requested" })} className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10">
                             <AlertTriangle className="w-4 h-4 mr-2" /> Needs Changes
                           </Button>
-                          )}
-                          <Button variant="ghost" size="sm" onClick={() => reviewMutation.mutate({ item: r, action: "reject" })} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                          <Button variant="ghost" size="sm" disabled={reviewMutation.isPending || !reasons[r.id]?.trim() || reasons[r.id]!.trim().length > 1000} onClick={() => reviewMutation.mutate({ item: r, action: "reject" })} className="text-red-400 hover:text-red-300 hover:bg-red-500/10">
                             <X className="w-4 h-4 mr-2" /> Reject
                           </Button>
                         </>

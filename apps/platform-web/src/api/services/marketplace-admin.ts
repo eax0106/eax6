@@ -1,6 +1,8 @@
+import type { MarketplaceGovernanceItem } from "@alterx/contracts"
 import { isLiveApi } from "../http"
 import * as live from "../live-admin-commerce"
 
+import { demoGovernance, demoGovernanceWrite } from "../mock/marketplace-governance"
 import { delay } from "../mock/data"
 
 export interface MarketplaceReviewItem {
@@ -10,7 +12,10 @@ export interface MarketplaceReviewItem {
   listingName: string
   sellerName: string
   assetType: "workflow" | "plugin" | "agent" | "listing" | "tool"
-  /** Demo only: the governance API has no risk score. */
+  etag?: string
+  riskDetails?: MarketplaceGovernanceItem["risk"]
+  reviewNotes?: MarketplaceGovernanceItem["review_notes"]
+  /** Older demo fixtures retain their categorical score. */
   risk?: "low" | "medium" | "high"
   trustLevel?: string
   status: "pending_review" | "approved" | "changes_requested" | "rejected" | "suspended"
@@ -76,15 +81,19 @@ export class MarketplaceAdminService {
   async reviewQueue(): Promise<MarketplaceReviewItem[]> {
     if (isLiveApi) return live.listMarketplaceReviews()
     await delay(300)
-    return MOCK_REVIEWS
+    return [...[...demoGovernance.values()].map(item => ({id:item.id,resourceType:item.resource_type,listingName:item.name,sellerName:"Demo seller",assetType:"listing" as const,
+      status:item.status==="needs_changes"?"changes_requested" as const:item.status==="published"?"approved" as const:item.status==="removed"?"suspended" as const:"pending_review" as const,
+      etag:item.etag,riskDetails:item.risk,reviewNotes:item.review_notes,submittedAt:item.updated_at})),...MOCK_REVIEWS]
   }
 
-  async reviewListing(id: string, action: "approve" | "reject" | "changes_requested" | "suspend", _reason?: string, resourceType?: MarketplaceReviewItem["resourceType"]): Promise<MarketplaceReviewItem> {
-    if (isLiveApi) {
-      if (action === "changes_requested") throw new Error("Requesting changes is not available")
-      return live.reviewMarketplaceItem({ id, resourceType }, action)
-    }
+  async reviewListing(id: string, action: "approve" | "reject" | "changes_requested" | "suspend", reason?: string, resourceType?: MarketplaceReviewItem["resourceType"], etag?: string): Promise<MarketplaceReviewItem> {
+    if (!reason?.trim() || reason.trim().length > 1000) throw new Error("Review reason must contain 1 to 1000 characters")
+    if (isLiveApi) return live.reviewMarketplaceItem({ id, resourceType, etag }, action, reason)
     await delay(500)
+    if (demoGovernance.has(id)) {
+      demoGovernanceWrite(id,etag,action === "changes_requested" ? "needs_changes" : action === "suspend" ? "takedown" : action,reason)
+      return (await this.reviewQueue()).find(item => item.id === id)!
+    }
     const rev = MOCK_REVIEWS.find(r => r.id === id)
     if (!rev) throw new Error("Not found")
     

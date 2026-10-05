@@ -18,6 +18,7 @@ const MIGRATION_TAGS = [
   "0005_listing_pricing",
   "0006_payout_ledger_erasure_guard",
   "0007_tool_version_review",
+  "0008_marketplace_governance",
 ];
 
 /**
@@ -67,6 +68,7 @@ describe("applyMarketplaceMigrations", () => {
       "0005_listing_pricing",
       "0006_payout_ledger_erasure_guard",
       "0007_tool_version_review",
+  "0008_marketplace_governance",
     ]);
   });
 
@@ -124,8 +126,8 @@ describe("applyMarketplaceMigrations", () => {
 
     expect(
       await applyMarketplaceMigrations(client, { direction: "down", steps: 2 }),
-    ).toEqual(["0007_tool_version_review", "0006_payout_ledger_erasure_guard"]);
-    expect(ledger).toEqual(MIGRATION_TAGS.slice(0, 6));
+    ).toEqual(["0008_marketplace_governance", "0007_tool_version_review"]);
+    expect(ledger).toEqual(MIGRATION_TAGS.slice(0, 7));
   });
 
   it("treats a zero or negative step count as nothing to do", async () => {

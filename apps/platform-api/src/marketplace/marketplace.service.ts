@@ -23,6 +23,7 @@ const transitions: Readonly<Record<string, readonly string[]>> = {
   submitted: ["automated_review", "private_testing", "removed"],
   automated_review: ["human_review", "published", "private_testing", "removed"],
   human_review: ["published", "private_testing", "removed"],
+  needs_changes: [],
   published: ["suspended", "deprecated", "removed"],
   suspended: ["published", "deprecated", "removed"],
   deprecated: ["removed"],
@@ -43,11 +44,11 @@ export class MarketplaceService {
   async update(tenantId: string, listingId: string, input: UpdateListingInput, staff?: StaffActorContext) {
     const current = await this.requireOwnedListing(tenantId, listingId);
     if(input.price_minor!==undefined && BigInt(input.price_minor)!==0n)throw paidUnavailable();
-    if (input.price_minor !== undefined && !["draft", "private_testing"].includes(current.status)) {
+    if (input.price_minor !== undefined && !["draft", "private_testing", "needs_changes"].includes(current.status)) {
       throw new MarketplaceHttpError(409, "MARKETPLACE_PRICE_LOCKED", "Price can be changed only before submission.", `/api/v1/marketplace/listings/${listingId}`);
     }
     if (input.status && !transitions[current.status]!.includes(input.status)) throw new MarketplaceHttpError(409, "MARKETPLACE_INVALID_STATUS_TRANSITION", `Cannot transition listing from ${current.status} to ${input.status}.`, `/api/v1/marketplace/listings/${listingId}`);
-    if (input.status && ["submitted", "automated_review", "human_review", "published"].includes(input.status) && !this.isPublishAuthorized(staff)) {
+    if (input.status && ["submitted", "automated_review", "human_review", "needs_changes", "published"].includes(input.status) && !this.isPublishAuthorized(staff)) {
       throw new MarketplaceHttpError(
         403,
         "MARKETPLACE_PUBLISH_REQUIRES_STAFF",

@@ -12,7 +12,7 @@ describe("truthful v1 demo commerce",()=>{
   await expect(marketplaceService.install("mkt_2")).rejects.toThrow("not found")
   await expect(marketplaceService.purchase("mkt_2")).rejects.toThrow("free-only")
   await expect(sellerService.listings.create({pricing:{type:"paid"}})).rejects.toThrow("free-only")
-  await expect(sellerService.listings.update("mkt_1",{pricing:{type:"paid"}})).rejects.toThrow("free-only")
+  await expect(sellerService.listings.update("mkt_1",{title:"Paid",description:"Asset",reason:"Changed",pricing:{type:"paid",price:1,currency:"INR"}})).rejects.toThrow("free-only")
  })
  it("exposes unconfigured paid pricing without an invented subscription or charge",async()=>{
   expect(await billingService.getSubscription()).toBeNull()
