@@ -3,7 +3,10 @@ import { resolveEnvironmentSecret } from "@alterx/shared-clients";
 export class BillingPolicyClient {
   constructor(private readonly baseUrl: string, private readonly resolveToken: () => Promise<string>, private readonly fetchImpl: typeof fetch=fetch) {}
   async policy(payload: unknown): Promise<void> { await this.send("policy",payload); }
-  async grant(tenantId: string,eventRef: string,credits: number): Promise<void> { await this.send("grant",{tenantId:`ten_${tenantId}`,eventRef,credits}); }
+  async grant(tenantId: string,eventRef: string,credits: number): Promise<void> {
+    const ack=await this.send("grant",{tenantId:`ten_${tenantId}`,eventRef,credits});
+    if(!ack||typeof ack!=="object"||!("applied" in ack)||typeof ack.applied!=="boolean")throw new Error("Billing credit grant acknowledgement is invalid");
+  }
   async account(tenantId: string): Promise<{balance:string;reserved:string;available:string}> {
     return await this.send("account",{tenantId:`ten_${tenantId}`}) as {balance:string;reserved:string;available:string};
   }

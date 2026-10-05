@@ -348,7 +348,11 @@ export {
   CreateIncidentRequestSchema,
   CreateJitGrantRequestSchema,
   DeploymentAdminActionRequestSchema,
+  DeploymentAdminInternalActionRequestSchema,
   DeploymentAdminActionResultSchema,
+  TenantDeploymentSchema,
+  TenantDeploymentCollectionSchema,
+  TenantDeploymentListRequestSchema,
   FeatureFlagNameSchema,
   FeatureFlagSchema,
   IncidentApprovalRequestSchema,
@@ -378,6 +382,8 @@ export {
   type CreateJitGrantRequest,
   type DeploymentAdminActionRequest,
   type DeploymentAdminActionResult,
+  type TenantDeployment,
+  type TenantDeploymentCollection,
   type FeatureFlag,
   type IncidentApprovalRequest,
   type MarketplaceGovernanceActionRequest,
@@ -458,3 +464,5 @@ export * from "./workflow-folders";
 export * from "./node-overrides";
 
 export { HostedFormFieldSchema, HostedFormDefinitionSchema, PublicFormTokenClaimsSchema, HostedFormSetupSchema, hostedFormValuesSchema, type HostedFormField, type HostedFormDefinition, type PublicFormTokenClaims, type HostedFormSetup } from "./public-forms";
+
+export * from "./staff-billing-operations";

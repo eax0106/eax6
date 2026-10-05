@@ -190,6 +190,27 @@ export const DeploymentAdminActionRequestSchema = z
     reason: z.string().trim().min(1).max(1_000),
   })
   .strict();
+export const DeploymentAdminInternalActionRequestSchema = DeploymentAdminActionRequestSchema.extend({
+  staff_user_id: z.string().regex(/^stf_[a-z0-9._:-]{1,127}$/i),
+}).strict();
+export const TenantDeploymentSchema = z.object({
+  id: DeploymentIdSchema,
+  tenant_id: PlatformTenantIdSchema,
+  project_id: ProjectIdSchema,
+  project_name: z.string().min(1),
+  status: z.enum(["pending", "active", "failed", "rolled_back", "suspended"]),
+  created_at: IsoTimestampSchema,
+  updated_at: IsoTimestampSchema,
+  etag: z.string().regex(/^"dep_[0-9a-f-]{36}:rev-[1-9][0-9]*"$/i),
+}).strict().refine(value=>value.etag.startsWith(`"${value.id}:rev-`),"Deployment revision must identify its row");
+export const TenantDeploymentListRequestSchema = z.object({tenant_id: PlatformTenantIdSchema}).strict();
+export const TenantDeploymentCollectionSchema = z.object({
+  tenant_id: PlatformTenantIdSchema,
+  total: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  items: z.array(TenantDeploymentSchema).max(200),
+}).strict().refine(value => value.total >= value.items.length && new Set(value.items.map(item=>item.id)).size===value.items.length && value.items.every(item => item.tenant_id === value.tenant_id), "Deployment collection must match its tenant and total");
+export type TenantDeployment = z.infer<typeof TenantDeploymentSchema>;
+export type TenantDeploymentCollection = z.infer<typeof TenantDeploymentCollectionSchema>;
 export const DeploymentAdminActionResultSchema = z
   .object({
     tenant_id: PlatformTenantIdSchema,
@@ -199,6 +220,7 @@ export const DeploymentAdminActionResultSchema = z
     status: z.enum(["active", "rolled_back", "suspended"]),
     active_deployment_id: DeploymentIdSchema.nullable(),
     updated_at: IsoTimestampSchema,
+    etag: z.string().min(1).optional(),
   })
   .strict();
 

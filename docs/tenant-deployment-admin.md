@@ -1,0 +1,19 @@
+# Tenant deployment administration
+
+Staff administrators select an actual tenant and read its recorded Engine deployments. The list uses ordinary tenant PostgreSQL context, a stable newest-first limit of 200, and an independent total from the same database snapshot. Rows contain the recorded project name, deployment status, timestamps and the exact quoted deployment revision. Pending and failed rows offer no state transition. Upstream, authentication, audit and malformed-response failures remain visible; they are never replaced by fictional live records.
+
+Rollback, suspend and resume retain the existing Engine transition rules. Suspend requires an active deployment; resume requires a suspended deployment and no other active deployment for its project. Rollback replaces an active deployment with the most recent earlier rolled-back deployment. The existing artifact/destination constraints and single-active-deployment index remain in force.
+
+The current staff cookie and stored `staff_admin` role authorize the platform route. Requests have a strict named-tenant body and human reason, with required `If-Match` (428 if missing, 412 if stale). Platform locks the existing non-erased tenant `FOR SHARE` while forwarding the operation. Its dedicated existing service credential authenticates the internal Engine transport; the staff assertion is supplied by platform, never accepted from the browser body.
+
+Engine serializes the project, locks the deployment, and checks the exact current revision in the same transaction. Status changes advance a durable monotonic revision. The transaction inserts a UUIDv7 action record containing the actual staff identifier, full reason, previous/next status and restored deployment when applicable. It awaits the actual audit service acknowledgement before committing, and refuses an invalid acknowledgement. A failure rolls back status, timestamp, revision and local action history, including both affected rollback rows. The central event uses a stable reason code and local history reference through the existing supported scope field; full human text stays in the owning database.
+
+Migration 0055 gives action history FORCE RLS, named-tenant read/append/delete policies and update rejection, including privileged updates. Deletion follows the Engine's existing named-tenant erasure authority. The subject FK is named before the nullable restoration FK so the existing schema-derived workspace erasure planner follows the owning deployment. Both history and deployments are erased before their project/artifact parents. The paired downgrade preserves legacy deployment records when history is empty and refuses downgrade when action history exists.
+
+The page offers actual tenant selection, count, state-appropriate controls and a reason form carrying the displayed revision. Loading, empty, unavailable, retry and failed-action states are separate; failed reason text remains visible. Demo state and transitions are explicitly fictional and use no live requests. This changes existing recorded deployment state; it does not provision, promote or deploy infrastructure.
+
+## Verification boundaries
+
+Native storage tests use migrated PostgreSQL through NOSUPERUSER/NOBYPASSRLS roles and cover independent tenants, bounded counts, transitions, concurrency, audit rollback, history scope, paired downgrade and existing erasure. The end-to-end fixture runs current staff middleware/RBAC, listening Engine HTTP, signed audit gRPC with real JWKS, and the real audit service with ordinary `audit_service` PostgreSQL storage. Auth0 userinfo is the controlled external edge. Separate direct-storage tests control acknowledgement failure and delay. No live vendor, cloud deployment or production operation is claimed.
+
+D26 billing operations and the other roadmap items remain separate required work.

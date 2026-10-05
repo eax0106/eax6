@@ -1403,3 +1403,5 @@ export interface ApprovalPolicyChange {
   timeoutSeconds: number | null
   confirmConsequence?: string
 }
+
+export type {TenantDeployment, TenantDeploymentCollection, DeploymentAdminActionRequest, DeploymentAdminActionResult} from "@alterx/contracts"
