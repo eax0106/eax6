@@ -54,25 +54,19 @@ export class AdminUsersService {
     return { revoked };
   }
 
+  async appendNote(id: string, staffUserId: string, body: string, instance: string): Promise<AdminUserActionView> {
+    const note = await this.repository.appendNote(id, staffUserId, body, (noteId) => this.audit.record({
+      actorType: "admin", actorRef: staffUserId, action: "user.note.append",
+      targetType: "user_admin_action", targetRef: noteId, reasonCode: "staff_note", scope: "user:notes",
+    }));
+    if (!note) throw userNotFound(instance);
+    return note;
+  }
+
   private async require(id: string, instance: string): Promise<AdminUserView> {
     const user = await this.repository.find(id);
     if (!user) {
-      throw new HttpException(
-        {
-          type: "https://errors.alter.ai/user-not-found",
-          title: "USER_NOT_FOUND",
-          status: 404,
-          detail: "User not found",
-          instance,
-          error_code: "USER_NOT_FOUND",
-          trace_id: `trc_${randomUUID()}`,
-          request_id: `req_${randomUUID()}`,
-          retryable: false,
-          field_errors: [],
-          documentation_key: "user.not.found",
-        },
-        404,
-      );
+      throw userNotFound(instance);
     }
     return user;
   }
@@ -87,4 +81,13 @@ export class AdminUsersService {
       scope: "user:write",
     });
   }
+}
+
+function userNotFound(instance: string): HttpException {
+  return new HttpException({
+    type: "https://errors.alter.ai/user-not-found", title: "USER_NOT_FOUND",
+    status: 404, detail: "User not found", instance, error_code: "USER_NOT_FOUND",
+    trace_id: `trc_${randomUUID()}`, request_id: `req_${randomUUID()}`,
+    retryable: false, field_errors: [], documentation_key: "user.not.found",
+  }, 404);
 }

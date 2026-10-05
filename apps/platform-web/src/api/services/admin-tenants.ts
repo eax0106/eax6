@@ -38,8 +38,8 @@ export class AdminTenantsService {
     return MOCK_NOTES[id] || []
   }
 
-  async addNote(id: string, body: string): Promise<AdminNote> {
-    if (isLiveApi) throw new Error("Tenant notes are not available yet: platform-api has no notes store")
+  async addNote(id: string, body: string, grantId?: string): Promise<AdminNote> {
+    if (isLiveApi) return live.appendTenantNote(id, body, grantId)
     await delay(300)
     const newNote: AdminNote = {
       id: `note-${Date.now()}`,

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminUsersRepository } from "./admin-users.repository";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
@@ -73,6 +73,59 @@ describe.skipIf(!databaseUrl)("AdminUsersRepository PostgreSQL (task B1.2)", () 
     }
   });
 
+  it("appends immutable notes under the ordinary role and requires successful staff audit", async () => {
+    const subjectId = userId;
+    const audit = vi.fn(async () => "acknowledged");
+    const note = await repository.appendNote(subjectId, "stf_test", "Investigation completed", audit);
+    expect(note).toMatchObject({action: "note_added", reason: "Investigation completed", staff_email: "ops@example.com"});
+    expect(audit).toHaveBeenCalledExactlyOnceWith(note!.id);
+    expect(await repository.listActions(subjectId)).toContainEqual(note);
+    await expect(pool.query("UPDATE user_admin_actions SET reason='changed' WHERE id=$1", [note!.id])).rejects.toThrow(/append-only|permission denied for function staff_user_expiry_allowed/);
+    await expect(pool.query("DELETE FROM user_admin_actions WHERE id=$1", [note!.id])).rejects.toThrow(/append-only|permission denied for function staff_user_expiry_allowed/);
+    await expect(repository.appendNote(subjectId, "stf_test", "No audit acknowledgement", async () => {throw new Error("Audit unavailable");})).rejects.toThrow("Audit unavailable");
+    expect(await repository.listActions(subjectId)).toEqual([note]);
+    const missingAudit = vi.fn(async () => "acknowledged");
+    expect(await repository.appendNote(randomUUID(), "stf_test", "Unknown subject", missingAudit)).toBeUndefined();
+    expect(missingAudit).not.toHaveBeenCalled();
+  });
+
+  it("does not append new notes to an erased user", async () => {
+    await admin.query("UPDATE users SET identity_ref='erased:' || id::text, status='suspended' WHERE id=$1", [userId]);
+    const audit = vi.fn(async () => "acknowledged");
+    expect(await repository.appendNote(userId, "stf_test", "Late note", audit)).toBeUndefined();
+    expect(audit).not.toHaveBeenCalled();
+    expect(await repository.listActions(userId)).toEqual([]);
+  });
+
+  it("waits for concurrent erasure and rechecks the current subject before appending", async () => {
+    await admin.query("BEGIN");
+    await admin.query("UPDATE users SET identity_ref='erased:' || id::text, status='suspended' WHERE id=$1", [userId]);
+    const audit = vi.fn(async () => "acknowledged");
+    const append = repository.appendNote(userId, "stf_test", "Concurrent note", audit);
+    try {
+      await vi.waitFor(async () => {
+        await admin.query("SELECT pg_stat_clear_snapshot()");
+        const waiting = await admin.query("SELECT 1 FROM pg_stat_activity WHERE usename=$1 AND wait_event_type='Lock' AND query LIKE 'SELECT id FROM users%'", [roleName]);
+        expect(waiting.rowCount).toBe(1);
+      }, {timeout: 3000});
+      await admin.query("COMMIT");
+      expect(await append).toBeUndefined();
+      expect(audit).not.toHaveBeenCalled();
+      expect(await repository.listActions(userId)).toEqual([]);
+    } finally {
+      await admin.query("ROLLBACK");
+      await append;
+    }
+  });
+
+  it("enforces bounded note bodies in PostgreSQL without changing existing action reasons", async () => {
+    const subjectId = userId;
+    for (const body of ["", "   ", "a".repeat(4001)]) {
+      await expect(repository.appendNote(subjectId, "stf_test", body, async () => "acknowledged")).rejects.toThrow(/notes_body_check/);
+    }
+    expect(await repository.listActions(subjectId)).toEqual([]);
+  });
+
   it("lists a user across tenants, suspends and revokes every session in every tenant", async () => {
     const [listed] = await repository.list();
     expect(listed).toMatchObject({ id: userId, email: "person@example.com", status: "active", active_sessions: 2 });
@@ -87,7 +140,7 @@ describe.skipIf(!databaseUrl)("AdminUsersRepository PostgreSQL (task B1.2)", () 
     expect(await repository.listActions(userId)).toEqual([
       expect.objectContaining({ action: "suspended", reason: "abuse report", staff_email: "ops@example.com" }),
     ]);
-    await expect(admin.query(`DELETE FROM user_admin_actions`)).rejects.toThrow(/append-only/);
+    await expect(admin.query(`DELETE FROM user_admin_actions`)).rejects.toThrow(/append-only|permission denied for function staff_user_expiry_allowed/);
   });
 });
 

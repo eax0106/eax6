@@ -6,10 +6,14 @@ import { Card } from "@/components/ui/card"
 import { StatusBadge } from "@/components/common/status-badge"
 import { Button } from "@/components/ui/button"
 import { Loader2, ArrowLeft, Shield, Lock, Unlock } from "lucide-react"
+import { isLiveApi } from "@/api/http"
+import { getStaffSession } from "@/api/staff-auth"
+import { AdminNoteComposer } from "../../components/admin-note-composer"
 
 export function UserDetail() {
   const { userId } = useParams<{ userId: string }>()
   const queryClient = useQueryClient()
+  const session = useQuery({queryKey: ["staff", "session"], queryFn: getStaffSession, enabled: isLiveApi})
   
   const { data: user, isLoading } = useQuery({
     queryKey: queryKeys.admin.users.detail(userId!),
@@ -17,7 +21,7 @@ export function UserDetail() {
     enabled: !!userId
   })
 
-  const { data: notes, isLoading: notesLoading } = useQuery({
+  const { data: notes, isLoading: notesLoading, error: notesError } = useQuery({
     queryKey: queryKeys.admin.users.notes(userId!),
     queryFn: () => api.admin.users.getNotes(userId!),
     enabled: !!userId
@@ -105,6 +109,12 @@ export function UserDetail() {
 
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-slate-200">Admin Notes</h3>
+        {(!isLiveApi || session.data?.roles.some(role => ["staff_admin", "staff_support", "staff_security"].includes(role))) && <AdminNoteComposer append={async body => {
+          const note = await api.admin.users.addNote(userId!, body)
+          await queryClient.invalidateQueries({queryKey: queryKeys.admin.users.notes(userId!)})
+          return note
+        }} />}
+        {notesError && <p role="alert" className="text-destructive">{notesError instanceof Error ? notesError.message : "Notes are unavailable"}</p>}
         {notesLoading ? (
           <div className="p-4 text-center text-slate-500"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
         ) : notes?.length === 0 ? (

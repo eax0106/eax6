@@ -175,3 +175,15 @@ policy from #212 lifted for it only when its live adapter is verified.
 Removed the restricted tenant state and action from demo data and the client, provider maintenance action, user MFA/risk displays, invented tenant risk badges, and list-page policy creation controls. User identity security links to the Auth0 dashboard. Suspension, session revocation and provider enable/disable remain. This completes the removal portion of D26; tenant detail data, append-only notes, review assignment, billing operations and tenant deployment actions remain separate required work.
 
 Proof: eight live/demo render and action tests; seven failures on the original UI with eight passing after restoration; all 392 web tests pass; web typecheck, lint and build, architecture boundaries and normalized AST checks pass with no new findings.
+
+### C125 — D26 append-only staff notes
+
+Tenant and user detail pages append bounded administrative notes through current
+staff authorization and tenant support-grant scope. Notes reuse immutable staff
+action history and its existing erasure retention. Mandatory central audit must
+acknowledge before the local note commits; an unavailable audit leaves no note.
+Erased subjects cannot acquire new notes, and subject row locks serialize notes
+with erasure. History cannot be edited; corrections append another note.
+
+This completes the notes slice only. Tenant detail metrics, review assignment,
+billing operations and tenant deployment actions remain required D26 work.

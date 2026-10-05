@@ -43,6 +43,12 @@ export async function getUserTimeline(id: string): Promise<AdminNote[]> {
   })
 }
 
+export async function appendUserNote(id: string, body: string): Promise<AdminNote> {
+  const item = await apiPost<AnyRecord>(`/api/v1/admin/users/${encodeURIComponent(id)}/notes`, {body});
+  return {id: String(item.id), userId: id, author: {id: "", name: String(item.staff_email)},
+    body: String(item.reason), createdAt: String(item.occurred_at)};
+}
+
 export async function suspendUser(id: string, reason: string): Promise<AdminUser> {
   return mapUser(await apiPost<unknown>(`/api/v1/admin/users/${encodeURIComponent(id)}/actions/suspend`, { reason }))
 }

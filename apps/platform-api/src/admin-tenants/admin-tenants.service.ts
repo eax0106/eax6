@@ -168,6 +168,16 @@ export class AdminTenantsService {
     };
   }
 
+  async appendNote(id: string, staffUserId: string, body: string, instance: string): Promise<AdminTenantActionView> {
+    const note = await this.repository.appendNote(id, staffUserId, body, (noteId) => this.audit.record({
+      tenantId: id,
+      actorType: "admin", actorRef: staffUserId, action: "tenant.note.append",
+      targetType: "tenant_admin_action", targetRef: noteId, reasonCode: "staff_note", scope: "tenant:notes",
+    }));
+    if (!note) throw notFound(instance);
+    return note;
+  }
+
   private async requireTenant(
     id: string,
     instance: string,

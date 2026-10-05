@@ -54,6 +54,12 @@ export async function getTenantTimeline(id: string, grantId?: string): Promise<A
   })
 }
 
+export async function appendTenantNote(id: string, body: string, grantId?: string): Promise<AdminNote> {
+  const item = await apiPost<AnyRecord>(`/api/v1/admin/tenants/${encodeURIComponent(id)}/notes`, {body}, {headers: grantId ? {[GRANT_HEADER]: grantId} : undefined});
+  return {id: String(item.id), tenantId: id, author: {id: "", name: String(item.staff_email)},
+    body: String(item.reason), createdAt: String(item.occurred_at)};
+}
+
 export async function suspendTenant(id: string, reason: string): Promise<AdminTenant> {
   return mapTenant(
     await apiPost<unknown>(`/api/v1/admin/tenants/${encodeURIComponent(id)}/actions/suspend`, { reason }),

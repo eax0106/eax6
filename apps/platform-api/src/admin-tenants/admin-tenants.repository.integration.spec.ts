@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminTenantsRepository } from "./admin-tenants.repository";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
@@ -61,6 +61,44 @@ describe.skipIf(!databaseUrl)("AdminTenantsRepository PostgreSQL RLS", () => {
       await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
       await admin.end();
     }
+  });
+
+  it("appends immutable notes under the ordinary role and requires successful staff audit", async () => {
+    const subjectId = randomUUID();
+    await repository.createTenant(subjectId, "Notes tenant", "org-notes", "ap-south-1");
+    const audit = vi.fn(async () => "acknowledged");
+    const note = await repository.appendNote(subjectId, "stf_test", "Investigation completed", audit);
+    expect(note).toMatchObject({action: "note_added", reason: "Investigation completed", staff_email: "ops@example.com"});
+    expect(audit).toHaveBeenCalledExactlyOnceWith(note!.id);
+    expect(await repository.listActions(subjectId)).toContainEqual(note);
+    await expect(pool.query("UPDATE tenant_admin_actions SET reason='changed' WHERE id=$1", [note!.id])).rejects.toThrow(/append-only/);
+    await expect(pool.query("DELETE FROM tenant_admin_actions WHERE id=$1", [note!.id])).rejects.toThrow(/append-only/);
+    await expect(repository.appendNote(subjectId, "stf_test", "No audit acknowledgement", async () => {throw new Error("Audit unavailable");})).rejects.toThrow("Audit unavailable");
+    expect(await repository.listActions(subjectId)).toEqual([note]);
+    const missingAudit = vi.fn(async () => "acknowledged");
+    expect(await repository.appendNote(randomUUID(), "stf_test", "Unknown subject", missingAudit)).toBeUndefined();
+    expect(missingAudit).not.toHaveBeenCalled();
+  });
+
+  it("pairs rollback without deleting retained note history and restores note support on reapply", async () => {
+    const migration = readFileSync(join(__dirname, "../db/migrations/0035_admin_notes.sql"), "utf8");
+    const rollback = readFileSync(join(__dirname, "../db/migrations/rollback/0035_remove_admin_notes.sql"), "utf8");
+    for (const sql of rollback.split("--> statement-breakpoint")) if (sql.trim()) await admin.query(sql);
+    for (const sql of migration.split("--> statement-breakpoint")) if (sql.trim()) await admin.query(sql);
+    const subjectId = randomUUID();
+    await repository.createTenant(subjectId, "Rollback tenant", "org-rollback", "ap-south-1");
+    const note = await repository.appendNote(subjectId, "stf_test", "Retained history", async () => "acknowledged");
+    await expect(admin.query(rollback.split("--> statement-breakpoint")[0]!)).rejects.toThrow(/retained note history/);
+    expect(await repository.listActions(subjectId)).toEqual([note]);
+  });
+
+  it("enforces bounded note bodies in PostgreSQL without changing existing action reasons", async () => {
+    const subjectId = randomUUID();
+    await repository.createTenant(subjectId, "Notes tenant", "org-notes", "ap-south-1");
+    for (const body of ["", "   ", "a".repeat(4001)]) {
+      await expect(repository.appendNote(subjectId, "stf_test", body, async () => "acknowledged")).rejects.toThrow(/notes_body_check/);
+    }
+    expect(await repository.listActions(subjectId)).toEqual([]);
   });
 
   it("defaults to zero rows under FORCE RLS with no tenant context set", async () => {
@@ -144,13 +182,7 @@ describe.skipIf(!databaseUrl)("AdminTenantsRepository PostgreSQL RLS", () => {
 
 async function applyMigrations(client: pg.Client): Promise<void> {
   const directory = join(__dirname, "../db/migrations");
-  const files = ["0000_platform_db_identity_foundation.sql", "0010_staff_plane.sql"]
-    .concat(
-      readdirSync(directory)
-        .filter((file) => file.endsWith(".sql"))
-        .find((file) => file.includes("admin_tenant_actions")) ?? [],
-    )
-    .filter((file, index, all) => all.indexOf(file) === index);
+  const files = readdirSync(directory).filter((file) => file.endsWith(".sql")).sort();
   const sql = files
     .map((file) => readFileSync(join(directory, file), "utf8"))
     .join("\n--> statement-breakpoint\n");
