@@ -81,7 +81,7 @@ export class CreditPurchaseRepository {
   }
 
   async locked(tx: PoolClient, tenantId: string, purchaseId: string): Promise<CreditPurchaseRow> {
-    CreditPurchaseIdSchema.parse(purchaseId);
+    validatePurchaseId(purchaseId);
     const result = await tx.query<CreditPurchaseRow>("SELECT * FROM credit_purchases WHERE tenant_id=$1 AND id=$2 FOR UPDATE", [tenantId.slice(4), purchaseId]);
     if (!result.rows[0]) throw problem(404, "CREDIT_PURCHASE_NOT_FOUND", "Credit purchase not found");
     return result.rows[0];
@@ -97,7 +97,7 @@ export class CreditPurchaseRepository {
   }
 
   async read(tenantId: string, userId: string, purchaseId?: string): Promise<CreditPurchaseView[]> {
-    if (purchaseId !== undefined) CreditPurchaseIdSchema.parse(purchaseId);
+    if (purchaseId !== undefined) validatePurchaseId(purchaseId);
     return this.transaction(tenantId, async tx => {
       await this.authorize(tx, tenantId, userId, false);
       const result = await tx.query<CreditPurchaseRow>(`SELECT * FROM credit_purchases WHERE tenant_id=$1
@@ -121,6 +121,10 @@ export class CreditPurchaseRepository {
   async due(): Promise<{ tenant_id: string; purchase_id: string }[]> {
     return (await this.pool.query<{ tenant_id: string; purchase_id: string }>("SELECT * FROM list_due_credit_purchases(100)")).rows;
   }
+}
+
+function validatePurchaseId(id: string): void {
+  if (!CreditPurchaseIdSchema.safeParse(id).success) throw problem(400, "INVALID_CREDIT_PURCHASE_ID", "Use a valid named credit purchase");
 }
 
 export function view(row: CreditPurchaseRow): CreditPurchaseView {

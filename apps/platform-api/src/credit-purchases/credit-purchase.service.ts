@@ -9,6 +9,7 @@ import { BillingWebhookRepository } from "../billing/billing-webhook.repository"
 import { CreditPurchaseRepository, problem, quote, view, type CreditPurchaseAudit, type CreditPurchaseRow } from "./credit-purchase.repository";
 
 const reconciler = { type: "service" as const, ref: "svc_billing-credit-purchases" };
+type PurchaseActor = { type: "user" | "service"; ref: string };
 const terminal = new Set(["delivered", "cancelled", "expired"]);
 
 export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
@@ -33,13 +34,13 @@ export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
         const checkout = await deadline(this.provider.create(providerInput(claim.row)));
         await this.repository.transaction(tenantId, async tx => {
           const row = await this.repository.locked(tx, tenantId, claim.row.id);
-          await this.applyCheckout(tx, row, checkout);
+          await this.applyCheckout(tx, row, checkout, undefined, { type: "user", ref: userId });
         });
       } catch (error) {
         if (error instanceof BillingOperationNotSubmittedError) {
           await this.repository.transaction(tenantId, async tx => {
             const row = await this.repository.locked(tx, tenantId, claim.row.id);
-            if (row.state === "submitting" && !row.provider_ref) await this.transition(tx, row, { state: "cancelled" });
+            if (row.state === "submitting" && !row.provider_ref) await this.transition(tx, row, { state: "cancelled" }, undefined, { type: "user", ref: userId });
           });
         }
         // The durable record is visible even after a rejected or uncertain
@@ -61,6 +62,7 @@ export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
   async reconcile(tenantId: string, id: string, caller?: { userId: string; ifMatch: string | undefined }, providerEventId?: string): Promise<CreditPurchaseView> {
     const reconciled = await this.repository.transaction(tenantId, async tx => {
       if (caller) await this.repository.authorize(tx, tenantId, caller.userId, true);
+      const actor: PurchaseActor = caller ? { type: "user", ref: caller.userId } : reconciler;
       let row = await this.repository.locked(tx, tenantId, id);
       if (caller) {
         if (!caller.ifMatch) throw problem(428, "CREDIT_PURCHASE_REVISION_REQUIRED", "Displayed purchase revision is required");
@@ -68,11 +70,11 @@ export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
       }
       if (terminal.has(row.state)) return row;
       const published = row.payment_ref ? await tx.query("SELECT published_at FROM billing_credit_deliveries WHERE tenant_id=$1 AND payment_ref=$2 AND published_at IS NOT NULL", [row.tenant_id, row.payment_ref]) : undefined;
-      if (published?.rowCount) return this.transition(tx, row, { state: "delivered" }, providerEventId);
+      if (published?.rowCount) return this.transition(tx, row, { state: "delivered" }, providerEventId, actor);
       if (!row.payment_ref) {
         const input = providerInput(row);
         const checkout = await deadline(row.provider_ref ? this.provider.get(input, row.provider_ref) : this.provider.find(input));
-        if (checkout) row = await this.applyCheckout(tx, row, checkout, providerEventId);
+        if (checkout) row = await this.applyCheckout(tx, row, checkout, providerEventId, actor);
       }
       await tx.query("UPDATE credit_purchases SET next_check_at=clock_timestamp()+interval '60 seconds' WHERE tenant_id=$1 AND id=$2", [row.tenant_id, row.id]);
       return row;
@@ -95,7 +97,7 @@ export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
     return ack.entry_hash;
   };
 
-  private async applyCheckout(tx: PoolClient, row: CreditPurchaseRow, checkout: CreditPurchaseCheckout, providerEventId?: string): Promise<CreditPurchaseRow> {
+  private async applyCheckout(tx: PoolClient, row: CreditPurchaseRow, checkout: CreditPurchaseCheckout, providerEventId?: string, actor: PurchaseActor = reconciler): Promise<CreditPurchaseRow> {
     if (checkout.tenantId !== `ten_${row.tenant_id}` || checkout.referenceId !== row.id ||
         checkout.amountMinor !== row.total_minor || checkout.currency !== "INR" ||
         !/^plink_[A-Za-z0-9]{1,100}$/.test(checkout.id) || (row.provider_ref && row.provider_ref !== checkout.id)) {
@@ -118,20 +120,20 @@ export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
     // A late create response cannot regress an already observed partial payment.
     if (row.state === "payment_pending" && state === "checkout_ready") state = "payment_pending";
     const changed = await this.transition(tx, row, { state, provider_ref: checkout.id, checkout_url: url,
-      ...(payment ? { payment_ref: payment } : {}) }, providerEventId);
+      ...(payment ? { payment_ref: payment } : {}) }, providerEventId, actor);
     if (payment) await this.webhookRepository.enqueueCredits(tx, row.tenant_id, payment, row.credits, providerEventId ?? `credit-purchase:${row.id}`);
     return changed;
   }
 
   private async transition(tx: PoolClient, row: CreditPurchaseRow,
-    change: { state: CreditPurchaseView["state"]; provider_ref?: string; checkout_url?: string; payment_ref?: string }, providerEventId?: string): Promise<CreditPurchaseRow> {
+    change: { state: CreditPurchaseView["state"]; provider_ref?: string; checkout_url?: string; payment_ref?: string }, providerEventId?: string, actor: PurchaseActor = reconciler): Promise<CreditPurchaseRow> {
     if (change.state === row.state && (change.provider_ref === undefined || change.provider_ref === row.provider_ref) &&
         (change.payment_ref === undefined || change.payment_ref === row.payment_ref)) return row;
     const result = await tx.query<CreditPurchaseRow>(`UPDATE credit_purchases SET state=$3,provider_ref=COALESCE($4,provider_ref),
       checkout_url=COALESCE($5,checkout_url),payment_ref=COALESCE($6,payment_ref) WHERE tenant_id=$1 AND id=$2 RETURNING *`,
     [row.tenant_id, row.id, change.state, change.provider_ref ?? null, change.checkout_url ?? null, change.payment_ref ?? null]);
     const changed = result.rows[0]!;
-    await this.repository.event(tx, changed, row.state, reconciler, this.audit, providerEventId);
+    await this.repository.event(tx, changed, row.state, actor, this.audit, providerEventId);
     return changed;
   }
 
