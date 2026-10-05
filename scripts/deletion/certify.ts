@@ -77,6 +77,7 @@ async function main(): Promise<void> {
       /^TABLES = \(([\s\S]*?)\)/m,
     ),
     "memory-service": providerTables("apps/memory-service/src/deletion/provider.py", /^TABLES = \(([\s\S]*?)\)/m),
+    "eval-service": providerTables("apps/eval-service/src/deletion/provider.py", /^TABLES = \(([\s\S]*?)\)/m),
     "platform-api": providerTables(
       "apps/platform-api/src/deletion/platform-deletion.service.ts",
       /export const PLATFORM_TABLES = \[([\s\S]*?)\] as const/,

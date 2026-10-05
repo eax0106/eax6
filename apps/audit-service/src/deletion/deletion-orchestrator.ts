@@ -27,7 +27,7 @@ export const AUDIT_ERASURE_TABLES = ["audit_events"] as const;
  * the tenant under the legal hold. Memory policies and audit events are
  * tenant-level.
  */
-export const WORKSPACE_ERASURE_STORES = ["ads-core", "orchestration-service", "platform-api", "intelligence-service"] as const;
+export const WORKSPACE_ERASURE_STORES = ["ads-core", "orchestration-service", "platform-api", "intelligence-service", "eval-service"] as const;
 
 interface DeletionProgress {
   readonly manifestId: string;
