@@ -7,11 +7,12 @@ export class MetaCloudApiWhatsappProvider {
   constructor(private readonly secrets: SecretsProvider, private readonly fetchImpl: typeof fetch = fetch, private readonly baseUrl = "https://graph.facebook.com/v21.0") {}
   async sendTemplateMessage(account: WhatsappProviderAccount, to: string, templateName: string, languageCode = "en_US"): Promise<{ readonly messageId: string }> {
     const body = await this.call(account, `/${encodeURIComponent(account.phoneNumberId)}/messages`, "POST", { messaging_product: "whatsapp", to, type: "template", template: { name: templateName, language: { code: languageCode } } });
-    const messages = Array.isArray(body.messages) ? body.messages : [];
-    const first = messages[0];
-    const id = typeof first === "object" && first !== null && typeof (first as Record<string, unknown>).id === "string" ? (first as Record<string, string>).id : undefined;
-    if (!id) throw new MetaCloudApiWhatsappError(502, "Meta Cloud API returned no message id");
-    return { messageId: id };
+    return { messageId: firstMessageId(body) };
+  }
+  /** A free-form reply; Meta accepts it only inside the customer's 24-hour service window. */
+  async sendTextMessage(account: WhatsappProviderAccount, to: string, text: string): Promise<{ readonly messageId: string }> {
+    const body = await this.call(account, `/${encodeURIComponent(account.phoneNumberId)}/messages`, "POST", { messaging_product: "whatsapp", to, type: "text", text: { body: text, preview_url: false } });
+    return { messageId: firstMessageId(body) };
   }
   async getTemplates(account: WhatsappProviderAccount): Promise<readonly WhatsappTemplate[]> {
     const body = await this.call(account, `/${encodeURIComponent(account.wabaId)}/message_templates`, "GET");
@@ -29,5 +30,12 @@ export class MetaCloudApiWhatsappProvider {
     if (typeof body !== "object" || body === null || Array.isArray(body)) throw new MetaCloudApiWhatsappError(502, "Meta Cloud API returned an invalid response");
     return body as Record<string, unknown>;
   }
+}
+function firstMessageId(body: Record<string, unknown>): string {
+  const messages = Array.isArray(body.messages) ? body.messages : [];
+  const first = messages[0];
+  const id = typeof first === "object" && first !== null && typeof (first as Record<string, unknown>).id === "string" ? (first as Record<string, string>).id : undefined;
+  if (!id) throw new MetaCloudApiWhatsappError(502, "Meta Cloud API returned no message id");
+  return id;
 }
 export class MetaCloudApiWhatsappError extends Error { constructor(readonly status: number, message: string) { super(message); this.name = "MetaCloudApiWhatsappError"; } }

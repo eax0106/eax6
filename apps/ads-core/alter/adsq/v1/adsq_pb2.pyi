@@ -7,18 +7,20 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class RetrievalHit(_message.Message):
-    __slots__ = ("document_id", "chunk_reference", "score", "confidence", "provenance_json")
+    __slots__ = ("document_id", "chunk_reference", "score", "confidence", "provenance_json", "context")
     DOCUMENT_ID_FIELD_NUMBER: _ClassVar[int]
     CHUNK_REFERENCE_FIELD_NUMBER: _ClassVar[int]
     SCORE_FIELD_NUMBER: _ClassVar[int]
     CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
     PROVENANCE_JSON_FIELD_NUMBER: _ClassVar[int]
+    CONTEXT_FIELD_NUMBER: _ClassVar[int]
     document_id: str
     chunk_reference: str
     score: float
     confidence: float
     provenance_json: str
-    def __init__(self, document_id: _Optional[str] = ..., chunk_reference: _Optional[str] = ..., score: _Optional[float] = ..., confidence: _Optional[float] = ..., provenance_json: _Optional[str] = ...) -> None: ...
+    context: str
+    def __init__(self, document_id: _Optional[str] = ..., chunk_reference: _Optional[str] = ..., score: _Optional[float] = ..., confidence: _Optional[float] = ..., provenance_json: _Optional[str] = ..., context: _Optional[str] = ...) -> None: ...
 
 class RetrieveRequest(_message.Message):
     __slots__ = ("tenant_id", "workspace_id", "query", "scope_ids", "top_k", "metadata_filter_json", "requester")

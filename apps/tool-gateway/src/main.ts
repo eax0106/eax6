@@ -4,7 +4,9 @@ import { FastifyAdapter, type NestFastifyApplication } from "@nestjs/platform-fa
 import { NestFactory } from "@nestjs/core";
 
 import {
+  AdsQueryClient,
   AuditServiceClient,
+  MetaCloudApiWhatsappProvider,
   AwsAppConfigConfigProvider,
   AwsSecretsManagerProvider,
   BrowserbasePlaywrightProvider,
@@ -38,6 +40,8 @@ import { lazyAuth0M2mTokenProviderFromEnvironment } from "@alterx/auth";
 import { AppModule } from "./app.module";
 import { loadToolGatewayEnvironment } from "./config/environment";
 import { resolveConnectionCredential } from "./gateway/connection-credential-client";
+import { ADSQ_CLIENT_PROTO_PATH } from "./gateway/grpc.constants";
+import { adsKnowledgeSearch, connectedWhatsappSend, httpRunScopeResolver } from "./gateway/workspace-tools";
 import {
   AUDIT_CLIENT_PROTO_PATH,
   TOOLGW_PROTO_PATH,
@@ -155,6 +159,21 @@ function createEmailProvider(secretsProvider: SecretsProvider): EmailProvider {
   return resolveEmailProvider((reference) => secretsProvider.getSecret(reference));
 }
 
+// knowledge.search and whatsapp.send: the engine names the run's workspace;
+// ADS answers from its documents, and its connected WhatsApp account sends
+// with that account's own token reference.
+function workspaceTools(environment: ToolGatewayEnvironment, secretsProvider: SecretsProvider) {
+  const resolveScope = httpRunScopeResolver(environment.engineBaseUrl, environment.internalServiceToken);
+  return {
+    knowledgeSearch: adsKnowledgeSearch(resolveScope, new AdsQueryClient({
+      address: environment.adsqGrpcTarget,
+      protoPath: ADSQ_CLIENT_PROTO_PATH,
+      authorization: `Bearer ${environment.internalServiceToken}`,
+    })),
+    whatsappSend: connectedWhatsappSend(resolveScope, new MetaCloudApiWhatsappProvider(secretsProvider)),
+  };
+}
+
 async function bootstrap(): Promise<void> {
   const environment = loadToolGatewayEnvironment(process.env);
   const configProvider = createConfigProvider(environment);
@@ -185,7 +204,10 @@ async function bootstrap(): Promise<void> {
       cacheProvider,
       browserProvider,
       emailProvider,
-      { resolveConnection: input => resolveConnectionCredential(environment.engineBaseUrl, environment.internalServiceToken, input) },
+      {
+        resolveConnection: input => resolveConnectionCredential(environment.engineBaseUrl, environment.internalServiceToken, input),
+        ...workspaceTools(environment, secretsProvider),
+      },
     ),
     new FastifyAdapter(),
   );

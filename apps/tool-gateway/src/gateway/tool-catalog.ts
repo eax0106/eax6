@@ -8,12 +8,12 @@ import { TOOL_NAMES, type ToolName } from "@alterx/contracts";
  * `dispatchImplemented` is what turns "how many tools are missing" from an
  * estimate someone reads out of an `if` chain into a number a test asserts.
  *
- * Every entry is currently implemented -- the four families are the whole
+ * Every entry is currently implemented -- the six families are the whole
  * declared set, not a wired subset of a larger one. That is the answer to
  * the question, not an absence of one: a name outside this catalogue is not
  * a missing tool, it is not a tool.
  */
-export type ToolFamily = "search" | "database" | "browser" | "email";
+export type ToolFamily = "search" | "database" | "browser" | "email" | "knowledge" | "whatsapp";
 
 export interface ToolCatalogEntry {
   readonly name: ToolName;
@@ -35,6 +35,8 @@ export const TOOL_CATALOG: readonly ToolCatalogEntry[] = [
   { name: "browser.extract", family: "browser", provider: "Browserbase", dispatchImplemented: true },
   { name: "browser.session.close", family: "browser", provider: "Browserbase", dispatchImplemented: true },
   { name: "email.send", family: "email", provider: "AWS SES", dispatchImplemented: true },
+  { name: "knowledge.search", family: "knowledge", provider: "ADS (workspace documents)", dispatchImplemented: true },
+  { name: "whatsapp.send", family: "whatsapp", provider: "Meta WhatsApp Cloud API", dispatchImplemented: true },
 ];
 
 const CATALOG_BY_NAME = new Map<string, ToolCatalogEntry>(

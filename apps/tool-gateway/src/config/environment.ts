@@ -11,6 +11,8 @@ interface ToolGatewayEnvironmentBase {
   readonly grpcBindAddress: string;
   readonly engineBaseUrl: string;
   readonly internalServiceToken: string;
+  /** ADS Q gRPC, for knowledge.search. */
+  readonly adsqGrpcTarget: string;
 }
 
 export interface ToolGatewayAppConfigEnvironment
@@ -100,6 +102,7 @@ export function loadToolGatewayEnvironment(
   const baseEnvironment: ToolGatewayEnvironmentBase = {
     engineBaseUrl: engineUrl.origin,
     internalServiceToken: requireValue(environment, "INTERNAL_SERVICE_TOKEN"),
+    adsqGrpcTarget: parseGrpcAddress(environment["ADSQ_GRPC_TARGET"], "ADSQ_GRPC_TARGET", "127.0.0.1:50050"),
     alterEnvironment:
       alterEnvironment as ToolGatewayEnvironment["alterEnvironment"],
     serviceName,

@@ -53,6 +53,7 @@ class AdsqGrpcService:
                     score=hit.score,
                     confidence=hit.confidence,
                     provenance_json=json.dumps(hit.provenance, separators=(",", ":")),
+                    context=hit.context,
                 )
                 for hit in result.hits
             ]
