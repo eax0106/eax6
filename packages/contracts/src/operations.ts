@@ -159,6 +159,12 @@ export const AbuseSignalSchema = z
     evidence_ref: z.string().trim().min(1).max(512),
     observed_at: IsoTimestampSchema,
     status: z.enum(["open", "confirmed", "dismissed"]),
+    etag: z.string().min(1).optional(),
+    assignment: z.object({
+      staff_user_id: z.string().regex(/^stf_/), staff_email: z.string(), active: z.boolean(),
+      assigned_by: z.string().regex(/^stf_/), assigned_at: IsoTimestampSchema,
+      reason: z.string().trim().min(1).max(1_000),
+    }).strict().nullable().optional(),
   })
   .strict();
 export const ReviewAbuseSignalRequestSchema = z
@@ -167,6 +173,14 @@ export const ReviewAbuseSignalRequestSchema = z
     reason: z.string().trim().min(1).max(1_000),
   })
   .strict();
+export const AssignAbuseSignalRequestSchema = z.object({
+  staff_user_id: z.string().regex(/^stf_/).max(200),
+  reason: z.string().trim().min(1).max(1_000),
+}).strict();
+export const SecurityReviewStaffSchema = z.object({
+  id: z.string().regex(/^stf_/), email: z.string(),
+  roles: z.array(z.enum(["staff_admin", "staff_support", "staff_billing_ops", "staff_security"])).min(1),
+}).strict().refine(value => value.roles.some(role => role === "staff_admin" || role === "staff_security"), "Staff must be eligible for security review");
 
 export const DeploymentAdminActionRequestSchema = z
   .object({
@@ -267,6 +281,8 @@ export type RefundPaymentRequest = z.infer<typeof RefundPaymentRequestSchema>;
 export type ResolveDisputeRequest = z.infer<typeof ResolveDisputeRequestSchema>;
 export type AbuseSignal = z.infer<typeof AbuseSignalSchema>;
 export type ReviewAbuseSignalRequest = z.infer<typeof ReviewAbuseSignalRequestSchema>;
+export type AssignAbuseSignalRequest = z.infer<typeof AssignAbuseSignalRequestSchema>;
+export type SecurityReviewStaff = z.infer<typeof SecurityReviewStaffSchema>;
 export type DeploymentAdminActionRequest = z.infer<typeof DeploymentAdminActionRequestSchema>;
 export type DeploymentAdminActionResult = z.infer<typeof DeploymentAdminActionResultSchema>;
 export type MarketplaceGovernanceActionRequest = z.infer<typeof MarketplaceGovernanceActionRequestSchema>;

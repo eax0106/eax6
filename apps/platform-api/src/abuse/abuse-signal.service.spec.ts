@@ -30,7 +30,7 @@ describe("AbuseSignalService", () => {
     };
     const collectFacts = vi.fn().mockResolvedValue([fact]);
     const upsertFacts = vi.fn().mockResolvedValue(1);
-    const review = vi.fn().mockResolvedValue(signal);
+    const review = vi.fn(async (_id, _decision, _reason, _actor, write) => { await write.audit(signal, "asa_actual-history"); return signal; });
     const record = vi.fn().mockResolvedValue("a".repeat(64));
     const service = new AbuseSignalService(
       { collectFacts, upsertFacts, review } as unknown as AbuseSignalRepository,

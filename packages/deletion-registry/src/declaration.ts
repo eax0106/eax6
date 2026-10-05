@@ -52,6 +52,7 @@ export interface TenantDataExemption {
 
 export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "platform_db", schema: "public", table: "abuse_signals", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
+  { database: "platform_db", schema: "public", table: "abuse_signal_actions", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "action_item_annotations", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_dunning_audits", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_dunning_states", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
