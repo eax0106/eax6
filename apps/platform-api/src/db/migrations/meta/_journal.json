@@ -281,6 +281,13 @@
       "when": 1790247600002,
       "tag": "0036_security_review_assignment",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1790247600003,
+      "tag": "0038_credit_purchases",
+      "breakpoints": true
     }
   ]
 }

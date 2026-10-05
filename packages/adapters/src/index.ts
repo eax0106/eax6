@@ -1,3 +1,4 @@
+export { RazorpayCreditPurchaseProvider } from "./razorpay/razorpay-credit-purchase-provider";
 export {
   RAZORPAY_BILLING_CAPABILITIES,
   RazorpayBillingError,
