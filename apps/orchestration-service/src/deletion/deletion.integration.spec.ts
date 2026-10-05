@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import { resolve } from "node:path";
 
 import { PostgresOrchestrationStoreProvider } from "@alterx/adapters";
@@ -100,7 +101,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     expect(DELETE_ORDER).toHaveLength(new Set(DELETE_ORDER).size);
   });
 
-  it("deletes all 42 tenant tables while preserving a second tenant", async () => {
+  it("deletes all tenant tables while preserving a second tenant", async () => {
     await seedAll(adminStore, TENANT_A, "a");
     await seedAll(adminStore, TENANT_B, "b");
 
@@ -111,11 +112,11 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     // C8 added side_effects; D3 added budgets, budget_usage and budget_reservations;
     // D2 added workspace_holds and workspace_run_retention; D5 approval_step_policies;
     // D19 added connection_registry; D9 added workflow_folders.
-    expect(before).toHaveLength(42);
+    expect(before).toHaveLength(43);
     expect(before.every((location) => location.rowCount === 1)).toBe(true);
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
-      deletedRows: 42,
+      deletedRows: 43,
       deletedObjects: 2,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
@@ -281,7 +282,7 @@ async function seedAll(
     await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$5,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node, workspace]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations
-    // 0019+). Seeded here so "deletes all 42 tenant tables" actually proves
+    // 0019+). Seeded here so "deletes all tenant tables" actually proves
     // coverage instead of just proving the original 19 still work.
     const project = `prj_${suffix}`;
     const webhookEndpoint = `whe_${suffix}`;
@@ -292,7 +293,9 @@ async function seedAll(
     // artifacts before deployments: deployments.artifact_id -> artifacts is a
     // plain (non-CASCADE) FK, so the referenced row must exist first.
     await tx.query("INSERT INTO artifacts(id,tenant_id,run_id,storage_reference,content_type,size_bytes) VALUES ($1,$2,$3,'s3://fixture','text/plain',1)", [artifact, tenant, run]);
-    await tx.query("INSERT INTO deployments(id,tenant_id,project_id,artifact_id) VALUES ($1,$2,$3,$4)", [`dep_${suffix}`, tenant, project, artifact]);
+    await tx.query("INSERT INTO deployments(id,tenant_id,project_id,artifact_id,status,destination_reference) VALUES ($1,$2,$3,$4,'active','s3://fixture')", [`dep_${suffix}`, tenant, project, artifact]);
+    await tx.query("UPDATE deployments SET status='suspended' WHERE id=$1", [`dep_${suffix}`]);
+    await tx.query("INSERT INTO deployment_admin_actions(id,tenant_id,deployment_id,actor_ref,action,reason,previous_status,next_status,revision) VALUES($1,$2,$3,'stf_fixture','suspend','Recorded staff action','active','suspended',2)", [`daa_${uuidv7()}`,tenant,`dep_${suffix}`]);
     await tx.query("INSERT INTO project_plans(tenant_id,project_id,conversation_id,brief) VALUES ($1,$2,$3,'fixture')", [tenant, project, conversation]);
     await tx.query("INSERT INTO whatsapp_accounts(id,tenant_id,workspace_id,phone_number_id,waba_id,access_token_ref) VALUES ($1,$2,$5,$3,$4,'fixture-ref')", [`wa_${suffix}`, tenant, `phone_${suffix}_${randomUUID()}`, `waba_${suffix}`, workspace]);
     await tx.query("INSERT INTO webhook_endpoints(id,tenant_id,workspace_id,integration_id,path_token) VALUES ($1,$2,$5,$3,$4)", [webhookEndpoint, tenant, integrationId, `token_${suffix}_${randomUUID()}`, workspace]);

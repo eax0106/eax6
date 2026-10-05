@@ -48,7 +48,7 @@ export const TABLES = [
   "workflows", "workflow_versions", "triggers", "trigger_versions", "clarifications", "conversations",
   "conversation_goal_states", "events", "runs", "blackboard_checkpoints", "node_executions",
   "run_stream_events", "verification_results", "recovery_actions", "run_outcomes", "approvals",
-  "projects", "deployments", "project_plans", "artifacts", "whatsapp_accounts",
+  "projects", "deployments", "deployment_admin_actions", "project_plans", "artifacts", "whatsapp_accounts",
   "webhook_endpoints", "webhook_endpoint_secrets", "trigger_integration_bindings",
   "escalations", "run_dispatch_queue", "side_effects",
   "budgets", "budget_usage", "budget_reservations",
@@ -75,6 +75,7 @@ export const TABLES = [
 // for every edge.
 // Exported for the same reason as TABLES above.
 export const DELETE_ORDER = [
+  "deployment_admin_actions",
   "billing_run_reservations", "billing_credit_grants", "billing_accounts",
   "conversation_messages",
   "connection_registry",

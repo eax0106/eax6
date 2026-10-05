@@ -1,8 +1,10 @@
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
-import { Body, Controller, Headers, HttpException, Inject, Post } from "@nestjs/common";
-import { Public as BypassSessionGatewayActorAuth } from "@alterx/auth";
+import { createHash, timingSafeEqual } from "node:crypto";
+import {v7 as uuidv7} from "uuid";
+import { Body, Controller, Get, Headers, HttpException, Inject, Post, Query } from "@nestjs/common";
+import { Public as BypassIdentityTenantActorAuth } from "@alterx/auth";
 import {
-  DeploymentAdminActionRequestSchema,
+  DeploymentAdminInternalActionRequestSchema,
+  TenantDeploymentListRequestSchema,
   ProblemDetailsSchema,
   type ProblemDetails,
 } from "@alterx/contracts";
@@ -10,11 +12,12 @@ import {
   DeploymentAdminConflictError,
   DeploymentAdminNotFoundError,
   DeploymentAdminService,
+  DeploymentAdminPreconditionError,
 } from "./deployment-admin.service";
 
 export const DEPLOYMENT_ADMIN_TOKEN_HASH = Symbol("DEPLOYMENT_ADMIN_TOKEN_HASH");
 
-@BypassSessionGatewayActorAuth()
+@BypassIdentityTenantActorAuth()
 @Controller("internal/admin/deployments")
 export class DeploymentAdminController {
   constructor(
@@ -22,14 +25,24 @@ export class DeploymentAdminController {
     @Inject(DEPLOYMENT_ADMIN_TOKEN_HASH) private readonly tokenHash: string,
   ) {}
 
-  @Post("actions/apply")
-  async apply(@Body() body: unknown, @Headers("authorization") authorization?: string) {
+  @Get()
+  list(@Query() query: unknown, @Headers("authorization") authorization?: string) {
     this.authorize(authorization);
-    const parsed = DeploymentAdminActionRequestSchema.safeParse(body);
+    const parsed = TenantDeploymentListRequestSchema.safeParse(query);
+    if (!parsed.success) throw failure(400, "DEPLOYMENT_ADMIN_VALIDATION_FAILED");
+    return this.service.list(parsed.data.tenant_id);
+  }
+
+  @Post("actions/apply")
+  async apply(@Body() body: unknown, @Headers("authorization") authorization?: string, @Headers("if-match") ifMatch?:string) {
+    this.authorize(authorization);
+    const parsed = DeploymentAdminInternalActionRequestSchema.safeParse(body);
     if (!parsed.success) throw failure(400, "DEPLOYMENT_ADMIN_VALIDATION_FAILED");
     try {
-      return await this.service.apply(parsed.data);
+      const {staff_user_id,...input}=parsed.data;
+      return await this.service.apply(input,staff_user_id,ifMatch);
     } catch (error: unknown) {
+      if (error instanceof DeploymentAdminPreconditionError) throw failure(error.status,error.status===428?"PRECONDITION_REQUIRED":"PRECONDITION_FAILED",error.message);
       if (error instanceof DeploymentAdminNotFoundError) {
         throw failure(404, "DEPLOYMENT_ADMIN_NOT_FOUND", error.message);
       }
@@ -68,6 +81,5 @@ function failure(status: number, code: string, detail = code): HttpException {
 }
 
 function generatedId(prefix: "trc" | "req"): string {
-  const uuid = randomUUID();
-  return `${prefix}_${uuid.slice(0, 14)}7${uuid.slice(15)}`;
+  return `${prefix}_${uuidv7()}`;
 }
