@@ -214,3 +214,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Change | Scope and evidence | Status |
 | --- | --- | --- |
 | C128 | Tenant activity joins actual platform members, Engine workflows and exact thirty-day runs with ledger execution usage by currency. Bounded lists retain actual totals; strict contracts, current staff cookies and JIT grants, service authentication, ordinary RLS, mandatory read audit and truthful loading/empty/error/reload states are preserved. No new storage or invoice write. See `docs/tenant-admin-detail.md`; five local gates passed, including full API coverage, web/Engine/ledger/database/contract suites and fourteen fault/restoration controls; exact-head CI is required before completion. D26 review assignment, billing operations and tenant deployments remain. | local verification passed; exact-head CI pending |
+
+### C131 — Temporal rollover regression readiness
+
+| Change | Scope and evidence | Status |
+| --- | --- | --- |
+| C131 | Temporal rollover regression waits for the actual first workflow task before sending its two rollover messages. Preserves all rollover, retained-message, deduplication and closure assertions. Both PR150 CI attempts failed the unchanged original test with normal resolved-first-run output. The separately recorded buffered-start production gap remains outside this test change. Three independent native rollover runs and full adapters603/1 skipped pass; lint/typecheck/build pass. Exact-head CI is required. | local verification passed; CI pending |
