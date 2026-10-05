@@ -22,4 +22,4 @@ Scope: Authenticated staff can append bounded notes to tenant and user action hi
 - [x] G4: Old-code and fault controls fail then restored code passes; full API/web tests, coverage, static, migration rollback, erasure/retention and architecture/RBAC/AST checks pass
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: admin-notes-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=68a032aa1b0fe4f6c1e849a062006fd241b8ec0ff8ecb25bef77a964fddf8a36; exit=0; EXPECT=matched; output-sha256=374b83b5a33c41b21e25f6b54701dd60e865b152849e17d3a7cb45ba7339687d; output-bytes=751; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=68a032aa1b0fe4f6c1e849a062006fd241b8ec0ff8ecb25bef77a964fddf8a36; exit=0; EXPECT=matched; output-sha256=e92e0c37fd724368ae271b32f3f1f103b5ea112bb1cab37c36446e80ce2c94a4; output-bytes=751; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
