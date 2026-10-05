@@ -1,5 +1,6 @@
 import { apiGet, apiPost } from "./http"
 import type { Incident, SecurityReviewItem, SupportAccessRequest } from "./types"
+import { AbuseSignalSchema, SecurityReviewStaffSchema, type SecurityReviewStaff } from "@alterx/contracts"
 
 // Admin console, incidents / security / support access (tasks B1.5, B1.8, B1.9):
 // live adapter over /api/v1/admin/incidents, /api/v1/admin/abuse/signals and
@@ -58,7 +59,7 @@ function severityFromScore(score: number): SecurityReviewItem["severity"] {
 }
 
 function mapSignal(value: unknown): SecurityReviewItem {
-  const item = value as AnyRecord
+  const item = AbuseSignalSchema.parse(value)
   const type = String(item.signal_type)
   const score = Number(item.score)
   return {
@@ -66,26 +67,36 @@ function mapSignal(value: unknown): SecurityReviewItem {
     type: signalType[type] ?? "abuse",
     severity: severityFromScore(score),
     // "confirmed" is a closed review with abuse found; it reads as resolved here.
-    status: item.status === "open" ? "open" : item.status === "dismissed" ? "dismissed" : "resolved",
+    status: item.status === "open" ? (item.assignment ? "investigating" : "open") : item.status === "dismissed" ? "dismissed" : "resolved",
     tenantId: String(item.tenant_id),
     title: type.replaceAll("_", " "),
     summary: `${String(item.source)} · score ${score} · ${String(item.evidence_ref)}`,
     createdAt: String(item.observed_at),
+    etag: item.etag,
+    assignment: item.assignment ? { staffUserId: item.assignment.staff_user_id, staffEmail: item.assignment.staff_email, active: item.assignment.active,
+      assignedBy: item.assignment.assigned_by, assignedAt: item.assignment.assigned_at, reason: item.assignment.reason } : null,
   }
 }
 
 export async function listSignals(): Promise<SecurityReviewItem[]> {
   const body = await apiGet<unknown>("/api/v1/admin/abuse/signals")
-  return (Array.isArray(body) ? body : []).map(mapSignal)
+  return AbuseSignalSchema.array().parse(body).map(mapSignal)
 }
 
-export async function reviewSignal(id: string, resolution: "resolved" | "dismissed"): Promise<SecurityReviewItem> {
+export async function reviewSignal(id: string, resolution: "resolved" | "dismissed", reason: string, etag: string): Promise<SecurityReviewItem> {
   return mapSignal(
     await apiPost<unknown>(`/api/v1/admin/abuse/signals/${encodeURIComponent(id)}/actions/review`, {
       decision: resolution === "resolved" ? "confirm" : "dismiss",
-      reason: CONSOLE_REASON,
-    }),
+      reason,
+    }, { ifMatch: etag }),
   )
+}
+
+export async function securityReviewStaff(): Promise<SecurityReviewStaff[]> {
+  return SecurityReviewStaffSchema.array().parse(await apiGet<unknown>("/api/v1/admin/abuse/signals/staff"))
+}
+export async function assignSignal(id: string, staffUserId: string, reason: string, etag: string): Promise<SecurityReviewItem> {
+  return mapSignal(await apiPost<unknown>(`/api/v1/admin/abuse/signals/${encodeURIComponent(id)}/actions/assign`, { staff_user_id: staffUserId, reason }, { ifMatch: etag }))
 }
 
 // --- Support access: JIT grants ----------------------------------------------

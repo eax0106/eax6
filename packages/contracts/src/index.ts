@@ -341,6 +341,8 @@ export {
 } from "./tool-names";
 export {
   AbuseSignalSchema,
+  AssignAbuseSignalRequestSchema,
+  SecurityReviewStaffSchema,
   AdminIncidentSchema,
   CreateIncidentRequestSchema,
   CreateJitGrantRequestSchema,
@@ -368,6 +370,8 @@ export {
   UpdateModelAliasRequestSchema,
   UpsertFeatureFlagRequestSchema,
   type AbuseSignal,
+  type AssignAbuseSignalRequest,
+  type SecurityReviewStaff,
   type AdminIncident,
   type CreateIncidentRequest,
   type CreateJitGrantRequest,

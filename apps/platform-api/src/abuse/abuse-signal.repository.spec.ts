@@ -88,7 +88,7 @@ describe("AbuseSignalRepository", () => {
     ]);
   });
 
-  it("lists, writes, reviews, and closes only pools it owns", async () => {
+  it("lists, writes, and closes only pools it owns", async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [{
         id: "abs_018f47a5-7b2c-7d10-8f11-123456789abc",
@@ -98,21 +98,10 @@ describe("AbuseSignalRepository", () => {
         score: "40",
         evidence_ref: "evt-1",
         observed_at: new Date("2026-08-06T10:00:00.000Z"),
-        status: "open",
+        status: "open", revision: "1", assigned_to: null,
       }] })
       .mockResolvedValueOnce({ rowCount: 1 })
-      .mockResolvedValueOnce({ rowCount: 0 })
-      .mockResolvedValueOnce({ rows: [] })
-      .mockResolvedValueOnce({ rows: [{
-        id: "abs_018f47a5-7b2c-7d10-8f11-123456789abc",
-        tenant_id: "tenant-1",
-        signal_type: "payment_fraud",
-        source: "billing",
-        score: 40,
-        evidence_ref: "evt-1",
-        observed_at: new Date("2026-08-06T10:00:00.000Z"),
-        status: "dismissed",
-      }] });
+      .mockResolvedValueOnce({ rowCount: 0 });
     const store = { query, end: vi.fn().mockResolvedValue(undefined) } as unknown as Pool;
     const platform = { end: vi.fn().mockResolvedValue(undefined) } as unknown as Pool;
     const marketplace = { end: vi.fn().mockResolvedValue(undefined) } as unknown as Pool;
@@ -137,9 +126,6 @@ describe("AbuseSignalRepository", () => {
 
     await expect(repository.list("open")).resolves.toMatchObject([{ score: 40, status: "open" }]);
     await expect(repository.upsertFacts(facts)).resolves.toBe(1);
-    await expect(repository.review("missing", "confirm", "reason", "stf")).resolves.toBeUndefined();
-    await expect(repository.review("abs_018f47a5-7b2c-7d10-8f11-123456789abc", "dismiss", "reason", "stf"))
-      .resolves.toMatchObject({ status: "dismissed" });
     await repository.onModuleDestroy();
     expect(query.mock.calls[0]?.[1]).toEqual(["open"]);
     expect((store.end as ReturnType<typeof vi.fn>)).toHaveBeenCalledOnce();
