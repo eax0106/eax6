@@ -226,3 +226,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Change | Scope and evidence | Status |
 | --- | --- | --- |
 | C131 | Temporal rollover regression waits for the actual first workflow task before sending its two rollover messages. Preserves all rollover, retained-message, deduplication and closure assertions. Both PR150 CI attempts failed the unchanged original test with normal resolved-first-run output. The separately recorded buffered-start production gap remains outside this test change. Three independent native rollover runs and full adapters603/1 skipped pass; lint/typecheck/build pass. Exact-head CI is required. | local verification passed; CI pending |
+
+### C132 — D26 real staff billing operations
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C132 | D26 real staff billing operations: reasoned exact-revision run-credit grants, provider-bound hosted recovery and paid-only resolution, durable Engine credit delivery and guarded erasure | In progress: native proofs and five acceptance gates; no completion or merge claim | codex/billing-ops-c132 |

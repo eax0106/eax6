@@ -272,6 +272,7 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 
 **Answer: build or drop as recommended.**
 - **Build:** tenant detail (members, workflows, runs in the last 30 days, spend; read-only); tenant notes and user notes (staff-only, audited, append-only history); assign a security review to a staff member; billing ops retry charge, apply credit and resolve (through Razorpay, D22, audited with a reason); the deployments page re-scoped to tenant deployments (list plus rollback, suspend, resume, audited).
+- **2026-10-05 clarification:** The owner confirmed “Apply credit” means grant extra run credits. It is not a payment refund, cash amount or invoice discount. Staff records a human reason; the Engine receives an idempotent durable grant and charges credits only for verified runs under D22.
 - **Drop (removed from the admin UI):** a "restricted" tenant state (suspend covers it); MFA and risk display (Auth0 shows it; the user screen links there instead); provider "maintenance" state (enable/disable covers it); editing policies from the list page (policy changes go through reviewed configuration).
 
 **What it means.** The build items get platform-api staff routes (staff roles, audited, reason where the action changes state) and web wiring; the drop items are removed from the web, not hidden.

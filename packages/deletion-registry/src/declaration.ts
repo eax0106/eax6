@@ -58,6 +58,8 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "platform_db", schema: "public", table: "billing_dunning_states", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_policy_state", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_credit_deliveries", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
+  { database: "platform_db", schema: "public", table: "billing_admin_operations", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
+  { database: "platform_db", schema: "public", table: "billing_admin_credit_deliveries", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_subscription_plans", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_events", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },
   { database: "platform_db", schema: "public", table: "billing_payment_method_refs", owner: "platform-api", erasure: { kind: "provider", provider: "platform-api" } },

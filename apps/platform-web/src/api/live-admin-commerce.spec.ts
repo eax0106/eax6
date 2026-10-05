@@ -73,8 +73,8 @@ describe("live admin marketplace and billing (B2.1, B2.2)", () => {
   it("lists tenants out of good standing as open payment failures with their access state and no invented amount", async () => {
     fetchMock.mockResolvedValue(
       Response.json([
-        { tenant_id: "ten_a", tenant_name: "Acme", state: "grace", current_plan: "pro", first_failed_at: "2026-09-20T00:00:00.000Z", updated_at: "2026-09-21T00:00:00.000Z" },
-        { tenant_id: "ten_b", tenant_name: "Beta", state: "suspended", current_plan: null, first_failed_at: null, updated_at: "2026-09-01T00:00:00.000Z" },
+        { tenant_id: "00000000-0000-7000-8000-0000000000a1", etag: '"billing-00000000-0000-7000-8000-0000000000a1-1"', tenant_name: "Acme", state: "grace", current_plan: "pro", first_failed_at: "2026-09-20T00:00:00.000Z", updated_at: "2026-09-21T00:00:00.000Z" },
+        { tenant_id: "00000000-0000-7000-8000-0000000000b1", etag: '"billing-00000000-0000-7000-8000-0000000000b1-1"', tenant_name: "Beta", state: "suspended", current_plan: null, first_failed_at: null, updated_at: "2026-09-01T00:00:00.000Z" },
       ]),
     )
     const issues = await listBillingIssues()
@@ -86,11 +86,12 @@ describe("live admin marketplace and billing (B2.1, B2.2)", () => {
     expect(issues[0]!.amount).toBeUndefined()
   })
 
-  it("refuses resolve, credit and retry in live mode: they have no backend", async () => {
+  it("rejects invalid billing subjects before a live financial operation", async () => {
     const service = new BillingOpsService()
-    await expect(service.resolve("ten_a")).rejects.toThrow(/no backend/)
-    await expect(service.applyCredit("ten_a", 10, "x")).rejects.toThrow(/no backend/)
-    await expect(service.retryBilling("ten_a")).rejects.toThrow(/no backend/)
+    const item={id:"bad",tenantId:"bad",tenantName:"Bad",issue:"payment_failed" as const,plan:"pro",status:"open" as const,createdAt:"2026-09-20T00:00:00.000Z",etag:'"wrong"'}
+    await expect(service.resolve(item,"Investigated")).rejects.toThrow()
+    await expect(service.applyCredit(item,10,"Investigated")).rejects.toThrow()
+    await expect(service.retryBilling(item,"Investigated")).rejects.toThrow()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

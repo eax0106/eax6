@@ -29,7 +29,7 @@ describe.skipIf(!databaseUrl)("AdminBillingRepository PostgreSQL (task B2.2)", (
     await admin.query(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${password}'`);
     await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO "${roleName}"`);
     await admin.query(`GRANT SELECT ON ALL TABLES IN SCHEMA "${schemaName}" TO "${roleName}"`);
-    await admin.query(`GRANT EXECUTE ON FUNCTION "${schemaName}".admin_list_billing_issues() TO "${roleName}"`);
+    await admin.query(`GRANT EXECUTE ON FUNCTION "${schemaName}".admin_list_staff_billing_issues() TO "${roleName}"`);
     // A per-test schema needs explicit USAGE for the SECURITY DEFINER owner
     // (test-only step, as in admin-users.repository.integration.spec.ts).
     await admin.query(`GRANT USAGE ON SCHEMA "${schemaName}" TO platform_provisioner`);

@@ -4,6 +4,7 @@ import {
   RazorpayBillingProvider,
 } from "@alterx/adapters";
 import type { SecretsProvider } from "@alterx/shared-clients";
+import {billingDatabaseFromEnvironment} from "./config";
 import { sharedPool } from "../db/shared-pool";
 import {
   ConcurrencyExceptionFilter,
@@ -15,6 +16,8 @@ import { IdempotencyModule } from "../idempotency";
 import { EntitlementsModule } from "../entitlements/entitlements.module";
 import { AdminAuditModule } from "../admin-audit/admin-audit.module";
 import { StaffAuthMiddleware, StaffModule } from "../staff";
+import {AdminBillingOperationsService} from "./admin-billing-operations.service";
+import {AdminBillingOperationsRepository} from "./admin-billing-operations.repository";
 import { AdminBillingController } from "./admin-billing.controller";
 import { AdminBillingRepository } from "./admin-billing.repository";
 import { AdminBillingService } from "./admin-billing.service";
@@ -38,11 +41,11 @@ import {
   providers: [
     {
       provide: BillingRepository,
-      useFactory: () => new BillingRepository(sharedPool(process.env.DATABASE_URL), false),
+      useFactory: () => new BillingRepository(sharedPool(billingDatabaseFromEnvironment(process.env)), false),
     },
     {
       provide: AdminBillingRepository,
-      useFactory: () => new AdminBillingRepository(sharedPool(process.env.DATABASE_URL), false),
+      useFactory: () => new AdminBillingRepository(sharedPool(billingDatabaseFromEnvironment(process.env)), false),
     },
     {
       provide: BILLING_SECRETS_PROVIDER,
@@ -59,7 +62,7 @@ import {
     },
     {
       provide: BillingWebhookRepository,
-      useFactory: () => new BillingWebhookRepository(sharedPool(process.env.DATABASE_URL), false),
+      useFactory: () => new BillingWebhookRepository(sharedPool(billingDatabaseFromEnvironment(process.env)), false),
     },
     {
       provide: BILLING_PROVIDER,
@@ -81,6 +84,8 @@ import {
           repository,
         ),
     },
+    {provide:AdminBillingOperationsRepository,useFactory:()=>new AdminBillingOperationsRepository(sharedPool(billingDatabaseFromEnvironment(process.env)))},
+    AdminBillingOperationsService,
     BillingService,
     AdminBillingService,
     BillingWebhookService,
