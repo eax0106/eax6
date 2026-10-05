@@ -8,6 +8,7 @@ export interface BillingIssueView {
   current_plan: string | null;
   first_failed_at: string | null;
   updated_at: string;
+  etag: string;
 }
 
 interface BillingIssueRow {
@@ -17,11 +18,12 @@ interface BillingIssueRow {
   current_plan: string | null;
   first_failed_at: Date | null;
   updated_at: Date;
+  revision: string;
 }
 
 /**
  * Staff plane, cross-tenant by design (task B2.2). Tenants whose payments
- * failed, read through admin_list_billing_issues() -- a SECURITY DEFINER
+ * failed, read through admin_list_staff_billing_issues() -- a SECURITY DEFINER
  * function (migration 0023), because billing_dunning_states is tenant-RLS.
  */
 @Injectable()
@@ -32,7 +34,7 @@ export class AdminBillingRepository implements OnModuleDestroy {
   ) {}
 
   async listIssues(): Promise<BillingIssueView[]> {
-    const result = await this.pool.query<BillingIssueRow>("SELECT * FROM admin_list_billing_issues()");
+    const result = await this.pool.query<BillingIssueRow>("SELECT * FROM admin_list_staff_billing_issues()");
     return result.rows.map((row) => ({
       tenant_id: row.tenant_id,
       tenant_name: row.tenant_name,
@@ -40,6 +42,7 @@ export class AdminBillingRepository implements OnModuleDestroy {
       current_plan: row.current_plan,
       first_failed_at: row.first_failed_at?.toISOString() ?? null,
       updated_at: row.updated_at.toISOString(),
+      etag: `"billing-${row.tenant_id}-${row.revision}"`,
     }));
   }
 

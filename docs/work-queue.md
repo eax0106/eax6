@@ -208,3 +208,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Task | Change and evidence | State |
 |---|---|---|
 | C127 | D27 adds attributed requested changes, immutable reviewer/seller notes, saved corrections and resubmission with locked revisions and mandatory audit acknowledgement. Advisory risk uses current recorded scans, actual first-resource history, declared actions/scopes and staff takedowns, exposes missing evidence, and ranks the full review population before its 200-item bound. Exact-version scanner review and free-only publication remain enforced. Five local gates pass: storage28; pure risk6 and actual SQL ranking2; staff/tenant HTTP, audit protocol and registry19 plus1 conditional skip; live/demo/rendered web27; full API1817 plus21 skips with coverage, database130 plus1 skip, web434, contracts/deletion registry148, erasure/retention26, static/build, zero added normalized AST findings and twelve distinct failing/restored controls. Central acknowledgement precedes local commit; this does not claim distributed atomic commit. CI must pass on the exact PR head before squash merge. | local gates passed; CI required |
+
+### C132 — D26 real staff billing operations
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C132 | D26 real staff billing operations: reasoned exact-revision run-credit grants, provider-bound hosted recovery and paid-only resolution, durable Engine credit delivery and guarded erasure | In progress: native proofs and five acceptance gates; no completion or merge claim | codex/billing-ops-c132 |

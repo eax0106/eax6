@@ -39,7 +39,7 @@ const STORE = "platform-api";
 // the deletion registry disagree, in either direction.
 export const PLATFORM_TABLES = [
   "abuse_signals", "action_item_annotations", "billing_dunning_audits", "billing_dunning_states",
-  "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "billing_events", "billing_payment_method_refs", "billing_profiles",
+  "billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "billing_events", "billing_payment_method_refs", "billing_profiles",
   "credential_refs", "credential_use_audits", "discovery_recommendations", "entitlements",
   "env_var_use_audits", "env_vars", "idempotency_keys", "installs", "jit_grant_audit",
   "jit_grants", "kyc_submissions", "listing_versions", "listings", "notification_digests",
@@ -54,7 +54,8 @@ export const PLATFORM_TABLES = [
 // Children before parents (a topological sort over every foreign key among the
 // tables above, checked against a real schema by the integration spec). Left out
 // on purpose, because they are not erased by a plain DELETE:
-//   action_item_annotations, payout_ledger, marketplace_governance_events  append-only: erased by their guarded functions
+//   action_item_annotations, payout_ledger, marketplace_governance_events,
+//   billing_admin_operations, billing_admin_credit_deliveries: guarded manifest erasure
 //   tenants                                 becomes a tombstone
 //   users                                   pseudonymised when no other tenant holds them
 //   the SKELETON_TABLES                     staff access records, kept 90 days
@@ -131,6 +132,7 @@ export class PlatformDeletionService implements DeletionProvider, WorkspaceDelet
       let rows = 0;
       rows += Number((await tx.query<{ n: number }>("SELECT erase_tenant_action_annotations($1::uuid, $2) AS n", [tenant, manifestId])).rows[0]?.n ?? 0);
       rows += Number((await tx.query<{ n: number }>("SELECT erase_tenant_payout_ledger($1::uuid, $2) AS n", [tenant, manifestId])).rows[0]?.n ?? 0);
+      rows += Number((await tx.query<{n:number}>("SELECT erase_tenant_billing_admin_operations($1::uuid,$2) AS n",[tenant,manifestId])).rows[0]?.n ?? 0);
       // tenants.billing_profile_id and billing_profiles.tenant_id point at each other.
       await tx.query("UPDATE tenants SET billing_profile_id = NULL WHERE id = $1", [tenant]);
       for (const table of PLATFORM_DELETE_ORDER) {

@@ -54,6 +54,11 @@ export class BillingPolicyService implements OnModuleInit, OnModuleDestroy {
         await this.client!.grant(tenantId,`razorpay:${grant.payment_ref}`,grant.credits);
         await tx.query("UPDATE billing_credit_deliveries SET published_at=clock_timestamp() WHERE tenant_id=$1 AND payment_ref=$2",[tenantId,grant.payment_ref]);
       }
+      const staffGrants=await tx.query<{operation_id:string;credits:number}>("SELECT operation_id,credits FROM billing_admin_credit_deliveries WHERE tenant_id=$1 AND published_at IS NULL ORDER BY created_at,operation_id LIMIT 20 FOR UPDATE",[tenantId]);
+      for(const grant of staffGrants.rows){
+        await this.client!.grant(tenantId,`staff-credit:${grant.operation_id}`,grant.credits);
+        await tx.query("UPDATE billing_admin_credit_deliveries SET published_at=clock_timestamp() WHERE tenant_id=$1 AND operation_id=$2",[tenantId,grant.operation_id]);
+      }
     });
   }
 

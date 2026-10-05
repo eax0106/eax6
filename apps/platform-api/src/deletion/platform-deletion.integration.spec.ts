@@ -132,9 +132,13 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     await q(`INSERT INTO oauth_connections (tenant_id, id, workspace_id, connector, external_account_id, scopes) VALUES ($1, '00000000-0000-7000-8000-000000050001', $2, 'github', 'x', 'repo')`, [A, wsA]);
     await q(`INSERT INTO onboarding_states (id, tenant_id, workspace_id, steps, status) VALUES ($1, $2, $3, '{}', 'in_progress')`, [randomUUID(), A, wsA]);
     await q(`INSERT INTO entitlements (id, tenant_id, plan) VALUES ($1, $2, 'free')`, [randomUUID(), A]);
+    await q(`INSERT INTO staff_users (id, identity_ref, email, roles) VALUES ('stf_1', 'auth0|s', 's@example.test', ARRAY['staff_support'])`);
     for (const [tenant,user] of [[A,u1],[B,u3]] as const) {
       await q("INSERT INTO billing_policy_state(tenant_id,email_verified,verified_by) VALUES($1,true,$2)", [tenant,user]);
       await q("INSERT INTO billing_credit_deliveries(tenant_id,payment_ref,credits,provider_event_id) VALUES($1,'pay_erasure',100,'event_erasure')", [tenant]);
+      const operation=`bop_00000000-0000-7000-8000-${tenant===A?"0000000000a1":"0000000000b1"}`;
+      await q("INSERT INTO billing_admin_operations(id,tenant_id,action,actor_ref,reason,revision,runs,credits) VALUES($1,$2,'grant_credits','stf_1','Retained human billing grant reason',2,3,6)",[operation,tenant]);
+      await q("INSERT INTO billing_admin_credit_deliveries(tenant_id,operation_id,credits) VALUES($1,$2,6)",[tenant,operation]);
       await q(`INSERT INTO billing_subscription_plans(tenant_id,subscription_ref,provider_plan_ref,internal_plan,commercial_snapshot)
         VALUES($1,'sub_erasure','plan_erasure','paid',$2::jsonb)`, [tenant,JSON.stringify({currency:"INR",basePriceMinor:100,razorpayPlanId:"plan_erasure",includedCredits:100,extraCreditPriceMinor:10,creditsPerVerifiedRun:2})]);
     }
@@ -157,13 +161,12 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     await q(`INSERT INTO marketplace_governance_events(id,tenant_id,resource_type,resource_id,actor_type,actor_ref,action,previous_status,next_status,reason,resource_revision)
       VALUES ('mge_00000000-0000-7000-8000-000000009001',$1,'listing','lst_1','staff','stf_1','needs_changes','human_review','needs_changes','Correct fields',1)`,[A]);
     // staff access records: kept 90 days
-    await q(`INSERT INTO staff_users (id, identity_ref, email, roles) VALUES ('stf_1', 'auth0|s', 's@example.test', ARRAY['staff_support'])`);
     await q(`INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action, reason) VALUES ('taa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [A]);
     await q(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action, reason) VALUES ('uaa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [u1]);
   }
 
   it("names every table exactly once between the delete order and the special cases", () => {
-    const special = ["action_item_annotations", "payout_ledger", "marketplace_governance_events", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
+    const special = ["billing_admin_operations", "billing_admin_credit_deliveries", "action_item_annotations", "payout_ledger", "marketplace_governance_events", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
     expect([...PLATFORM_DELETE_ORDER, ...special].sort()).toEqual([...PLATFORM_TABLES].sort());
     expect(new Set(PLATFORM_DELETE_ORDER).size).toBe(PLATFORM_DELETE_ORDER.length);
   });
@@ -226,7 +229,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     const located = await service.locateSubjectData(ten(A));
     expect(located.map((item) => item.table).sort()).toEqual([...PLATFORM_TABLES].sort());
     const rows = Object.fromEntries(located.map((item) => [item.table, item.rowCount]));
-    expect(rows).toMatchObject({ tenants: 1, users: 2, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1, workspace_invitations: 4, billing_policy_state: 1, billing_credit_deliveries: 1, billing_subscription_plans: 1 });
+    expect(rows).toMatchObject({ tenants: 1, users: 2, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1, workspace_invitations: 4, billing_policy_state: 1, billing_credit_deliveries: 1, billing_admin_operations: 1, billing_admin_credit_deliveries: 1, billing_subscription_plans: 1 });
   });
 
   it("erases tenant A completely, leaves tenant B whole, and verification agrees", async () => {
@@ -236,10 +239,10 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(result.deletedRows).toBeGreaterThan(0);
     expect(result.deletedObjects).toBe(3); // credential, env var, connection: tenant A's own secrets
     expect(verified).toMatchObject({ deleted: true, remaining: [] });
-    for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "workspace_invitations", "workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "marketplace_governance_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
+    for (const table of ["billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "workspace_invitations", "workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "marketplace_governance_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
       expect(await count(table), table).toBe(0);
     }
-    for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans"]) expect(await count(table,"tenant_id",B),table).toBe(1);
+    for (const table of ["billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans"]) expect(await count(table,"tenant_id",B),table).toBe(1);
     // tenant B is untouched
     expect(await count("workspace_invitations", "tenant_id", B)).toBe(4);
     expect(await count("workspaces", "tenant_id", B)).toBe(1);
@@ -426,7 +429,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(rowsOf("oauth_connections")).toBe(1);
     expect(rowsOf("notification_reads")).toBe(1);
     // Tenant-wide and legal-hold tables are never part of a workspace.
-    for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "tenant_members", "billing_events", "billing_profiles", "entitlements", "orders", "credential_refs"]) {
+    for (const table of ["billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "tenant_members", "billing_events", "billing_profiles", "entitlements", "orders", "credential_refs"]) {
       expect(rowsOf(table)).toBeUndefined();
     }
 
@@ -440,7 +443,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(Number((await one<{ n: string }>("SELECT count(*)::text AS n FROM workspace_members WHERE workspace_id = $1", [wsA2])).n)).toBe(1);
     expect(await count("tenant_members")).toBe(2);
     expect(await count("billing_events")).toBe(1);
-    for (const table of ["billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans"]) expect(await count(table),table).toBe(1);
+    for (const table of ["billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans"]) expect(await count(table),table).toBe(1);
     expect(await count("tenants", "id")).toBe(1);
     expect([...secrets.values.keys()].sort()).toEqual([
       `/alter/credentials/${A}/00000000-0000-7000-8000-0000000c0001`,

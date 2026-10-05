@@ -1,7 +1,7 @@
 import { MarketplaceGovernanceItemSchema } from "@alterx/contracts"
 import { apiGet, apiPost } from "./http"
 import type { MarketplaceReviewItem, SellerVerification, ToolVersionReviewItem } from "./services/marketplace-admin"
-import type { BillingIssue } from "./services/billing-ops"
+import { BillingOpsService, type BillingIssue } from "./services/billing-ops"
 
 // Live marketplace moderation and billing adapters. Staff attribution comes from the session.
 
@@ -88,24 +88,8 @@ export async function reviewSellerVerification(
 
 // --- Billing operations ------------------------------------------------------
 
-function mapIssue(value: unknown): BillingIssue {
-  const item = value as AnyRecord
-  const state = String(item.state) as NonNullable<BillingIssue["accessState"]>
-  return {
-    id: String(item.tenant_id),
-    tenantId: String(item.tenant_id),
-    tenantName: String(item.tenant_name),
-    issue: "payment_failed",
-    plan: typeof item.current_plan === "string" ? item.current_plan : "unknown",
-    status: "open",
-    accessState: state,
-    createdAt: String(item.first_failed_at ?? item.updated_at),
-  }
-}
-
 export async function listBillingIssues(): Promise<BillingIssue[]> {
-  const body = await apiGet<unknown>("/api/v1/admin/billing/issues")
-  return (Array.isArray(body) ? body : []).map(mapIssue)
+  return new BillingOpsService().listIssues()
 }
 
 // First tool version: the API attributes staff from the authenticated session.
