@@ -36,7 +36,7 @@ describe("AbuseSignalController", () => {
     expect(review).toHaveBeenCalledWith(id, "stf_security", {
       decision: "confirm",
       reason: "verified evidence",
-    });
+    }, undefined);
   });
 });
 

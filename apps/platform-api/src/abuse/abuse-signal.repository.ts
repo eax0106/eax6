@@ -1,5 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
+import { AbuseReviewRepository, abuseSignalProjection, mapAbuseSignal, type AbuseSignalRow, type AbuseReviewWrite } from "./abuse-review.repository";
 import type { AbuseSignal } from "@alterx/contracts";
 import type { Pool } from "pg";
 
@@ -11,17 +12,6 @@ export interface AbuseFact {
   readonly evidenceRef: string;
   readonly sourceFingerprint: string;
   readonly observedAt: Date;
-}
-
-interface SignalRow {
-  id: string;
-  tenant_id: string;
-  signal_type: AbuseSignal["signal_type"];
-  source: string;
-  score: string | number;
-  evidence_ref: string;
-  observed_at: Date;
-  status: AbuseSignal["status"];
 }
 
 interface CountFactRow {
@@ -49,14 +39,11 @@ export class AbuseSignalRepository implements OnModuleDestroy {
   ) {}
 
   async list(status?: AbuseSignal["status"]): Promise<AbuseSignal[]> {
-    const result = await this.store.query<SignalRow>(
-      `SELECT id, tenant_id, signal_type, source, score, evidence_ref, observed_at, status
-       FROM abuse_signals
-       WHERE ($1::text IS NULL OR status = $1)
-       ORDER BY score DESC, observed_at DESC, id DESC`,
+    const result = await this.store.query<AbuseSignalRow>(
+      abuseSignalProjection + ` WHERE ($1::text IS NULL OR s.status = $1) ORDER BY s.score DESC,s.observed_at DESC,s.id DESC`,
       [status ?? null],
     );
-    return result.rows.map(mapSignal);
+    return result.rows.map(mapAbuseSignal);
   }
 
   async collectFacts(): Promise<AbuseFact[]> {
@@ -126,7 +113,7 @@ export class AbuseSignalRepository implements OnModuleDestroy {
            updated_at = clock_timestamp()
          RETURNING id`,
         [
-          `abs_${randomUUID()}`,
+          `abs_${uuidv7()}`,
           fact.tenantId,
           fact.signalType,
           fact.source,
@@ -141,25 +128,12 @@ export class AbuseSignalRepository implements OnModuleDestroy {
     return changed;
   }
 
-  async review(
-    id: string,
-    decision: "confirm" | "dismiss",
-    reason: string,
-    staffUserId: string,
-  ): Promise<AbuseSignal | undefined> {
-    const result = await this.store.query<SignalRow>(
-      `UPDATE abuse_signals SET
-         status = $2,
-         reviewed_by = $3,
-         reviewed_at = clock_timestamp(),
-         review_reason = $4,
-         updated_at = clock_timestamp()
-       WHERE id = $1 AND status = 'open'
-       RETURNING id, tenant_id, signal_type, source, score,
-                 evidence_ref, observed_at, status`,
-      [id, decision === "confirm" ? "confirmed" : "dismissed", staffUserId, reason],
-    );
-    return result.rows[0] ? mapSignal(result.rows[0]) : undefined;
+  eligibleStaff() { return new AbuseReviewRepository(this.store).eligibleStaff(); }
+  assign(id: string, target: string, reason: string, actor: string, write: AbuseReviewWrite) {
+    return new AbuseReviewRepository(this.store).assign(id,target,reason,actor,write);
+  }
+  review(id: string, decision: "confirm" | "dismiss", reason: string, actor: string, write: AbuseReviewWrite) {
+    return new AbuseReviewRepository(this.store).review(id,decision,reason,actor,write);
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -215,19 +189,6 @@ function findings(value: unknown): string[] {
     const severity = (item as Record<string, unknown>).severity;
     return typeof severity === "string" ? [severity.toLowerCase()] : [];
   });
-}
-
-function mapSignal(row: SignalRow): AbuseSignal {
-  return {
-    id: row.id,
-    tenant_id: row.tenant_id,
-    signal_type: row.signal_type,
-    source: row.source,
-    score: Number(row.score),
-    evidence_ref: row.evidence_ref,
-    observed_at: row.observed_at.toISOString(),
-    status: row.status,
-  };
 }
 
 export class AbuseSignalSourceUnavailableError extends Error {

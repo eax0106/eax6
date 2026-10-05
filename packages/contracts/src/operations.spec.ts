@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  AssignAbuseSignalRequestSchema,
+  SecurityReviewStaffSchema,
   CreateJitGrantRequestSchema,
   FeatureFlagNameSchema,
   MarketplaceGovernanceActionRequestSchema,
@@ -11,6 +13,12 @@ import {
 } from "./operations";
 
 describe("Operations contracts", () => {
+  it("requires a real staff assignment with bounded reason and rejects forged attribution", () => {
+    expect(AssignAbuseSignalRequestSchema.parse({staff_user_id:"stf_actual",reason:"  Investigate evidence  "})).toEqual({staff_user_id:"stf_actual",reason:"Investigate evidence"});
+    for (const body of [{staff_user_id:"customer",reason:"Investigate"},{staff_user_id:"stf_actual",reason:" "},{staff_user_id:"stf_actual",reason:"x".repeat(1001)},{staff_user_id:"stf_actual",reason:"Investigate",assigned_by:"stf_forged"}])expect(()=>AssignAbuseSignalRequestSchema.parse(body)).toThrow();
+    expect(SecurityReviewStaffSchema.parse({id:"stf_actual",email:"actual@test.test",roles:["staff_security"]}).id).toBe("stf_actual");
+    for (const roles of [[],["staff_support"],["staff_billing_ops"],["owner"]])expect(()=>SecurityReviewStaffSchema.parse({id:"stf_actual",email:"actual@test.test",roles})).toThrow();
+  });
   it("requires explicit JIT scopes and bounded lifetime", () => {
     const input = {
       staff_user_id: "stf_support",
