@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import type { AbuseSignal, ReviewAbuseSignalRequest } from "@alterx/contracts";
+import { SecurityReviewStaffSchema, type AbuseSignal, type AssignAbuseSignalRequest, type ReviewAbuseSignalRequest } from "@alterx/contracts";
 import { AdminAuditService } from "../admin-audit";
 import {
   AbuseSignalRepository,
@@ -16,6 +16,17 @@ export class AbuseSignalService {
 
   list(status?: AbuseSignal["status"]): Promise<AbuseSignal[]> {
     return this.signals.list(status);
+  }
+
+  async eligibleStaff() { return SecurityReviewStaffSchema.array().parse(await this.signals.eligibleStaff()); }
+
+  async assign(id: string, staffUserId: string, input: AssignAbuseSignalRequest, ifMatch: string | undefined): Promise<AbuseSignal> {
+    const signal = await this.signals.assign(id, input.staff_user_id, input.reason, staffUserId, { ifMatch,
+      audit: (value, historyId) => this.audit.record({ tenantId: value.tenant_id, actorType: "admin", actorRef: staffUserId,
+        action: "abuse.signal.assign", targetType: "abuse_signal", targetRef: id, reasonCode: "staff_assignment", scope: ["abuse:assign", `history:${historyId}`] }),
+    });
+    if (!signal) throw new AbuseSignalsHttpError(404, "ABUSE_SIGNAL_NOT_FOUND", "Security review not found", `/api/v1/admin/abuse/signals/${id}/actions/assign`);
+    return signal;
   }
 
   async refresh(staffUserId: string): Promise<{ observed: number; stored: number }> {
@@ -48,8 +59,13 @@ export class AbuseSignalService {
     id: string,
     staffUserId: string,
     input: ReviewAbuseSignalRequest,
+    ifMatch?: string,
   ): Promise<AbuseSignal> {
-    const signal = await this.signals.review(id, input.decision, input.reason, staffUserId);
+    const signal = await this.signals.review(id, input.decision, input.reason, staffUserId, { ifMatch,
+      audit: (value, historyId) => this.audit.record({ tenantId: value.tenant_id, actorType: "admin", actorRef: staffUserId,
+        action: `abuse.signal.${input.decision}`, targetType: "abuse_signal", targetRef: id,
+        reasonCode: "staff_decision", scope: ["abuse:review", `history:${historyId}`] }),
+    });
     if (!signal) {
       throw new AbuseSignalsHttpError(
         409,
@@ -58,16 +74,6 @@ export class AbuseSignalService {
         `/api/v1/admin/abuse/signals/${id}/actions/review`,
       );
     }
-    await this.audit.record({
-      tenantId: signal.tenant_id,
-      actorType: "admin",
-      actorRef: staffUserId,
-      action: `abuse.signal.${input.decision}`,
-      targetType: "abuse_signal",
-      targetRef: id,
-      reasonCode: "staff_decision",
-      scope: "abuse:review",
-    });
     return signal;
   }
 }

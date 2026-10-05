@@ -41,6 +41,8 @@ import { RunEstimateService } from "./budgets/run-estimate.service";
 import { RunLauncherService } from "./runs/run-launcher.service";
 import { RunsController } from "./runs/runs.controller";
 import { RunOutcomeService } from "./runs/run-outcome.service";
+import { TenantActivityController } from "./tenant-activity/tenant-activity.controller";
+import { TenantActivityService } from "./tenant-activity/tenant-activity.service";
 import { ProjectRunProvisioningService } from "./runs/project-run-provisioning.service";
 import { RunWorkspaceLookupService } from "./runs/run-workspace-lookup.service";
 import { PROVISIONING_CLIENT_PROTO_PATH } from "./runs/provisioning-client.constants";
@@ -215,6 +217,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     AgentWorkflowsController,
     BudgetsController,
     RunLearningController,
+    TenantActivityController,
     ApprovalsController,
     ApprovalPoliciesController,
     EscalationsController,
@@ -222,6 +225,7 @@ function buildRecoveryPolicyService(): RecoveryPolicyService {
     NodeTypeController,
   ],
   providers: [
+    { provide: TenantActivityService, useFactory: () => new TenantActivityService(orchestrationStore(identityTenantGatewayEnvironment(process.env))) },
     {
       provide: ClarificationsService,
       useFactory: () => {

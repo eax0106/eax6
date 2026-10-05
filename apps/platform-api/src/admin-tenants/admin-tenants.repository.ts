@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { v7 as uuidv7 } from "uuid";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
+import { TenantMembersSchema, type TenantMembers } from "@alterx/contracts";
 import type { Pool, PoolClient } from "pg";
 import type {
   AdminTenantActionView, AdminTenantView } from "./types";
@@ -81,6 +82,22 @@ export class AdminTenantsRepository implements OnModuleDestroy {
         [id, status],
       );
       return result.rows[0] ? mapRow(result.rows[0]) : undefined;
+    });
+  }
+
+  members(tenantId: string): Promise<TenantMembers | undefined> {
+    return this.withTenant(tenantId, async client => {
+      const subject = await client.query("SELECT id FROM tenants WHERE id=$1 AND deleted_at IS NULL", [tenantId]);
+      if (!subject.rows.length) return undefined;
+      const total = await client.query<{ count: string }>(
+        `SELECT count(*)::text AS count FROM tenant_members m JOIN users u ON u.id=m.user_id
+          WHERE m.tenant_id=$1 AND u.identity_ref NOT LIKE 'erased:%'`, [tenantId],
+      );
+      const rows = await client.query<{ id: string; email: string; name: string | null; role: string }>(
+        `SELECT u.id::text,u.email,u.display_name AS name,m.role FROM tenant_members m JOIN users u ON u.id=m.user_id
+          WHERE m.tenant_id=$1 AND u.identity_ref NOT LIKE 'erased:%' ORDER BY m.created_at,u.id LIMIT 50`, [tenantId],
+      );
+      return TenantMembersSchema.parse({ count: Number(total.rows[0]!.count), members: rows.rows });
     });
   }
 

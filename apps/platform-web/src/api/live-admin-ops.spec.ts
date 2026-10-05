@@ -5,7 +5,7 @@ vi.mock("./http", async (importOriginal) => ({
   isLiveApi: true,
 }))
 
-import { listGrants, listSignals, reviewSignal, setIncidentStatus } from "./live-admin-ops"
+import { assignSignal, securityReviewStaff, listGrants, listSignals, reviewSignal, setIncidentStatus } from "./live-admin-ops"
 
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
@@ -36,8 +36,23 @@ describe("live admin ops", () => {
 
   it("reviews a signal as confirm or dismiss with a reason", async () => {
     fetchMock.mockResolvedValue(Response.json({ ...signal, status: "dismissed" }))
-    expect((await reviewSignal(signal.id, "dismissed")).status).toBe("dismissed")
+    expect((await reviewSignal(signal.id, "dismissed", "Recorded review reason", '"rev-2"')).status).toBe("dismissed")
     expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toMatchObject({ decision: "dismiss" })
+    expect(new Headers(fetchMock.mock.calls[0]![1]!.headers).get("if-match")).toBe('"rev-2"')
+  })
+
+  it("uses actual eligible staff, exact assignment version and a human reason", async () => {
+    fetchMock.mockResolvedValue(Response.json([{ id: "stf_actual", email: "actual@example.test", roles: ["staff_security"] }]))
+    expect((await securityReviewStaff())[0]!.id).toBe("stf_actual")
+    fetchMock.mockResolvedValue(Response.json({ ...signal, etag: '"rev-3"', assignment: { staff_user_id: "stf_actual", staff_email: "actual@example.test", active: true, assigned_by: "stf_actor", assigned_at: signal.observed_at, reason: "Investigate evidence" } }))
+    expect(await assignSignal(signal.id, "stf_actual", "Investigate evidence", '"rev-2"')).toMatchObject({status:"investigating",assignment:{staffUserId:"stf_actual"},etag:'"rev-3"'})
+    const call = fetchMock.mock.calls[1]!
+    expect(JSON.parse(String(call[1]!.body))).toEqual({ staff_user_id: "stf_actual", reason: "Investigate evidence" })
+    expect(new Headers(call[1]!.headers).get("if-match")).toBe('"rev-2"'); expect(call[1]!.credentials).toBe("include")
+    fetchMock.mockResolvedValue(Response.json([{ id: "stf_support", email: "support@test.test", roles: ["staff_support"] }]))
+    await expect(securityReviewStaff()).rejects.toThrow()
+    fetchMock.mockResolvedValue(Response.json({error:"unavailable"}))
+    await expect(listSignals()).rejects.toThrow()
   })
 
   it("sets an incident's status through the status route", async () => {

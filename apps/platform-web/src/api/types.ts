@@ -1318,6 +1318,8 @@ export interface SecurityReviewItem {
   title: string;
   summary: string;
   createdAt: string;
+  etag?: string;
+  assignment?: { staffUserId: string; staffEmail: string; active: boolean; assignedBy: string; assignedAt: string; reason: string } | null;
 }
 
 export interface FeatureFlag {
@@ -1401,3 +1403,5 @@ export interface ApprovalPolicyChange {
   timeoutSeconds: number | null
   confirmConsequence?: string
 }
+
+export type {TenantDeployment, TenantDeploymentCollection, DeploymentAdminActionRequest, DeploymentAdminActionResult} from "@alterx/contracts"

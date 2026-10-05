@@ -34,11 +34,11 @@ export interface ErasureStore {
 
 const STORE = "platform-api";
 
-// Every tenant-scoped table in platform_db that erasure is answerable for (50).
+// Every tenant-scoped table in platform_db that erasure is answerable for.
 // scripts/deletion/certify.ts parses this exact block and fails CI if it and
 // the deletion registry disagree, in either direction.
 export const PLATFORM_TABLES = [
-  "abuse_signals", "action_item_annotations", "billing_dunning_audits", "billing_dunning_states",
+  "abuse_signals", "abuse_signal_actions", "action_item_annotations", "billing_dunning_audits", "billing_dunning_states",
   "billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "billing_events", "billing_payment_method_refs", "billing_profiles",
   "credential_refs", "credential_use_audits", "discovery_recommendations", "entitlements",
   "env_var_use_audits", "env_vars", "idempotency_keys", "installs", "jit_grant_audit",
@@ -55,7 +55,7 @@ export const PLATFORM_TABLES = [
 // tables above, checked against a real schema by the integration spec). Left out
 // on purpose, because they are not erased by a plain DELETE:
 //   action_item_annotations, payout_ledger, marketplace_governance_events,
-//   billing_admin_operations, billing_admin_credit_deliveries: guarded manifest erasure
+//   billing_admin_operations, billing_admin_credit_deliveries, abuse_signal_actions: guarded manifest erasure
 //   tenants                                 becomes a tombstone
 //   users                                   pseudonymised when no other tenant holds them
 //   the SKELETON_TABLES                     staff access records, kept 90 days
@@ -135,6 +135,7 @@ export class PlatformDeletionService implements DeletionProvider, WorkspaceDelet
       rows += Number((await tx.query<{n:number}>("SELECT erase_tenant_billing_admin_operations($1::uuid,$2) AS n",[tenant,manifestId])).rows[0]?.n ?? 0);
       // tenants.billing_profile_id and billing_profiles.tenant_id point at each other.
       await tx.query("UPDATE tenants SET billing_profile_id = NULL WHERE id = $1", [tenant]);
+      rows += Number((await tx.query<{ n: number }>("SELECT erase_tenant_abuse_signal_actions($1::uuid,$2) AS n", [tenant,manifestId])).rows[0]?.n ?? 0);
       for (const table of PLATFORM_DELETE_ORDER) {
         rows += (await tx.query(table === "tool_versions" ? TOOL_VERSIONS_DELETE : `DELETE FROM "${table}" WHERE tenant_id = $1`, [tenant])).rowCount;
       }

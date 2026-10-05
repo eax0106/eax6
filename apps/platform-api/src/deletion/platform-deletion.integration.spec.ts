@@ -161,12 +161,20 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     await q(`INSERT INTO marketplace_governance_events(id,tenant_id,resource_type,resource_id,actor_type,actor_ref,action,previous_status,next_status,reason,resource_revision)
       VALUES ('mge_00000000-0000-7000-8000-000000009001',$1,'listing','lst_1','staff','stf_1','needs_changes','human_review','needs_changes','Correct fields',1)`,[A]);
     // staff access records: kept 90 days
+    await q(`INSERT INTO staff_users (id,identity_ref,email,roles) VALUES ('stf_review','auth0|review','review@example.test',ARRAY['staff_security'])`);
+    for (const [tenant,suffix] of [[A,"a901"],[B,"b901"]] as const) {
+      const signal = `abs_00000000-0000-7000-8000-00000000${suffix}`;
+      await q(`INSERT INTO abuse_signals(id,tenant_id,signal_type,source,score,evidence_ref,source_fingerprint,observed_at,revision,assigned_to,assigned_by,assigned_at,assignment_reason)
+        VALUES($1,$2,'payment_fraud','billing.fixture',60,'evt_review',$1,now(),2,'stf_review','stf_review',now(),'Recorded review assignment')`,[signal,tenant]);
+      await q(`INSERT INTO abuse_signal_actions(id,tenant_id,signal_id,action,actor_ref,assignee_ref,reason,revision)
+        VALUES($1,$2,$3,'assign','stf_review','stf_review','Recorded review assignment',2)`,[`asa_00000000-0000-7000-8000-00000000${suffix}`,tenant,signal]);
+    }
     await q(`INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action, reason) VALUES ('taa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [A]);
     await q(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action, reason) VALUES ('uaa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [u1]);
   }
 
   it("names every table exactly once between the delete order and the special cases", () => {
-    const special = ["billing_admin_operations", "billing_admin_credit_deliveries", "action_item_annotations", "payout_ledger", "marketplace_governance_events", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
+    const special = ["abuse_signal_actions", "billing_admin_operations", "billing_admin_credit_deliveries", "action_item_annotations", "payout_ledger", "marketplace_governance_events", "listings", "listing_versions", "tenants", "users", ...SKELETON_TABLES];
     expect([...PLATFORM_DELETE_ORDER, ...special].sort()).toEqual([...PLATFORM_TABLES].sort());
     expect(new Set(PLATFORM_DELETE_ORDER).size).toBe(PLATFORM_DELETE_ORDER.length);
   });
@@ -229,7 +237,7 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     const located = await service.locateSubjectData(ten(A));
     expect(located.map((item) => item.table).sort()).toEqual([...PLATFORM_TABLES].sort());
     const rows = Object.fromEntries(located.map((item) => [item.table, item.rowCount]));
-    expect(rows).toMatchObject({ tenants: 1, users: 2, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1, workspace_invitations: 4, billing_policy_state: 1, billing_credit_deliveries: 1, billing_admin_operations: 1, billing_admin_credit_deliveries: 1, billing_subscription_plans: 1 });
+    expect(rows).toMatchObject({ tenants: 1, users: 2, abuse_signals: 1, abuse_signal_actions: 1, payout_ledger: 1, action_item_annotations: 1, orders: 1, workspaces: 1, workspace_invitations: 4, billing_policy_state: 1, billing_credit_deliveries: 1, billing_admin_operations: 1, billing_admin_credit_deliveries: 1, billing_subscription_plans: 1 });
   });
 
   it("erases tenant A completely, leaves tenant B whole, and verification agrees", async () => {
@@ -239,6 +247,8 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
     expect(result.deletedRows).toBeGreaterThan(0);
     expect(result.deletedObjects).toBe(3); // credential, env var, connection: tenant A's own secrets
     expect(verified).toMatchObject({ deleted: true, remaining: [] });
+    expect(await count("abuse_signal_actions")).toBe(0); expect(await count("abuse_signals")).toBe(0);
+    expect(await count("abuse_signal_actions","tenant_id",B)).toBe(1); expect(await count("abuse_signals","tenant_id",B)).toBe(1);
     for (const table of ["billing_admin_operations", "billing_admin_credit_deliveries", "billing_policy_state", "billing_credit_deliveries", "billing_subscription_plans", "workspace_invitations", "workspaces", "tenant_members", "workspace_members", "user_sessions", "notification_events", "notification_reads", "credential_refs", "env_vars", "oauth_connections", "onboarding_states", "entitlements", "billing_profiles", "billing_events", "marketplace_governance_events", "action_item_annotations", "kyc_submissions", "orders", "payouts", "payout_ledger", "publishers"]) {
       expect(await count(table), table).toBe(0);
     }

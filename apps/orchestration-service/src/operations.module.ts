@@ -1,3 +1,4 @@
+import {runLearningAuditClient} from "./runs/run-learning-audit";
 import { Module } from "@nestjs/common";
 import { BillingAccountController, BILLING_SYNC_TOKEN_HASH } from "./billing/billing-account.controller";
 import { EngineBillingAccountService } from "./billing/billing-account.service";
@@ -93,7 +94,7 @@ import {
       provide: DeploymentAdminService,
       useFactory: () => {
         const dbConfig = identityTenantGatewayEnvironment(process.env);
-        return new DeploymentAdminService(orchestrationStore(dbConfig));
+        return new DeploymentAdminService(orchestrationStore(dbConfig),runLearningAuditClient(process.env));
       },
     },
     {

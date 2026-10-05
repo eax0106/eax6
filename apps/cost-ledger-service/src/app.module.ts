@@ -14,6 +14,8 @@ import { CostStoreLifecycle } from "./database/store.lifecycle";
 import { CostIngestService, type CostEventStore } from "./ingest/cost-ingest.service";
 import { applyMargin, CostRollupService, type RollupStore } from "./rollup/cost-rollup.service";
 import { CostSummaryController } from "./rollup/cost-summary.controller";
+import { TenantSpendController } from "./rollup/tenant-spend.controller";
+import { TenantSpendService } from "./rollup/tenant-spend.service";
 import { EstimationController } from "./estimation/estimation.controller";
 import { EstimationService } from "./estimation/estimation.service";
 import { RunEstimatesController } from "./estimation/run-estimates.controller";
@@ -47,12 +49,14 @@ export class AppModule {
         RunEstimatesController,
         NodeCostsController,
         CostSummaryController,
+        TenantSpendController,
         ModelOutcomesController,
         CostDeletionController,
       ],
       providers: [
         serviceAuthGuardProvider(),
         { provide: COST_STORE_PROVIDER, useValue: store },
+        { provide: TenantSpendService, inject: [RUN_TOTAL_MARGIN], useFactory: (billable: (minor: string) => string) => new TenantSpendService(store as unknown as RollupStore, billable) },
         { provide: COST_DELETION_TOKEN_HASH, useValue: deletionTokenHash },
         { provide: CostDeletionService, useValue: new CostDeletionService(store as unknown as CostDeletionStore) },
         EstimationService,

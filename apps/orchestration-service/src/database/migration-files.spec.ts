@@ -72,6 +72,7 @@ describe("orchestration migration files", () => {
       "0052_workflow_folders.sql",
       "0053_public_forms.sql",
       "0054_billing_accounts.sql",
+      "0055_deployment_admin_history.sql",
     ]);
     expect(
       readdirSync(resolve(ORCHESTRATION_MIGRATIONS_PATH, "rollback"))
@@ -133,6 +134,7 @@ describe("orchestration migration files", () => {
       "0052_restore_workflow_folders.sql",
       "0053_drop_public_forms.sql",
       "0054_drop_billing_accounts.sql",
+      "0055_drop_deployment_admin_history.sql",
     ]);
   });
 
@@ -167,10 +169,12 @@ describe("orchestration migration files", () => {
     expect(billingSql).toContain(
       "CREATE TRIGGER billing_reject_tenant_change BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION reject_tenant_id_change()",
     );
-    const existingSql = migrationSql.filter(({ file }) => file !== "0054_billing_accounts.sql")
+    const existingSql = migrationSql.filter(({ file }) => file !== "0054_billing_accounts.sql" && file !== "0055_deployment_admin_history.sql")
       .map(({ sql }) => sql).join("\n");
     expect(existingSql.match(/EXECUTE FUNCTION reject_tenant_id_change\(\)/g))
       .toHaveLength(37);
+    const deploymentSql = migrationSql.find(({ file }) => file === "0055_deployment_admin_history.sql")?.sql;
+    expect(deploymentSql).toContain("CREATE TRIGGER deployment_admin_actions_reject_tenant_id_change BEFORE UPDATE ON deployment_admin_actions FOR EACH ROW EXECUTE FUNCTION reject_tenant_id_change()");
   });
 
   it("persists a bounded traffic percentage only for canary versions", () => {

@@ -341,11 +341,17 @@ export {
 } from "./tool-names";
 export {
   AbuseSignalSchema,
+  AssignAbuseSignalRequestSchema,
+  SecurityReviewStaffSchema,
   AdminIncidentSchema,
   CreateIncidentRequestSchema,
   CreateJitGrantRequestSchema,
   DeploymentAdminActionRequestSchema,
+  DeploymentAdminInternalActionRequestSchema,
   DeploymentAdminActionResultSchema,
+  TenantDeploymentSchema,
+  TenantDeploymentCollectionSchema,
+  TenantDeploymentListRequestSchema,
   FeatureFlagNameSchema,
   FeatureFlagSchema,
   IncidentApprovalRequestSchema,
@@ -368,11 +374,15 @@ export {
   UpdateModelAliasRequestSchema,
   UpsertFeatureFlagRequestSchema,
   type AbuseSignal,
+  type AssignAbuseSignalRequest,
+  type SecurityReviewStaff,
   type AdminIncident,
   type CreateIncidentRequest,
   type CreateJitGrantRequest,
   type DeploymentAdminActionRequest,
   type DeploymentAdminActionResult,
+  type TenantDeployment,
+  type TenantDeploymentCollection,
   type FeatureFlag,
   type IncidentApprovalRequest,
   type MarketplaceGovernanceActionRequest,
@@ -445,6 +455,7 @@ export {
 } from "./workflow-dag";
 
 export * from "./memory-settings";
+export * from "./tenant-activity";
 export * from "./workflow-chat";
 export * from "./workflow-plan";
 

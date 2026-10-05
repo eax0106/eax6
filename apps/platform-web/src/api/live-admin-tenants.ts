@@ -1,6 +1,7 @@
 import { apiGet, apiPost } from "./http"
 import { getStaffSession } from "./staff-auth"
 import type { AdminNote, AdminTenant } from "./types"
+import { TenantDetailActivitySchema, type TenantDetailActivity } from "@alterx/contracts"
 
 // Admin console, tenants (task B1.1): live adapter over
 // /api/v1/admin/tenants and /api/v1/admin/staff-access. Fields the API does
@@ -34,6 +35,14 @@ export async function getTenant(id: string, grantId?: string): Promise<AdminTena
       headers: grantId ? { [GRANT_HEADER]: grantId } : undefined,
     }),
   )
+}
+
+export async function getTenantActivity(id: string, grantId?: string): Promise<TenantDetailActivity> {
+  const result = TenantDetailActivitySchema.parse(await apiGet<unknown>(`/api/v1/admin/tenants/${encodeURIComponent(id)}/activity`, {
+    headers: grantId ? { [GRANT_HEADER]: grantId } : undefined,
+  }))
+  if (result.tenant_id !== id) throw new Error("Tenant activity response does not match this tenant")
+  return result
 }
 
 /** The tenant's staff action history, shown as its admin notes. */

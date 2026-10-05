@@ -209,6 +209,24 @@ Admin golden-set history now reads actual eval-service run records through servi
 |---|---|---|
 | C127 | D27 adds attributed requested changes, immutable reviewer/seller notes, saved corrections and resubmission with locked revisions and mandatory audit acknowledgement. Advisory risk uses current recorded scans, actual first-resource history, declared actions/scopes and staff takedowns, exposes missing evidence, and ranks the full review population before its 200-item bound. Exact-version scanner review and free-only publication remain enforced. Five local gates pass: storage28; pure risk6 and actual SQL ranking2; staff/tenant HTTP, audit protocol and registry19 plus1 conditional skip; live/demo/rendered web27; full API1817 plus21 skips with coverage, database130 plus1 skip, web434, contracts/deletion registry148, erasure/retention26, static/build, zero added normalized AST findings and twelve distinct failing/restored controls. Central acknowledgement precedes local commit; this does not claim distributed atomic commit. CI must pass on the exact PR head before squash merge. | local gates passed; CI required |
 
+| C130 | D26 tenant deployment administration: actual selected-tenant Engine records, one-snapshot bounded list and totals, current staff-admin authorization, locked revision rollback/suspend/resume with full attributed local history and mandatory central acknowledgement before commit. Native PostgreSQL storage/erasure64, staff-cookie/Engine TCP/audit gRPC25 and web14 passed; integrated API1834/21 skips with coverage and web448 passed. Four automatic local gates and fourteen distinct fault/restoration controls passed; full Engine1301 plus5 skips, database130 plus1 skip, contracts148 and zero added normalized AST findings passed. Parent verification and exact-head CI remain required. See `tenant-deployment-admin.md`. | local gates passed; parent and CI pending |
+### C129 — D26 security review assignment
+
+| Item | Change and evidence | Status |
+| --- | --- | --- |
+| C129 | Actual eligible staff picker and reason-based assignment/reassignment on recorded security reviews. Locked exact revisions, acknowledged audit, immutable attributed history, current staff-cookie roles, ordinary RLS and guarded tenant erasure. Live/demo UI retains failed input and exposes actual assignee and unavailable/stale states. Native PostgreSQL, HTTP, concurrency, audit protocol, rollback and rendered UI checks; see `docs/security-review-assignment.md`. D26 billing operations and tenant deployments remain. Four local gates passed: storage/contracts20; current staff HTTP and actual audit protocol14; rendered/live UI12; full API1831 plus21 skips with coverage, web442, database130 plus1 skip, contracts143, erasure/registry25, affected static/build, zero added normalized AST findings and thirteen failing/restored controls. Exact-head CI remains required. | local gates passed; CI required |
+### C128 — D26 read-only tenant detail
+
+| Change | Scope and evidence | Status |
+| --- | --- | --- |
+| C128 | Tenant activity joins actual platform members, Engine workflows and exact thirty-day runs with ledger execution usage by currency. Bounded lists retain actual totals; strict contracts, current staff cookies and JIT grants, service authentication, ordinary RLS, mandatory read audit and truthful loading/empty/error/reload states are preserved. No new storage or invoice write. See `docs/tenant-admin-detail.md`; five local gates passed, including full API coverage, web/Engine/ledger/database/contract suites and fourteen fault/restoration controls; exact-head CI is required before completion. D26 review assignment, billing operations and tenant deployments remain. | local verification passed; exact-head CI pending |
+
+### C131 — Temporal rollover regression readiness
+
+| Change | Scope and evidence | Status |
+| --- | --- | --- |
+| C131 | Temporal rollover regression waits for the actual first workflow task before sending its two rollover messages. Preserves all rollover, retained-message, deduplication and closure assertions. Both PR150 CI attempts failed the unchanged original test with normal resolved-first-run output. The separately recorded buffered-start production gap remains outside this test change. Three independent native rollover runs and full adapters603/1 skipped pass; lint/typecheck/build pass. Exact-head CI is required. | local verification passed; CI pending |
+
 ### C132 — D26 real staff billing operations
 
 | Item | Change and evidence | Status | Branch |
