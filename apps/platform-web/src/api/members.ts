@@ -46,8 +46,10 @@ export async function inviteMember(workspaceId: string, email: string, role: Wor
   const normalized = email.trim().toLowerCase()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized) || normalized.length > 320) throw new Error("Valid email required")
   if (workspaceMembers(workspaceId).some(member => member.email.toLowerCase() === normalized) || invitations.some(invitation => invitation.workspaceId === workspaceId && invitation.email === normalized && ["pending", "delivering"].includes(invitation.status) && Date.parse(invitation.expiresAt) > Date.now())) throw new Error("Member or pending invitation already exists")
+  const now = Date.now()
+  const timestamp = new Date(now).toISOString()
   const invitation: WorkspaceInvitation = { id: crypto.randomUUID(), workspaceId, email: normalized, role, status: "pending",
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), etag: `"${crypto.randomUUID()}"` }
+    createdAt: timestamp, updatedAt: timestamp, expiresAt: new Date(now + 7 * 86400000).toISOString(), etag: `"${crypto.randomUUID()}"` }
   invitations.unshift(invitation)
   return copy(invitation)
 }
@@ -80,7 +82,8 @@ export async function resendInvite(workspaceId: string, invitationId: string, et
   await delay(100)
   const invitation = mutableInvitation(workspaceId, invitationId, etag)
   if (["revoked", "accepted", "delivering"].includes(invitation.status)) throw new Error("Invitation cannot be resent in its current state")
-  invitation.status = "pending"; invitation.expiresAt = new Date(Date.now() + 7 * 86400000).toISOString(); invitation.updatedAt = new Date().toISOString(); advance(invitation)
+  const now = Date.now()
+  invitation.status = "pending"; invitation.expiresAt = new Date(now + 7 * 86400000).toISOString(); invitation.updatedAt = new Date(now).toISOString(); advance(invitation)
 }
 export async function revokeInvite(workspaceId: string, invitationId: string, etag?: string): Promise<void> {
   if (isLiveApi) { await apiDelete(`${path}/invitations/${encodeURIComponent(invitationId)}`, { ifMatch: etag }); return }
