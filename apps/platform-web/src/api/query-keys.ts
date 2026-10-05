@@ -171,9 +171,10 @@ export const queryKeys = {
     suggestions: ["discovery", "suggestions"] as const,
   },
   benchmarks: {
-    list: ["benchmarks", "list"] as const,
-    detail: (id: string) => ["benchmarks", "detail", id] as const,
-    results: (id: string) => ["benchmarks", "results", id] as const,
+    datasets: ["benchmarks", "datasets"] as const,
+    dataset: (id: string) => ["benchmarks", "datasets", id] as const,
+    runs: (datasetId?: string) => ["benchmarks", "runs", datasetId ?? "all"] as const,
+    run: (id: string) => ["benchmarks", "run", id] as const,
   },
   commands: {
     recent: ["commands", "recent"] as const,

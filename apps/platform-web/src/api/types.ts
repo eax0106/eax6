@@ -1131,59 +1131,6 @@ export interface UseCase {
   starterPrompt?: string;
 }
 
-export type BenchmarkMetricType =
-  | 'accuracy'
-  | 'success_rate'
-  | 'latency'
-  | 'cost'
-  | 'verification_rate'
-  | 'custom';
-
-export interface BenchmarkMetricDefinition {
-  id: string;
-  name: string;
-  type: BenchmarkMetricType;
-  higherIsBetter: boolean;
-}
-
-export interface BenchmarkDataset {
-  id: string;
-  name: string;
-  caseCount: number;
-  description?: string;
-}
-
-export interface Benchmark {
-  id: string;
-  name: string;
-  description?: string;
-  targetType: 'workflow' | 'workflow_version' | 'project';
-  targetId: string;
-  datasetId?: string;
-  metrics: BenchmarkMetricDefinition[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface BenchmarkMetricResult {
-  metricId: string;
-  value: number;
-}
-
-export interface BenchmarkResult {
-  id: string;
-  benchmarkId: string;
-  targetId: string;
-  version?: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
-  metrics: BenchmarkMetricResult[];
-  caseCount: number;
-  passedCases: number;
-  failedCases: number;
-  startedAt?: string;
-  completedAt?: string;
-}
-
 // --- Phase 10: Admin & Operations ---
 
 export interface AdminTenant {
