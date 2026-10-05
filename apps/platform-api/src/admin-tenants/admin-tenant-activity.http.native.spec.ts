@@ -10,7 +10,9 @@ import {Test} from "@nestjs/testing";
 import {APP_GUARD,APP_FILTER} from "@nestjs/core";
 import {FastifyAdapter,type NestFastifyApplication} from "@nestjs/platform-fastify";
 import {PostgresOrchestrationStoreProvider,PostgresCostStoreProvider} from "@alterx/adapters";
-import {ActorTokenValidator,M2mValidator,SessionGatewayGuard,ServiceAuthGuard} from "@alterx/auth";
+import type {CanActivate} from "@nestjs/common";
+import {M2mValidator,ServiceAuthGuard} from "@alterx/auth";
+import {RedisContainer,type StartedRedisContainer} from "@testcontainers/redis";
 import {PostgreSqlContainer,type StartedPostgreSqlContainer} from "@testcontainers/postgresql";
 import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from "vitest";
 import {RbacModule} from "../rbac";
@@ -28,6 +30,8 @@ import {EngineExceptionFilter} from "../engine/engine-exception.filter";
 import {ENTITLEMENT_PROVIDER} from "../entitlements/entitlement-provider.interface";
 // Exercise built sibling services across TCP rather than importing another app's source.
 const requireBuilt=createRequire(resolve("package.json"));
+const {SecurityModule}=requireBuilt(resolve("dist/apps/orchestration-service/security.module.js"));
+const {orchestrationStore,identityTenantGatewayEnvironment}=requireBuilt(resolve("dist/apps/orchestration-service/orchestration-infrastructure.module.js"));
 const {TenantActivityController}=requireBuilt(resolve("dist/apps/orchestration-service/tenant-activity/tenant-activity.controller.js"));
 const {TenantActivityService}=requireBuilt(resolve("dist/apps/orchestration-service/tenant-activity/tenant-activity.service.js"));
 const {RUN_LEARNING_AUDIT}=requireBuilt(resolve("dist/apps/orchestration-service/runs/run-learning.controller.js"));
@@ -37,6 +41,7 @@ const {applyMargin}=requireBuilt(resolve("dist/apps/cost-ledger-service/rollup/c
 const database=process.env.DATABASE_URL;
 describe.skipIf(!database).sequential("tenant activity current staff cookie and authenticated native service HTTP",()=>{
  let admin:pg.Client,pool:pg.Pool,schema:string,role:string,app:NestFastifyApplication,engine:NestFastifyApplication,cost:NestFastifyApplication,jwks:Server;
+ let redis:StartedRedisContainer,guardStore:PostgresOrchestrationStoreProvider;
  let engineContainer:StartedPostgreSqlContainer,costContainer:StartedPostgreSqlContainer,engineAdmin:PostgresOrchestrationStoreProvider,engineStore:PostgresOrchestrationStoreProvider,costAdmin:PostgresCostStoreProvider,costStore:PostgresCostStoreProvider;
  let engineBase:string,costBase:string,jwksBase:string,auditUnavailable=false,engineAuditUnavailable=false,badMachine=false;
  const tenant=uuidv7(),other=uuidv7(),member=uuidv7(),workspace=uuidv7(),grant="jit_"+uuidv7(),workflow=`wf_${uuidv7()}`,run=`run_${uuidv7()}`;
@@ -67,8 +72,18 @@ describe.skipIf(!database).sequential("tenant activity current staff cookie and 
   await costStore.withTenant(tenant,tx=>tx.query("INSERT INTO cost_events(id,tenant_id,workspace_id,mode,source,provider,resource,quantity,unit,internal_cost_minor,currency,occurred_at) VALUES($1,$2,$3,'workflow','tool_gateway','fixture','call',1,'call',101,'INR',$4)",[uuidv7(),tenant,workspace,start]));
   jwks=createServer((_req,res)=>{res.setHeader("content-type","application/json");res.end(JSON.stringify({keys:[{...key.publicKey.export({format:"jwk"}),alg:"RS256",use:"sig",kid}]}));});await new Promise<void>(resolve=>jwks.listen(0,"127.0.0.1",resolve));const address=jwks.address();if(!address||typeof address==="string")throw new Error("Invalid fixture address");jwksBase=`http://127.0.0.1:${address.port}`;
   const validator=()=>new M2mValidator({auth0Domain:"activity.auth.test",apiAudience:"alter-engine",jwksUrl:jwksBase});
-  const actor=new ActorTokenValidator({issuer:"activity-actor",audience:"alter-engine",jwksUrl:jwksBase},{setIfAbsent:async()=>true});
-  const engineModule=await Test.createTestingModule({controllers:[TenantActivityController],providers:[{provide:TenantActivityService,useValue:new TenantActivityService(engineStore)},{provide:RUN_LEARNING_AUDIT,useValue:{recordEvent:async(input:Record<string,unknown>)=>{if(engineAuditUnavailable)throw new Error("Audit unavailable");engineEvents.push(input);return {entry_hash:"a".repeat(64)};}}},{provide:APP_GUARD,useValue:new SessionGatewayGuard(validator(),actor,engineStore)}]}).compile();
+  redis=await new RedisContainer("redis:7-alpine").start();
+  const guards=(Reflect.getMetadata("providers",SecurityModule) as {provide:unknown;useFactory?:()=>CanActivate}[]).filter(provider=>provider.provide===APP_GUARD);
+  expect(guards).toHaveLength(3);
+  let guard:CanActivate;
+  try{
+   for(const [name,value] of Object.entries({ALTER_ENV:"local",AUTH0_DOMAIN:"activity.auth.test",AUTH0_API_AUDIENCE:"alter-engine",AUTH0_JWKS_URL:jwksBase,
+    ACTOR_TOKEN_ISSUER:"activity-actor",ACTOR_TOKEN_AUDIENCE:"alter-engine",ACTOR_TOKEN_JWKS_URL:jwksBase,REDIS_ENDPOINT:redis.getConnectionUrl(),
+    ORCHESTRATION_DATABASE_AUTHENTICATION:"static",ORCHESTRATION_DATABASE_URL:ordinary(engineContainer.getConnectionUri()),AWS_REGION:"ap-south-1",ALTER_ARTIFACTS_BUCKET_PARAM:"/alter/local/orchestration/artifacts-bucket"}))vi.stubEnv(name,value);
+   const factory=guards[0]?.useFactory;if(!factory)throw new Error("Production authentication factory missing");guard=factory();
+   guardStore=orchestrationStore(identityTenantGatewayEnvironment(process.env));
+  }finally{vi.unstubAllEnvs();}
+  const engineModule=await Test.createTestingModule({controllers:[TenantActivityController],providers:[{provide:TenantActivityService,useValue:new TenantActivityService(engineStore)},{provide:RUN_LEARNING_AUDIT,useValue:{recordEvent:async(input:Record<string,unknown>)=>{if(engineAuditUnavailable)throw new Error("Audit unavailable");engineEvents.push(input);return {entry_hash:"a".repeat(64)};}}},{provide:APP_GUARD,useValue:guard}]}).compile();
   engine=engineModule.createNestApplication<NestFastifyApplication>(new FastifyAdapter());await engine.listen(0,"127.0.0.1");engineBase=await engine.getUrl();
   const costModule=await Test.createTestingModule({controllers:[TenantSpendController],providers:[{provide:TenantSpendService,useValue:new TenantSpendService(costStore,(minor:string)=>applyMargin(minor,0.2))},{provide:APP_GUARD,useValue:new ServiceAuthGuard(validator())}]}).compile();
   cost=costModule.createNestApplication<NestFastifyApplication>(new FastifyAdapter());await cost.listen(0,"127.0.0.1");costBase=await cost.getUrl();
@@ -81,7 +96,7 @@ describe.skipIf(!database).sequential("tenant activity current staff cookie and 
   app=module.createNestApplication<NestFastifyApplication>(new FastifyAdapter());app.getHttpAdapter().getInstance().addHook("preHandler",async(request,reply)=>middleware.use(request as unknown as Parameters<StaffAuthMiddleware["use"]>[0],reply,()=>{}));await app.init();await app.getHttpAdapter().getInstance().ready();
  },120000);
  beforeEach(async()=>{events.length=0;engineEvents.length=0;auditUnavailable=false;engineAuditUnavailable=false;badMachine=false;await admin.query("UPDATE staff_users SET roles=ARRAY['staff_support'],deactivated_at=NULL WHERE id='stf_activity'");await admin.query("UPDATE jit_grants SET granted_at=now(),expires_at=now()+interval '1 hour',revoked_at=NULL,scopes=ARRAY['tenant:read'] WHERE id=$1",[grant]);});
- afterAll(async()=>{await app?.close();await engine?.close();await cost?.close();if(jwks)await new Promise<void>((resolve,reject)=>jwks.close(error=>error?reject(error):resolve()));await pool?.end();await engineStore?.close();await costStore?.close();await engineAdmin?.close();await costAdmin?.close();await engineContainer?.stop();await costContainer?.stop();if(admin){await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.query(`DROP ROLE IF EXISTS ${role}`);await admin.end();}vi.unstubAllGlobals();vi.unstubAllEnvs();},60000);
+ afterAll(async()=>{await app?.close();await engine?.close();await cost?.close();if(jwks)await new Promise<void>((resolve,reject)=>jwks.close(error=>error?reject(error):resolve()));await pool?.end();await engineStore?.close();await costStore?.close();await engineAdmin?.close();await costAdmin?.close();await guardStore?.close();await redis?.stop();await engineContainer?.stop();await costContainer?.stop();if(admin){await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await admin.query(`DROP ROLE IF EXISTS ${role}`);await admin.end();}vi.unstubAllGlobals();vi.unstubAllEnvs();},60000);
  const headers={cookie:"alter_staff_access=actual-staff","x-alter-support-grant":grant};
  const read=(id=tenant,auth:Record<string,string>=headers)=>app.inject({method:"GET",url:`/api/v1/admin/tenants/${id}/activity`,headers:auth});
  it("serves actual records over both authenticated TCP services and records the real staff actor",async()=>{

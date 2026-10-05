@@ -27,4 +27,4 @@ Scope: Build D26 tenant detail from actual member, workflow, run and billed exec
 - [x] G5: Original/fault/restored controls prove tenant filters, time boundaries, billable-only projection and authorization; integrated affected suites, coverage, static/build, production wiring and architecture/RBAC/AST checks pass
   CHECK: node .unlazy/verify-detail-final.mjs
   EXPECT: tenant-detail-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=05758c950817ed9f01ea2b5e9ef2af5d56b217a3cbd195aeb8752a658852e520; exit=0; EXPECT=matched; output-sha256=70b2046d5e8d9753b4d57d441d20f8019d3d0339f112392ff4944692b0656423; output-bytes=1208; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-detail-c128; path=2b1f1cc87037/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=05758c950817ed9f01ea2b5e9ef2af5d56b217a3cbd195aeb8752a658852e520; exit=0; EXPECT=matched; output-sha256=d98fb28c87631f404ef80b3a539b276995bbb136f286b1074354428c2b683a24; output-bytes=1237; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-detail-c128; path=2b1f1cc87037/31 entries
