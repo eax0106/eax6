@@ -232,3 +232,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change and evidence | Status | Branch |
 | --- | --- | --- | --- |
 | C132 | D26 real staff billing operations: reasoned exact-revision run-credit grants, provider-bound hosted recovery and paid-only resolution, durable Engine credit delivery and guarded erasure | In progress: native proofs and five acceptance gates; no completion or merge claim | codex/billing-ops-c132 |
+
+### C136 — D25 tenant benchmarks through Simulate
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C136 | D25 (b) tenant benchmark datasets and runs. **Engine slice:** `POST /internal/benchmarks/simulate-case` (internal service credential) runs one case through Simulate: the workflow's promoted version executes in wave order with the case input as its trigger payload; compute nodes (LLMTask, Synthesis, Gate, Merge, GroupChat, YAMLImport) execute through the run handlers and each is scored by the Verification & Quality Gate; ToolCall, SandboxExec, MemoryWrite, PubSub and HumanApproval never execute and are recorded as simulated with the inputs they would have received; the case is judged against its own success criteria. Model use carries the tenant and a simulation run id, so the Model Gateway costs it as any other model call. Workflows outside the case's workspace read as not found. Specs 12 (simulator 8, controller 4); executing an outside-action node fails 2 and dropping the case criteria fails 1. | In progress: eval-service storage and runner, platform routes and the customer Benchmarks area remain | build/tenant-benchmarks-c136 |
