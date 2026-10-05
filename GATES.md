@@ -27,4 +27,4 @@ Scope: Staff golden-set run history backed by actual eval-service PostgreSQL rec
 - [x] G5: Decisive fault controls fail and restored code passes; full affected tests, static checks, real transport, architecture/RBAC and normalized AST checks pass
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: benchmark-history-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=2ba56d042eeb04b629cc60fdd621293aeda1715937e28bfb999cd2fd63bbd323; exit=0; EXPECT=matched; output-sha256=202c3d7740f7d0e7f35bbc343c1217b6fdc9845797946d2928d2f6323aa18e2f; output-bytes=889; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=2ba56d042eeb04b629cc60fdd621293aeda1715937e28bfb999cd2fd63bbd323; exit=0; EXPECT=matched; output-sha256=d823f78db07889af3fad528338663b9dcfb2c9ed5ec78ccf3f318422f466e5b8; output-bytes=889; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
