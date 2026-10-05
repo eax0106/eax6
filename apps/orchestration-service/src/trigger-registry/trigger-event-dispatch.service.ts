@@ -12,6 +12,7 @@ import {
 import type { RunDispatchHandler } from "@alterx/adapters";
 import type { OrchestrationTenantStore } from "../runs/run-launcher.service";
 import type { RunBudgetGate } from "../budgets/run-budget-gate";
+import type { EngineBillingAccountService } from "../billing/billing-account.service";
 import { RunLauncherService, type RunRow } from "../runs/run-launcher.service";
 
 export class TriggerEventValidationError extends Error {
@@ -64,6 +65,7 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
     private readonly store: OrchestrationTenantStore,
     private readonly launcher: RunLauncherService,
     private readonly budgetGate?: RunBudgetGate,
+    private readonly billing?: Pick<EngineBillingAccountService, "reserve">,
   ) {}
 
   async createRun(request: RunsCreateRunRequest): Promise<RunsCreateRunResponse> {
@@ -239,6 +241,7 @@ export class TriggerEventDispatchService implements RunDispatchHandler {
         `run row for event ${eventId} could not be created`,
       );
     }
+    await this.billing?.reserve(tx, { tenantId, runId });
     return inserted.rows[0]!;
   }
 }

@@ -1,13 +1,10 @@
 import { NavLink, Outlet } from "react-router-dom"
-import { BarChart, List, DollarSign, ArrowUpRight, ShieldCheck, Store } from "lucide-react"
+import { BarChart, List, Store } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const sellerNavItems = [
   { name: "Overview", href: "/app/seller", icon: BarChart },
   { name: "Listings", href: "/app/seller/listings", icon: List },
-  { name: "Earnings", href: "/app/seller/earnings", icon: DollarSign },
-  { name: "Payouts", href: "/app/seller/payouts", icon: ArrowUpRight },
-  { name: "Verification", href: "/app/seller/kyc", icon: ShieldCheck },
 ]
 
 export function SellerLayout() {

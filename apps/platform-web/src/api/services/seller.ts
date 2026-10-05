@@ -117,6 +117,7 @@ export const sellerService = {
       return mockSellerListings
     },
     create: async (data: any): Promise<MarketplaceListing> => {
+      if (data.pricing && data.pricing.type !== "free") throw new Error("Marketplace listings are free-only in v1")
       if (isLiveApi) {
         const row = await apiPost<SellerListingRow>("/api/v1/marketplace/listings", {
           name: data.title,
@@ -144,6 +145,7 @@ export const sellerService = {
       }
     },
     update: async (_id: string, data: any) => {
+      if (data.pricing && data.pricing.type !== "free") throw new Error("Marketplace listings are free-only in v1")
       if (isLiveApi) throw new Error("Listing edits are not available in this Seller Console yet")
       await delay(500)
       return { ...mockSellerListings[0], ...data }

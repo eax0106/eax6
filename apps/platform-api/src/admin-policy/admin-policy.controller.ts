@@ -3,14 +3,17 @@ import {
   Controller,
   Delete,
   Get,
+  Headers,
   HttpCode,
   Param,
   Put,
   Query,
   Req,
   UseFilters,
+  UseInterceptors,
 } from "@nestjs/common";
 import { RequireStaffRole } from "../rbac/decorators";
+import { EtagResponseInterceptor } from "../concurrency";
 import type { RbacRequest } from "../rbac/types";
 import { AdminPolicyExceptionFilter } from "./admin-policy-exception.filter";
 import { AdminPolicyService } from "./admin-policy.service";
@@ -52,6 +55,7 @@ export class AdminPolicyController {
   }
 
   @Get(":plan")
+  @UseInterceptors(EtagResponseInterceptor)
   @RequireStaffRole(...readRoles)
   getPolicy(@Param("plan") plan: string): Promise<PlanPolicyView> {
     const instance = `/api/v1/admin/policy/plans/${plan}`;
@@ -72,18 +76,21 @@ export class AdminPolicyController {
   }
 
   @Put(":plan")
+  @UseInterceptors(EtagResponseInterceptor)
   @HttpCode(200)
   @RequireStaffRole(...writeRoles)
   upsert(
     @Param("plan") plan: string,
     @Body() body: unknown,
     @Req() request: RbacRequest,
+    @Headers("if-match") ifMatch?: string,
   ): Promise<PlanDefinitionView> {
     const instance = `/api/v1/admin/policy/plans/${plan}`;
     return this.policy.upsert(
       parsePlanName(plan, instance),
       requireStaff(request, instance).staff_user_id,
       parseUpsertPlanDefinitionInput(body, instance),
+      ifMatch,
     );
   }
 
@@ -94,12 +101,14 @@ export class AdminPolicyController {
     @Param("plan") plan: string,
     @Body() body: unknown,
     @Req() request: RbacRequest,
+    @Headers("if-match") ifMatch?: string,
   ): Promise<void> {
     const instance = `/api/v1/admin/policy/plans/${plan}`;
     return this.policy.remove(
       parsePlanName(plan, instance),
       requireStaff(request, instance).staff_user_id,
       parseDeletePlanDefinitionInput(body, instance),
+      ifMatch,
     );
   }
 }

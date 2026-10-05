@@ -6,7 +6,7 @@ import { createMockMutableSecretsProvider, type ErasableSecretsProvider } from "
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { DELETE_ORDER, OrchestrationDeletionService, TABLES } from "./deletion.service";
+import { DELETE_ORDER, OrchestrationDeletionService, TABLES, WORKSPACE_TABLES } from "./deletion.service";
 
 const migrationsFolder = resolve(process.cwd(), "apps/orchestration-service/drizzle");
 const TENANT_A = "018f4d6e-2b4a-7a3e-8c1a-1234567890a1";
@@ -100,7 +100,7 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     expect(DELETE_ORDER).toHaveLength(new Set(DELETE_ORDER).size);
   });
 
-  it("deletes all 39 tenant tables while preserving a second tenant", async () => {
+  it("deletes all 42 tenant tables while preserving a second tenant", async () => {
     await seedAll(adminStore, TENANT_A, "a");
     await seedAll(adminStore, TENANT_B, "b");
 
@@ -111,11 +111,11 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
     // C8 added side_effects; D3 added budgets, budget_usage and budget_reservations;
     // D2 added workspace_holds and workspace_run_retention; D5 approval_step_policies;
     // D19 added connection_registry; D9 added workflow_folders.
-    expect(before).toHaveLength(39);
+    expect(before).toHaveLength(42);
     expect(before.every((location) => location.rowCount === 1)).toBe(true);
 
     await expect(service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
-      deletedRows: 39,
+      deletedRows: 42,
       deletedObjects: 2,
     });
     await expect(service.verifyDeletion(`ten_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({
@@ -143,18 +143,24 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
 
   it("erases one workspace from the live schema and leaves the tenant's other workspace (D2)", async () => {
     const other = "018f4d6e-2b4a-7a3e-8c1a-1234567890e9";
+    await service.deleteSubjectData(`ten_${TENANT_A}`, MANIFEST);
     await seedAll(adminStore, TENANT_A, "x", other);
     await seedAll(adminStore, TENANT_A, "w");
 
     await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_w/v1`, "erased");
     await secrets.putSecret(`alter/webhook-endpoints/ten_${TENANT_A}/whe_x/v1`, "kept");
     const located = await service.locateWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`);
-    expect(located).toHaveLength(TABLES.length);
+    expect(located).toHaveLength(WORKSPACE_TABLES.length);
     expect(located.every((location) => location.rowCount === 1)).toBe(true);
 
-    await expect(service.deleteWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deletedRows: TABLES.length, deletedObjects: 1 });
+    await expect(service.deleteWorkspaceData(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deletedRows: WORKSPACE_TABLES.length, deletedObjects: 1 });
     await expect(secrets.listSecretReferences(`alter/webhook-endpoints/ten_${TENANT_A}/`)).resolves.toEqual([`alter/webhook-endpoints/ten_${TENANT_A}/whe_x/v1`]);
     await expect(service.verifyWorkspaceDeletion(`ten_${TENANT_A}`, `ws_${TENANT_A}`, MANIFEST)).resolves.toMatchObject({ deleted: true, remaining: [] });
+    await tenantStore.withTenant(TENANT_A, async tx => {
+      expect((await tx.query("SELECT credit_balance::text AS balance,reserved_credits::text AS reserved FROM billing_accounts")).rows).toEqual([{balance:"100",reserved:"2"}]);
+      expect((await tx.query("SELECT event_ref FROM billing_credit_grants")).rows).toEqual([{event_ref:"erasure-fixture"}]);
+      expect((await tx.query("SELECT run_id FROM billing_run_reservations")).rows).toEqual([{run_id:"run_x"}]);
+    });
     const survivors = await service.locateWorkspaceData(`ten_${TENANT_A}`, `ws_${other}`);
     expect(survivors.every((location) => location.rowCount === 1)).toBe(true);
     await expect(service.locateSubjectData(`ten_${TENANT_A}`)).resolves.toSatisfy(
@@ -212,6 +218,8 @@ describe.sequential("OrchestrationDeletionService real Postgres", () => {
         [TENANT_RETENTION],
       );
       expect(node.rows[0]).toEqual({ input_ref: null, output_ref: null });
+      expect((await tx.query("SELECT credit_balance::text AS balance,reserved_credits::text AS reserved FROM billing_accounts")).rows).toEqual([{balance:"100",reserved:"0"}]);
+      expect((await tx.query("SELECT * FROM billing_run_reservations")).rows).toEqual([]);
     });
     log.mockRestore();
     warn.mockRestore();
@@ -250,6 +258,10 @@ async function seedAll(
     await tx.query("INSERT INTO conversation_goal_states(tenant_id,conversation_id) VALUES ($1,$2)", [tenant, conversation]);
     await tx.query("INSERT INTO events(event_id,event_type,schema_version,tenant_id,workspace_id,source,idempotency_key,occurred_at,conversation_id,trigger_id,trigger_version,payload,signature_status) VALUES ($1,'fixture','v1',$2,$6,'fixture',$3,now(),$4,$5,1,'{}','verified')", [`evt_${suffix}`, tenant, `idem-${suffix}`, conversation, trigger, workspace]);
     await tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id,conversation_id,trigger_id,triggering_event_id) VALUES ($1,$2,$8,'workflow',$3,$4,$5,$6,$7)", [run, tenant, workflow, workflowVersion, conversation, trigger, `evt_${suffix}`, workspace]);
+    await tx.query("INSERT INTO billing_accounts(tenant_id,plan,source_revision,policy_hash,access_state,email_verified,is_free,max_runs_per_day,credits_per_verified_run,credit_balance) VALUES($1,'paid',now(),repeat('0',64),'active',true,false,100,2,100) ON CONFLICT(tenant_id) DO NOTHING", [tenant]);
+    await tx.query("INSERT INTO billing_credit_grants(tenant_id,event_ref,credits) VALUES($1,'erasure-fixture',100) ON CONFLICT DO NOTHING", [tenant]);
+    await tx.query("UPDATE billing_accounts SET reserved_credits=reserved_credits+2 WHERE tenant_id=$1", [tenant]);
+    await tx.query("INSERT INTO billing_run_reservations(tenant_id,run_id,credits) VALUES($1,$2,2)", [tenant,run]);
     await tx.query("INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES ($1,$2,'fixture','{}')", [tenant, run]);
     await tx.query("INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,'fixture','Merge','succeeded')", [node, tenant, run]);
     await tx.query("INSERT INTO side_effects(id,tenant_id,run_id,dag_node_id,node_execution_id,tool_name,status) VALUES ($1,$2,$3,'fixture',$4,'email.send','completed')", [`sfx_${suffix}`, tenant, run, node]);
@@ -269,7 +281,7 @@ async function seedAll(
     await tx.query("INSERT INTO approvals(id,tenant_id,workspace_id,run_id,node_execution_id,requested_action,expiry_at) VALUES ($1,$2,$5,$3,$4,'{}',now()+interval '1 hour')", [`apr_${suffix}`, tenant, run, node, workspace]);
 
     // The ten tables ENGINE-FIX-P0-2 added to TABLES/DELETE_ORDER (migrations
-    // 0019+). Seeded here so "deletes all 39 tenant tables" actually proves
+    // 0019+). Seeded here so "deletes all 42 tenant tables" actually proves
     // coverage instead of just proving the original 19 still work.
     const project = `prj_${suffix}`;
     const webhookEndpoint = `whe_${suffix}`;
@@ -298,6 +310,9 @@ async function seedRetention(store: PostgresOrchestrationStoreProvider): Promise
     await tx.query("INSERT INTO conversation_goal_states(tenant_id,conversation_id) VALUES ($1,'conv_old')", [TENANT_RETENTION]);
     await tx.query("INSERT INTO events(event_id,event_type,schema_version,tenant_id,workspace_id,source,idempotency_key,occurred_at,conversation_id,payload,signature_status) VALUES ('evt_old','fixture','v1',$1,$1,'fixture','idem-old',now(),'conv_old','{}','verified')", [TENANT_RETENTION]);
     await tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,conversation_id) VALUES ('run_old',$1,$1,'workflow','wf_retention','conv_old'),('run_retention',$1,$1,'workflow','wf_retention',NULL)", [TENANT_RETENTION]);
+    await tx.query("INSERT INTO billing_accounts(tenant_id,plan,source_revision,policy_hash,access_state,email_verified,is_free,max_runs_per_day,credits_per_verified_run,credit_balance,reserved_credits) VALUES($1,'paid',now(),repeat('0',64),'active',true,false,100,2,100,2)", [TENANT_RETENTION]);
+    await tx.query("INSERT INTO billing_run_reservations(tenant_id,run_id,credits) VALUES($1,'run_old',2)", [TENANT_RETENTION]);
+    await tx.query("INSERT INTO run_dispatch_queue(id,tenant_id,run_id,compiled_dag) VALUES($1,$2,'run_old','{}')", [randomUUID(),TENANT_RETENTION]);
     await tx.query("INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status,input_ref,output_ref,ended_at) VALUES ('node_retention',$1,'run_retention','fixture','Merge','succeeded','input','output',now()-interval '91 days')", [TENANT_RETENTION]);
   });
 }

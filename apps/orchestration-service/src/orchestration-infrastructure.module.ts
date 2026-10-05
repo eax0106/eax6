@@ -1,4 +1,5 @@
 import { Module } from "@nestjs/common";
+import { EngineBillingAccountService } from "./billing/billing-account.service";
 import { createMockConfigProvider } from "@alterx/shared-clients";
 import {
   AwsAppConfigConfigProvider,
@@ -146,7 +147,7 @@ export function internalM2mTokenProvider() {
 export function buildRunOutcomeService(): RunOutcomeService {
   const dbConfig = identityTenantGatewayEnvironment(process.env);
   const store = orchestrationStore(dbConfig);
-  return new RunOutcomeService(store, runVerdictSink(process.env), buildRunBudgetGate(process.env));
+  return new RunOutcomeService(store, runVerdictSink(process.env), buildRunBudgetGate(process.env), new EngineBillingAccountService(store));
 }
 
 /**

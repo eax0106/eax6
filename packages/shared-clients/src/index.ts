@@ -77,6 +77,7 @@ export {
   type BillingRefund,
   type BillingPlan,
   type BillingProvider,
+  BillingOperationNotSubmittedError,
   type KycDocumentRef,
   type KycProvider,
   type KycSubmission,
@@ -168,6 +169,8 @@ export {
   type SecretReferenceId,
   type SecretsProvider,
   type Subscription,
+  type SubscriptionCheckoutInput,
+  type SubscriptionCheckoutLookup,
   type StatusPageIncident,
   type StatusPageIncidentRequest,
   type StatusPageProvider,
@@ -349,3 +352,5 @@ export {
   type MockSpeechToTextProviderOptions,
 } from "./mocks/speech-to-text-provider";
 export type { PackageEcosystem, PackageScanRequest, PackageScanReport, PackageScanProvider, ScanFinding, ScanSeverity, ScanVerdict, RegistryToolVersion, RegistryScanReport, ToolVersionReviewItem } from "./package-scan";
+
+export { resolveEnvironmentSecret } from "./environment-secret";

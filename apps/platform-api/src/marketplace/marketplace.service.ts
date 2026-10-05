@@ -38,10 +38,11 @@ export class MarketplaceService {
   ) {}
 
   list(tenantId: string, query: ListingQuery, cursor?: ListingCursor) { return this.repository.listListings(tenantId, query, cursor); }
-  async get(tenantId: string, listingId: string): Promise<ListingRecord> { return this.requireListing(tenantId, listingId); }
-  async create(tenantId: string, input: CreateListingInput) { return this.repository.createListing(tenantId, marketplaceId("lst"), input); }
+  async get(tenantId: string, listingId: string): Promise<ListingRecord> { const listing=await this.requireListing(tenantId,listingId);if(BigInt(listing.priceMinor)!==0n)throw this.notFound(listingId);return listing; }
+  async create(tenantId: string, input: CreateListingInput) { if(BigInt(input.price_minor??"0")!==0n)throw paidUnavailable();return this.repository.createListing(tenantId, marketplaceId("lst"), input); }
   async update(tenantId: string, listingId: string, input: UpdateListingInput, staff?: StaffActorContext) {
     const current = await this.requireOwnedListing(tenantId, listingId);
+    if(input.price_minor!==undefined && BigInt(input.price_minor)!==0n)throw paidUnavailable();
     if (input.price_minor !== undefined && !["draft", "private_testing"].includes(current.status)) {
       throw new MarketplaceHttpError(409, "MARKETPLACE_PRICE_LOCKED", "Price can be changed only before submission.", `/api/v1/marketplace/listings/${listingId}`);
     }
@@ -93,6 +94,7 @@ export class MarketplaceService {
       throw new MarketplaceHttpError(409, "IDEMPOTENCY_KEY_REUSED", "Idempotency key was already used for another install.", `/api/v1/marketplace/listings/${listingId}/actions/install`);
     }
     const listing = await this.requireListing(tenantId, listingId);
+    if(BigInt(listing.priceMinor)!==0n)throw paidUnavailable();
     const entitlement = await this.entitlements.getEffectiveEntitlement(tenantId);
     if (entitlement.accessState !== "active") throw new MarketplaceHttpError(403, "MARKETPLACE_ENTITLEMENT_INACTIVE", `Marketplace install requires active entitlement; current state is ${entitlement.accessState}.`, `/api/v1/marketplace/listings/${listingId}/actions/install`);
     const version = await this.repository.findVersion(tenantId, listingId, input.listing_version_id);
@@ -128,4 +130,5 @@ export class MarketplaceService {
     return { compatible: requirements.every((item) => item.satisfied), requirements, permissions: ["marketplace:install"] };
   }
 }
+function paidUnavailable(){return new MarketplaceHttpError(409,"MARKETPLACE_FREE_ONLY","Marketplace listings are free-only in v1.","/api/v1/marketplace/listings");}
 function isUniqueViolation(error: unknown): error is { code: string } { return typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "23505"; }

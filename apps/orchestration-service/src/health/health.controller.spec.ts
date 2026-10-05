@@ -27,6 +27,7 @@ describe("GET /health", () => {
       DELETION_DATABASE_USER: "orchestration_deletion",
       DELETION_SERVICE_TOKEN_SHA256: "a".repeat(64),
       DEPLOYMENT_ADMIN_SERVICE_TOKEN_SHA256: "c".repeat(64),
+      BILLING_SYNC_SERVICE_TOKEN_SHA256: "f".repeat(64),
       CONNECTION_REGISTRY_SERVICE_TOKEN_SHA256: "d".repeat(64),
       INTERNAL_SERVICE_TOKEN_SHA256: "e".repeat(64),
       EVAL_SERVICE_GRPC_TARGET: "127.0.0.1:50062",

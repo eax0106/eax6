@@ -25,6 +25,7 @@ import { BillingWebhookService } from "./billing-webhook.service";
 import { BillingController } from "./billing.controller";
 import { BillingRepository } from "./billing.repository";
 import { BillingService } from "./billing.service";
+import { BillingPolicyModule } from "./billing-policy.module";
 import {
   BILLING_PROVIDER,
   BILLING_SECRETS_PROVIDER,
@@ -32,7 +33,7 @@ import {
 } from "./tokens";
 
 @Module({
-  imports: [IdempotencyModule, EntitlementsModule, AdminAuditModule, StaffModule],
+  imports: [IdempotencyModule, EntitlementsModule, AdminAuditModule, StaffModule, BillingPolicyModule],
   controllers: [BillingController, AdminBillingController],
   providers: [
     {
