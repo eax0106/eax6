@@ -19,6 +19,8 @@ const provisionSchema = z
   })
   .strict();
 
+const noteSchema = z.object({ body: z.string().trim().min(1).max(4000) }).strict();
+
 const suspendSchema = z
   .object({
     reason: z.string().trim().min(1).max(500),
@@ -40,6 +42,10 @@ const entitlementOverrideSchema = z
     reason: z.string().trim().min(1).max(500),
   })
   .strict();
+
+export function parseTenantNoteInput(value: unknown, instance: string): {body: string} {
+  return parse(noteSchema, value, instance);
+}
 
 export function parseTenantId(value: string, instance: string): string {
   if (!uuidPattern.test(value)) {

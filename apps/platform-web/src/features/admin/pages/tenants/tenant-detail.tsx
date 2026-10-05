@@ -6,6 +6,7 @@ import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { isLiveApi } from "@/api/http"
 import { getStaffSession } from "@/api/staff-auth"
+import { AdminNoteComposer } from "../../components/admin-note-composer"
 
 import { Card } from "@/components/ui/card"
 import { StatusBadge } from "@/components/common/status-badge"
@@ -36,7 +37,7 @@ export function TenantDetail() {
     enabled: canRead
   })
 
-  const { data: notes, isLoading: notesLoading } = useQuery({
+  const { data: notes, isLoading: notesLoading, error: notesError } = useQuery({
     queryKey: [...queryKeys.admin.tenants.notes(tenantId!), grantId],
     queryFn: () => api.admin.tenants.getNotes(tenantId!, grantId),
     enabled: canRead
@@ -128,6 +129,12 @@ export function TenantDetail() {
 
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-slate-200">Admin Notes</h3>
+        {canRead && (!isLiveApi || session.data?.roles.some(role => ["staff_admin", "staff_support", "staff_billing_ops", "staff_security"].includes(role))) && <AdminNoteComposer append={async body => {
+          const note = await api.admin.tenants.addNote(tenantId!, body, grantId)
+          await queryClient.invalidateQueries({queryKey: queryKeys.admin.tenants.notes(tenantId!)})
+          return note
+        }} />}
+        {notesError && <p role="alert" className="text-destructive">{notesError instanceof Error ? notesError.message : "Notes are unavailable"}</p>}
         {notesLoading ? (
           <div className="p-4 text-center text-slate-500"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></div>
         ) : notes?.length === 0 ? (

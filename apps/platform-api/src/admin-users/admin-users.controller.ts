@@ -36,6 +36,20 @@ export class AdminUsersController {
     return this.users.actions(parseUserId(userId, instance), instance);
   }
 
+  @Post(":userId/notes")
+  @HttpCode(201)
+  @RequireStaffRole(...readRoles)
+  appendNote(@Param("userId") userId: string, @Body() body: unknown, @Req() request: RbacRequest): Promise<AdminUserActionView> {
+    const instance = `${BASE}/${userId}/notes`;
+    if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).length !== 1
+        || typeof (body as {body?: unknown}).body !== "string") {
+      throw problem(400, "VALIDATION_FAILED", "body is required (1-4000 characters)", instance);
+    }
+    const text = (body as {body: string}).body.trim();
+    if (!text || text.length > 4000) throw problem(400, "VALIDATION_FAILED", "body is required (1-4000 characters)", instance);
+    return this.users.appendNote(parseUserId(userId, instance), staffId(request, instance), text, instance);
+  }
+
   @Post(":userId/actions/suspend")
   @HttpCode(200)
   @RequireStaffRole(...actRoles)

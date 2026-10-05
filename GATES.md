@@ -1,30 +1,25 @@
-# Gates: D25 staff golden-set history (C124)
+# Gates: D26 append-only staff tenant and user notes (C125)
 
-OWNS: apps/eval-service/src/db/session.py, apps/eval-service/src/grpc_server.py, apps/eval-service/src/history/**, apps/eval-service/src/main.py, apps/eval-service/tests/test_history.py, apps/platform-api/src/benchmarks/**, apps/platform-web/src/api/services/benchmark-history.ts, apps/platform-web/src/api/services/benchmark-history.spec.ts, apps/platform-web/src/features/admin/pages/platform/benchmark-history.tsx, apps/platform-web/src/features/admin/pages/platform/benchmark-history.spec.tsx, apps/platform-web/src/features/admin/layout/admin-sidebar.tsx, apps/platform-web/src/app/router.tsx, deploy/ec2/**, .env.local.example, docs/work-queue.md, scripts/gates/baseline.json
+OWNS: apps/platform-api/src/deletion/platform-deletion.integration.spec.ts, apps/platform-api/src/deletion/retention-expiry.integration.spec.ts, apps/platform-web/src/features/admin/components/admin-note-composer.tsx, apps/platform-api/src/admin-tenants/**, apps/platform-api/src/admin-users/**, apps/platform-api/src/db/migrations/0035_admin_notes.sql, apps/platform-api/src/db/migrations/rollback/0035_remove_admin_notes.sql, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-web/src/api/live-admin-tenants.ts, apps/platform-web/src/api/live-admin-users.ts, apps/platform-web/src/api/services/admin-tenants.ts, apps/platform-web/src/api/services/admin-users.ts, apps/platform-web/src/features/admin/pages/tenants/tenant-detail.tsx, apps/platform-web/src/features/admin/pages/users/user-detail.tsx, apps/platform-web/src/features/admin/pages/tenants/tenant-notes.spec.tsx, apps/platform-web/src/features/admin/pages/users/user-notes.spec.tsx, scripts/gates/baseline.json, docs/work-queue.md
 
-Scope: Staff golden-set run history backed by actual eval-service PostgreSQL records and current staff authorization. D25 tenant datasets, per-case Simulate execution and customer Benchmarks remain independently required in the root roadmap. No live model call or cloud apply is required for this leaf.
+Scope: Authenticated staff can append bounded notes to tenant and user action history. Existing immutable history and retention remain authoritative; tenant read/write retains active support-grant scope. Notes are immutable local staff history; mandatory central staff audit is acknowledged before local commit, and failed audit rolls back the note. D26 tenant detail metrics, review assignment, billing operations and deployments remain independently required. No vendor write is needed.
 
-- [x] G1: Authenticated eval-service HTTP lists actual golden-set runs with scores and stable bounded pagination through ordinary forced RLS; no missing service credential or invalid filter reaches storage
-  CHECK: node .unlazy/verify-history.mjs
-  EXPECT: benchmark-history-storage-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=ac2c8bf8de996a54f3ffa325f07234a69f9ff44240d29063239b6de717733b4e; exit=0; EXPECT=matched; output-sha256=292a6d4c141821b72f6441b5c2a002ec538d1f41db0705c951ee19f81f5b215b; output-bytes=36; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
+- [x] G1: Real ordinary-role PostgreSQL persists tenant/user notes as immutable staff history with mandatory central audit acknowledgement before commit; audit failure rolls back, note updates/deletes fail, and existing action history and retention remain intact
+  CHECK: node .unlazy/verify-storage.mjs
+  EXPECT: admin-notes-storage-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=d4ec974c4e6ff1f64425cc4b2105a316ed6e5159a733a92c0a250ad0fbbdae87; exit=0; EXPECT=matched; output-sha256=3072481478a022a163048983d7338be8cef94afe90f7823d17d4e07ea3675a2a; output-bytes=81; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
 
-- [x] G2: Platform history routes authorize current staff roles only and preserve pagination and upstream failure semantics; nonstaff and expired sessions cannot read history
+- [x] G2: Real staff-cookie HTTP applies current roles and tenant support-grant scope; missing, expired, unrelated and revoked access cannot read or append notes; unknown subjects and invalid notes return errors
   CHECK: node .unlazy/verify-http.mjs
-  EXPECT: benchmark-history-http-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=a2cfa3facf10d6191bcc21a4da4866887a530bf2239867c65cc6f4ec56dd0027; exit=0; EXPECT=matched; output-sha256=717f80cc5b9b746df33f4cb77fef7ff8b23ba78087fe3e54011c57fdc23f8eab; output-bytes=84; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
+  EXPECT: admin-notes-http-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=65ca83c977eab453c7a0b255092d40738a922732ea9d89c27ccea7f909c8de97; exit=0; EXPECT=matched; output-sha256=81de062d61d035073ab939a7c27d4ca4867676e75a7b5949409f26aee41cec2c; output-bytes=78; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
 
-- [x] G3: Admin history page displays actual golden set, version, status, pass rate and timestamps; loading, empty, unavailable and subsequent pages remain honest
+- [x] G3: Live and demo tenant/user pages append and refresh actual history; validation, role limitations and unavailable service remain visible
   CHECK: node .unlazy/verify-web.mjs
-  EXPECT: benchmark-history-web-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=85687a7a0abdd5f8f0a59f9c550ad5783175c05bd9135a8b3aa681463ecc2ba0; exit=0; EXPECT=matched; output-sha256=6018a75ebb4b67990594a8ebbb4947ec34e9924a40c0246e94526fee993153a3; output-bytes=81; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
+  EXPECT: admin-notes-web-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=198a8758c4e38e9dd496c3d39b823f2b4bfb94fffd12f0cfd1078f780bcd63b3; exit=0; EXPECT=matched; output-sha256=fe8447dc37b3d62c1c5a9f4700cb5759908ec8c4ce657aa4fc1d7fd430b7947c; output-bytes=77; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
 
-- [x] G4: Production configuration routes the authenticated history client to the eval-service listener and preserves existing evaluation run/release gate behavior
-  CHECK: node .unlazy/verify-production.mjs
-  EXPECT: benchmark-history-production-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=c85e39e07a88a2f4f89c984b76957337788adf57c7d6554958cf48bb4d0e4331; exit=0; EXPECT=matched; output-sha256=fba9209ec9f7ed104da9f198fc87f14c1d17a1bd87918603e2286562ce12fade; output-bytes=202; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
-
-- [x] G5: Decisive fault controls fail and restored code passes; full affected tests, static checks, real transport, architecture/RBAC and normalized AST checks pass
+- [x] G4: Old-code and fault controls fail then restored code passes; full API/web tests, coverage, static, migration rollback, erasure/retention and architecture/RBAC/AST checks pass
   CHECK: node .unlazy/verify-final.mjs
-  EXPECT: benchmark-history-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=2ba56d042eeb04b629cc60fdd621293aeda1715937e28bfb999cd2fd63bbd323; exit=0; EXPECT=matched; output-sha256=d823f78db07889af3fad528338663b9dcfb2c9ed5ec78ccf3f318422f466e5b8; output-bytes=889; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-benchmarks-c124; path=2b1f1cc87037/31 entries
+  EXPECT: admin-notes-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=68a032aa1b0fe4f6c1e849a062006fd241b8ec0ff8ecb25bef77a964fddf8a36; exit=0; EXPECT=matched; output-sha256=e92e0c37fd724368ae271b32f3f1f103b5ea112bb1cab37c36446e80ce2c94a4; output-bytes=751; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
