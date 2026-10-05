@@ -73,7 +73,9 @@ CREATE OR REPLACE FUNCTION protect_credit_purchase() RETURNS trigger LANGUAGE pl
     OR (OLD.payment_ref IS NOT NULL AND NEW.payment_ref IS DISTINCT FROM OLD.payment_ref)
   THEN RAISE EXCEPTION 'credit purchase snapshot and payment identity are immutable'; END IF;
   IF NEW.state IS DISTINCT FROM OLD.state AND NOT (
-    (OLD.state IN ('submitting','checkout_ready','payment_pending') AND NEW.state IN ('checkout_ready','payment_pending','delivery_pending','cancelled','expired'))
+    (OLD.state='submitting' AND NEW.state IN ('checkout_ready','payment_pending','delivery_pending','cancelled','expired'))
+    OR (OLD.state='checkout_ready' AND NEW.state IN ('payment_pending','delivery_pending','cancelled','expired'))
+    OR (OLD.state='payment_pending' AND NEW.state IN ('delivery_pending','cancelled','expired'))
     OR (OLD.state='delivery_pending' AND NEW.state='delivered'))
   THEN RAISE EXCEPTION 'credit purchase state cannot move backwards'; END IF;
   IF ROW(NEW.state,NEW.provider_ref,NEW.checkout_url,NEW.payment_ref) IS DISTINCT FROM ROW(OLD.state,OLD.provider_ref,OLD.checkout_url,OLD.payment_ref) THEN

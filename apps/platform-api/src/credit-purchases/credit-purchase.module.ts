@@ -7,6 +7,7 @@ import { AuditEventsClient } from "../engine/audit-events-client";
 import { BillingPolicyModule } from "../billing/billing-policy.module";
 import { BillingPolicyService } from "../billing/billing-policy.service";
 import { BillingWebhookRepository } from "../billing/billing-webhook.repository";
+import { creditPurchaseConfigFromEnvironment } from "./config";
 import { CreditPurchaseController } from "./credit-purchase.controller";
 import { CreditPurchaseRepository } from "./credit-purchase.repository";
 import { CreditPurchaseService } from "./credit-purchase.service";
@@ -17,14 +18,14 @@ export const CREDIT_PURCHASE_PROVIDER = Symbol("CREDIT_PURCHASE_PROVIDER");
   imports: [EngineModule, BillingPolicyModule],
   controllers: [CreditPurchaseController],
   providers: [
-    { provide: CreditPurchaseRepository, useFactory: () => new CreditPurchaseRepository(sharedPool(process.env.DATABASE_URL)) },
-    { provide: CREDIT_PURCHASE_PROVIDER, useFactory: () => new RazorpayCreditPurchaseProvider({
-      keyIdSecretRef: process.env.RAZORPAY_KEY_ID_SECRET_REF ?? "/alter/billing/razorpay/key-id",
-      keySecretSecretRef: process.env.RAZORPAY_KEY_SECRET_SECRET_REF ?? "/alter/billing/razorpay/key-secret",
-    }, new AwsSecretsManagerProvider({ region: process.env.AWS_REGION ?? "ap-south-1" })) },
+    { provide: CreditPurchaseRepository, useFactory: () => new CreditPurchaseRepository(sharedPool(creditPurchaseConfigFromEnvironment(process.env).databaseUrl)) },
+    { provide: CREDIT_PURCHASE_PROVIDER, useFactory: () => {
+      const config = creditPurchaseConfigFromEnvironment(process.env);
+      return new RazorpayCreditPurchaseProvider(config, new AwsSecretsManagerProvider({ region: config.region }));
+    } },
     { provide: CreditPurchaseService, inject: [CreditPurchaseRepository, CREDIT_PURCHASE_PROVIDER, AuditEventsClient, BillingPolicyService],
       useFactory: (repository: CreditPurchaseRepository, provider: CreditPurchaseProvider, audit: AuditEventsClient, delivery: BillingPolicyService) =>
-        new CreditPurchaseService(repository, provider, audit, delivery, new BillingWebhookRepository(sharedPool(process.env.DATABASE_URL))) },
+        new CreditPurchaseService(repository, provider, audit, delivery, new BillingWebhookRepository(sharedPool(creditPurchaseConfigFromEnvironment(process.env).databaseUrl))) },
   ],
   exports: [CreditPurchaseService],
 })
