@@ -13,7 +13,11 @@ from testcontainers.postgres import PostgresContainer
 
 from alembic import command
 from src.agent_contracts.embedding_client import EmbeddingResult
-from src.capability_registry.reembed import reembed_stale_capabilities
+from src.capability_registry.reembed import (
+    SpendCeilingError,
+    estimate_reembed_usd,
+    reembed_stale_capabilities,
+)
 
 SERVICE_ROOT = Path(__file__).parent.parent
 TENANT = "ten_018f47a5-7b2c-7d10-8f11-12345678c18a"
@@ -111,6 +115,9 @@ async def test_dry_run_counts_stale_rows_and_spends_nothing(session: AsyncSessio
     )
 
     assert (result.stale, result.reembedded) == (2, 0)
+    assert result.estimated_usd == estimate_reembed_usd(
+        ["describes cemb_mock", "describes cemb_none"]
+    )
     assert embeddings.texts == []
 
 
@@ -149,4 +156,39 @@ async def test_refuses_to_write_vectors_from_a_different_model(session: AsyncSes
             tenant_id=TENANT,
             live_model_id=LIVE,
             apply=True,
+        )
+
+
+def test_estimate_is_an_upper_bound_of_one_token_per_character() -> None:
+    assert estimate_reembed_usd([]) == 0
+    assert estimate_reembed_usd(["a" * 1000, "b" * 1000]) == pytest.approx(0.00004)
+
+
+async def test_apply_refuses_before_any_call_when_estimate_exceeds_ceiling(
+    session: AsyncSession,
+) -> None:
+    await seed(session, TENANT_UUID, "cemb_mock", "mock.embedding")
+    embeddings = RecordingEmbeddings()
+
+    with pytest.raises(SpendCeilingError, match="exceeds the USD 1e-09 ceiling"):
+        await reembed_stale_capabilities(
+            session,
+            embeddings,
+            tenant_id=TENANT,
+            live_model_id=LIVE,
+            apply=True,
+            max_usd=0.000000001,
+        )
+    assert embeddings.texts == []
+
+
+async def test_ceiling_above_the_approved_amount_is_rejected(session: AsyncSession) -> None:
+    with pytest.raises(SpendCeilingError, match="exceeds the approved USD 1.0"):
+        await reembed_stale_capabilities(
+            session,
+            RecordingEmbeddings(),
+            tenant_id=TENANT,
+            live_model_id=LIVE,
+            apply=False,
+            max_usd=2.0,
         )
