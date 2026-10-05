@@ -4,6 +4,7 @@ import { PostgresCostStoreProvider } from "@alterx/adapters";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { TenantSpendService } from "./tenant-spend.service";
+import { applyMargin } from "./cost-rollup.service";
 
 const tenant = randomUUID(), other = randomUUID(), workspace = randomUUID();
 const window = { tenant_id: tenant, start_at: "2026-09-05T00:00:00.000Z", end_at: "2026-10-05T00:00:00.000Z" };
@@ -22,7 +23,7 @@ describe.sequential("read-only tenant spend through ordinary PostgreSQL", () => 
     });
     const url = new URL(container.getConnectionUri()); url.username = role; url.password = password;
     store = new PostgresCostStoreProvider({ authentication: "static", connectionString: url.href, migrationsFolder });
-    service = new TenantSpendService(store, 0.2);
+    service = new TenantSpendService(store, minor => applyMargin(minor, 0.2));
   }, 120_000);
   afterAll(async () => { await store?.close(); await admin?.close(); await container?.stop(); });
   beforeEach(async () => { for (const id of [tenant, other]) await store.withTenant(id, tx => tx.query("DELETE FROM cost_events WHERE tenant_id=$1", [id])); });
@@ -50,6 +51,7 @@ describe.sequential("read-only tenant spend through ordinary PostgreSQL", () => 
     expect((await service.spend(window)).currencies).toEqual([{ currency: "INR", billed_minor: "11258999068426242", event_count: 1 }]);
     await event(other, "0", "USD", window.start_at);
     expect((await service.spend({ ...window, tenant_id: other })).currencies).toEqual([{ currency: "USD", billed_minor: "0", event_count: 1 }]);
-    for (const rate of [NaN, -1, 1, 0.9999999]) expect(() => new TenantSpendService(store, rate)).toThrow();
+    await expect(new TenantSpendService(store, () => "-1").spend(window)).rejects.toThrow();
+    await expect(new TenantSpendService(store, () => { throw new Error("Billing rule unavailable"); }).spend(window)).rejects.toThrow("Billing rule unavailable");
   });
 });

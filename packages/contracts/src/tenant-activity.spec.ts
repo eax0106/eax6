@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { TenantActivityWindowSchema, TenantBilledSpendSchema, TenantDetailActivitySchema, TenantMembersSchema } from "./tenant-activity";
+import { TenantActivityCountFromStorageSchema, TenantActivityWindowSchema, TenantBilledSpendSchema, TenantDetailActivitySchema, TenantMembersSchema } from "./tenant-activity";
 
 const window = { tenant_id: "018f4d6e-2b4a-7a3e-8c1a-1234567890a1", start_at: "2026-09-05T00:00:00.000Z", end_at: "2026-10-05T00:00:00.000Z" };
 describe("read-only tenant activity contracts", () => {
   it("requires an exact, ordered thirty-day window and a real tenant UUID", () => {
+    expect(TenantActivityCountFromStorageSchema.parse("2147483648")).toBe(2147483648);
+    expect(TenantActivityCountFromStorageSchema.parse(String(Number.MAX_SAFE_INTEGER))).toBe(Number.MAX_SAFE_INTEGER);
+    for (const count of ["9007199254740992", "-1", "1.1", ""]) expect(() => TenantActivityCountFromStorageSchema.parse(count)).toThrow();
     expect(TenantActivityWindowSchema.parse(window)).toEqual(window);
     for (const input of [{ ...window, end_at: window.start_at }, { ...window, start_at: window.end_at }, { ...window, end_at: "2026-10-06T00:00:00.000Z" }, { ...window, tenant_id: "other" }, { ...window, actor: "staff" }]) {
       expect(() => TenantActivityWindowSchema.parse(input)).toThrow();

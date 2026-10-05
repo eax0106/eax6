@@ -1,11 +1,9 @@
-import { TenantActivityWindowSchema, TenantBilledSpendSchema, type TenantActivityWindow, type TenantBilledSpend } from "@alterx/contracts";
-import { applyMargin, type RollupStore } from "./cost-rollup.service";
+import { TenantActivityWindowSchema, TenantActivityCountFromStorageSchema, TenantBilledSpendSchema, type TenantActivityWindow, type TenantBilledSpend } from "@alterx/contracts";
+import type { RollupStore } from "./cost-rollup.service";
 
 /** Read-only projection with the ledger's canonical integer billing rule. */
 export class TenantSpendService {
-  constructor(private readonly store: RollupStore, private readonly marginRate: number) {
-    if (!Number.isFinite(marginRate) || marginRate < 0 || Math.round(marginRate * 1_000_000) >= 1_000_000) throw new Error("Invalid billing margin rate");
-  }
+  constructor(private readonly store: RollupStore, private readonly billable: (minor: string) => string) {}
 
   spend(input: TenantActivityWindow): Promise<TenantBilledSpend> {
     const window = TenantActivityWindowSchema.parse(input);
@@ -16,7 +14,7 @@ export class TenantSpendService {
         [window.tenant_id, window.start_at, window.end_at],
       );
       return TenantBilledSpendSchema.parse({ ...window, currencies: result.rows.map(row => ({
-        currency: row.currency, billed_minor: applyMargin(row.internal_minor, this.marginRate), event_count: Number(row.count),
+        currency: row.currency, billed_minor: this.billable(row.internal_minor), event_count: TenantActivityCountFromStorageSchema.parse(row.count),
       })) });
     });
   }

@@ -3,6 +3,9 @@ import { IsoTimestampSchema, RunIdSchema, WorkflowIdSchema } from "./ids";
 import { PlatformTenantIdSchema } from "./operations";
 
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+export const TenantActivityCountFromStorageSchema = z.string().regex(/^\d+$/).transform(value => BigInt(value))
+  .refine(value => value <= BigInt(Number.MAX_SAFE_INTEGER), "Recorded count exceeds the safe integer range")
+  .transform(value => Number(value));
 const thirtyDays = (value: { start_at: string; end_at: string }) => Date.parse(value.end_at) - Date.parse(value.start_at) === 30 * 24 * 60 * 60 * 1000;
 export const TenantActivityWindowSchema = z.object({
   tenant_id: PlatformTenantIdSchema,

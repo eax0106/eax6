@@ -56,7 +56,7 @@ export class AppModule {
       providers: [
         serviceAuthGuardProvider(),
         { provide: COST_STORE_PROVIDER, useValue: store },
-        { provide: TenantSpendService, useFactory: () => new TenantSpendService(store as unknown as RollupStore, marginRate) },
+        { provide: TenantSpendService, inject: [RUN_TOTAL_MARGIN], useFactory: (billable: (minor: string) => string) => new TenantSpendService(store as unknown as RollupStore, billable) },
         { provide: COST_DELETION_TOKEN_HASH, useValue: deletionTokenHash },
         { provide: CostDeletionService, useValue: new CostDeletionService(store as unknown as CostDeletionStore) },
         EstimationService,

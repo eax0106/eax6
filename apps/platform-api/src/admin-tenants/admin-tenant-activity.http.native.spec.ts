@@ -33,6 +33,7 @@ const {TenantActivityService}=requireBuilt(resolve("dist/apps/orchestration-serv
 const {RUN_LEARNING_AUDIT}=requireBuilt(resolve("dist/apps/orchestration-service/runs/run-learning.controller.js"));
 const {TenantSpendController}=requireBuilt(resolve("dist/apps/cost-ledger-service/rollup/tenant-spend.controller.js"));
 const {TenantSpendService}=requireBuilt(resolve("dist/apps/cost-ledger-service/rollup/tenant-spend.service.js"));
+const {applyMargin}=requireBuilt(resolve("dist/apps/cost-ledger-service/rollup/cost-rollup.service.js"));
 const database=process.env.DATABASE_URL;
 describe.skipIf(!database).sequential("tenant activity current staff cookie and authenticated native service HTTP",()=>{
  let admin:pg.Client,pool:pg.Pool,schema:string,role:string,app:NestFastifyApplication,engine:NestFastifyApplication,cost:NestFastifyApplication,jwks:Server;
@@ -69,7 +70,7 @@ describe.skipIf(!database).sequential("tenant activity current staff cookie and 
   const actor=new ActorTokenValidator({issuer:"activity-actor",audience:"alter-engine",jwksUrl:jwksBase},{setIfAbsent:async()=>true});
   const engineModule=await Test.createTestingModule({controllers:[TenantActivityController],providers:[{provide:TenantActivityService,useValue:new TenantActivityService(engineStore)},{provide:RUN_LEARNING_AUDIT,useValue:{recordEvent:async(input:Record<string,unknown>)=>{if(engineAuditUnavailable)throw new Error("Audit unavailable");engineEvents.push(input);return {entry_hash:"a".repeat(64)};}}},{provide:APP_GUARD,useValue:new SessionGatewayGuard(validator(),actor,engineStore)}]}).compile();
   engine=engineModule.createNestApplication<NestFastifyApplication>(new FastifyAdapter());await engine.listen(0,"127.0.0.1");engineBase=await engine.getUrl();
-  const costModule=await Test.createTestingModule({controllers:[TenantSpendController],providers:[{provide:TenantSpendService,useValue:new TenantSpendService(costStore,0.2)},{provide:APP_GUARD,useValue:new ServiceAuthGuard(validator())}]}).compile();
+  const costModule=await Test.createTestingModule({controllers:[TenantSpendController],providers:[{provide:TenantSpendService,useValue:new TenantSpendService(costStore,(minor:string)=>applyMargin(minor,0.2))},{provide:APP_GUARD,useValue:new ServiceAuthGuard(validator())}]}).compile();
   cost=costModule.createNestApplication<NestFastifyApplication>(new FastifyAdapter());await cost.listen(0,"127.0.0.1");costBase=await cost.getUrl();
   const realFetch=globalThis.fetch;vi.stubEnv("AUTH0_STAFF_DOMAIN","activity.staff.test");vi.stubGlobal("fetch",async(input:Parameters<typeof fetch>[0],init?:RequestInit)=>{if(String(input)!=="https://activity.staff.test/userinfo")return realFetch(input,init);const token=new Headers(init?.headers).get("authorization");return token==="Bearer actual-staff"?Response.json({sub:"auth0|activity",email:"staff@test.test"}):token==="Bearer other-staff"?Response.json({sub:"auth0|other",email:"other@test.test"}):new Response("",{status:401});});
   const audit=new AdminAuditService({record:async(input:Record<string,unknown>)=>{if(auditUnavailable)throw new Error("Audit unavailable");events.push(input);return {entry_hash:"a".repeat(64)};}} as never);
