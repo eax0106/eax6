@@ -70,6 +70,7 @@ describe.skipIf(!databaseUrl)("AdminTenantsRepository PostgreSQL RLS", () => {
     const note = await repository.appendNote(subjectId, "stf_test", "Investigation completed", audit);
     expect(note).toMatchObject({action: "note_added", reason: "Investigation completed", staff_email: "ops@example.com"});
     expect(audit).toHaveBeenCalledExactlyOnceWith(note!.id);
+    expect(note!.id).toMatch(/^taa_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(await repository.listActions(subjectId)).toContainEqual(note);
     await expect(pool.query("UPDATE tenant_admin_actions SET reason='changed' WHERE id=$1", [note!.id])).rejects.toThrow(/append-only/);
     await expect(pool.query("DELETE FROM tenant_admin_actions WHERE id=$1", [note!.id])).rejects.toThrow(/append-only/);

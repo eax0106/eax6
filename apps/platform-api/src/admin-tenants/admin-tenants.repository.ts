@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import type {
@@ -144,7 +145,7 @@ export class AdminTenantsRepository implements OnModuleDestroy {
          VALUES ($1,$2,$3,'note_added',$4)
          RETURNING id,action,reason,occurred_at,
            (SELECT email FROM staff_users WHERE id=$3) AS staff_email`,
-        [`taa_${randomUUID()}`,subjectId,staffUserId,body],
+        [`taa_${uuidv7()}`,subjectId,staffUserId,body],
       );
       const note = result.rows[0]!;
       await acknowledgeAudit(note.id);
