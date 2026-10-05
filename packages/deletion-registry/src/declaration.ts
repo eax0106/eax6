@@ -26,7 +26,7 @@ export type DatabaseName =
   | "eval_db";
 
 /** The services whose erasure provider the audit-service DeletionOrchestrator calls. */
-export type ErasureProvider = "orchestration-service" | "ads-core" | "platform-api" | "cost-ledger-service" | "intelligence-service" | "memory-service" | "audit-service";
+export type ErasureProvider = "orchestration-service" | "ads-core" | "platform-api" | "cost-ledger-service" | "intelligence-service" | "memory-service" | "audit-service" | "eval-service";
 
 export type ErasureRoute =
   | { readonly kind: "provider"; readonly provider: ErasureProvider }
@@ -172,6 +172,10 @@ export const tenantDataDeclarations: readonly TenantDataDeclaration[] = [
   { database: "intelligence_db", schema: "public", table: "capability_embeddings", owner: "intelligence-service", erasure: { kind: "provider", provider: "intelligence-service" } },
   { database: "intelligence_db", schema: "public", table: "capability_registry_versions", owner: "intelligence-service", erasure: { kind: "provider", provider: "intelligence-service" } },
   { database: "intelligence_db", schema: "public", table: "performance_records", owner: "intelligence-service", erasure: { kind: "provider", provider: "intelligence-service" } },
+  { database: "eval_db", schema: "public", table: "benchmark_case_results", owner: "eval-service", erasure: { kind: "provider", provider: "eval-service" } },
+  { database: "eval_db", schema: "public", table: "benchmark_cases", owner: "eval-service", erasure: { kind: "provider", provider: "eval-service" } },
+  { database: "eval_db", schema: "public", table: "benchmark_datasets", owner: "eval-service", erasure: { kind: "provider", provider: "eval-service" } },
+  { database: "eval_db", schema: "public", table: "benchmark_runs", owner: "eval-service", erasure: { kind: "provider", provider: "eval-service" } },
   { database: "policy_db", schema: "public", table: "drift_scores", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
   { database: "policy_db", schema: "public", table: "memory_records", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },
   { database: "policy_db", schema: "public", table: "memory_settings_audit", owner: "memory-service", erasure: { kind: "provider", provider: "memory-service" } },

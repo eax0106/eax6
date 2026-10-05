@@ -261,6 +261,9 @@ jobs:
           node scripts/check-injection-parity.mjs
           node scripts/gates/safety-duplicate.spec.mjs
 
+      - name: spend guard
+        run: node scripts/spend/spend-guard.spec.mjs
+
       # platform-api:test needs a migrated DATABASE_URL (real Postgres-backed
       # specs, e.g. entitlement/credential guards) -- excluded here so it
       # only runs once, correctly, after "migrate platform db" below. Every

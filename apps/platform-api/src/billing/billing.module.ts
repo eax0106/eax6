@@ -5,7 +5,7 @@ import {
 } from "@alterx/adapters";
 import type { SecretsProvider } from "@alterx/shared-clients";
 import { CreditPurchaseModule } from "../credit-purchases/credit-purchase.module";
-import {billingDatabaseFromEnvironment} from "./config";
+import {billingDatabaseFromEnvironment, billingOperationsDatabaseFromEnvironment} from "./config";
 import { sharedPool } from "../db/shared-pool";
 import {
   ConcurrencyExceptionFilter,
@@ -46,7 +46,7 @@ import {
     },
     {
       provide: AdminBillingRepository,
-      useFactory: () => new AdminBillingRepository(sharedPool(billingDatabaseFromEnvironment(process.env)), false),
+      useFactory: () => new AdminBillingRepository(sharedPool(billingOperationsDatabaseFromEnvironment(process.env)), false),
     },
     {
       provide: BILLING_SECRETS_PROVIDER,
