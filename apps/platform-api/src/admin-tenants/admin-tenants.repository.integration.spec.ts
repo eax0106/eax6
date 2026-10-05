@@ -81,6 +81,29 @@ describe.skipIf(!databaseUrl)("AdminTenantsRepository PostgreSQL RLS", () => {
     expect(missingAudit).not.toHaveBeenCalled();
   });
 
+  it("reads actual bounded tenant members under the ordinary role and excludes erased users", async () => {
+    const tenant = randomUUID(), other = randomUUID();
+    await repository.createTenant(tenant, "Members", "org-members", "ap-south-1");
+    await repository.createTenant(other, "Other", "org-other", "ap-south-1");
+    const ids: string[] = Array.from({ length: 51 }, () => randomUUID());
+    for (const [index, id] of ids.entries()) {
+      await admin.query("INSERT INTO users(id,identity_ref,email,display_name,status) VALUES($1,$2,$3,$4,'active')", [id, `fixture|${id}`, `member${index}@example.test`, `Member ${index}`]);
+      await admin.query("INSERT INTO tenant_members(id,tenant_id,user_id,role) VALUES($1,$2,$3,'member')", [randomUUID(), tenant, id]);
+    }
+    for (const [subject, identity] of [[tenant, "erased:fixture"], [other, "fixture|other"]]) {
+      const user = randomUUID();
+      await admin.query("INSERT INTO users(id,identity_ref,email,status) VALUES($1,$2,'other@example.test','active')", [user, identity]);
+      await admin.query("INSERT INTO tenant_members(id,tenant_id,user_id,role) VALUES($1,$2,$3,'owner')", [randomUUID(), subject, user]);
+    }
+    expect((await pool.query("SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user")).rows).toEqual([{ rolsuper: false, rolbypassrls: false }]);
+    const result = await repository.members(tenant);
+    expect(result?.count).toBe(51); expect(result?.members).toHaveLength(50);
+    expect(result?.members.every(member => ids.includes(member.id))).toBe(true);
+    expect(await repository.members(randomUUID())).toBeUndefined();
+    await admin.query("UPDATE tenants SET deleted_at=clock_timestamp() WHERE id=$1", [tenant]);
+    expect(await repository.members(tenant)).toBeUndefined();
+  });
+
   it("pairs rollback without deleting retained note history and restores note support on reapply", async () => {
     const migration = readFileSync(join(__dirname, "../db/migrations/0035_admin_notes.sql"), "utf8");
     const rollback = readFileSync(join(__dirname, "../db/migrations/rollback/0035_remove_admin_notes.sql"), "utf8");

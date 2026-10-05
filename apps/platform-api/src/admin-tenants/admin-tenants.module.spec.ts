@@ -5,6 +5,8 @@ import { RbacModule } from "../rbac";
 import { AdminTenantsModule } from "./admin-tenants.module";
 import { AdminTenantsRepository } from "./admin-tenants.repository";
 import { AdminTenantsService } from "./admin-tenants.service";
+import { AdminTenantActivityService } from "./admin-tenant-activity.service";
+import { TenantActivityClient } from "../engine";
 
 const originalEnvironment = { ...process.env };
 
@@ -27,6 +29,8 @@ describe("AdminTenantsModule", () => {
     expect(moduleRef.get(AdminTenantsService)).toBeInstanceOf(
       AdminTenantsService,
     );
+    expect(moduleRef.get(AdminTenantActivityService)).toBeInstanceOf(AdminTenantActivityService);
+    expect(moduleRef.get(TenantActivityClient)).toBeInstanceOf(TenantActivityClient);
 
     const app = moduleRef.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),
