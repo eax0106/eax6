@@ -35,7 +35,7 @@ export function NewListingPage() {
     onSuccess: (newListing) => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.seller.listings })
       if (isLiveApi) {
-        alert("Draft created. Add a version and complete verification before submitting for review.")
+        alert("Free draft created. Add a version before submitting for staff review. No identity documents are required.")
       } else {
         alert("Draft listing created! Submitting for review... (Mock)")
         void api.seller.listings.submit(newListing.id)
@@ -94,7 +94,7 @@ export function NewListingPage() {
                 <option>Productivity</option>
               </select>
             </div>}
-            {isLiveApi && <p className="text-sm text-muted-foreground">This saves a draft only. Listing versions and verification are required before review.</p>}
+            <p className="text-sm text-muted-foreground">V1 listings are free. Add a version and submit for staff review. No identity documents are required.</p>
             {mutation.error && <p role="alert" className="text-sm text-destructive">{mutation.error.message}</p>}
           </CardContent>
           <CardFooter className="flex justify-between">

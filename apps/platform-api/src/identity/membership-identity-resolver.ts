@@ -6,22 +6,29 @@ import { PlatformDb } from "../signup/platform-db";
 import type { ExistingSignup } from "../signup/types";
 import type { AuthenticatedIdentity } from "./identity-provider.interface";
 import { IdentityHttpError } from "./problem";
+import type { BillingPolicyService } from "../billing/billing-policy.service";
 
 export class MembershipIdentityResolver {
-  constructor(private readonly db: PlatformDb | undefined, private readonly audit: AuditEventHandler) {}
+  constructor(private readonly db: PlatformDb | undefined, private readonly audit: AuditEventHandler,
+    private readonly billing?: Pick<BillingPolicyService, "recordVerifiedIdentity">) {}
 
   async resolve(identity: AuthenticatedIdentity, invitation?: string): Promise<ExistingSignup | null> {
     if (!identity.emailVerified) reject("EMAIL_VERIFICATION_REQUIRED", "Verify your email before signing in");
     if (!this.db) throw new IdentityHttpError(503, "IDENTITY_STORAGE_UNAVAILABLE", "Identity storage is unavailable");
     if (invitation !== undefined) {
       if (!identity.organizationId || !invitation || invitation.length > 4096) reject("INVITATION_REJECTED", "Invitation context is unavailable");
-      return this.accept(identity, invitation);
+      const accepted = await this.accept(identity, invitation);
+      await this.billing?.recordVerifiedIdentity(accepted.tenantId, accepted.userId);
+      return accepted;
     }
     const existing = identity.organizationId
       ? await this.db.resolveOrganizationMember(identity.identityRef, identity.organizationId)
       : await this.db.findExisting(identity.identityRef, identity.tenantId);
     if (identity.organizationId && !existing) reject("ORGANIZATION_MEMBERSHIP_REQUIRED", "Use your current invitation link to join this organization");
-    return existing ? validMembership(existing) : null;
+    if (!existing) return null;
+    const member = validMembership(existing);
+    await this.billing?.recordVerifiedIdentity(member.tenantId, member.userId);
+    return member;
   }
 
   private async accept(identity: AuthenticatedIdentity, ticket: string): Promise<ExistingSignup> {

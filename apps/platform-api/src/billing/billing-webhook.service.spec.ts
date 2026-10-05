@@ -1,3 +1,5 @@
+import type { BillingPolicyService } from "./billing-policy.service";
+import type { SubscriptionLifecycleRow } from "./billing-webhook.repository";
 import type {
   BillingEvent,
   BillingProvider,
@@ -81,6 +83,7 @@ describe("BillingWebhookService", () => {
       repository,
       entitlements,
       config,
+      { prepare: vi.fn(async () => {}) } as unknown as BillingPolicyService,
     );
     service = {
       receive: (providerId, rawBody, signature) =>
@@ -116,7 +119,7 @@ describe("BillingWebhookService", () => {
     );
     expect(entitlements.createEntitlement).toHaveBeenCalledWith(
       tenantId,
-      "plan_pro",
+      "plan_basic",
       repository.client,
       { accessState: "active" },
     );
@@ -137,7 +140,7 @@ describe("BillingWebhookService", () => {
   it("moves grace to limited to suspended from config, then recovers", async () => {
     await service.receive(
       "razorpay",
-      eventBytes("evt_failed_1", "payment.failed"),
+      eventBytes("evt_failed_1", "subscription.pending"),
       "valid",
     );
     expect(repository.state.state).toBe("grace");
@@ -145,7 +148,7 @@ describe("BillingWebhookService", () => {
     vi.advanceTimersByTime(61_000);
     await service.receive(
       "razorpay",
-      eventBytes("evt_failed_2", "payment.failed"),
+      eventBytes("evt_failed_2", "subscription.pending"),
       "valid",
     );
     expect(repository.state.state).toBe("limited");
@@ -159,7 +162,7 @@ describe("BillingWebhookService", () => {
     vi.advanceTimersByTime(60_000);
     await service.receive(
       "razorpay",
-      eventBytes("evt_failed_3", "payment.failed"),
+      eventBytes("evt_failed_3", "subscription.pending"),
       "valid",
     );
     expect(repository.state.state).toBe("suspended");
@@ -172,7 +175,7 @@ describe("BillingWebhookService", () => {
 
     await service.receive(
       "razorpay",
-      eventBytes("evt_recovered", "payment.succeeded"),
+      eventBytes("evt_recovered", "subscription.activated"),
       "valid",
     );
     expect(repository.state).toEqual({
@@ -200,7 +203,7 @@ describe("BillingWebhookService", () => {
     await expect(
       service.receive(
         "razorpay",
-        eventBytes("evt_invalid", "payment.failed"),
+        eventBytes("evt_invalid", "subscription.pending"),
         "invalid",
       ),
     ).rejects.toMatchObject({
@@ -264,7 +267,7 @@ describe("BillingWebhookService", () => {
   });
 
   it("redacts payment credentials from persisted payload", async () => {
-    const raw = eventBytes("evt_secret", "payment.failed", undefined, {
+    const raw = eventBytes("evt_secret", "subscription.pending", undefined, {
       card_number: "4111111111111111",
       cvv: "987",
       provider_token: "token_secret",
@@ -293,7 +296,7 @@ describe("BillingWebhookService", () => {
       new Error("secret-name-and-value"),
     );
     await expect(
-      service.receive("razorpay", eventBytes("evt_x", "payment.failed"), "valid"),
+      service.receive("razorpay", eventBytes("evt_x", "subscription.pending"), "valid"),
     ).rejects.toSatisfy(
       (error: BillingHttpError) =>
         error.getStatus() === 502 &&
@@ -302,7 +305,7 @@ describe("BillingWebhookService", () => {
   });
 
   it("rejects unknown providers, missing signatures, tenants, and plans", async () => {
-    const raw = eventBytes("evt_x", "payment.failed");
+    const raw = eventBytes("evt_x", "subscription.pending");
     await expect(
       service.receive("stripe", raw, "valid"),
     ).rejects.toMatchObject({ status: 404 });
@@ -315,7 +318,7 @@ describe("BillingWebhookService", () => {
 
     vi.mocked(provider.parseWebhookEvent).mockReturnValueOnce({
       id: "evt_no_tenant",
-      type: "payment.failed",
+      type: "subscription.pending",
       createdAt: "2026-07-28T00:00:00.000Z",
       payload: {},
     });
@@ -323,21 +326,15 @@ describe("BillingWebhookService", () => {
       service.receive("razorpay", raw, "valid"),
     ).rejects.toMatchObject({ status: 400 });
 
-    repository.state.currentPlan = null;
+    repository.profile.current_plan = null;
     await expect(
       service.receive(
         "razorpay",
         eventBytes("evt_no_plan", "subscription.activated"),
         "valid",
       ),
-    ).rejects.toThrow("Billing success event has no plan");
-    await expect(
-      service.receive(
-        "razorpay",
-        eventBytes("evt_no_current", "payment.failed"),
-        "valid",
-      ),
-    ).rejects.toThrow("Billing failure event has no current plan");
+    ).rejects.toMatchObject({ status: 503 });
+
   });
 
   it("accepts unknown event types and database-level duplicate events", async () => {
@@ -358,7 +355,7 @@ describe("BillingWebhookService", () => {
     await expect(
       service.receive(
         "razorpay",
-        eventBytes("evt_db_duplicate", "payment.failed"),
+        eventBytes("evt_db_duplicate", "subscription.pending"),
         "valid",
       ),
     ).resolves.toMatchObject({ state: "active", replayed: false });
@@ -374,9 +371,10 @@ describe("BillingWebhookService", () => {
     const raw = new TextEncoder().encode(
       JSON.stringify({
         id: "evt_payment_notes",
-        event: "payment.failed",
-        created_at: 1_785_196_800,
+        event: "subscription.pending",
+        created_at: Math.floor(Date.now()/1000),
         payload: {
+          subscription: { entity: { id: "sub_fixture", plan_id: "plan_pro", status: "pending" } },
           payment: {
             entity: {
               notes: { tenant_id: tenantId },
@@ -402,6 +400,12 @@ class MemoryWebhookRepository extends BillingWebhookRepository {
     currentPlan: "plan_basic",
     firstFailedAt: null,
   };
+  profile: SubscriptionLifecycleRow = { subscription_ref:"sub_fixture",provider_plan_ref:"plan_pro",current_plan:"plan_basic",status:"active",checkout_attempt_id:null,last_provider_event_at:"0",
+    commercial_snapshot:{currency:"INR",basePriceMinor:10000,razorpayPlanId:"plan_pro",includedCredits:100,extraCreditPriceMinor:50,creditsPerVerifiedRun:2} };
+  override async lockProfile() { return this.profile; }
+  override async historicalPlan() { return null; }
+  override async clearMutation() { this.profile.mutation_attempt_id=null;this.profile.mutation_kind=null; }
+  override async updateProviderState(_client:PoolClient,_tenantId:string,status:string,timestamp:number) { this.profile.status=status;this.profile.last_provider_event_at=String(timestamp); }
   transactionCalls = 0;
   markProcessedCalls = 0;
 
@@ -418,6 +422,7 @@ class MemoryWebhookRepository extends BillingWebhookRepository {
       events: this.events,
       audits: this.audits,
       state: this.state,
+      profile: this.profile,
       markProcessedCalls: this.markProcessedCalls,
     });
     try {
@@ -426,6 +431,7 @@ class MemoryWebhookRepository extends BillingWebhookRepository {
       this.events = snapshot.events;
       this.audits = snapshot.audits;
       this.state = snapshot.state;
+      this.profile = snapshot.profile;
       this.markProcessedCalls = snapshot.markProcessedCalls;
       throw error;
     }
@@ -536,11 +542,13 @@ function eventBytes(
     JSON.stringify({
       id,
       event: type,
-      created_at: 1_785_196_800,
+      created_at: Math.floor(Date.now()/1000),
       payload: {
         subscription: {
           entity: {
-            plan_id: plan,
+            id: "sub_fixture",
+            status: type === "subscription.pending" ? "pending" : "active",
+            plan_id: plan ?? "plan_pro",
             notes: {
               tenant_id: tenantId,
               ...extraNotes,

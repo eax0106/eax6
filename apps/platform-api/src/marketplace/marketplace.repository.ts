@@ -1,5 +1,6 @@
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
+import { MarketplaceHttpError } from "./problem";
 import type {
   CreateListingInput,
   CreateListingVersionInput,
@@ -85,7 +86,7 @@ export class MarketplaceRepository implements OnModuleDestroy {
     cursor?: ListingCursor,
   ): Promise<ListingPage> {
     return this.withTenant(tenantId, async (client) => {
-      const conditions = ["true"];
+      const conditions = [query.owner === "me" ? "true" : "price_minor = 0"];
       const values: unknown[] = [];
       const add = (value: unknown): string => {
         values.push(value);
@@ -186,7 +187,7 @@ export class MarketplaceRepository implements OnModuleDestroy {
     return this.withTenant(tenantId, async (client) => {
       const result = await client.query<ListingRow>(
         `UPDATE listings SET status = 'published', updated_at = clock_timestamp()
-         WHERE tenant_id = $1 AND id = $2 AND latest_version IS NOT NULL
+         WHERE tenant_id = $1 AND id = $2 AND latest_version IS NOT NULL AND price_minor = 0
            AND EXISTS (SELECT 1 FROM listing_versions
                        WHERE listing_id = $2 AND version = listings.latest_version)
          RETURNING *`,
@@ -308,11 +309,12 @@ export class MarketplaceRepository implements OnModuleDestroy {
       const result = await client.query<InstallRow>(
         `INSERT INTO installs
            (id, tenant_id, workspace_id, listing_id, listing_version_id, installed_payload_ref, license_type, idempotency_key)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         SELECT $1, $2, $3, $4, $5, $6, $7, $8 FROM listings WHERE id = $4 AND price_minor = 0
          RETURNING *`,
         [id, tenantId, workspaceId, listingId, listingVersionId, installedPayloadRef, licenseType, idempotencyKey],
       );
-      return mapInstall(result.rows[0]!);
+      if (!result.rows[0]) throw new MarketplaceHttpError(409, "MARKETPLACE_FREE_ONLY", "Only free listings can be installed in v1.", `/api/v1/marketplace/listings/${listingId}/actions/install`);
+      return mapInstall(result.rows[0]);
     });
   }
 

@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import pg from "pg";
 import { applyMarketplaceMigrations } from "../db/marketplace-migrator";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { PublisherRepository } from "../publisher/publisher.repository";
+import { PublisherService } from "../publisher/publisher.service";
+import type { KycProvider } from "@alterx/shared-clients";
 import { MarketplaceRepository } from "./marketplace.repository";
 import type { ListingCompatibility } from "./types";
 
@@ -76,6 +79,44 @@ describe.skipIf(!databaseUrl)("MarketplaceRepository PostgreSQL RLS", () => {
       await admin.query(`DROP ROLE IF EXISTS "${roleName}"`);
       await admin.end();
     }
+  });
+
+  it("keeps legacy priced listings out of public catalog, publication and installs, while free cross-tenant install succeeds", async () => {
+    const paid = listingId(), free = listingId();
+    for (const id of [paid, free]) {
+      await repository.createListing(tenantA, id, { type: "workflow_template", name: id, license_type: "single_workspace" });
+      await repository.createVersion(tenantA, `lsv_${randomUUID()}`, id, { version: "1.0.0", payload_ref: "s3://bucket/template.json", compatibility });
+    }
+    await admin.query("UPDATE listings SET price_minor = 100, status = 'human_review' WHERE id = $1", [paid]);
+    expect(await repository.publishListing(tenantA, paid)).toBeUndefined();
+    await expect(admin.query("UPDATE listings SET status = 'published' WHERE id = $1", [paid])).rejects.toMatchObject({constraint:"listings_paid_launch_gate"});
+    // Exercise the application fences against a legacy catalog predating the launch constraint.
+    await admin.query("ALTER TABLE listings DROP CONSTRAINT listings_paid_launch_gate");
+    await admin.query("UPDATE listings SET status = 'published' WHERE id = $1", [paid]);
+    expect((await repository.listListings(tenantB, { limit: 50 })).data.map(row => row.id)).not.toContain(paid);
+    expect((await repository.listListings(tenantA, { limit: 50, owner: "me" })).data.map(row => row.id)).toContain(paid);
+    const paidVersion = (await repository.listVersions(tenantA, paid))[0]!;
+    await expect(repository.createInstall(tenantB, `ins_${randomUUID()}`, workspaceA, paid, paidVersion.id, "s3://bucket/copied", "single_workspace", randomUUID())).rejects.toMatchObject({status:409,response:{error_code:"MARKETPLACE_FREE_ONLY"}});
+    const published = await repository.publishListing(tenantA, free);
+    expect(published?.status).toBe("published");
+    const freeVersion = (await repository.listVersions(tenantB, free))[0]!;
+    await expect(repository.createInstall(tenantB, `ins_${randomUUID()}`, workspaceA, free, freeVersion.id, "s3://bucket/copied", "single_workspace", randomUUID())).resolves.toMatchObject({tenantId:tenantB,listingId:free});
+    expect(await repository.listAssets(tenantA)).toHaveLength(0);
+    expect(await repository.listAssets(tenantB)).toHaveLength(1);
+  });
+
+  it("submits an owned free draft without KYC, retaining staff review and refusing priced, foreign, repeated submissions", async () => {
+    const id = listingId(), paid = listingId();
+    for (const listing of [id,paid]) await repository.createListing(tenantA, listing, {type:"agent",name:listing,license_type:"tenant_wide"});
+    await admin.query("UPDATE listings SET price_minor = 100 WHERE id = $1", [paid]);
+    const service = new PublisherService(new PublisherRepository(pool), {} as KycProvider);
+    await expect(service.submitListing(tenantB,id)).rejects.toMatchObject({status:404});
+    await expect(service.submitListing(tenantA,paid)).rejects.toMatchObject({status:409,response:{error_code:"PUBLISHER_FREE_ONLY"}});
+    await expect(service.submitListing(tenantA,id)).resolves.toEqual({listingId:id,status:"submitted"});
+    expect((await repository.findListing(tenantA,id))?.status).toBe("submitted");
+    await expect(service.submitListing(tenantA,id)).rejects.toMatchObject({status:409});
+    await expect(service.transitionListing(tenantA,id,"published")).rejects.toMatchObject({status:403});
+    await expect(service.transitionListing(tenantA,id,"automated_review")).rejects.toMatchObject({status:403});
   });
 
   // Spec 12 — a draft listing owned by tenant A is invisible to tenant B.

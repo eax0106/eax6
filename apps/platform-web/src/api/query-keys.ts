@@ -135,6 +135,7 @@ export const queryKeys = {
     list: ["budgets", "list"] as const,
   },
   billing: {
+    credits: ["billing", "credits"] as const,
     subscription: ["billing", "subscription"] as const,
     plans: ["billing", "plans"] as const,
     invoices: ["billing", "invoices"] as const,

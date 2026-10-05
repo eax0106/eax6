@@ -5,6 +5,7 @@ import type {
 } from "@alterx/shared-clients";
 import {
   assertProviderContractParity,
+  BillingOperationNotSubmittedError,
   billingProviderContract,
 } from "@alterx/shared-clients";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -85,6 +86,127 @@ describe("RazorpayBillingProvider", () => {
     expect(JSON.stringify(requests)).not.toContain("card_number");
     expect(JSON.stringify(requests)).not.toContain("cvv");
   });
+
+  it("creates hosted checkout only for the configured tax-inclusive provider plan", async () => {
+    http.request = vi.fn(async request => {
+      requests.push(request);
+      return { status: 200, body: request.method === "GET" ? checkoutPlan() : checkoutSubscription() };
+    });
+    const subscription = await provider.createCheckoutSubscription(tenantId, "plan_basic", {
+      internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR", gstin: "27ABCDE1234F1Z5",
+    });
+    expect(subscription).toMatchObject({ id: "sub_123", status: "created", checkoutUrl: "https://rzp.io/rzp/fixture" });
+    expect(requests.map(request => request.path)).toEqual(["/v1/plans/plan_basic", "/v1/subscriptions"]);
+    expect(requests[1]?.body).toEqual({ plan_id: "plan_basic", total_count: 1200, quantity: 1, customer_notify: true,
+      notes: { tenant_id: tenantId, alter_plan: "basic", gstin: "27ABCDE1234F1Z5" } });
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it.each([{ amount: 10003 }, { currency: "USD" }, { active: false }])(
+    "refuses a provider plan that differs from configured checkout: %j", async change => {
+      http.request = vi.fn(async request => {
+        requests.push(request);
+        return { status: 200, body: { ...checkoutPlan(), item: { ...checkoutPlan().item, ...change } } };
+      });
+      await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+        internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR",
+      })).rejects.toThrow("configured amount and currency");
+      expect(requests).toHaveLength(1);
+      expect(references.subscriptionRef).toBeNull();
+    },
+  );
+
+  it.each(["http://rzp.io/rzp/fixture", "https://foreign.test/checkout", "https://rzp.io:8443/rzp/a",
+    "https://user:pass@rzp.io/rzp/a", "https://rzp.io/rzp/a#secret", "javascript:alert(1)"])(
+    "refuses unsafe hosted checkout URL %s", async shortUrl => {
+      http.request = vi.fn(async request => ({ status: 200,
+        body: request.method === "GET" ? checkoutPlan() : { ...checkoutSubscription(), short_url: shortUrl } }));
+      await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+        internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR",
+      })).rejects.toThrow("Razorpay HTTPS checkout URL");
+      expect(references.subscriptionRef).toBeNull();
+    },
+  );
+
+  it("rejects absent or mismatched checkout resources and malformed input before creating references", async () => {
+    await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+      internalPlanId: "basic", expectedTotalMinor: 1.5, currency: "INR",
+    })).rejects.toThrow("configuration");
+    expect(http.request).not.toHaveBeenCalled();
+    for (const change of [{ short_url: null }, { plan_id: "plan_foreign" }]) {
+      http.request = vi.fn(async request => ({ status: 200,
+        body: request.method === "GET" ? checkoutPlan() : { ...checkoutSubscription(), ...change } }));
+      await expect(provider.createCheckoutSubscription(tenantId, "plan_basic", {
+        internalPlanId: "basic", expectedTotalMinor: 11804, currency: "INR",
+      })).rejects.toThrow("matching hosted checkout");
+    }
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it("recovers one exact checkout attempt after scanning unrelated tenant and attempt resources", async () => {
+    const attempt = "cd7d61fa-7c2e-4c26-a4ba-4dfc415b7e37";
+    http.request = vi.fn(async request => {
+      requests.push(request);
+      return {status:200,body:{items:[
+        {...checkoutSubscription(),notes:{tenant_id:"other",alter_checkout_attempt:attempt}},
+        {...checkoutSubscription(),notes:{tenant_id:tenantId,alter_checkout_attempt:"other"}},
+        {...checkoutSubscription(),notes:{tenant_id:tenantId,alter_checkout_attempt:attempt}},
+      ]}};
+    });
+    expect(await provider.findCheckoutSubscription(tenantId,{checkoutAttemptId:attempt,providerPlanId:"plan_basic",createdAfter:"2026-01-01T00:00:00.000Z"}))
+      .toMatchObject({id:"sub_123",checkoutUrl:"https://rzp.io/rzp/fixture"});
+    expect(requests).toHaveLength(1);expect(requests[0]?.method).toBe("GET");
+    expect(requests[0]?.path).toContain("plan_id=plan_basic&from=1767225300&to=");
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it("records checkout attempt correlation in provider notes", async () => {
+    const attempt="cd7d61fa-7c2e-4c26-a4ba-4dfc415b7e37";
+    http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:request.method==="GET"?checkoutPlan():checkoutSubscription()};});
+    await provider.createCheckoutSubscription(tenantId,"plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR",checkoutAttemptId:attempt});
+    expect(requests[1]?.body?.notes).toEqual({tenant_id:tenantId,alter_plan:"basic",alter_checkout_attempt:attempt});
+  });
+
+  it("does not treat duplicate, malformed, foreign-plan or incomplete checkout lookup as proof", async () => {
+    const attempt="cd7d61fa-7c2e-4c26-a4ba-4dfc415b7e37",lookup={checkoutAttemptId:attempt,providerPlanId:"plan_basic",createdAfter:"2026-01-01T00:00:00.000Z"};
+    const match={...checkoutSubscription(),notes:{tenant_id:tenantId,alter_checkout_attempt:attempt}};
+    for (const body of [{items:[match,match]},{items:[{...match,plan_id:"plan_foreign"}]},{items:[{...match,short_url:"https://foreign.test/pay"}]},{items:"invalid"}]) {
+      http.request=vi.fn(async()=>({status:200,body}));
+      await expect(provider.findCheckoutSubscription(tenantId,lookup)).rejects.toThrow();
+    }
+    requests=[];http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:{items:Array.from({length:100},()=>({...checkoutSubscription(),notes:{tenant_id:"other"}}))}};});
+    await expect(provider.findCheckoutSubscription(tenantId,lookup)).rejects.toThrow("bounded scan");
+    expect(requests).toHaveLength(5);expect(requests[4]?.path).toContain("skip=400");
+    http.request=vi.fn(async()=>({status:200,body:{items:[]}}));
+    expect(await provider.findCheckoutSubscription(tenantId,lookup)).toBeNull();
+    expect(references.subscriptionRef).toBeNull();
+  });
+
+  it("distinguishes failures before a provider write from an unknown submitted checkout",async()=>{
+    http.request=vi.fn(async request=>{requests.push(request);throw new Error("Read edge unavailable");});
+    await expect(provider.createCheckoutSubscription(tenantId,"plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).rejects.toBeInstanceOf(BillingOperationNotSubmittedError);
+    expect(requests.map(request=>request.method)).toEqual(["GET"]);
+    requests.length=0;
+    http.request=vi.fn(async request=>{requests.push(request);if(request.method==="GET")return {status:200,body:checkoutPlan()};throw new Error("Write response unavailable");});
+    try {await provider.createCheckoutSubscription(tenantId,"plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"});expect.fail("Write must fail");}
+    catch(error){expect(error).toBeInstanceOf(Error);expect(error).not.toBeInstanceOf(BillingOperationNotSubmittedError);}
+    expect(requests.map(request=>request.method)).toEqual(["GET","POST"]);
+  });
+
+  it("checks configured amount and tenant card mandate before updating a subscription", async () => {
+    http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:request.path==="/v1/plans/plan_basic"?checkoutPlan():
+      request.method==="PATCH"?{...checkoutSubscription(),status:"active"}:{...checkoutSubscription(),status:"active",payment_method:"card",notes:{tenant_id:tenantId}}};});
+    expect(await provider.changeConfiguredSubscription(tenantId,"sub_123","plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).toMatchObject({id:"sub_123",planId:"plan_basic",status:"active"});
+    expect(requests.map(request=>request.method+" "+request.path)).toEqual(["GET /v1/subscriptions/sub_123","GET /v1/plans/plan_basic","PATCH /v1/subscriptions/sub_123"]);
+    expect(requests[2]?.body).toEqual({plan_id:"plan_basic",schedule_change_at:"now",quantity:1,customer_notify:true});
+  });
+
+  it.each([{payment_method:"upi"},{payment_method:"emandate"},{status:"halted"},{notes:{tenant_id:"other"}},{id:"sub_foreign"}])(
+    "refuses subscription update before a PATCH when its mandate or identity is unsupported: %j",async change=>{
+      http.request=vi.fn(async request=>{requests.push(request);return {status:200,body:{...checkoutSubscription(),status:"active",payment_method:"card",notes:{tenant_id:tenantId},...change}};});
+      await expect(provider.changeConfiguredSubscription(tenantId,"sub_123","plan_basic",{internalPlanId:"basic",expectedTotalMinor:11804,currency:"INR"})).rejects.toBeInstanceOf(BillingOperationNotSubmittedError);
+      expect(requests).toHaveLength(1);expect(requests[0]?.method).toBe("GET");
+    });
 
   it("runs subscription lifecycle and invoice pagination against Razorpay paths", async () => {
     expect(await provider.getSubscription(tenantId)).toBeNull();
@@ -666,4 +788,13 @@ function contractProvider(): RazorpayBillingProvider {
     { request: async (request) => response(request) },
     () => new Date("2026-07-28T00:00:00.000Z"),
   );
+}
+
+function checkoutPlan() {
+  return { id: "plan_basic", interval: 1, period: "monthly",
+    item: { name: "Basic", description: null, amount: 11804, currency: "INR", active: true } };
+}
+function checkoutSubscription() {
+  return { id: "sub_123", plan_id: "plan_basic", status: "created", current_start: null,
+    current_end: null, customer_id: null, short_url: "https://rzp.io/rzp/fixture" };
 }

@@ -31,7 +31,7 @@ describe("PostgresPlanDefinitionStore", () => {
     const store = new PostgresPlanDefinitionStore(pool as never);
 
     expect(await store.list()).toEqual([
-      { plan: "free", limits: LIMITS, updatedAt, updatedBy: "stf_a" },
+      { plan: "free", limits: LIMITS, commercial: null, updatedAt, updatedBy: "stf_a" },
     ]);
     expect(pool.query.mock.calls[0]![0]).toContain("ORDER BY plan");
   });
@@ -75,6 +75,8 @@ describe("PostgresPlanDefinitionStore", () => {
       "pro",
       JSON.stringify(LIMITS),
       "stf_a",
+      null,
+      false,
     ]);
 
     const updatedPool = fakePool(() => ({
@@ -120,6 +122,7 @@ describe("PostgresPlanDefinitionStore", () => {
       JSON.stringify(LIMITS),
       "launch",
       "stf_a",
+      null,
     ]);
   });
 
@@ -164,6 +167,7 @@ describe("PostgresPlanDefinitionStore", () => {
       plan: "pro",
       action: "created",
       limits: LIMITS,
+      commercial: null,
       reason: "launch",
       staffUserId: "stf_a",
       occurredAt: updatedAt,

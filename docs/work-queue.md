@@ -176,6 +176,19 @@ Removed the restricted tenant state and action from demo data and the client, pr
 
 Proof: eight live/demo render and action tests; seven failures on the original UI with eight passing after restoration; all 392 web tests pass; web typecheck, lint and build, architecture boundaries and normalized AST checks pass with no new findings.
 
+### C122 — D22 configured subscriptions and verified-run credits
+
+Added owner-configured INR commercial terms, integer 18 percent GST, validated
+hosted Razorpay subscription checkout and signed durable lifecycle. Central run
+admission reserves credits and daily capacity; persisted verified acceptance
+settles credits once. Workspace erasure and retention resolve reservations
+before deletion. Staff plan settings retain locked versions and transactional
+audit. V1 marketplace accepts free publication and installation only.
+
+Verification is recorded in the C122 acceptance ledger. Additional-credit
+purchase remains a separate required D22 change; this slice stores its price
+without claiming a purchase flow. No live payment or deployment is claimed.
+
 ### C125 — D26 append-only staff notes
 
 Tenant and user detail pages append bounded administrative notes through current

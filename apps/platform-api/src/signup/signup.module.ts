@@ -1,4 +1,6 @@
 import { MembershipIdentityResolver } from "../identity/membership-identity-resolver";
+import { BillingPolicyModule } from "../billing/billing-policy.module";
+import { BillingPolicyService } from "../billing/billing-policy.service";
 import { Module } from "@nestjs/common";
 import { sharedPool } from "../db/shared-pool";
 import {
@@ -30,6 +32,7 @@ import { SignupService } from "./signup.service";
     IdentityBrokerModule,
     EntitlementsModule,
     OnboardingModule,
+    BillingPolicyModule,
   ],
   controllers: [SignupController],
   providers: [
@@ -52,6 +55,7 @@ import { SignupService } from "./signup.service";
         ProcessLocalSignupIdempotencyStore,
         ONBOARDING_INITIALIZER,
         MembershipIdentityResolver,
+        BillingPolicyService,
       ],
       useFactory: (
         identityProvider: IdentityProvider,
@@ -62,6 +66,7 @@ import { SignupService } from "./signup.service";
         idempotency: IdempotencyStore,
         onboardingInitializer: OnboardingInitializer,
         resolver: MembershipIdentityResolver,
+        billing: BillingPolicyService,
       ) =>
         new SignupService(
           identityProvider,
@@ -72,6 +77,7 @@ import { SignupService } from "./signup.service";
           idempotency,
           onboardingInitializer,
           resolver,
+          billing,
         ),
     },
   ],

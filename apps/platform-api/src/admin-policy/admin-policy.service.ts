@@ -6,6 +6,7 @@ import {
 } from "../entitlements/config-provider.interface";
 import {
   PLAN_DEFINITION_STORE,
+  PlanDefinitionPreconditionError,
   type PlanDefinitionAuditRecord,
   type PlanDefinitionRecord,
   type PlanDefinitionStore,
@@ -46,6 +47,7 @@ export class AdminPolicyService {
     const definition = await this.definitions.find(plan);
     if (definition) {
       return {
+        version: definition.updatedAt.toISOString(),
         plan,
         limits: definition.limits,
         source: "plan_definition",
@@ -55,6 +57,7 @@ export class AdminPolicyService {
 
     try {
       return {
+        version: "absent",
         plan,
         limits: await this.config.getEntitlementDefaults(plan),
         source: "config_provider",
@@ -74,20 +77,15 @@ export class AdminPolicyService {
     plan: string,
     staffUserId: string,
     input: UpsertPlanDefinitionInput,
+    ifMatch?: string,
   ): Promise<PlanDefinitionView> {
-    const { record, created } = await this.definitions.upsert(
+    const { record } = await preconditioned(()=>this.definitions.upsert(
       plan,
       input.limits,
       staffUserId,
-    );
-    await this.definitions.recordAudit(
-      plan,
-      created ? "created" : "updated",
-      record.limits,
+      input.commercial,
       input.reason,
-      staffUserId,
-    );
-    await this.audit.record({
+      {ifMatch:requiredIfMatch(ifMatch,plan),beforeCommit:created=>this.audit.record({
       actorType: "admin",
       actorRef: staffUserId,
       action: created ? "policy.plan.create" : "policy.plan.update",
@@ -95,7 +93,8 @@ export class AdminPolicyService {
       targetRef: plan,
       reasonCode: "staff_decision",
       scope: "entitlements:write",
-    });
+      })},
+    ),plan);
     return toDefinitionView(record);
   }
 
@@ -103,20 +102,11 @@ export class AdminPolicyService {
     plan: string,
     staffUserId: string,
     input: DeletePlanDefinitionInput,
+    ifMatch?: string,
   ): Promise<void> {
     const instance = `/api/v1/admin/policy/plans/${plan}`;
-    const existing = await this.definitions.find(plan);
-    if (!existing) throw notFound(instance, plan);
-    const removed = await this.definitions.remove(plan);
-    if (!removed) throw notFound(instance, plan);
-    await this.definitions.recordAudit(
-      plan,
-      "deleted",
-      existing.limits,
-      input.reason,
-      staffUserId,
-    );
-    await this.audit.record({
+    const removed=await preconditioned(()=>this.definitions.remove(plan,{ifMatch:requiredIfMatch(ifMatch,plan),
+      staffUserId,auditReason:input.reason,beforeCommit:()=>this.audit.record({
       actorType: "admin",
       actorRef: staffUserId,
       action: "policy.plan.delete",
@@ -124,7 +114,8 @@ export class AdminPolicyService {
       targetRef: plan,
       reasonCode: "staff_decision",
       scope: "entitlements:write",
-    });
+      })}),plan);
+    if (!removed) throw notFound(instance, plan);
   }
 
   async history(plan: string, limit: number): Promise<PlanDefinitionAuditView[]> {
@@ -134,11 +125,21 @@ export class AdminPolicyService {
 
 function toDefinitionView(record: PlanDefinitionRecord): PlanDefinitionView {
   return {
+    version: record.updatedAt.toISOString(),
     plan: record.plan,
     limits: record.limits,
+    commercial: record.commercial ?? null,
     updated_at: record.updatedAt.toISOString(),
     updated_by: record.updatedBy,
   };
+}
+
+function requiredIfMatch(ifMatch:string|undefined,plan:string):string {
+  if(!ifMatch)throw new AdminPolicyHttpError(428,"PRECONDITION_REQUIRED","If-Match header is required",`/api/v1/admin/policy/plans/${plan}`);
+  return ifMatch;
+}
+async function preconditioned<T>(operation:()=>Promise<T>,plan:string):Promise<T>{
+  try{return await operation();}catch(error){if(error instanceof PlanDefinitionPreconditionError)throw new AdminPolicyHttpError(error.status,error.status===428?"PRECONDITION_REQUIRED":"PRECONDITION_FAILED",error.message,`/api/v1/admin/policy/plans/${plan}`);throw error;}
 }
 
 function toAuditView(record: PlanDefinitionAuditRecord): PlanDefinitionAuditView {
@@ -147,6 +148,7 @@ function toAuditView(record: PlanDefinitionAuditRecord): PlanDefinitionAuditView
     plan: record.plan,
     action: record.action,
     limits: record.limits,
+    commercial: record.commercial ?? null,
     reason: record.reason,
     staff_user_id: record.staffUserId,
     occurred_at: record.occurredAt.toISOString(),

@@ -224,6 +224,19 @@ describe("MarketplaceService", () => {
     h = harness();
   });
 
+  it("rejects priced creation, edits, details, publication and install before persistence or payload copy", async () => {
+    await expect(h.service.create(tenantId,{type:"agent",name:"Paid",license_type:"tenant_wide",price_minor:"100"})).rejects.toMatchObject({status:409,response:{error_code:"MARKETPLACE_FREE_ONLY"}});
+    await expect(h.service.update(tenantId,listingId,{price_minor:"100"})).rejects.toMatchObject({status:409,response:{error_code:"MARKETPLACE_FREE_ONLY"}});
+    h.repository.findListing.mockResolvedValue(listing({status:"published",priceMinor:"100"}));
+    await expect(h.service.get(tenantId,listingId)).rejects.toMatchObject({status:404});
+    await expect(h.service.install(tenantId,workspaceId,listingId,{listing_version_id:versionId,confirmed:true},"paid-install")).rejects.toMatchObject({status:409,response:{error_code:"MARKETPLACE_FREE_ONLY"}});
+    expect(h.repository.createInstall).not.toHaveBeenCalled();expect(h.putSpy).not.toHaveBeenCalled();
+    h.repository.findListing.mockResolvedValue(listing({status:"human_review",priceMinor:"100"}));
+    const staff:StaffActorContext={staff_user_id:"stf_1",identity_ref:"x",email:"s@x",roles:["staff_admin"]};
+    await expect(h.service.publish(staff,tenantId,listingId)).rejects.toMatchObject({status:409,response:{error_code:"MARKETPLACE_PAID_CHECKOUT_UNAVAILABLE"}});
+    expect(h.repository.publishListing).not.toHaveBeenCalled();
+  });
+
   // Spec 7 — transition table, not enum validation.
   describe("listing status transitions", () => {
     it.each([
