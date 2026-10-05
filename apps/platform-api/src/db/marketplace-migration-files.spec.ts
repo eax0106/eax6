@@ -29,6 +29,7 @@ describe("marketplace migration files", () => {
       "0005_listing_pricing.sql",
       "0006_payout_ledger_erasure_guard.sql",
       "0007_tool_version_review.sql",
+      "0008_marketplace_governance.sql",
     ]);
     expect(rollbackFiles).toEqual([
       "0000_drop_marketplace_core.sql",
@@ -39,6 +40,7 @@ describe("marketplace migration files", () => {
       "0005_drop_listing_pricing.sql",
       "0006_drop_payout_ledger_erasure_guard.sql",
       "0007_drop_tool_version_review.sql",
+      "0008_remove_marketplace_governance.sql",
     ]);
   });
 

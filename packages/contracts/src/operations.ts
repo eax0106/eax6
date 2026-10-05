@@ -1,5 +1,5 @@
 import { z } from "./zod";
-import { DeploymentIdSchema, IsoTimestampSchema, ProjectIdSchema } from "./ids";
+import { DeploymentIdSchema, IsoTimestampSchema, ProjectIdSchema, TenantIdSchema } from "./ids";
 import { ModelAliasBindingSchema, ModelAliasSchema } from "./model-alias-policy";
 
 export const PlatformTenantIdSchema = z.string().uuid();
@@ -190,7 +190,7 @@ export const DeploymentAdminActionResultSchema = z
 
 export const MarketplaceGovernanceActionRequestSchema = z
   .object({
-    action: z.enum(["approve", "reject", "takedown", "restore", "set_trust"]),
+    action: z.enum(["approve", "reject", "needs_changes", "takedown", "restore", "set_trust"]),
     reason: z.string().trim().min(1).max(1_000),
     trust_level: z
       .enum([
@@ -214,11 +214,21 @@ export const MarketplaceGovernanceResourceTypeSchema = z.enum([
 export const MarketplaceGovernanceItemSchema = z.object({
   resource_type: MarketplaceGovernanceResourceTypeSchema,
   id: z.string().trim().min(1).max(128),
-  tenant_id: z.string().uuid().nullable(),
+  tenant_id: z.union([PlatformTenantIdSchema, TenantIdSchema]).nullable(),
   name: z.string().trim().min(1).max(255),
+  description: z.string().nullable().optional(),
   status: z.string().trim().min(1).max(64),
   trust_level: z.string().trim().min(1).max(64).nullable(),
   updated_at: IsoTimestampSchema,
+  etag: z.string().min(1).optional(),
+  risk: z.object({score: z.number().int().min(0).max(100), incomplete: z.boolean(),
+    reasons: z.array(z.object({signal: z.enum(["scanner", "first_listing", "outside_actions", "account_scopes", "prior_takedowns"]),
+      points: z.number().int().nonnegative(), detail: z.string(), evidence: z.array(z.string()), observed: z.boolean()}).strict()),
+  }).strict().optional(),
+  review_notes: z.array(z.object({id: z.string(), actor_type: z.enum(["staff", "seller"]), actor_ref: z.string(),
+    action: z.enum(["approve", "reject", "needs_changes", "takedown", "restore", "set_trust", "resubmit", "edit"]),
+    previous_status: z.string(), next_status: z.string(), reason: z.string(), occurred_at: IsoTimestampSchema,
+  }).strict()).optional(),
 }).strict();
 
 export type StaffAccessScope = z.infer<typeof StaffAccessScopeSchema>;

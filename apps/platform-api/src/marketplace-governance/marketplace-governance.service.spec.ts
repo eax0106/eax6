@@ -4,8 +4,9 @@ import { MarketplaceGovernanceRepository } from "./marketplace-governance.reposi
 import { MarketplaceGovernanceService } from "./marketplace-governance.service";
 
 describe("MarketplaceGovernanceService", () => {
-  it("acts on underlying resource then writes central audit", async () => {
+  it("requires audit acknowledgement within the repository transaction", async () => {
     const item = {
+      review_notes: [{id:"mge_test"}],
       resource_type: "listing" as const,
       id: "lst_123",
       tenant_id: "f0204070-2fd2-4bb7-a117-3222301822fe",
@@ -14,7 +15,7 @@ describe("MarketplaceGovernanceService", () => {
       trust_level: null,
       updated_at: "2026-08-06T10:00:00.000Z",
     };
-    const act = vi.fn().mockResolvedValue(item);
+    const act = vi.fn(async (_type, _id, _input, write) => { await write.audit(item); return item; });
     const record = vi.fn().mockResolvedValue("a".repeat(64));
     const service = new MarketplaceGovernanceService(
       { act } as unknown as MarketplaceGovernanceRepository,

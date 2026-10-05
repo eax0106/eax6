@@ -268,3 +268,7 @@ export function validatePlatformApiEnv(env: NodeJS.ProcessEnv): PlatformApiEnv {
 export function registryPackageScanConfiguration(env: NodeJS.ProcessEnv = process.env) {
   return { operationsDatabaseUrl: env.OPERATIONS_MARKETPLACE_DATABASE_URL, executableSearchPath: env.PATH, bucket: env.REGISTRY_PACKAGE_BUCKET, region: env.AWS_REGION ?? "ap-south-1", executable: env.OSV_SCANNER_EXECUTABLE ?? "osv-scanner" };
 }
+
+export function marketplaceDatabaseConfiguration(env: NodeJS.ProcessEnv = process.env) {
+  return { databaseUrl: env.MARKETPLACE_DATABASE_URL, operationsDatabaseUrl: env.OPERATIONS_MARKETPLACE_DATABASE_URL };
+}

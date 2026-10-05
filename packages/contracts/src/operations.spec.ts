@@ -85,4 +85,16 @@ describe("Operations contracts", () => {
       updated_at: "2026-08-06T10:00:00.000Z",
     }).resource_type).toBe("tool_manifest");
   });
+
+  it("validates advisory risk and attributed requested-change history without breaking older queues", () => {
+    const item = { resource_type: "listing", id: "lst_review", tenant_id: "ten_f0204070-2fd2-7bb7-a117-3222301822fe", name: "Mapping", status: "needs_changes", trust_level: null, updated_at: "2026-10-05T00:00:00.000Z",
+      etag: '"revision-1"', risk: { score: 15, incomplete: true, reasons: [{ signal: "first_listing", points: 15, detail: "First listing", evidence: [], observed: true }] },
+      review_notes: [{ id: "mge_note", actor_type: "staff", actor_ref: "stf_reviewer", action: "needs_changes", previous_status: "human_review", next_status: "needs_changes", reason: "Explain fields", occurred_at: "2026-10-05T00:00:00.000Z" }] };
+    expect(MarketplaceGovernanceItemSchema.parse(item)).toEqual(item);
+    for (const score of [-1, 101, 1.5]) expect(() => MarketplaceGovernanceItemSchema.parse({ ...item, risk: { ...item.risk, score } })).toThrow();
+    expect(() => MarketplaceGovernanceItemSchema.parse({ ...item, risk: { ...item.risk, approve: true } })).toThrow();
+    expect(() => MarketplaceGovernanceItemSchema.parse({ ...item, review_notes: [{ ...item.review_notes[0], actor_type: "unknown" }] })).toThrow();
+    expect(MarketplaceGovernanceActionRequestSchema.parse({ action: "needs_changes", reason: " Correct fields " }).reason).toBe("Correct fields");
+    for (const reason of [" ", "x".repeat(1001)]) expect(() => MarketplaceGovernanceActionRequestSchema.parse({ action: "needs_changes", reason })).toThrow();
+  });
 });

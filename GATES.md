@@ -1,25 +1,30 @@
-# Gates: D26 append-only staff tenant and user notes (C125)
+# Gates: D27 marketplace reviewer changes and real-signal risk (C127)
 
-OWNS: apps/platform-api/src/deletion/platform-deletion.integration.spec.ts, apps/platform-api/src/deletion/retention-expiry.integration.spec.ts, apps/platform-web/src/features/admin/components/admin-note-composer.tsx, apps/platform-api/src/admin-tenants/**, apps/platform-api/src/admin-users/**, apps/platform-api/src/db/migrations/0035_admin_notes.sql, apps/platform-api/src/db/migrations/rollback/0035_remove_admin_notes.sql, apps/platform-api/src/db/migrations/meta/_journal.json, apps/platform-web/src/api/live-admin-tenants.ts, apps/platform-web/src/api/live-admin-users.ts, apps/platform-web/src/api/services/admin-tenants.ts, apps/platform-web/src/api/services/admin-users.ts, apps/platform-web/src/features/admin/pages/tenants/tenant-detail.tsx, apps/platform-web/src/features/admin/pages/users/user-detail.tsx, apps/platform-web/src/features/admin/pages/tenants/tenant-notes.spec.tsx, apps/platform-web/src/features/admin/pages/users/user-notes.spec.tsx, scripts/gates/baseline.json, docs/work-queue.md
+OWNS: apps/platform-api/vitest.config.ts, apps/platform-api/src/config/env.schema.ts, tests/integration/marketplace/governance-audit.spec.ts, apps/platform-api/src/marketplace-governance/**, apps/platform-api/src/marketplace/**, apps/platform-api/src/publisher/**, apps/platform-api/src/registry/**, apps/platform-api/src/db/marketplace-migrations/0008_marketplace_governance.sql, apps/platform-api/src/db/marketplace-migrations/rollback/0008_remove_marketplace_governance.sql, apps/platform-api/src/db/marketplace-migrator.spec.ts, apps/platform-api/src/db/marketplace-migration-files.spec.ts, apps/platform-api/src/db/marketplace-migrator.integration.spec.ts, packages/deletion-registry/src/declaration.ts, apps/platform-api/src/deletion/**, packages/contracts/src/operations.ts, packages/contracts/src/operations.spec.ts, apps/platform-web/src/api/live-admin-commerce.ts, apps/platform-web/src/api/live-admin-commerce.spec.ts, apps/platform-web/src/api/services/marketplace-admin.ts, apps/platform-web/src/api/services/seller.ts, apps/platform-web/src/api/services/marketplace.ts, apps/platform-web/src/api/types.ts, apps/platform-web/src/api/mock/marketplace-governance.ts, apps/platform-web/src/features/admin/pages/platform/marketplace-admin.tsx, apps/platform-web/src/features/admin/pages/platform/marketplace-admin.spec.tsx, apps/platform-web/src/features/seller/pages/**, apps/platform-web/src/features/assets/pages/**, apps/platform-web/src/api/**marketplace**spec.ts, scripts/gates/baseline.json, docs/marketplace-governance.md, docs/work-queue.md
 
-Scope: Authenticated staff can append bounded notes to tenant and user action history. Existing immutable history and retention remain authoritative; tenant read/write retains active support-grant scope. Notes are immutable local staff history; mandatory central staff audit is acknowledged before local commit, and failed audit rolls back the note. D26 tenant detail metrics, review assignment, billing operations and deployments remain independently required. No vendor write is needed.
+Scope: Complete D27 needs-changes with attributed reviewer notes, seller edits and resubmission into review; audited transitions retain reasons. Review risk derives from actual current scan, first-listing, declared outside actions/account scopes and recorded reports/takedowns, exposes its reasons, orders review and never makes approval decisions. Preserve D21 exact scan/version review and D22 free-only publication. Marketplace migration0008 follows existing tool-version review0007. C122 billing and C125 notes run concurrently; integrate applicable main changes before final verification.
 
-- [x] G1: Real ordinary-role PostgreSQL persists tenant/user notes as immutable staff history with mandatory central audit acknowledgement before commit; audit failure rolls back, note updates/deletes fail, and existing action history and retention remain intact
-  CHECK: node .unlazy/verify-storage.mjs
-  EXPECT: admin-notes-storage-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=d4ec974c4e6ff1f64425cc4b2105a316ed6e5159a733a92c0a250ad0fbbdae87; exit=0; EXPECT=matched; output-sha256=3072481478a022a163048983d7338be8cef94afe90f7823d17d4e07ea3675a2a; output-bytes=81; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
+- [x] G1: Ordinary-role PostgreSQL preserves immutable attributed reviewer notes and audited locked transitions; needs-changes returns to review only after authorized seller resubmission, stale and unrelated writes fail, and failed audit commits no transition
+  CHECK: node .unlazy/verify-governance-storage.mjs
+  EXPECT: marketplace-governance-storage-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=2c56c548e34279cba8877e6edf5b407340dbbc8ddc72a11dfa8ac8bbb78f36a7; exit=0; EXPECT=matched; output-sha256=a7b2e19b450e388d393e4059a00d0f16655cea9b097e4cc677f2013672ddc4bf; output-bytes=92; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-marketplace-governance-c127; path=2b1f1cc87037/31 entries
 
-- [x] G2: Real staff-cookie HTTP applies current roles and tenant support-grant scope; missing, expired, unrelated and revoked access cannot read or append notes; unknown subjects and invalid notes return errors
-  CHECK: node .unlazy/verify-http.mjs
-  EXPECT: admin-notes-http-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=65ca83c977eab453c7a0b255092d40738a922732ea9d89c27ccea7f909c8de97; exit=0; EXPECT=matched; output-sha256=81de062d61d035073ab939a7c27d4ca4867676e75a7b5949409f26aee41cec2c; output-bytes=78; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
+- [x] G2: Risk uses only recorded current scanner verdict, actual first-listing history, declared outside actions/account scopes and prior reports/takedowns; reasons explain contributions, missing signals remain explicit and risk never changes publication status
+  CHECK: node .unlazy/verify-governance-risk.mjs
+  EXPECT: marketplace-governance-risk-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=cf66aa59fdad3899e85726dbb19f00743c79dc95c02c8706483a836b20f50b90; exit=0; EXPECT=matched; output-sha256=be753f05664019fbec2d5ac5cdf45a5b997de5253db0a97a840ea4bcde217a6b; output-bytes=152; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-marketplace-governance-c127; path=2b1f1cc87037/31 entries
 
-- [x] G3: Live and demo tenant/user pages append and refresh actual history; validation, role limitations and unavailable service remain visible
-  CHECK: node .unlazy/verify-web.mjs
-  EXPECT: admin-notes-web-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=198a8758c4e38e9dd496c3d39b823f2b4bfb94fffd12f0cfd1078f780bcd63b3; exit=0; EXPECT=matched; output-sha256=fe8447dc37b3d62c1c5a9f4700cb5759908ec8c4ce657aa4fc1d7fd430b7947c; output-bytes=77; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
+- [x] G3: Actual current staff-cookie and tenant-session HTTP enforce existing roles and ownership for review, notes and resubmission; normal scanner review and free-only publication retain their requirements
+  CHECK: node .unlazy/verify-governance-http.mjs
+  EXPECT: marketplace-governance-http-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=2979a7723c68849e6955d9245707628040f69cbc0f07e0c09fc66b4afc524cb6; exit=0; EXPECT=matched; output-sha256=5ac26f1fd22aadaf64775869d9fc2163bba5659ac5e27f90f84d5c70c39f722d; output-bytes=101; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-marketplace-governance-c127; path=2b1f1cc87037/31 entries
 
-- [x] G4: Old-code and fault controls fail then restored code passes; full API/web tests, coverage, static, migration rollback, erasure/retention and architecture/RBAC/AST checks pass
-  CHECK: node .unlazy/verify-final.mjs
-  EXPECT: admin-notes-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=68a032aa1b0fe4f6c1e849a062006fd241b8ec0ff8ecb25bef77a964fddf8a36; exit=0; EXPECT=matched; output-sha256=e92e0c37fd724368ae271b32f3f1f103b5ea112bb1cab37c36446e80ce2c94a4; output-bytes=751; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-admin-notes-c125; path=2b1f1cc87037/31 entries
+- [x] G4: Live and demo reviewer/seller pages show risk with reasons and reviewer notes, submit bounded reasons, edit and resubmit the actual listing, and preserve failures and conflicts without fabricated success
+  CHECK: node .unlazy/verify-governance-web.mjs
+  EXPECT: marketplace-governance-web-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e3860110f9941b5ce5b0becc233a8749a03238c19ba8b915cd37035a344cea69; exit=0; EXPECT=matched; output-sha256=75c2c7c6f392f092a056ccfb6e8c88bba3db44c6524f41c3edf4ededbe42a5a7; output-bytes=88; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-marketplace-governance-c127; path=2b1f1cc87037/31 entries
+
+- [x] G5: Meaningful original/fault/restored controls prove the outcomes; full affected suites, coverage, static, actual migrations/rollback, erasure/retention and architecture/RBAC/AST checks pass on the integrated final source
+  CHECK: node .unlazy/verify-governance-final.mjs
+  EXPECT: marketplace-governance-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=c40c399dd8b6a16941bfbc324d9fc3443b3584f379dcfa34ab3bb1e9ca9f8d45; exit=0; EXPECT=matched; output-sha256=6b7d22a01a9e2e9593b19f06dd908a1802f1a20b18297339d38a368e6d40b4f8; output-bytes=998; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-marketplace-governance-c127; path=2b1f1cc87037/31 entries

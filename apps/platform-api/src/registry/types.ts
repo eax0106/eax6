@@ -9,7 +9,7 @@ export const versionStatuses = ["draft", "scanning", "scan_failed", "scan_unavai
 export type Ecosystem = (typeof ecosystems)[number];
 export type TrustLevel = (typeof trustLevels)[number];
 export type VersionStatus = (typeof versionStatuses)[number];
-export type ManifestStatus = "draft" | "published" | "blocked";
+export type ManifestStatus = "draft" | "needs_changes" | "published" | "blocked";
 export interface ToolManifest { readonly id: string; readonly tenantId: string | null; readonly name: string; readonly ecosystem: Ecosystem; readonly description: string | null; readonly trustLevel: TrustLevel; readonly status: ManifestStatus; readonly publisherId: string | null; readonly createdAt: string; readonly updatedAt: string; }
 export type ToolVersion = import("@alterx/shared-clients").RegistryToolVersion;
 export type ScanReport = import("@alterx/shared-clients").RegistryScanReport;
