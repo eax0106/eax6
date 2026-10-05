@@ -25,6 +25,7 @@ export interface AuditDeletionWiring {
   readonly costBaseUrl: string;
   readonly intelligenceBaseUrl: string;
   readonly memoryBaseUrl: string;
+  readonly evalBaseUrl: string;
   readonly serviceToken: string;
   readonly serviceTokenHash: string;
   readonly pseudonymKey: string;
@@ -43,6 +44,7 @@ export class AppModule {
       new HttpDeletionProvider(deletion.costBaseUrl, deletion.serviceToken, "cost-ledger-service"),
       new HttpDeletionProvider(deletion.intelligenceBaseUrl, deletion.serviceToken, "intelligence-service"),
       new HttpDeletionProvider(deletion.memoryBaseUrl, deletion.serviceToken, "memory-service"),
+      new HttpDeletionProvider(deletion.evalBaseUrl, deletion.serviceToken, "eval-service"),
     ];
     const workspaceStores: readonly string[] = WORKSPACE_ERASURE_STORES;
     const orchestrator = deletion === undefined ? undefined : new DeletionOrchestrator(

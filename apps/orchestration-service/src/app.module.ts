@@ -8,6 +8,7 @@ import { RunLauncherModule } from "./run-launcher.module";
 import { IngressModule } from "./ingress.module";
 import { WorkflowAuthoringModule } from "./workflow-authoring.module";
 import { ExecutionRuntimeModule } from "./execution-runtime.module";
+import { BenchmarkSimulationModule } from "./benchmark-simulation.module";
 
 /**
  * Thin composition root -- Step 7/7 of docs/design/app-module-split.md.
@@ -26,6 +27,7 @@ import { ExecutionRuntimeModule } from "./execution-runtime.module";
     IngressModule,
     WorkflowAuthoringModule,
     ExecutionRuntimeModule,
+    BenchmarkSimulationModule,
   ],
   controllers: [HealthController],
 })
