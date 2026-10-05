@@ -1,5 +1,5 @@
 import { HttpException } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
+import {v7 as uuidv7} from "uuid";
 
 export class AdminDeploymentHttpError extends HttpException {
   constructor(status: number, code: string, detail: string, instance: string) {
@@ -20,6 +20,5 @@ export class AdminDeploymentHttpError extends HttpException {
 }
 
 function generatedId(prefix: "trc" | "req"): string {
-  const uuid = randomUUID();
-  return `${prefix}_${uuid.slice(0, 14)}7${uuid.slice(15)}`;
+  return `${prefix}_${uuidv7()}`;
 }

@@ -106,3 +106,11 @@ describe("Operations contracts", () => {
     for (const reason of [" ", "x".repeat(1001)]) expect(() => MarketplaceGovernanceActionRequestSchema.parse({ action: "needs_changes", reason })).toThrow();
   });
 });
+
+import {TenantDeploymentCollectionSchema} from "./operations";
+describe("tenant deployment read bounds",()=>{
+ const tenant="018f4d6e-2b4a-7a3e-8c1a-1234567890ab",id="dep_018f4d6e-2b4a-7a3e-8c1a-1234567890a2";
+ const row={id,tenant_id:tenant,project_id:"prj_018f4d6e-2b4a-7a3e-8c1a-1234567890ab",project_name:"Recorded project",status:"active",created_at:"2026-10-05T00:00:00Z",updated_at:"2026-10-05T00:00:00Z",etag:`"${id}:rev-1"`};
+ it("accepts exact empty and bounded recorded collections",()=>{expect(TenantDeploymentCollectionSchema.parse({tenant_id:tenant,total:0,items:[]})).toEqual({tenant_id:tenant,total:0,items:[]});expect(TenantDeploymentCollectionSchema.parse({tenant_id:tenant,total:201,items:[row]}).total).toBe(201)});
+ it.each([{tenant_id:tenant,total:0,items:[row]},{tenant_id:tenant,total:2,items:[row,row]},{tenant_id:tenant,total:1,items:[{...row,etag:'"stale"'}]},{tenant_id:tenant,total:1,items:[{...row,etag:'"dep_018f4d6e-2b4a-7a3e-8c1a-1234567890a3:rev-1"'}]},{tenant_id:tenant,total:1,items:[{...row,tenant_id:"018f4d6e-2b4a-7a3e-8c1a-1234567890ac"}]}])("rejects misbound, duplicate or unversioned read %#",value=>{expect(TenantDeploymentCollectionSchema.safeParse(value).success).toBe(false)});
+});
