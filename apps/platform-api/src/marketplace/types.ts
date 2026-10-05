@@ -12,6 +12,7 @@ export const listingStatuses = [
   "submitted",
   "automated_review",
   "human_review",
+  "needs_changes",
   "published",
   "suspended",
   "deprecated",

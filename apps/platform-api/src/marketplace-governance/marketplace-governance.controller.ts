@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseFilters } from "@nestjs/common";
+import { Body, Controller, Get, Headers, Param, Post, Req, UseFilters } from "@nestjs/common";
 import {
   MarketplaceGovernanceActionRequestSchema,
   MarketplaceGovernanceResourceTypeSchema,
@@ -47,6 +47,7 @@ export class MarketplaceGovernanceController {
     @Param("id") id: string,
     @Body() body: unknown,
     @Req() request: RbacRequest,
+    @Headers("if-match") ifMatch?: string,
   ) {
     const instance = `/api/v1/admin/marketplace/governance/${rawResourceType}/${id}/actions/apply`;
     const resourceType = MarketplaceGovernanceResourceTypeSchema.safeParse(rawResourceType);
@@ -68,6 +69,6 @@ export class MarketplaceGovernanceController {
         instance,
       );
     }
-    return this.governance.act(resourceType.data, id, staffUserId, input.data);
+    return this.governance.act(resourceType.data, id, staffUserId, input.data, ifMatch);
   }
 }

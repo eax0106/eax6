@@ -4,6 +4,7 @@ import type {
   MarketplaceGovernanceItem,
   MarketplaceGovernanceResourceType,
 } from "@alterx/contracts";
+import { governanceAuditScope } from "./governance-history";
 import { AdminAuditService } from "../admin-audit";
 import {
   MarketplaceGovernanceInvalidActionError,
@@ -32,11 +33,19 @@ export class MarketplaceGovernanceService {
     id: string,
     staffUserId: string,
     input: MarketplaceGovernanceActionRequest,
+    ifMatch?: string,
   ): Promise<MarketplaceGovernanceItem> {
     const instance = `/api/v1/admin/marketplace/governance/${resourceType}/${id}/actions/apply`;
     let item: MarketplaceGovernanceItem | undefined;
     try {
-      item = await this.repository.act(resourceType, id, input);
+      item = await this.repository.act(resourceType, id, input, {
+        actorRef: staffUserId, ifMatch,
+        audit: async reviewed => this.audit.record({
+          ...(reviewed.tenant_id ? {tenantId: reviewed.tenant_id} : {}),
+          actorType: "admin", actorRef: staffUserId, action: `marketplace.governance.${input.action}`,
+          targetType: resourceType, targetRef: id, reasonCode: "staff_decision", scope: governanceAuditScope(reviewed),
+        }),
+      });
     } catch (error) {
       this.translate(error, instance);
     }
@@ -48,16 +57,6 @@ export class MarketplaceGovernanceService {
         instance,
       );
     }
-    await this.audit.record({
-      ...(item.tenant_id ? { tenantId: item.tenant_id } : {}),
-      actorType: "admin",
-      actorRef: staffUserId,
-      action: `marketplace.governance.${input.action}`,
-      targetType: resourceType,
-      targetRef: id,
-      reasonCode: "staff_decision",
-      scope: "marketplace:governance",
-    });
     return item;
   }
 

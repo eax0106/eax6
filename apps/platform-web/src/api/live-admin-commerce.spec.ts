@@ -41,18 +41,33 @@ describe("live admin marketplace and billing (B2.1, B2.2)", () => {
 
   it("sends suspend as the governance takedown, on the item's own resource type, with a reason", async () => {
     fetchMock.mockResolvedValue(
-      Response.json({ resource_type: "tool_manifest", id: "tlm_1", tenant_id: null, name: "Search", status: "blocked", trust_level: "blocked", updated_at: "x" }),
+      Response.json({ resource_type: "tool_manifest", id: "tlm_1", tenant_id: null, name: "Search", status: "blocked", trust_level: "blocked", updated_at: "2026-10-05T00:00:00.000Z" }),
     )
-    const result = await reviewMarketplaceItem({ id: "tlm_1", resourceType: "tool_manifest" }, "suspend")
+    const result = await reviewMarketplaceItem({ id: "tlm_1", resourceType: "tool_manifest", etag: '"revision-1"' }, "suspend", "Inspected tool")
     const [url, init] = fetchMock.mock.calls[0]!
     expect(String(url)).toContain("/api/v1/admin/marketplace/governance/tool_manifest/tlm_1/actions/apply")
-    expect(JSON.parse(String(init!.body))).toEqual({ action: "takedown", reason: "Decided in the admin console" })
+    expect(JSON.parse(String(init!.body))).toEqual({ action: "takedown", reason: "Inspected tool" })
+    expect(new Headers(init!.headers).get("if-match")).toBe('"revision-1"')
     expect(result.status).toBe("suspended")
   })
 
-  it("refuses 'changes requested' in live mode instead of pretending it happened", async () => {
-    await expect(new MarketplaceAdminService().reviewListing("lst_1", "changes_requested")).rejects.toThrow(/not available/)
+  it("sends requested changes with bounded reviewer reason and the exact revision", async () => {
+    const resource={resource_type:"listing",id:"lst_1",tenant_id:null,name:"CRM mapping",status:"needs_changes",trust_level:null,updated_at:"2026-10-05T00:00:00Z",etag:'"revision-2"',
+      risk:{score:15,incomplete:true,reasons:[{signal:"scanner",points:0,detail:"No recorded scanner verdict",evidence:[],observed:false}]},
+      review_notes:[{id:"mge_1",actor_type:"staff",actor_ref:"stf_review",action:"needs_changes",previous_status:"human_review",next_status:"needs_changes",reason:"Correct mapping",occurred_at:"2026-10-05T00:00:00Z"}]}
+    fetchMock.mockResolvedValue(Response.json(resource))
+    const item=await new MarketplaceAdminService().reviewListing("lst_1","changes_requested","Correct mapping","listing",'"revision-1"')
+    expect(item).toMatchObject({status:"changes_requested",etag:'"revision-2"',riskDetails:resource.risk,reviewNotes:resource.review_notes})
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]!.body))).toEqual({action:"needs_changes",reason:"Correct mapping"})
+    expect(new Headers(fetchMock.mock.calls[0]![1]!.headers).get("if-match")).toBe('"revision-1"')
+  })
+  it("rejects missing revision or invalid reasons before dispatch and surfaces server conflict",async()=>{
+    const service=new MarketplaceAdminService()
+    await expect(service.reviewListing("lst_1","changes_requested","Correct mapping")).rejects.toThrow("Reload")
+    for(const reason of [" ","x".repeat(1001)])await expect(service.reviewListing("lst_1","changes_requested",reason,"listing",'"rev"')).rejects.toThrow("1 to 1000")
     expect(fetchMock).not.toHaveBeenCalled()
+    fetchMock.mockResolvedValue(Response.json({detail:"The resource changed",error_code:"PRECONDITION_FAILED"},{status:412}))
+    await expect(service.reviewListing("lst_1","changes_requested","Correct mapping","listing",'"rev"')).rejects.toThrow()
   })
 
   it("lists tenants out of good standing as open payment failures with their access state and no invented amount", async () => {

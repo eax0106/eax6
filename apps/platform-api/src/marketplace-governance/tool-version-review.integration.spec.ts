@@ -14,6 +14,7 @@ import { StaffRepository } from "../staff/staff.repository";
 import { RegistryRepository } from "../registry/registry.repository";
 import type { PackageScanReport } from "../registry/package-scan";
 import { MarketplaceGovernanceModule } from "./marketplace-governance.module";
+import { governanceEtag } from "./governance-history";
 import { MarketplaceGovernanceRepository } from "./marketplace-governance.repository";
 import { ToolVersionReviewRepository } from "./tool-version-review.repository";
 
@@ -77,7 +78,12 @@ describe.skipIf(!databaseUrl)("first-version staff review: ordinary PostgreSQL a
   async function scan(manifestId:string,versionId:string,result=clean()) {
     await registry.beginScan(tenant,manifestId,versionId); return registry.completeScan(tenant,manifestId,versionId,`scn_${randomUUID()}`,result);
   }
-  const request=(url=queueUrl,token="review-token",body?:Record<string,unknown>)=>app.inject({method:body===undefined?"GET":"POST",url,headers:{cookie:token=== "tenant-token"?"alter_access=tenant-token":`alter_staff_access=${token}`},...(body===undefined?{}:{payload:body})});
+  const request=async(url=queueUrl,token="review-token",body?:Record<string,unknown>)=>{
+    const headers:Record<string,string>={cookie:token=== "tenant-token"?"alter_access=tenant-token":`alter_staff_access=${token}`};
+    const generic=/governance\/tool_manifest\/(tlm_[0-9a-f-]+)\/actions\/apply$/.exec(url);
+    if(generic){const row=(await operationsPool.query("SELECT governance_revision FROM tool_manifests WHERE id=$1",[generic[1]])).rows[0];if(row)headers["if-match"]=governanceEtag(generic[1]!,row.governance_revision);}
+    return app.inject({method:body===undefined?"GET":"POST",url,headers,...(body===undefined?{}:{payload:body})});
+  };
   const reviewUrl=(manifestId:string,versionId:string)=>`/api/v1/admin/marketplace/governance/tools/${manifestId}/versions/${versionId}/review`;
   const decision=(scanReportId:string,reason="Inspected package and dependency scan")=>({scanReportId,decision:"approved" as const,reason});
 

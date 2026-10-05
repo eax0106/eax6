@@ -45,7 +45,7 @@ export const PLATFORM_TABLES = [
   "jit_grants", "kyc_submissions", "listing_versions", "listings", "notification_digests",
   "notification_events", "notification_preferences", "notification_reads",
   "oauth_connection_use_audits", "oauth_connections", "oauth_states", "onboarding_states",
-  "orders", "payout_ledger", "payouts", "publishers", "repository_bindings", "reviews",
+  "marketplace_governance_events", "orders", "payout_ledger", "payouts", "publishers", "repository_bindings", "reviews",
   "tenant_admin_actions", "tenant_members", "tenants",   "tool_manifests", "tool_revocations",
   "tool_scan_reports", "tool_versions", "user_admin_actions", "user_sessions", "users",
   "workflow_safeguards", "workspace_connector_configs", "workspace_exports", "workspace_invitations", "workspace_members", "workspaces",
@@ -54,7 +54,7 @@ export const PLATFORM_TABLES = [
 // Children before parents (a topological sort over every foreign key among the
 // tables above, checked against a real schema by the integration spec). Left out
 // on purpose, because they are not erased by a plain DELETE:
-//   action_item_annotations, payout_ledger  append-only: erased by their guarded functions
+//   action_item_annotations, payout_ledger, marketplace_governance_events  append-only: erased by their guarded functions
 //   tenants                                 becomes a tombstone
 //   users                                   pseudonymised when no other tenant holds them
 //   the SKELETON_TABLES                     staff access records, kept 90 days
@@ -138,6 +138,8 @@ export class PlatformDeletionService implements DeletionProvider, WorkspaceDelet
       }
       // After the tenant's own orders, installs and reviews are gone: keeps a listing others depend on, ownerless.
       rows += Number((await tx.query<{ n: number }>("SELECT erase_tenant_listings($1::uuid, $2) AS n", [tenant, manifestId])).rows[0]?.n ?? 0);
+      // Governance history uses canonical bare tenant UUIDs and the same guarded erasure role.
+      rows += Number((await tx.query<{n:number}>("SELECT erase_tenant_marketplace_governance($1::uuid,$2) AS n",[tenant,manifestId])).rows[0]?.n ?? 0);
       rows += (
         await tx.query(
           `UPDATE tenants

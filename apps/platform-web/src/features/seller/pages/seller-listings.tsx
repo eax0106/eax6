@@ -1,3 +1,6 @@
+import * as React from "react"
+import { ListingReview } from "./listing-review"
+import type { MarketplaceListing } from "@/api/types"
 import { useQuery } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { api } from "@/api/client"
@@ -13,6 +16,7 @@ import { Plus } from "lucide-react"
 
 export function SellerListingsPage() {
   const navigate = useNavigate()
+  const [selected,setSelected] = React.useState<MarketplaceListing | null>(null)
   
   const { data: listings, isLoading, error } = useQuery({
     queryKey: queryKeys.seller.listings,
@@ -43,18 +47,19 @@ export function SellerListingsPage() {
                 <TableHead className="text-right">Price</TableHead>
                 {!isLiveApi && <TableHead className="text-right">Installs</TableHead>}
                 <TableHead className="text-right">Updated</TableHead>
+                <TableHead className="text-right">Review</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={isLiveApi ? 5 : 6} className="text-center py-8 text-muted-foreground animate-pulse">Loading listings...</TableCell>
+                  <TableCell colSpan={isLiveApi ? 6 : 7} className="text-center py-8 text-muted-foreground animate-pulse">Loading listings...</TableCell>
                 </TableRow>
               ) : error ? (
-                <TableRow><TableCell colSpan={isLiveApi ? 5 : 6} role="alert" className="text-center py-8 text-destructive">Could not load listings: {error.message}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={isLiveApi ? 6 : 7} role="alert" className="text-center py-8 text-destructive">Could not load listings: {error.message}</TableCell></TableRow>
               ) : listings?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={isLiveApi ? 5 : 6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={isLiveApi ? 6 : 7} className="text-center py-12 text-muted-foreground">
                     <p>No listings found.</p>
                   </TableCell>
                 </TableRow>
@@ -68,7 +73,7 @@ export function SellerListingsPage() {
                       <Badge variant="secondary" className="capitalize">{listing.assetType.replace("_", " ")}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={listing.status === "published" ? "success" : ["review", "submitted", "automated_review", "human_review"].includes(listing.status) ? "warning" : "default"}>
+                      <Badge variant={listing.status === "published" ? "success" : ["review", "submitted", "automated_review", "human_review", "needs_changes"].includes(listing.status) ? "warning" : "default"}>
                         {listing.status.replaceAll("_", " ")}
                       </Badge>
                     </TableCell>
@@ -77,6 +82,7 @@ export function SellerListingsPage() {
                     </TableCell>
                     {!isLiveApi && <TableCell className="text-right">{formatCompactNumber(listing.installCount || 0)}</TableCell>}
                     <TableCell className="text-right text-muted-foreground text-sm">{new Date(listing.updatedAt).toLocaleDateString()}</TableCell>
+                    <TableCell><Button variant="outline" size="sm" onClick={() => setSelected(listing)}>View review</Button></TableCell>
                   </TableRow>
                 ))
               )}
@@ -84,6 +90,7 @@ export function SellerListingsPage() {
           </Table>
         </CardContent>
       </Card>
+      {selected && <ListingReview key={selected.id} listing={selected} onClose={() => setSelected(null)} />}
     </div>
   )
 }

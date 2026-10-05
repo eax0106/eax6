@@ -1,4 +1,7 @@
 import { MiddlewareConsumer, Module, type NestModule } from "@nestjs/common";
+import { EngineModule } from "../engine";
+import { SellerGovernanceController } from "./seller-governance.controller";
+import { SellerGovernanceRepository } from "./seller-governance.repository";
 import { AdminAuditModule } from "../admin-audit";
 import { sharedPool } from "../db/shared-pool";
 import { StaffAuthMiddleware, StaffModule } from "../staff";
@@ -11,8 +14,8 @@ import { PublisherRepository } from "./publisher.repository";
 import { PublisherService } from "./publisher.service";
 
 @Module({
-  imports: [AdminAuditModule, StaffModule],
-  controllers: [PublisherController, AdminPublisherController],
+  imports: [AdminAuditModule, StaffModule, EngineModule],
+  controllers: [PublisherController, AdminPublisherController, SellerGovernanceController],
   providers: [
     {
       provide: AdminPublisherRepository,
@@ -24,6 +27,7 @@ import { PublisherService } from "./publisher.service";
       ),
     },
     AdminPublisherService,
+    { provide: SellerGovernanceRepository, useFactory: () => new SellerGovernanceRepository(sharedPool(process.env.MARKETPLACE_DATABASE_URL)) },
     { provide: PublisherRepository, useFactory: () => new PublisherRepository(sharedPool(process.env.MARKETPLACE_DATABASE_URL), false) },
     ManualReviewKycProvider,
     { provide: PublisherService, inject: [PublisherRepository, ManualReviewKycProvider], useFactory: (repository: PublisherRepository, kyc: ManualReviewKycProvider) => new PublisherService(repository, kyc) },
