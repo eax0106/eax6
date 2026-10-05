@@ -126,7 +126,7 @@ describe.skipIf(!database)("marketplace governance history ordinary PostgreSQL",
   await admin.query("INSERT INTO tool_scan_reports(id,tenant_id,tool_version_id,verdict,findings_json,scanner_version,duration_ms,scanned_at) VALUES($1,$2,$3,'blocked','[]','native',1,'2026-01-01')",[scan,tenant,version]);
   await admin.query("UPDATE tool_versions SET latest_scan_report_id=$2 WHERE id=$1",[version,scan]);
   const queue=await new MarketplaceGovernanceRepository({query:admin.query.bind(admin)} as unknown as pg.Pool).list();
-  expect(queue).toHaveLength(200);expect(queue[0]).toMatchObject({id:old,risk:{score:85,incomplete:false}});
+  expect(queue[0]).toMatchObject({id:old,risk:{score:85,incomplete:false}});expect(queue).toHaveLength(200);
  });
  it("prevents clean scans and version reviews from publishing a tool while changes are requested",async()=>{
   const registry=new RegistryRepository(pool),manifest=`tlm_${uuidv7()}`,first=`tlv_${uuidv7()}`,scanId=`scn_${uuidv7()}`;
@@ -145,6 +145,12 @@ describe.skipIf(!database)("marketplace governance history ordinary PostgreSQL",
   const seller=new SellerGovernanceRepository(pool),current=await seller.review(tenant,"tool_manifest",manifest);
   await seller.resubmit(tenant,"tool_manifest",manifest,"usr_seller","Corrected package",current.etag,async()=>{});
   expect(await ops.review(manifest,second,"stf_review",{scanReportId:secondScan,decision:"approved",reason:"Resubmitted clean version"},async()=>{})).toMatchObject({status:"published"});
+ });
+ it("refuses migration rollback while reviewer history or requested changes remain",async()=>{
+  await scoped(tenant,c=>event(c));
+  await expect(applyMarketplaceMigrations(admin,{direction:"down",steps:1})).rejects.toThrow("requires preserved history");
+  expect((await admin.query("SELECT count(*)::int AS count FROM marketplace_governance_events")).rows[0].count).toBe(1);
+  expect((await admin.query("SELECT tag FROM marketplace_migrations WHERE tag='0008_marketplace_governance'")).rows).toHaveLength(1);
  });
  it("increments revision even when an update repeats its timestamp or attempts to set revision",async()=>{
   await scoped(tenant,async client=>{

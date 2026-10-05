@@ -4,6 +4,7 @@ import { SellerGovernanceController } from "./seller-governance.controller";
 import { SellerGovernanceRepository } from "./seller-governance.repository";
 import { AdminAuditModule } from "../admin-audit";
 import { sharedPool } from "../db/shared-pool";
+import { marketplaceDatabaseConfiguration } from "../config/env.schema";
 import { StaffAuthMiddleware, StaffModule } from "../staff";
 import { AdminPublisherController } from "./admin-publisher.controller";
 import { AdminPublisherRepository } from "./admin-publisher.repository";
@@ -19,16 +20,14 @@ import { PublisherService } from "./publisher.service";
   providers: [
     {
       provide: AdminPublisherRepository,
-      useFactory: () => new AdminPublisherRepository(
-        process.env.OPERATIONS_MARKETPLACE_DATABASE_URL
-          ? sharedPool(process.env.OPERATIONS_MARKETPLACE_DATABASE_URL)
-          : undefined,
-        false,
-      ),
+      useFactory: () => {
+        const { operationsDatabaseUrl } = marketplaceDatabaseConfiguration();
+        return new AdminPublisherRepository(operationsDatabaseUrl ? sharedPool(operationsDatabaseUrl) : undefined, false);
+      },
     },
     AdminPublisherService,
-    { provide: SellerGovernanceRepository, useFactory: () => new SellerGovernanceRepository(sharedPool(process.env.MARKETPLACE_DATABASE_URL)) },
-    { provide: PublisherRepository, useFactory: () => new PublisherRepository(sharedPool(process.env.MARKETPLACE_DATABASE_URL), false) },
+    { provide: SellerGovernanceRepository, useFactory: () => new SellerGovernanceRepository(sharedPool(marketplaceDatabaseConfiguration().databaseUrl)) },
+    { provide: PublisherRepository, useFactory: () => new PublisherRepository(sharedPool(marketplaceDatabaseConfiguration().databaseUrl), false) },
     ManualReviewKycProvider,
     { provide: PublisherService, inject: [PublisherRepository, ManualReviewKycProvider], useFactory: (repository: PublisherRepository, kyc: ManualReviewKycProvider) => new PublisherService(repository, kyc) },
   ],

@@ -34,6 +34,7 @@ export function MarketplaceAdmin() {
       {isError && <p role="alert">{(error as Error).message}</p>}
       {reviewMutation.isError && <p role="alert">{(reviewMutation.error as Error).message}</p>}
       <Button variant="outline" disabled={isFetching || reviewMutation.isPending} onClick={() => void refetch()}>Reload review queue</Button>
+      {reviews && reviews.length >= 200 && <p className="text-sm text-slate-400">Showing 200 highest-risk review items.</p>}
       <p className="text-sm text-slate-400">Risk orders review. Staff decide publication after inspecting current evidence.</p>
       <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
         <Table>
@@ -101,7 +102,7 @@ export function MarketplaceAdmin() {
                     <div className="flex justify-end gap-2">
                       {r.status === "pending_review" && (
                         <>
-                          <Button variant="ghost" size="sm" disabled={reviewMutation.isPending || !reasons[r.id]?.trim() || reasons[r.id]!.trim().length > 1000} onClick={() => reviewMutation.mutate({ item: r, action: "approve" })} className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
+                          <Button variant="ghost" size="sm" disabled={r.resourceType === "tool_manifest" || reviewMutation.isPending || !reasons[r.id]?.trim() || reasons[r.id]!.trim().length > 1000} title={r.resourceType === "tool_manifest" ? "Approve the current clean tool version below" : undefined} onClick={() => reviewMutation.mutate({ item: r, action: "approve" })} className="text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10">
                             <Check className="w-4 h-4 mr-2" /> Approve
                           </Button>
                           <Button variant="ghost" size="sm" disabled={reviewMutation.isPending || !reasons[r.id]?.trim() || reasons[r.id]!.trim().length > 1000} onClick={() => reviewMutation.mutate({ item: r, action: "changes_requested" })} className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10">

@@ -80,6 +80,7 @@ describe.skipIf(!database)("marketplace governance current staff cookie and ordi
  const staff="alter_staff_access=reviewer",staffPath="/api/v1/admin/marketplace/governance";
  const sellerPath=(id:string)=>`/api/v1/publisher/reviews/listing/${id}`;
  async function request<T=MarketplaceGovernanceItem>(path:string,cookie?:string,method="GET",body?:Record<string,unknown>,etag?:string){
+  // eslint-disable-next-line alterx-boundaries/no-raw-engine-http -- exercises this loopback Platform API through its actual cookie/session guards.
   const response=await fetch(base+path,{method,headers:{...(cookie?{cookie}:{}),...(body?{"content-type":"application/json"}:{}),...(etag?{"if-match":etag}:{})},...(body?{body:JSON.stringify(body)}:{})});
   return {status:response.status,body:await response.json() as T};
  }

@@ -385,6 +385,23 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
       expect(await count("action_item_annotations", "tenant_id", B)).toBe(1);
     });
 
+    it("erases governance reasons only through its dedicated function and preserves the other tenant",async()=>{
+      await admin.query(`INSERT INTO marketplace_governance_events(id,tenant_id,resource_type,resource_id,actor_type,actor_ref,action,previous_status,next_status,reason,resource_revision)
+        VALUES('mge_00000000-0000-7000-8000-000000009002',$1,'listing','lst_other','staff','stf_1','needs_changes','human_review','needs_changes','Other seller reason',1)`,[B]);
+      await admin.query("INSERT INTO tenant_erasure_manifests(manifest_id,tenant_id) VALUES($1,$2)",[MANIFEST,A]);
+      const client=await pool.connect();try{
+        await client.query("BEGIN");await client.query("SELECT set_config('app.current_tenant_id',$1,true)",[A]);
+        expect((await client.query("DELETE FROM marketplace_governance_events WHERE tenant_id=$1",[A])).rowCount).toBe(0);
+        expect((await client.query("UPDATE marketplace_governance_events SET reason='Modified' WHERE tenant_id=$1",[A])).rowCount).toBe(0);
+      }finally{await client.query("ROLLBACK");client.release();}
+      expect((await pool.query("SELECT erase_tenant_marketplace_governance($1::uuid,$2) AS n",[A,MANIFEST])).rows[0].n).toBe(1);
+      expect(await count("marketplace_governance_events")).toBe(0);expect(await count("marketplace_governance_events","tenant_id",B)).toBe(1);
+      const policy=await one<{prosecdef:boolean;owner:string;public_execute:boolean;proconfig:string[]}>(`SELECT p.prosecdef,pg_get_userbyid(p.proowner) AS owner,p.proconfig,
+        has_function_privilege('public',p.oid,'EXECUTE') AS public_execute FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+        WHERE n.nspname=$1 AND p.proname='erase_tenant_marketplace_governance'`,[schemaName]);
+      expect(policy).toMatchObject({prosecdef:true,owner:"platform_erasure",public_execute:false});expect(policy.proconfig).toEqual([`search_path=${schemaName}, pg_temp`]);
+    });
+
     it("no manifest is left able to authorise a later erasure of the same tenant", async () => {
       await service.deleteSubjectData(ten(A), MANIFEST);
       const state = await one<{ state: string }>("SELECT state FROM tenant_erasure_manifests WHERE manifest_id = $1", [MANIFEST]);

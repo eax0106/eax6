@@ -20,6 +20,7 @@ export function demoGovernanceWrite(id:string,etag:string|undefined,action:"edit
   if(!etag||etag!==old.etag)throw new Error("The resource changed; reload before deciding")
   if(!reason.trim()||reason.trim().length>1000)throw new Error("Reason must contain 1 to 1000 characters")
   if((action==="edit"||action==="resubmit")&&old.status!=="needs_changes")throw new Error("This listing is not awaiting seller changes")
+  if(action==="approve"&&old.status==="needs_changes")throw new Error("The seller must resubmit before approval")
   const status=action==="resubmit"?"submitted":action==="needs_changes"?"needs_changes":action==="approve"?"published":action==="reject"?"private_testing":action==="takedown"?"removed":old.status
   const updated:MarketplaceGovernanceItem={...old,name:name??old.name,description:description??old.description,status,etag:`"demo-${++revision}"`,updated_at:new Date().toISOString(),review_notes:[{
     id:`mge_demo_${revision}`,actor_type:action==="edit"||action==="resubmit"?"seller":"staff",actor_ref:action==="edit"||action==="resubmit"?"usr_demo":"stf_demo",

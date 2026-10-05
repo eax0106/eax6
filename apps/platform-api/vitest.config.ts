@@ -14,6 +14,7 @@ export default defineConfig({
     include: [
       "apps/platform-api/src/**/*.spec.ts",
       "tests/integration/rbac/**/*.spec.ts",
+      "tests/integration/marketplace/**/*.spec.ts",
     ],
     exclude: [
       "apps/platform-api/src/marketplace/**/*.integration.spec.ts",
