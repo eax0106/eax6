@@ -22,4 +22,4 @@ Scope: Persist assignment of an open security review to a currently active staff
 - [x] G4: Migration and rollback preserve existing reviews and refuse destructive downgrade with assignment history; tenant erasure removes the target signal without affecting unrelated tenants; original/fault/restored controls and full API/web/static/coverage/architecture/RBAC/AST checks pass
   CHECK: node .unlazy/verify-assignment-final.mjs
   EXPECT: security-assignment-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=8176dac76c218f3ea4c9216925ba502d56c45c845ebb04520e6090b06a8e5025; exit=0; EXPECT=matched; output-sha256=a6f34fc4918d50173612469a35f55a977346e1699f2778e2fc847b671b4df332; output-bytes=1017; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-security-assignment-c129; path=2b1f1cc87037/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=8176dac76c218f3ea4c9216925ba502d56c45c845ebb04520e6090b06a8e5025; exit=0; EXPECT=matched; output-sha256=99316bf97b7206f808f3a06545ae55a2b9fcc58ac8f6347d7be6bd026f27745b; output-bytes=1018; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-security-assignment-c129; path=2b1f1cc87037/31 entries

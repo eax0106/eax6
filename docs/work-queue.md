@@ -214,3 +214,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change and evidence | Status |
 | --- | --- | --- |
 | C129 | Actual eligible staff picker and reason-based assignment/reassignment on recorded security reviews. Locked exact revisions, acknowledged audit, immutable attributed history, current staff-cookie roles, ordinary RLS and guarded tenant erasure. Live/demo UI retains failed input and exposes actual assignee and unavailable/stale states. Native PostgreSQL, HTTP, concurrency, audit protocol, rollback and rendered UI checks; see `docs/security-review-assignment.md`. D26 billing operations and tenant deployments remain. Four local gates passed: storage/contracts20; current staff HTTP and actual audit protocol14; rendered/live UI12; full API1831 plus21 skips with coverage, web442, database130 plus1 skip, contracts143, erasure/registry25, affected static/build, zero added normalized AST findings and thirteen failing/restored controls. Exact-head CI remains required. | local gates passed; CI required |
+
+### C131 — Temporal rollover regression readiness
+
+| Change | Scope and evidence | Status |
+| --- | --- | --- |
+| C131 | Temporal rollover regression waits for the actual first workflow task before sending its two rollover messages. Preserves all rollover, retained-message, deduplication and closure assertions. Both PR150 CI attempts failed the unchanged original test with normal resolved-first-run output. The separately recorded buffered-start production gap remains outside this test change. Three independent native rollover runs and full adapters603/1 skipped pass; lint/typecheck/build pass. Exact-head CI is required. | local verification passed; CI pending |
