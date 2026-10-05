@@ -24,6 +24,7 @@ Scope: Current staff Admin/Billing Ops can act on real named-tenant billing issu
   EXPECT: billing-ops-delivery-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=b95c8593eab73a4a55e68a8b55e4cd90767b64ecca43f36d33e101687f451352; exit=0; EXPECT=matched; output-sha256=c7fa166eff5dd0df794d46af8abaf6beced082d4902d19dc5ac38e9e8ec4cd06; output-bytes=344; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-billing-ops-c132; path=2b1f1cc87037/31 entries
 
-- [ ] G5: Old/fault/restored behavior controls, affected full API coverage and web/shared suites, production module wiring, static/build, architecture/RBAC/migration/naming and normalized AST checks pass without weakened thresholds or protections
+- [x] G5: Old/fault/restored behavior controls, affected full API coverage and web/shared suites, production module wiring, static/build, architecture/RBAC/migration/naming and normalized AST checks pass without weakened thresholds or protections
   CHECK: node .unlazy/verify-billing-ops-final.mjs
   EXPECT: billing-ops-final-passed
+  EVIDENCE: automatic-evidence=v1; definition-sha256=63b5c7b51c13e3ed094906d201333844578c139d948e54dd886512251b497dc7; exit=0; EXPECT=matched; output-sha256=5ef1a7fdd52e1cad6c71b0afbd3a696267a3e6493168a413a5e5d7708a1825b3; output-bytes=985; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-billing-ops-c132; path=2b1f1cc87037/31 entries
