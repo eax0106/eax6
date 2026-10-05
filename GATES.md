@@ -7,7 +7,7 @@ Scope: Replace fictional platform rollouts with recorded named-tenant Engine dep
 - [x] G1: Real ordinary PostgreSQL lists only the named tenant's existing deployments with bounded stable ordering and exact current revisions; transitions serialize and preserve existing rollback and active-deployment rules
   CHECK: node .unlazy/verify-deployment-storage.mjs
   EXPECT: tenant-deployment-storage-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=e9fc55e2a0febee161ff60b64922f269b72ee94cda0a947cc56063a750ab9023; exit=0; EXPECT=matched; output-sha256=a772c1d12cbb879d85beec81c0d7d237b6845ad551fe10c72f7d7d68c284d36e; output-bytes=219; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-tenant-deployments-c130; path=2b1f1cc87037/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=e9fc55e2a0febee161ff60b64922f269b72ee94cda0a947cc56063a750ab9023; exit=0; EXPECT=matched; output-sha256=406ef94c1020374dfec4fd2bc3c66c86be5b9715515c3e81463e527dbeb3f435; output-bytes=219; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-tenant-deployments-c130; path=2b1f1cc87037/31 entries
 
 - [x] G2: Real staff-cookie HTTP and existing authenticated internal service transport require current staff_admin, strict named-tenant requests, exact revisions and human reasons; failed mandatory audit rolls back the transition and local attributed history
   CHECK: node .unlazy/verify-deployment-http.mjs
@@ -22,4 +22,4 @@ Scope: Replace fictional platform rollouts with recorded named-tenant Engine dep
 - [x] G4: History RLS, erasure and paired migration rollback retain unrelated tenant data and legacy deployment records; old/fault/restored behavioral controls, affected full suites with coverage, production wiring, static/build and architecture/RBAC/AST checks pass
   CHECK: node .unlazy/verify-deployment-final.mjs
   EXPECT: tenant-deployment-final-passed
-  EVIDENCE: automatic-evidence=v1; definition-sha256=1f4b0190475be92d133c326ad017d7dfbb0ade02328cd8821403db19c7fcb429; exit=0; EXPECT=matched; output-sha256=1988b5c3b218eb5a6c6df8dc90e1eede3b1c88d7afb51f0d10de8c8b30088347; output-bytes=1176; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-tenant-deployments-c130; path=2b1f1cc87037/31 entries
+  EVIDENCE: automatic-evidence=v1; definition-sha256=1f4b0190475be92d133c326ad017d7dfbb0ade02328cd8821403db19c7fcb429; exit=0; EXPECT=matched; output-sha256=13db61c0d7988c683e4f1c15e6a73acc7c0608eb4745400a65ccaa7878343a3d; output-bytes=1178; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-tenant-deployments-c130; path=2b1f1cc87037/31 entries
