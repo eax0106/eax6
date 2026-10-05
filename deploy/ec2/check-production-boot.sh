@@ -49,4 +49,16 @@ NODE
 done
 echo "public-form-boot-controls-ok"
 (cd "$repo" && node deploy/ec2/check-public-form-routing.mjs)
+node - "$work/compose.json" "$work/history-negative.json" <<'NODE'
+const fs = require('node:fs');
+const [source, target] = process.argv.slice(2);
+const config = JSON.parse(fs.readFileSync(source, 'utf8'));
+config.services['platform-api'].environment.EVAL_HISTORY_BASE_URL = 'http://127.0.0.1:1';
+fs.writeFileSync(target, JSON.stringify(config));
+NODE
+if (cd "$repo" && pnpm exec tsx --tsconfig apps/platform-api/tsconfig.app.json deploy/ec2/check-production-config.ts "$work/history-negative.json") >"$work/history-negative.log" 2>&1; then
+  echo "FAIL mismatched evaluation history listener was accepted"; exit 1
+fi
+grep -Fq 'FAIL platform-api evaluation history client:' "$work/history-negative.log" || { echo "FAIL history listener mismatch did not reach its assertion"; exit 1; }
+echo "history-listener-negative-control-ok"
 echo "production-boot-ok"

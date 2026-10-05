@@ -9,6 +9,12 @@ import { BenchmarksService } from "./benchmarks.service";
 export class BenchmarksController {
   constructor(private readonly benchmarks: BenchmarksService) {}
 
+  @Get("runs")
+  @RequireStaffRole("staff_admin", "staff_security")
+  listRuns(@Query() query: unknown, @Headers("traceparent") traceparent?: string) {
+    return this.benchmarks.listRuns(query,traceparent);
+  }
+
   @Post("actions/run")
   @HttpCode(200)
   @RequireStaffRole("staff_admin")

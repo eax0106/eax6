@@ -200,3 +200,7 @@ with erasure. History cannot be edited; corrections append another note.
 
 This completes the notes slice only. Tenant detail metrics, review assignment,
 billing operations and tenant deployment actions remain required D26 work.
+
+### C124 — D25 staff golden-set history
+
+Admin golden-set history now reads actual eval-service run records through service authentication and the existing ordinary global-evaluation RLS context. Current staff admin/security roles can view original golden-set versions, scores, timestamps, exact-name filters and stable bounded pages. The page shows loading, empty and unavailable states without invented results. Production configuration validates the eval-service listener. Tenant datasets, actual safe Simulate execution, per-case verification and billing, erasure and the customer Benchmarks area remain separate D25 work.

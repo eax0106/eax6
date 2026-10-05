@@ -108,6 +108,13 @@ async function main(): Promise<void> {
   const { engineConfigFromEnvironment } = await import("../../apps/platform-api/src/engine/config");
   await check("platform-api", "Engine clients", () => engineConfigFromEnvironment(process.env));
 
+  const { historyConfig } = await import("../../apps/platform-api/src/benchmarks/history.client");
+  await check("platform-api", "evaluation history client", () => {
+    const config = historyConfig(process.env);
+    if (config.baseUrl !== `http://127.0.0.1:${services["eval-service"]?.environment?.EVAL_SERVICE_PORT}`) throw new Error("Evaluation history must use the eval-service listener port");
+    if (!services["platform-api"]?.environment?.INTERNAL_SERVICE_TOKEN) throw new Error("Evaluation history needs the configured service credential");
+  });
+
   // Pairs whose halves live in different containers: each must agree.
   const env = (service: string, key: string) => services[service]?.environment?.[key] ?? undefined;
   for (const key of ["PUBLIC_FORM_TOKEN_KEY", "PUBLIC_FORM_BASE_URL"]) {

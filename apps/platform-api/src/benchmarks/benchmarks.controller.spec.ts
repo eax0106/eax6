@@ -5,12 +5,14 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { EvalFacadeClient } from "../engine";
 import { RbacModule, type RbacRequest } from "../rbac";
+import { EvalHistoryClient } from "./history.client";
 import { BenchmarksController } from "./benchmarks.controller";
 import { BenchmarksExceptionFilter } from "./benchmarks-exception.filter";
 import { BenchmarksService } from "./benchmarks.service";
 
 describe("Benchmark relay routes", () => {
   let app: NestFastifyApplication;
+  const history = {list:vi.fn().mockResolvedValue({data:[],nextCursor:null})};
   const client = {
     runEvaluation: vi.fn().mockResolvedValue({
       evaluation_run_id: "evr_1",
@@ -26,6 +28,7 @@ describe("Benchmark relay routes", () => {
       controllers: [BenchmarksController],
       providers: [
         BenchmarksService,
+        { provide: EvalHistoryClient, useValue: history },
         BenchmarksExceptionFilter,
         { provide: EvalFacadeClient, useValue: client },
       ],
@@ -46,6 +49,13 @@ describe("Benchmark relay routes", () => {
   });
 
   afterAll(async () => app.close());
+
+  it("reads bounded history for current authorized staff and denies other roles",async()=>{
+    for(const role of ["staff_admin","staff_security"]){const response=await inject({method:"GET",url:"/api/v1/admin/benchmarks/runs?limit=10&golden_set=planner",headers:{"x-test-staff":JSON.stringify(staff([role]))}});expect(response.statusCode).toBe(200);expect(response.json()).toEqual({data:[],nextCursor:null});}
+    expect(history.list).toHaveBeenCalledWith({limit:10,golden_set:"planner"},undefined);
+    for(const roles of [undefined,["staff_support"],["staff_billing_ops"]]){const response=await inject({method:"GET",url:"/api/v1/admin/benchmarks/runs",headers:roles?{"x-test-staff":JSON.stringify(staff(roles))}:{}});expect(response.statusCode).toBe(403);}
+    const bad=await inject({method:"GET",url:"/api/v1/admin/benchmarks/runs?limit=101",headers:{"x-test-staff":JSON.stringify(staff(["staff_admin"]))}});expect(bad.statusCode).toBe(400);
+  });
 
   it("relays the current run and release-gate shapes for authorized staff only", async () => {
     const headers = {
