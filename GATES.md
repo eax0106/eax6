@@ -39,7 +39,7 @@ Scope: D22 uses Razorpay Subscriptions for hosted checkout, signed recurring lif
   EXPECT: payments-web-passed
   EVIDENCE: automatic-evidence=v1; definition-sha256=5ebcb6b41f8e3a7d04a03aa7d729836814ab10558c1f0475af4a9329f195a781; exit=0; EXPECT=matched; output-sha256=38da000738f2078c24bf24e77d6d388c22981f400a59b096d033a3c808d85533; output-bytes=74; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-payments-c122; path=2b1f1cc87037/31 entries
 
-- [ ] G8: Meaningful fault controls fail and pass restored code; full affected suites, production configuration, migration rollback, erasure, architecture, RBAC, coverage and normalized AST checks pass
+- [x] G8: Meaningful fault controls fail and pass restored code; full affected suites, production configuration, migration rollback, erasure, architecture, RBAC, coverage and normalized AST checks pass
   CHECK: node .unlazy/verify-final.mjs
   EXPECT: payments-final-passed
-  EVIDENCE: pending
+  EVIDENCE: automatic-evidence=v1; definition-sha256=9c1d8809c09fcf0ce01192617094fab29123611ec689140e8e374113cc3f9ed3; exit=0; EXPECT=matched; output-sha256=476a4653ab166cbf151b2e7365d8d7de455fccd3dfb8b9883ae3bce0fe783678; output-bytes=1276; shell=/bin/sh; cwd=/Users/havishvardhan/alter-work/alter-payments-c122; path=2b1f1cc87037/31 entries
