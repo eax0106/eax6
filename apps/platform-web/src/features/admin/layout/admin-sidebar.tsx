@@ -50,6 +50,7 @@ const navGroups = [
     items: [
       { name: "Billing Ops", href: "/app/admin/billing", icon: BadgeDollarSign },
       { name: "Marketplace", href: "/app/admin/marketplace", icon: Store },
+      { name: "Golden-set History", href: "/app/admin/benchmark-history", icon: Activity },
       { name: "Feature Flags", href: "/app/admin/feature-flags", icon: ToggleLeft },
     ]
   }

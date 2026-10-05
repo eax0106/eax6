@@ -188,3 +188,19 @@ audit. V1 marketplace accepts free publication and installation only.
 Verification is recorded in the C122 acceptance ledger. Additional-credit
 purchase remains a separate required D22 change; this slice stores its price
 without claiming a purchase flow. No live payment or deployment is claimed.
+
+### C125 — D26 append-only staff notes
+
+Tenant and user detail pages append bounded administrative notes through current
+staff authorization and tenant support-grant scope. Notes reuse immutable staff
+action history and its existing erasure retention. Mandatory central audit must
+acknowledge before the local note commits; an unavailable audit leaves no note.
+Erased subjects cannot acquire new notes, and subject row locks serialize notes
+with erasure. History cannot be edited; corrections append another note.
+
+This completes the notes slice only. Tenant detail metrics, review assignment,
+billing operations and tenant deployment actions remain required D26 work.
+
+### C124 — D25 staff golden-set history
+
+Admin golden-set history now reads actual eval-service run records through service authentication and the existing ordinary global-evaluation RLS context. Current staff admin/security roles can view original golden-set versions, scores, timestamps, exact-name filters and stable bounded pages. The page shows loading, empty and unavailable states without invented results. Production configuration validates the eval-service listener. Tenant datasets, actual safe Simulate execution, per-case verification and billing, erasure and the customer Benchmarks area remain separate D25 work.

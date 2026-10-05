@@ -158,8 +158,8 @@ describe.skipIf(!databaseUrl)("PlatformDeletionService on PostgreSQL", () => {
       VALUES ('mge_00000000-0000-7000-8000-000000009001',$1,'listing','lst_1','staff','stf_1','needs_changes','human_review','needs_changes','Correct fields',1)`,[A]);
     // staff access records: kept 90 days
     await q(`INSERT INTO staff_users (id, identity_ref, email, roles) VALUES ('stf_1', 'auth0|s', 's@example.test', ARRAY['staff_support'])`);
-    await q(`INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action) VALUES ('taa_1', $1, 'stf_1', 'suspended')`, [A]);
-    await q(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action) VALUES ('uaa_1', $1, 'stf_1', 'suspended')`, [u1]);
+    await q(`INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action, reason) VALUES ('taa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [A]);
+    await q(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action, reason) VALUES ('uaa_1', $1, 'stf_1', 'note_added', 'Retained staff note')`, [u1]);
   }
 
   it("names every table exactly once between the delete order and the special cases", () => {

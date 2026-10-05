@@ -70,7 +70,7 @@ async function expectDeleteToRaise(query: Promise<unknown>, pattern: RegExp): Pr
     for (const tenant of [OLD_TENANT, YOUNG_TENANT, LIVE_TENANT]) {
       const tag = tenant.slice(-4);
       await admin.query(
-        `INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action, reason) VALUES ('taa_${tag}', $1, '${STAFF}', 'suspended', 'test')`,
+        `INSERT INTO tenant_admin_actions (id, tenant_id, staff_user_id, action, reason) VALUES ('taa_${tag}', $1, '${STAFF}', 'note_added', 'Retained staff note')`,
         [tenant],
       );
       await admin.query(
@@ -93,7 +93,7 @@ async function expectDeleteToRaise(query: Promise<unknown>, pattern: RegExp): Pr
         `INSERT INTO users (id, identity_ref, email, display_name, status, updated_at) VALUES ($1::uuid, 'erased:' || $1::text, 'erased-' || $1::text || '@erased.invalid', NULL, 'suspended', ${aged})`,
         [user],
       );
-      await admin.query(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action, reason) VALUES ('uaa_${user.slice(-4)}', $1, '${STAFF}', 'suspended', 'test')`, [user]);
+      await admin.query(`INSERT INTO user_admin_actions (id, user_id, staff_user_id, action, reason) VALUES ('uaa_${user.slice(-4)}', $1, '${STAFF}', 'note_added', 'Retained staff note')`, [user]);
       if (member) {
         await admin.query(`INSERT INTO tenant_members (id, tenant_id, user_id, role) VALUES (gen_random_uuid(), $1, $2, 'member')`, [LIVE_TENANT, user]);
       }

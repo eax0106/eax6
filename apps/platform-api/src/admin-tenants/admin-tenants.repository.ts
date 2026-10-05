@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import type { Pool, PoolClient } from "pg";
 import type {
@@ -124,6 +125,32 @@ export class AdminTenantsRepository implements OnModuleDestroy {
       staff_email: row.staff_email,
       occurred_at: row.occurred_at.toISOString(),
     }));
+  }
+
+  async appendNote(
+    subjectId: string,
+    staffUserId: string,
+    body: string,
+    acknowledgeAudit: (noteId: string) => Promise<unknown>,
+  ): Promise<AdminTenantActionView | undefined> {
+    return this.withTenant(subjectId, async (client) => {
+      const subject = await client.query(
+        "SELECT id FROM tenants WHERE id=$1 AND deleted_at IS NULL FOR UPDATE", [subjectId],
+      );
+      if (!subject.rows.length) return undefined;
+      const result = await client.query<{
+        id: string; action: string; reason: string; staff_email: string; occurred_at: Date;
+      }>(
+        `INSERT INTO tenant_admin_actions (id,tenant_id,staff_user_id,action,reason)
+         VALUES ($1,$2,$3,'note_added',$4)
+         RETURNING id,action,reason,occurred_at,
+           (SELECT email FROM staff_users WHERE id=$3) AS staff_email`,
+        [`taa_${uuidv7()}`,subjectId,staffUserId,body],
+      );
+      const note = result.rows[0]!;
+      await acknowledgeAudit(note.id);
+      return { ...note, occurred_at: note.occurred_at.toISOString() };
+    });
   }
 
   async onModuleDestroy(): Promise<void> {

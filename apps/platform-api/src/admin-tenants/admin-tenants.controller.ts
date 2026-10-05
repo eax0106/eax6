@@ -15,6 +15,7 @@ import {
   parseProvisionTenantInput,
   parseSuspendTenantInput,
   parseTenantId,
+  parseTenantNoteInput,
 } from "./validation";
 
 const readRoles = ["staff_admin", "staff_support", "staff_billing_ops", "staff_security"] as const;
@@ -93,6 +94,22 @@ export class AdminTenantsController {
     const id = parseTenantId(tenantId, instance);
     await this.requireTenantRead(request, grantId, id, instance);
     return this.tenants.actions(id);
+  }
+
+  @Post(":tenantId/notes")
+  @HttpCode(201)
+  @RequireStaffRole(...readRoles)
+  async appendNote(
+    @Param("tenantId") tenantId: string,
+    @Body() body: unknown,
+    @Headers("x-alter-support-grant") grantId: string | undefined,
+    @Req() request: RbacRequest,
+  ): Promise<AdminTenantActionView> {
+    const instance = `/api/v1/admin/tenants/${tenantId}/notes`;
+    const id = parseTenantId(tenantId, instance);
+    const input = parseTenantNoteInput(body, instance);
+    await this.requireTenantRead(request, grantId, id, instance);
+    return this.tenants.appendNote(id, requireStaff(request, instance).staff_user_id, input.body, instance);
   }
 
   private async requireTenantRead(

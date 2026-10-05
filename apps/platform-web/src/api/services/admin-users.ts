@@ -38,7 +38,7 @@ export class AdminUsersService {
   }
 
   async addNote(id: string, body: string): Promise<AdminNote> {
-    if (isLiveApi) throw new Error("User notes are not available yet: platform-api has no notes store")
+    if (isLiveApi) return live.appendUserNote(id, body)
     await delay(300)
     const newNote: AdminNote = {
       id: `note-${Date.now()}`,

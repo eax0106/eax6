@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { v7 as uuidv7 } from "uuid";
 import { Injectable, type OnModuleDestroy } from "@nestjs/common";
 import type { Pool } from "pg";
 import type { AdminUserActionView, AdminUserView, UserAdminAction } from "./types";
@@ -83,6 +84,41 @@ export class AdminUsersRepository implements OnModuleDestroy {
       [userId],
     );
     return result.rows.map((row) => ({ ...row, occurred_at: row.occurred_at.toISOString() }));
+  }
+
+  async appendNote(
+    subjectId: string,
+    staffUserId: string,
+    body: string,
+    acknowledgeAudit: (noteId: string) => Promise<unknown>,
+  ): Promise<AdminUserActionView | undefined> {
+    const client = await this.pool.connect();
+    try {
+      await client.query("BEGIN");
+      const subject = await client.query("SELECT id FROM users WHERE id=$1 AND identity_ref NOT LIKE 'erased:%' FOR UPDATE", [subjectId]);
+      if (!subject.rows.length) {
+        await client.query("ROLLBACK");
+        return undefined;
+      }
+      const result = await client.query<{
+        id: string; action: string; reason: string; staff_email: string; occurred_at: Date;
+      }>(
+        `INSERT INTO user_admin_actions (id,user_id,staff_user_id,action,reason)
+         VALUES ($1,$2,$3,'note_added',$4)
+         RETURNING id,action,reason,occurred_at,
+           (SELECT email FROM staff_users WHERE id=$3) AS staff_email`,
+        [`uaa_${uuidv7()}`,subjectId,staffUserId,body],
+      );
+      const note = result.rows[0]!;
+      await acknowledgeAudit(note.id);
+      await client.query("COMMIT");
+      return { ...note, occurred_at: note.occurred_at.toISOString() };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async onModuleDestroy(): Promise<void> {
