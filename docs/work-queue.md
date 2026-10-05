@@ -214,6 +214,11 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change and evidence | Status |
 | --- | --- | --- |
 | C129 | Actual eligible staff picker and reason-based assignment/reassignment on recorded security reviews. Locked exact revisions, acknowledged audit, immutable attributed history, current staff-cookie roles, ordinary RLS and guarded tenant erasure. Live/demo UI retains failed input and exposes actual assignee and unavailable/stale states. Native PostgreSQL, HTTP, concurrency, audit protocol, rollback and rendered UI checks; see `docs/security-review-assignment.md`. D26 billing operations and tenant deployments remain. Four local gates passed: storage/contracts20; current staff HTTP and actual audit protocol14; rendered/live UI12; full API1831 plus21 skips with coverage, web442, database130 plus1 skip, contracts143, erasure/registry25, affected static/build, zero added normalized AST findings and thirteen failing/restored controls. Exact-head CI remains required. | local gates passed; CI required |
+### C128 — D26 read-only tenant detail
+
+| Change | Scope and evidence | Status |
+| --- | --- | --- |
+| C128 | Tenant activity joins actual platform members, Engine workflows and exact thirty-day runs with ledger execution usage by currency. Bounded lists retain actual totals; strict contracts, current staff cookies and JIT grants, service authentication, ordinary RLS, mandatory read audit and truthful loading/empty/error/reload states are preserved. No new storage or invoice write. See `docs/tenant-admin-detail.md`; five local gates passed, including full API coverage, web/Engine/ledger/database/contract suites and fourteen fault/restoration controls; exact-head CI is required before completion. D26 review assignment, billing operations and tenant deployments remain. | local verification passed; exact-head CI pending |
 
 ### C131 — Temporal rollover regression readiness
 

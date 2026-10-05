@@ -15,6 +15,7 @@ import { ENGINE_CONFIG, EngineClient } from "./engine-client";
 import { CostLedgerClient } from "./cost-ledger-client";
 import { EvalFacadeClient } from "./eval-facade-client";
 import { DeploymentAdminClient } from "./deployment-admin-client";
+import { TenantActivityClient } from "./tenant-activity-client";
 import { AuditEventsClient } from "./audit-events-client";
 import { EngineExceptionFilter } from "./engine-exception.filter";
 import { secretsProviderToken } from "../identity-broker/identity-broker.module";
@@ -75,6 +76,8 @@ import type { SecretsProvider } from "@alterx/shared-clients";
       useFactory: (config: EngineConfig) =>
         new DeploymentAdminClient(config, resolveRuntimeSecret),
     },
+    { provide: TenantActivityClient, inject: [ENGINE_CONFIG, ENGINE_M2M_TOKEN_PROVIDER],
+      useFactory: (config: EngineConfig, m2m: EngineM2mTokenProvider) => new TenantActivityClient(config, m2m) },
     {
       provide: AuditEventsClient,
       inject: [ENGINE_CONFIG, secretsProviderToken],
@@ -86,6 +89,6 @@ import type { SecretsProvider } from "@alterx/shared-clients";
       useClass: EngineExceptionFilter,
     },
   ],
-  exports: [EngineClient, CostLedgerClient, EvalFacadeClient, DeploymentAdminClient, AuditEventsClient, ENGINE_M2M_TOKEN_PROVIDER, ENGINE_CONFIG],
+  exports: [EngineClient, CostLedgerClient, EvalFacadeClient, DeploymentAdminClient, TenantActivityClient, AuditEventsClient, ENGINE_M2M_TOKEN_PROVIDER, ENGINE_CONFIG],
 })
 export class EngineModule {}

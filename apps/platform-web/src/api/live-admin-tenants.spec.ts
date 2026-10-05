@@ -8,7 +8,7 @@ vi.mock("./staff-auth", () => ({
   getStaffSession: vi.fn(async () => ({ staffUserId: "stf_1", email: "ops@alter.example", roles: ["staff_admin"] })),
 }))
 
-import { activeTenantGrant, getTenant, listTenants, requestTenantAccess } from "./live-admin-tenants"
+import { activeTenantGrant, getTenant, getTenantActivity, listTenants, requestTenantAccess } from "./live-admin-tenants"
 
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
@@ -20,6 +20,22 @@ afterEach(() => vi.unstubAllGlobals())
 const tenantId = "018f47a5-7b2c-7d10-8f11-123456789abc"
 
 describe("live admin tenants", () => {
+  it("validates live activity and carries cookie and support grant", async () => {
+    const window = { tenant_id: tenantId, start_at: "2026-09-05T00:00:00.000Z", end_at: "2026-10-05T00:00:00.000Z" }
+    const body = { ...window, workflow_count: 0, run_count: 0, workflows: [], runs: [], members: { count: 0, members: [] }, spend: { ...window, currencies: [] } }
+    fetchMock.mockResolvedValue(Response.json(body))
+    expect(await getTenantActivity(tenantId, "jit_active")).toEqual(body)
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toContain(`/tenants/${tenantId}/activity`); expect(init!.credentials).toBe("include")
+    expect(new Headers(init!.headers).get("x-alter-support-grant")).toBe("jit_active")
+    fetchMock.mockResolvedValue(Response.json({ ...body, internal_cost_minor: "123" }))
+    await expect(getTenantActivity(tenantId)).rejects.toThrow()
+    const other = { ...window, tenant_id: "018f47a5-7b2c-7d10-8f11-123456789abd" }
+    fetchMock.mockResolvedValue(Response.json({ ...body, ...other, spend: { ...other, currencies: [] } }))
+    await expect(getTenantActivity(tenantId)).rejects.toThrow("Tenant activity response does not match this tenant")
+    fetchMock.mockResolvedValue(Response.json({ detail: "Activity unavailable" }, { status: 502 }))
+    await expect(getTenantActivity(tenantId)).rejects.toThrow("Activity unavailable")
+  })
   it("maps only the fields the API serves", async () => {
     fetchMock.mockResolvedValue(
       Response.json([{ id: tenantId, name: "Acme", status: "active", region: "ap-south-1", created_at: "2026-09-28T00:00:00Z" }]),

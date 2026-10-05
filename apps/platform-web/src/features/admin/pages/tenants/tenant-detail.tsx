@@ -7,11 +7,12 @@ import { queryKeys } from "@/api/query-keys"
 import { isLiveApi } from "@/api/http"
 import { getStaffSession } from "@/api/staff-auth"
 import { AdminNoteComposer } from "../../components/admin-note-composer"
+import { TenantActivity } from "./tenant-activity"
 
 import { Card } from "@/components/ui/card"
 import { StatusBadge } from "@/components/common/status-badge"
 import { Button } from "@/components/ui/button"
-import { Loader2, ArrowLeft, Users, Activity, Shield, CheckCircle2 } from "lucide-react"
+import { Loader2, ArrowLeft, Shield, CheckCircle2 } from "lucide-react"
 
 export function TenantDetail() {
   const { tenantId } = useParams<{ tenantId: string }>()
@@ -25,17 +26,18 @@ export function TenantDetail() {
     isLiveApi && (session.data?.roles ?? []).some((role) => role === "staff_admin" || role === "staff_support")
   const grant = useQuery({
     queryKey: ["admin", "tenants", tenantId, "grant"],
-    queryFn: () => api.admin.tenants.activeGrant(tenantId!),
+    queryFn: async () => (await api.admin.tenants.activeGrant(tenantId!)) ?? null,
     enabled: !!tenantId && needsGrant,
   })
   const grantId = grant.data?.id
   const canRead = !!tenantId && (!needsGrant || !!grantId) && (!isLiveApi || !!session.data)
 
-  const { data: tenant, isLoading } = useQuery({
+  const tenantQuery = useQuery({
     queryKey: [...queryKeys.admin.tenants.detail(tenantId!), grantId],
     queryFn: () => api.admin.tenants.get(tenantId!, grantId),
     enabled: canRead
   })
+  const { data: tenant, isLoading } = tenantQuery
 
   const { data: notes, isLoading: notesLoading, error: notesError } = useQuery({
     queryKey: [...queryKeys.admin.tenants.notes(tenantId!), grantId],
@@ -77,6 +79,10 @@ export function TenantDetail() {
     )
   }
 
+  const readError = session.error ?? grant.error ?? tenantQuery.error
+  if (readError) return <div className="p-8 space-y-3"><p role="alert">{readError instanceof Error ? readError.message : "Tenant detail unavailable"}</p>
+    <Button onClick={() => { if (session.error) void session.refetch(); else if (grant.error) void grant.refetch(); else void tenantQuery.refetch() }}>Reload tenant detail</Button></div>
+
   if (!tenant) return <div className="p-8 text-slate-400">Tenant not found</div>
 
   return (
@@ -108,24 +114,13 @@ export function TenantDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div>
         <Card className="p-4 bg-slate-900 border-slate-800">
           <p className="text-sm text-slate-400">Plan</p>
           <p className="text-lg font-medium text-slate-200 capitalize mt-1">{tenant.plan ?? "—"}</p>
         </Card>
-        <Card className="p-4 bg-slate-900 border-slate-800">
-          <p className="text-sm text-slate-400 flex items-center gap-1"><Users className="w-4 h-4" /> Members</p>
-          <p className="text-lg font-medium text-slate-200 mt-1">{tenant.memberCount ?? "—"}</p>
-        </Card>
-        <Card className="p-4 bg-slate-900 border-slate-800">
-          <p className="text-sm text-slate-400 flex items-center gap-1"><Activity className="w-4 h-4" /> 30d Runs</p>
-          <p className="text-lg font-medium text-slate-200 mt-1">{tenant.runCount30d?.toLocaleString() ?? "—"}</p>
-        </Card>
-        <Card className="p-4 bg-slate-900 border-slate-800">
-          <p className="text-sm text-slate-400">Current Spend</p>
-          <p className="text-lg font-medium text-slate-200 mt-1">{tenant.currentSpend === undefined ? "—" : `$${tenant.currentSpend.toFixed(2)}`}</p>
-        </Card>
       </div>
+      {canRead && <TenantActivity tenantId={tenantId!} {...(grantId ? { grantId } : {})} />}
 
       <div className="space-y-4">
         <h3 className="text-lg font-medium text-slate-200">Admin Notes</h3>

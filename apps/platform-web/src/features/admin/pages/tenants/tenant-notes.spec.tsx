@@ -16,6 +16,7 @@ beforeEach(()=>{
   if(path.endsWith("/admin/session"))return Response.json({staffUserId:"stf_note",email:"staff@test.test",roles:["staff_support"]})
   if(path.endsWith("/staff-access/grants"))return Response.json({data:[{id:"jit_notes",tenant_id:id,scopes:["tenant:read"],expires_at:new Date(Date.now()+60000).toISOString()}]})
   if(path.endsWith("/actions"))return Response.json(notes)
+  if(path.endsWith("/activity"))return Response.json({tenant_id:id,start_at:"2026-09-05T00:00:00.000Z",end_at:"2026-10-05T00:00:00.000Z",workflow_count:0,run_count:0,workflows:[],runs:[],members:{count:0,members:[]},spend:{tenant_id:id,start_at:"2026-09-05T00:00:00.000Z",end_at:"2026-10-05T00:00:00.000Z",currencies:[]}})
   if(path.endsWith("/notes")){
    if(unavailable)return Response.json({detail:"Audit unavailable"},{status:503})
    const body=JSON.parse(String(options?.body)) as {body:string}

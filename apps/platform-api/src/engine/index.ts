@@ -31,6 +31,7 @@ export {
   type RunEvaluationResponse,
 } from "./eval-facade-client";
 export { DeploymentAdminClient } from "./deployment-admin-client";
+export { TenantActivityClient } from "./tenant-activity-client";
 export { EngineExceptionFilter } from "./engine-exception.filter";
 export { EngineModule } from "./engine.module";
 export { EngineProblemError } from "./problem";
