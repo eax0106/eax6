@@ -17,7 +17,7 @@ import { z } from "./zod";
  * agree with it. `apps/tool-gateway/src/gateway/tool-catalog.ts` records
  * which of these actually dispatch.
  *
- * Grouped by family, in dispatch order. Four families, eleven tools.
+ * Grouped by family, in dispatch order. Six families, thirteen tools.
  */
 export const ToolNameSchema = z.enum([
   // search -- Tavily
@@ -35,6 +35,10 @@ export const ToolNameSchema = z.enum([
   "browser.session.close",
   // email -- AWS SES
   "email.send",
+  // knowledge -- the workspace's own documents (ADS)
+  "knowledge.search",
+  // whatsapp -- the workspace's connected WhatsApp Business account
+  "whatsapp.send",
 ]);
 
 /** Every canonical tool name, in declaration order. */
@@ -58,6 +62,7 @@ export const SIDE_EFFECT_TOOL_NAMES: readonly ToolName[] = [
   "database.delete",
   "browser.click",
   "email.send",
+  "whatsapp.send",
 ];
 
 export function hasExternalSideEffect(toolName: string): boolean {

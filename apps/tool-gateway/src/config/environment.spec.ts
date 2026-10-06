@@ -36,7 +36,13 @@ describe("loadToolGatewayEnvironment", () => {
       grpcBindAddress: "0.0.0.0:50053",
       engineBaseUrl: "http://127.0.0.1:3010",
       internalServiceToken: "runtime-lookup-fixture",
+      adsqGrpcTarget: "127.0.0.1:50050",
     });
+  });
+
+  it("reads the knowledge search target and rejects a malformed one", () => {
+    expect(loadToolGatewayEnvironment(environment({ ADSQ_GRPC_TARGET: "10.0.0.7:50050" })).adsqGrpcTarget).toBe("10.0.0.7:50050");
+    expect(() => loadToolGatewayEnvironment(environment({ ADSQ_GRPC_TARGET: "not an address" }))).toThrow(/ADSQ_GRPC_TARGET/);
   });
 
   it("returns AppConfig binding fields for deployed environments", () => {

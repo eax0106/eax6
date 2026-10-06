@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Body, Controller, Headers, HttpCode, HttpException, Inject, Post } from "@nestjs/common";
 import { Public as InternalConnectionServiceAuth } from "@alterx/auth";
-import { ConnectionCredentialLookupSchema, ConnectionRegistrySnapshotSchema } from "@alterx/contracts";
+import { ConnectionCredentialLookupSchema, ConnectionRegistrySnapshotSchema, RunScopeLookupSchema } from "@alterx/contracts";
 import { ConnectionRegistryConflictError, ConnectionRegistryUnavailableError, ConnectionRegistryService } from "./connection-registry.service";
 
 export const CONNECTION_LOOKUP_TOKEN_HASH = Symbol("CONNECTION_LOOKUP_TOKEN_HASH");
@@ -25,6 +25,21 @@ export class ConnectionRegistryController {
     try { return await this.registry.resolve(parsed.data); }
     catch (error) {
       if (error instanceof ConnectionRegistryUnavailableError) throw new HttpException({ error_code: "CREDENTIAL_MISSING" }, 409);
+      throw error;
+    }
+  }
+
+  @Post("run-scope")
+  @HttpCode(200)
+  async runScope(@Body() body: unknown, @Headers("authorization") authorization?: string) {
+    const token = authorization?.startsWith("Bearer ") ? authorization.slice(7) : "";
+    const actual = createHash("sha256").update(token).digest(), expected = Buffer.from(this.lookupTokenHash, "hex");
+    if (!token || expected.length !== actual.length || !timingSafeEqual(actual, expected)) throw new HttpException("Internal service authentication required", 401);
+    const parsed = RunScopeLookupSchema.safeParse(body);
+    if (!parsed.success) throw new HttpException("Invalid run scope lookup", 400);
+    try { return await this.registry.runScope(parsed.data); }
+    catch (error) {
+      if (error instanceof ConnectionRegistryUnavailableError) throw new HttpException({ error_code: "RUN_NOT_FOUND" }, 404);
       throw error;
     }
   }

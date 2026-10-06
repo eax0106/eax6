@@ -197,6 +197,8 @@ Recorded live while Havish answered each open question, one at a time. Each entr
 
 **What it means.** Template store in the Capability Registry (C38, covered by the 2026-09-28 exemption) with list and instantiate routes; the first-run screen shows them below the describe box; instantiating creates a workflow and its chat (D6).
 
+**Follow-up answers, 5 October 2026.** (1) The engine had no way to read a workspace's documents or send a WhatsApp message, so templates 5 and 8 could not run. Havish approved building two new engine tools first, then all 8 templates: `knowledge.search` (read-only; the run workspace's documents, through ADS) and `whatsapp.send` (an outside action, so approval-gated; through the run workspace's connected WhatsApp account). (2) Each template's test cases run once through real Simulate with real models, capped at USD 1 in total; the actual counts and cost go in the work queue.
+
 ## D19. Which connection store is authoritative (C41, design log §4)
 
 **Question.** Users connect accounts in platform-api (`oauth_connections`); Tool Gateway uses credentials at run time; nothing maps one to the other, and §4 wants a pre-compile live-connection check with one batch "connect these" ask. The engine must never depend on the platform (§22 item 11).

@@ -29,9 +29,9 @@ describe("tool catalogue", () => {
     expect(dispatchedToolNames()).toHaveLength(TOOL_NAMES.length);
   });
 
-  it("declares four families and no others", () => {
+  it("declares six families and no others", () => {
     const families = [...new Set(TOOL_CATALOG.map((entry) => entry.family))];
-    expect(families).toEqual(["search", "database", "browser", "email"]);
+    expect(families).toEqual(["search", "database", "browser", "email", "knowledge", "whatsapp"]);
     expect(families.flatMap((family) => [...toolNamesInFamily(family)])).toHaveLength(
       TOOL_NAMES.length,
     );

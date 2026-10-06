@@ -45,3 +45,16 @@ export const ConnectionCredentialLookupSchema = z.object({
   credential_ref: ConnectionSecretReferenceSchema,
 }).strict();
 export type ConnectionCredentialLookup = z.infer<typeof ConnectionCredentialLookupSchema>;
+
+/** Tool Gateway asks which workspace a run belongs to and which WhatsApp accounts it has connected. */
+export const RunScopeLookupSchema = z.object({ tenant_id: TenantIdSchema, run_id: RunIdSchema }).strict();
+export type RunScopeLookup = z.infer<typeof RunScopeLookupSchema>;
+export const RunScopeSchema = z.object({
+  workspace_id: z.string().uuid(),
+  whatsapp_accounts: z.array(z.object({
+    account_id: z.string().min(1).max(128),
+    phone_number_id: z.string().regex(/^[0-9]{1,32}$/),
+    access_token_ref: z.string().min(1).max(512),
+  }).strict()).max(20),
+}).strict();
+export type RunScope = z.infer<typeof RunScopeSchema>;

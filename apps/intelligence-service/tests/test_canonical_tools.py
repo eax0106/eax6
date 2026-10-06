@@ -8,8 +8,10 @@ from src.capability_registry.canonical_tools import CANONICAL_TOOL_SIDE_EFFECTS,
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACT = REPO_ROOT / "packages/contracts/src/tool-names.ts"
-MIGRATION = (
-    Path(__file__).resolve().parents[1] / "alembic/versions/0008_register_canonical_tools.py"
+VERSIONS = Path(__file__).resolve().parents[1] / "alembic/versions"
+MIGRATIONS = (
+    VERSIONS / "0008_register_canonical_tools.py",
+    VERSIONS / "0010_register_workspace_tools.py",
 )
 
 
@@ -24,10 +26,8 @@ def test_names_match_the_contract_in_order() -> None:
     assert list(CANONICAL_TOOL_SIDE_EFFECTS) == _contract_tool_names()
 
 
-def test_migration_0008_registers_exactly_these_labels() -> None:
-    # 0008 copies the values so it keeps its meaning; they must agree at the
-    # revision that introduces them.
-    tree = ast.parse(MIGRATION.read_text())
+def _migration_tools(path: Path) -> dict[str, bool]:
+    tree = ast.parse(path.read_text())
     tools = next(
         node.value
         for node in tree.body
@@ -36,13 +36,25 @@ def test_migration_0008_registers_exactly_these_labels() -> None:
         and node.target.id == "_TOOLS"
         and node.value is not None
     )
-    assert dict(ast.literal_eval(tools)) == CANONICAL_TOOL_SIDE_EFFECTS
+    return dict(ast.literal_eval(tools))
+
+
+def test_the_registering_migrations_together_register_exactly_these_labels() -> None:
+    # Each migration copies its values so it keeps its meaning; taken in order
+    # they must add up to the current list, with no tool registered twice.
+    registered: dict[str, bool] = {}
+    for path in MIGRATIONS:
+        tools = _migration_tools(path)
+        assert not set(tools) & set(registered), f"{path.name} re-registers a tool"
+        registered.update(tools)
+    assert registered == CANONICAL_TOOL_SIDE_EFFECTS
 
 
 def test_only_reads_are_free_of_side_effects() -> None:
     assert sorted(name for name, acts in CANONICAL_TOOL_SIDE_EFFECTS.items() if not acts) == [
         "browser.extract",
         "database.select",
+        "knowledge.search",
         "search.web",
     ]
 

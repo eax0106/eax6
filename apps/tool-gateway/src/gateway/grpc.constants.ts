@@ -18,3 +18,12 @@ const workspaceAuditProtoPath = resolve(
 export const AUDIT_CLIENT_PROTO_PATH = existsSync(workspaceAuditProtoPath)
   ? workspaceAuditProtoPath
   : resolve(__dirname, "../proto/audit.proto");
+
+const workspaceAdsqProtoPath = resolve(
+  process.cwd(),
+  "packages/contracts/proto/alter/adsq/v1/adsq.proto",
+);
+
+export const ADSQ_CLIENT_PROTO_PATH = existsSync(workspaceAdsqProtoPath)
+  ? workspaceAdsqProtoPath
+  : resolve(__dirname, "../proto/adsq.proto");

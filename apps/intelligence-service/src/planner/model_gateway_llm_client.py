@@ -59,7 +59,13 @@ browser.session.create step>", "path": "sessionId"}, "url": "<url>"}
 "<optional CSS selector>"}
 - "browser.session.close": {"session_id": "...", "browser_session_id": "..."}
 - "email.send": {"to": "<one email address>", "subject": "<subject>", "body": "<body \
-text>", "html": <optional boolean>}"""
+text>", "html": <optional boolean>}
+- "knowledge.search": {"query": "<what to look for>", "topK": <optional integer 1 to 10>}, \
+reads only this workspace's own documents, and its output is {"results": [{"documentId": \
+"...", "title": "...", "text": "<passage>", "score": <number>}]}
+- "whatsapp.send": {"to": "<one international phone number, digits only>", "text": "<message \
+text>"}, sends from the workspace's connected WhatsApp account, and its output is \
+{"messageId": "..."}"""
 
 _SKELETON_SHAPE = (
     """{
@@ -100,7 +106,7 @@ the browser tools are for a specific page you were given.
 
 Never invent a tool: a tool_name that is not in that list is not a tool. When the \
 objective needs an action none of these tools performs -- posting to a chat app, \
-uploading a video, creating a ticket, sending a text message, adding a calendar event -- \
+uploading a video, creating a ticket, sending an SMS, adding a calendar event -- \
 do not add a tool node for it at all. Use an "llm" node that prepares exactly what a \
 person needs to complete that action themselves.
 
