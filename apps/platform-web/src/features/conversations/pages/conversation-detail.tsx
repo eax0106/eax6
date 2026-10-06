@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button"
 import { ConnectionsRequiredSchema } from "@alterx/contracts"
 import { WorkflowPlanSchema } from "@alterx/contracts"
 import { WorkflowPlanCard } from "@/components/conversation/workflow-plan"
+import { workflowTemplatesService } from "@/api/services/workflow-templates"
 
 export function ConversationDetail() {
   const { conversationId } = useParams<{ conversationId: string }>()
@@ -39,6 +40,15 @@ export function ConversationDetail() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.messages(conversationId!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.conversations.list() })
+    }
+  })
+
+  // A template's draft that was missing a connection compiles the same
+  // reviewed template into it once connected (D18), not a re-planned one.
+  const retryTemplate = useMutation({
+    mutationFn: (templateId: string) => workflowTemplatesService.instantiate(templateId, conversation!.linkedWorkflowId),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.conversations.messages(conversationId!) })
     }
   })
 
@@ -93,8 +103,10 @@ export function ConversationDetail() {
         {connections.data.missing_connections.map(gap => <li key={gap.connector_type}>{gap.connector_type} — {gap.reason === "unavailable" ? "Reconnect account" : "Connect account"}</li>)}
       </ul>{latest && <div className="flex items-center gap-4">
         <a className="text-primary underline" href="/app/connections" target="_blank" rel="noreferrer">Open connections in new tab</a>
-        <Button disabled={sendMessage.isPending || conversation.status === "archived"} onClick={() => sendMessage.mutate(data.build ? { content: "Check connections and build with the confirmed success criteria.", build: data.build } : "Check connections and continue building from the original goal and answers.")}>Check connections and plan again</Button>
-      </div>}</div>
+        {typeof data.templateId === "string"
+          ? <Button disabled={retryTemplate.isPending || conversation.status === "archived"} onClick={() => retryTemplate.mutate(data.templateId)}>Check connections and use the template again</Button>
+          : <Button disabled={sendMessage.isPending || conversation.status === "archived"} onClick={() => sendMessage.mutate(data.build ? { content: "Check connections and build with the confirmed success criteria.", build: data.build } : "Check connections and continue building from the original goal and answers.")}>Check connections and plan again</Button>}
+      </div>}{retryTemplate.isError && <p role="alert" className="text-sm text-destructive">{retryTemplate.error.message}</p>}</div>
     }
     if (msg.type === "clarification" && Array.isArray(data.questions)) {
       return <div><p>{msg.content}</p><ClarificationQuestions

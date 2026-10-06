@@ -1,9 +1,11 @@
 import { useRef } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Bot, ArrowRight, Zap } from "lucide-react"
 import { Composer } from "@/components/conversation/Composer"
 import { api } from "@/api/client"
+import { queryKeys } from "@/api/query-keys"
+import { StarterTemplates } from "../components/starter-templates"
 import { cn } from "@/lib/utils"
 
 const INTENT_SUGGESTIONS = [
@@ -14,6 +16,9 @@ const INTENT_SUGGESTIONS = [
 export function Home() {
   const navigate = useNavigate()
   const draft = useRef<Awaited<ReturnType<typeof api.createConversation>> | null>(null)
+  // First run (design log §19): no chats yet, so the guide and templates show.
+  const chats = useQuery({ queryKey: queryKeys.conversations.list(), queryFn: () => api.getConversations() })
+  const firstRun = chats.isSuccess && chats.data.length === 0
   const askAlter = useMutation({
     mutationFn: () => api.createConversation({ type: "general", title: "Ask Alter" }),
     onSuccess: chat => navigate(`/app/conversations/${chat.id}`),
@@ -73,7 +78,7 @@ export function Home() {
             Ask Alter about your workflows
           </button>
 
-          <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {firstRun ? <StarterTemplates /> : <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-3">
             {INTENT_SUGGESTIONS.map((suggestion, i) => (
               <button
                 key={i}
@@ -92,7 +97,7 @@ export function Home() {
                 <ArrowRight className="h-4 w-4 text-muted-foreground opacity-0 -translate-x-2 transition-all group-hover:opacity-100 group-hover:translate-x-0" />
               </button>
             ))}
-          </div>
+          </div>}
 
         </div>
 
