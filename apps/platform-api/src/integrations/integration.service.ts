@@ -87,6 +87,10 @@ export class IntegrationService {
     const instance = `/api/v1/integrations/${connectorId}/actions/authorize`;
     const definition = this.requireConnector(connectorId, instance);
     const runtime = this.requireConfigured(definition.id, instance);
+    if (input.connection_id) {
+      const target = await this.requireConnection(tenantId, workspaceId, input.connection_id, instance);
+      if (target.connector !== definition.id) throw notFound(instance);
+    }
     const clientId = await this.secrets.getSecret(runtime.clientIdSecretRef);
 
     if (input.tenant_config) {
@@ -116,6 +120,7 @@ export class IntegrationService {
       redirectUri: input.redirect_uri,
       createdBy: actorId,
       expiresAt,
+      ...(input.connection_id ? { connectionId: input.connection_id } : {}),
     });
 
     const url = new URL(endpoints.authorizeUrl);
@@ -158,7 +163,8 @@ export class IntegrationService {
       !stateRecord ||
       stateRecord.workspaceId !== workspaceId ||
       stateRecord.connector !== definition.id ||
-      stateRecord.expiresAt.getTime() < Date.now()
+      stateRecord.createdBy !== actorId ||
+      stateRecord.expiresAt.getTime() <= Date.now()
     ) {
       throw new IntegrationHttpError(
         400,
@@ -194,6 +200,13 @@ export class IntegrationService {
       throw providerFailure(error, instance);
     }
 
+    if (stateRecord.connectionId) {
+      const target = await this.requireConnection(tenantId, workspaceId, stateRecord.connectionId, instance);
+      if (target.connector !== definition.id || target.externalAccountId !== accountId) {
+        throw new IntegrationHttpError(409, "INTEGRATION_RECONNECT_ACCOUNT_MISMATCH", "Reconnect with the original provider account", instance);
+      }
+    }
+
     const id = randomUUID();
     const secretReference = tokenReference(tenantId, workspaceId, id);
     try {
@@ -213,6 +226,9 @@ export class IntegrationService {
         externalAccountId: accountId,
         scopes: tokenResult.grantedScopes ?? definition.scopes.join(" "),
       }, async connectionId => {
+        if (stateRecord.connectionId && connectionId !== stateRecord.connectionId) {
+          throw new IntegrationHttpError(409, "INTEGRATION_RECONNECT_ACCOUNT_MISMATCH", "Reconnect target changed; start again", instance);
+        }
         if (connectionId !== id) {
           await this.secrets.putSecret(tokenReference(tenantId, workspaceId, connectionId), await this.secrets.getSecret(secretReference));
         }

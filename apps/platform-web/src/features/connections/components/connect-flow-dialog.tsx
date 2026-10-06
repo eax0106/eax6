@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { api } from "@/api/client"
+import { isLiveApi } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
 import { type IntegrationDefinition } from "@/api/types"
 
@@ -21,34 +22,36 @@ export function ConnectFlowDialog({ integration, open, onOpenChange }: ConnectFl
   const [step, setStep] = React.useState<"initial" | "auth" | "success">("initial")
   const [name, setName] = React.useState("")
   const [apiKey, setApiKey] = React.useState("")
+  const [config, setConfig] = React.useState("")
+  const configField = integration ? ({ zendesk: "subdomain", salesforce: "login_host", shopify: "shop_domain", m365: "tenant" } as Record<string, string>)[integration.id] : undefined
 
   React.useEffect(() => {
     if (open && integration) {
       setStep("initial")
       setName(`${integration.name} Connection`)
       setApiKey("")
+      setConfig("")
     }
   }, [open, integration])
 
   const mutation = useMutation({
     mutationFn: () => {
-      // In a real app, this might trigger an OAuth flow or save a credential and then the connection.
-      // Here we just mock creating the connection directly.
       return api.createConnection({
         integrationId: integration!.id,
-        name
+        name,
+        ...(isLiveApi && configField ? { tenantConfig: { [configField]: config } } : {}),
       })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.connections.list })
-      setStep("success")
+      setStep(isLiveApi ? "auth" : "success")
     }
   })
 
   if (!integration) return null
 
   const handleConnect = () => {
-    if (integration.authType === "oauth") {
+    if (!isLiveApi && integration.authType === "oauth") {
       // Simulate OAuth redirect
       setTimeout(() => {
         mutation.mutate()
@@ -70,10 +73,16 @@ export function ConnectFlowDialog({ integration, open, onOpenChange }: ConnectFl
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
-              <div className="space-y-2">
+              {!isLiveApi && <div className="space-y-2">
                 <Label>Connection Name</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
+              </div>}
+              {isLiveApi && configField && <label className="block space-y-2">
+                <span>{({ subdomain: "Zendesk subdomain", login_host: "Salesforce login host", shop_domain: "Shopify shop domain", tenant: "Microsoft tenant UUID or common" } as Record<string, string>)[configField]}</span>
+                <Input value={config} onChange={event => setConfig(event.target.value)} required />
+              </label>}
+              {isLiveApi && !integration.available && <p role="alert">This integration is not configured. Ask your administrator to set it up.</p>}
+              {mutation.isError && <p role="alert">Connection authorization failed. Check your settings and try again.</p>}
               {integration.authType === "api_key" && (
                 <div className="space-y-2">
                   <Label>API Key</Label>
@@ -89,7 +98,7 @@ export function ConnectFlowDialog({ integration, open, onOpenChange }: ConnectFl
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button onClick={handleConnect} disabled={mutation.isPending}>
+              <Button onClick={handleConnect} disabled={mutation.isPending || (isLiveApi && (!integration.available || Boolean(configField && !config.trim())))}>
                 {mutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : integration.authType === "oauth" ? (
@@ -102,6 +111,8 @@ export function ConnectFlowDialog({ integration, open, onOpenChange }: ConnectFl
             </DialogFooter>
           </>
         )}
+
+        {step === "auth" && <p role="status">Opening provider authorization…</p>}
 
         {step === "success" && (
           <div className="py-6 text-center space-y-4">

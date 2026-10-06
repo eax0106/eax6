@@ -10,6 +10,8 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, describe, it } from "vitest"
 import { RouterProvider } from "react-router-dom"
 import { router } from "./router"
+import { useAuth } from "@/features/auth/hooks/useAuth"
+import { useOnboarding } from "@/features/onboarding/hooks/useOnboarding"
 
 afterEach(() => {
   cleanup()
@@ -41,4 +43,15 @@ describe("admin subtree lazy-loading", () => {
     // the shell mounts).
     await waitFor(() => screen.getByText("AlterX Admin"), { timeout: 15_000 })
   })
+})
+
+
+it("mounts the OAuth callback on the real application router", { timeout: 20_000 }, async () => {
+  localStorage.setItem("alterx_auth", "true")
+  useAuth.setState({ isAuthenticated: true, validated: true })
+  useOnboarding.setState({ completed: true })
+  sessionStorage.removeItem("alterx_connection_oauth")
+  render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><RouterProvider router={router} /></QueryClientProvider>)
+  await router.navigate("/app/connections/callback")
+  await screen.findByText("Connection authorization failed. Return to your connections and start again.", {}, { timeout: 15_000 })
 })

@@ -117,3 +117,48 @@ it("reads exports for the selected real workspace", async () => {
   await waitFor(() => expect(request.mock.calls.some(([url]) => String(url).includes("/workspaces/ws_2/exports"))).toBe(true))
   await waitFor(() => expect(screen.getByText("Ready")).toBeDefined())
 })
+
+
+it("deletes only the selected workspace after exact typed name and exposes D2 undo", async () => {
+  let deleted = false
+  const request = vi.fn<typeof fetch>().mockImplementation(async (input, init) => {
+    const url = String(input)
+    if (init?.method === "DELETE") { deleted = true; return Response.json({ deletionDueAt: "2099-10-13T10:00:00Z" }) }
+    if (url.endsWith("/actions/restore")) { deleted = false; return Response.json({ status: "active" }) }
+    if (url.endsWith("/pending-deletion")) return Response.json(deleted ? [{ id: "ws_2", name: "Second", deletionDueAt: "2099-10-13T10:00:00Z" }] : [])
+    if (url.endsWith("/workspaces")) return Response.json(deleted ? workspaces : [...workspaces, { id: "ws_2", name: "Second", role: "admin" }])
+    return Response.json([])
+  })
+  vi.stubGlobal("fetch", request)
+  renderPage()
+  const user = userEvent.setup()
+  await screen.findByLabelText("Export workspace")
+  await user.selectOptions(screen.getByLabelText("Export workspace"), "ws_2")
+  const confirm = await screen.findByLabelText("Workspace name to confirm deletion")
+  const button = screen.getByRole("button", { name: "Delete workspace" }) as HTMLButtonElement
+  expect(button.disabled).toBe(true)
+  await user.type(confirm, "second")
+  expect(button.disabled).toBe(true)
+  await user.clear(confirm); await user.type(confirm, "Second")
+  await user.click(button)
+  await waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(true))
+  const call = request.mock.calls.find(([, init]) => init?.method === "DELETE")!
+  expect(String(call[0])).toBe("/api/v1/workspaces/ws_2")
+  expect(JSON.parse(String(call[1]?.body))).toEqual({ confirm_name: "Second" })
+  expect(screen.queryByText(/cannot be undone|signed out shortly/i)).toBeNull()
+  await user.click(await screen.findByRole("button", { name: "Restore" }))
+  await waitFor(() => expect(request.mock.calls.some(([url, init]) => String(url).endsWith("/ws_2/actions/restore") && init?.method === "POST")).toBe(true))
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Restore" })).toBeNull())
+})
+
+it("surfaces a refused deletion and keeps the selected workspace", async () => {
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockImplementation(async (url, init) => {
+    if (init?.method === "DELETE") return Response.json({ status: 403, detail: "Forbidden" }, { status: 403 })
+    return Response.json(String(url).endsWith("/workspaces") ? [{ ...workspaces[0], role: "admin" }] : [])
+  }))
+  renderPage()
+  await userEvent.setup().type(await screen.findByLabelText("Workspace name to confirm deletion"), "W")
+  await userEvent.setup().click(screen.getByRole("button", { name: "Delete workspace" }))
+  await screen.findByText("Workspace deletion failed. Try again.")
+  expect(screen.getByLabelText("Export workspace")).toBeDefined()
+})

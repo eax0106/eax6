@@ -217,7 +217,7 @@ function DangerZone() {
 }
 
 /** D2: workspaces waiting out their restore window, each with a restore action. */
-function PendingDeletionWorkspaces() {
+export function PendingDeletionWorkspaces() {
   const queryClient = useQueryClient()
   const { data: pending } = useQuery({
     queryKey: queryKeys.workspace.pendingDeletion,
@@ -228,6 +228,7 @@ function PendingDeletionWorkspaces() {
     mutationFn: (id: string) => api.restoreWorkspace(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.workspace.all })
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspace.pendingDeletion })
       toast.success("Workspace restored")
     },
     onError: () => {

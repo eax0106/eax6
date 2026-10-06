@@ -21,6 +21,7 @@ interface WorkspaceConnectorConfigRow {
 }
 
 interface OAuthStateRow {
+  connection_id: string | null;
   tenant_id: string;
   id: string;
   workspace_id: string;
@@ -65,6 +66,7 @@ export class ActivityCursorNotFoundError extends Error {
 }
 
 export interface CreateOAuthStateInput {
+  readonly connectionId?: string;
   readonly id: string;
   readonly workspaceId: string;
   readonly connector: ConnectorId;
@@ -132,8 +134,8 @@ export class IntegrationRepository implements OnModuleDestroy {
     return this.withTenant(tenantId, async (client) => {
       const result = await client.query<OAuthStateRow>(
         `INSERT INTO oauth_states
-           (tenant_id, id, workspace_id, connector, code_verifier, redirect_uri, created_by, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           (tenant_id, id, workspace_id, connector, code_verifier, redirect_uri, created_by, expires_at, connection_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *`,
         [
           tenantId,
@@ -144,6 +146,7 @@ export class IntegrationRepository implements OnModuleDestroy {
           input.redirectUri,
           input.createdBy,
           input.expiresAt,
+          input.connectionId ?? null,
         ],
       );
       return mapStateRow(result.rows[0]!);
@@ -389,6 +392,7 @@ function mapConnectorConfigRow(
 
 function mapStateRow(row: OAuthStateRow): OAuthStateRecord {
   return {
+    connectionId: row.connection_id ?? null,
     tenantId: row.tenant_id,
     id: row.id,
     workspaceId: row.workspace_id,

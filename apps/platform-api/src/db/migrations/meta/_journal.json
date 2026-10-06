@@ -295,6 +295,13 @@
       "when": 1790247600004,
       "tag": "0038_credit_purchases",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791311700000,
+      "tag": "0039_oauth_reconnect_state",
+      "breakpoints": true
     }
   ]
 }
