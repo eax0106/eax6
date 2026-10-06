@@ -423,6 +423,26 @@ def criteria_request(
 class TestSuccessCriteria:
     """C29 slice 2b: the gate judges output against the node's own criteria."""
 
+    @pytest.mark.parametrize("node_type", ["LLMTask", "RunOutcome"])
+    async def test_rubric_review_receives_the_authoritative_task_criteria(
+        self, node_type: NodeType
+    ) -> None:
+        class ContextReviewer(ContractReviewer):
+            async def review(self, **kwargs: object) -> tuple[float, str]:
+                config = json.loads(str(kwargs["config_json"]))
+                assert config["success_criteria"] == ["Currency given"]
+                assert config["prompt"] == "Summarise the invoice"
+                return 0.95, "The task criteria are available for rubric scoring."
+
+        req = criteria_request('{"currency": "INR"}', ("Currency given",), node_type)
+        req = req.model_copy(
+            update={
+                "config_json": '{"prompt": "Summarise the invoice", "success_criteria": ["stale"]}'
+            }
+        )
+        result = await VerificationKernel(ContextReviewer()).score_node(req)
+        assert result.verdict == "pass"
+
     async def test_output_meeting_every_criterion_passes_with_a_per_criterion_record(self) -> None:
         reviewer = ContractReviewer()
         result = await VerificationKernel(llm_client=reviewer).score_node(
