@@ -1,3 +1,4 @@
+export * from "./credit-purchase";
 export {
   CapabilityRegistrationError,
   CapabilityRequirementsError,

@@ -5,6 +5,9 @@ import { RbacModule } from "../rbac";
 import { BillingModule } from "./billing.module";
 import { AdminBillingOperationsRepository } from "./admin-billing-operations.repository";
 import { AdminBillingOperationsService } from "./admin-billing-operations.service";
+import { RazorpayCreditPurchaseProvider } from "@alterx/adapters";
+import { CreditPurchaseService } from "../credit-purchases/credit-purchase.service";
+import { CREDIT_PURCHASE_PROVIDER } from "../credit-purchases/credit-purchase.module";
 
 const originalEnvironment = { ...process.env };
 
@@ -27,6 +30,8 @@ describe("BillingModule", () => {
     expect(moduleRef.get(AdminBillingOperationsService)).toBeInstanceOf(
       AdminBillingOperationsService,
     );
+    expect(moduleRef.get(CreditPurchaseService)).toBeInstanceOf(CreditPurchaseService);
+    expect(moduleRef.get(CREDIT_PURCHASE_PROVIDER)).toBeInstanceOf(RazorpayCreditPurchaseProvider);
 
     const app = moduleRef.createNestApplication<NestFastifyApplication>(
       new FastifyAdapter(),

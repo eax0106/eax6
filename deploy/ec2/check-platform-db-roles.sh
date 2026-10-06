@@ -78,7 +78,7 @@ members="tenant_members WHERE user_id = '$user_id'"
   || fail "tenant data update unavailable"
 [[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_signup('check|$user_id', '$tenant_a') WHERE \"userId\" = '$user_id' AND \"workspaceId\" = '$workspace_id'")" == 1 ]] \
   || fail "tenant signup lookup unavailable"
-[[ "$(psql_as "$app" -c "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND p.oid NOT IN ('resolve_existing_signup(text,uuid)'::regprocedure,'resolve_workspace_invitation(text,text,text)'::regprocedure,'resolve_existing_organization_member(text,text)'::regprocedure,'erase_tenant_action_annotations(uuid,text)'::regprocedure,'erase_tenant_payout_ledger(uuid,text)'::regprocedure,'erase_tenant_listings(uuid,text)'::regprocedure,'erase_tenant_marketplace_governance(uuid,text)'::regprocedure,'erase_tenant_abuse_signal_actions(uuid,text)'::regprocedure,'erase_tenant_billing_admin_operations(uuid,text)'::regprocedure) AND has_function_privilege(current_user,p.oid,'EXECUTE')")" == 0 ]] \
+[[ "$(psql_as "$app" -c "SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND p.prosecdef AND p.oid NOT IN ('resolve_existing_signup(text,uuid)'::regprocedure,'resolve_workspace_invitation(text,text,text)'::regprocedure,'resolve_existing_organization_member(text,text)'::regprocedure,'erase_tenant_action_annotations(uuid,text)'::regprocedure,'erase_tenant_payout_ledger(uuid,text)'::regprocedure,'erase_tenant_listings(uuid,text)'::regprocedure,'erase_tenant_marketplace_governance(uuid,text)'::regprocedure,'erase_tenant_abuse_signal_actions(uuid,text)'::regprocedure,'erase_tenant_billing_admin_operations(uuid,text)'::regprocedure,'erase_tenant_credit_purchases(uuid,text)'::regprocedure) AND has_function_privilege(current_user,p.oid,'EXECUTE')")" == 0 ]] \
   || fail "tenant function grant check failed"
 [[ "$(psql_as "$app" -c "SELECT count(*) FROM workspace_invitations WHERE id='$invitation_id'")" == 0 ]] \
   || fail "invitation rows require tenant context"
@@ -94,7 +94,7 @@ done
   || fail "organization bootstrap accepted unknown identity"
 [[ "$(psql_as "$app" -c "SELECT count(*) FROM resolve_existing_organization_member('check|$user_id','org_wrong')")" == 0 ]] \
   || fail "organization bootstrap accepted wrong organization"
-for call in 'admin_list_tenants()' "admin_list_users('$user_id')" "admin_revoke_user_sessions('$user_id')" 'admin_list_billing_issues()' 'admin_list_staff_billing_issues()' 'list_billing_sync_tenants(NULL,100)' 'pseudonymise_orphan_users(ARRAY[]::uuid[])' 'list_platform_tenant_ids()'; do
+for call in 'admin_list_tenants()' "admin_list_users('$user_id')" "admin_revoke_user_sessions('$user_id')" 'admin_list_billing_issues()' 'admin_list_staff_billing_issues()' 'list_billing_sync_tenants(NULL,100)' 'pseudonymise_orphan_users(ARRAY[]::uuid[])' 'list_platform_tenant_ids()' 'list_due_credit_purchases(100)'; do
   if psql_as "$app" -c "SELECT $call" >/dev/null 2>&1; then
     fail "tenant and staff function grants must differ"
   fi
