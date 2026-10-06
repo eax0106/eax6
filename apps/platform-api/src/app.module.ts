@@ -57,10 +57,12 @@ import { AdminControlsModule } from "./admin-controls";
 import { MarketplaceGovernanceModule } from "./marketplace-governance";
 import { AdminDeploymentModule } from "./admin-deployments";
 import { MemorySettingsModule } from "./memory-settings/memory-settings.module";
+import { TenantBenchmarksModule } from "./tenant-benchmarks/tenant-benchmarks.module";
 
 @Module({
   imports: [
     MemorySettingsModule,
+    TenantBenchmarksModule,
     DbModule,
     IdentityModule,
     IdentityBrokerModule,

@@ -1,130 +1,167 @@
-import type { Benchmark, BenchmarkResult, BenchmarkDataset, BenchmarkMetricDefinition } from "../types"
+import { apiGet, apiPost, isLiveApi, mutationKey } from "../http"
+import { delay } from "../mock/data"
 
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+// D25 (b): a workspace's benchmark datasets (test cases: an input plus the
+// success criteria it should meet) and runs of a workflow against a dataset.
+// Runs execute through Simulate, so no outside action fires.
 
-const mockMetrics: BenchmarkMetricDefinition[] = [
-  { id: "m_acc", name: "Accuracy", type: "accuracy", higherIsBetter: true },
-  { id: "m_lat", name: "Latency", type: "latency", higherIsBetter: false },
-  { id: "m_cost", name: "Cost", type: "cost", higherIsBetter: false },
-  { id: "m_succ", name: "Success Rate", type: "success_rate", higherIsBetter: true }
-]
+export interface BenchmarkCase {
+  id: string
+  position: number
+  input: Record<string, unknown>
+  successCriteria: string[]
+}
 
-const mockDatasets: BenchmarkDataset[] = [
-  { id: "ds_1", name: "Support Evaluation Set Q3", caseCount: 150, description: "150 verified support emails with known categories and priority." },
-  { id: "ds_2", name: "Invoice Extraction Samples", caseCount: 50, description: "50 diverse PDF invoices in multiple languages." }
-]
+export interface BenchmarkDataset {
+  id: string
+  name: string
+  description: string
+  caseCount: number
+  createdBy: string
+  createdAt: string
+}
 
-const mockBenchmarks: Benchmark[] = [
-  {
-    id: "bm_1",
-    name: "Support Classification Quality",
-    description: "Evaluates the accuracy and cost of the core support triage workflow against our internal Q3 benchmark dataset.",
-    targetType: "workflow",
-    targetId: "wf_1",
-    datasetId: "ds_1",
-    metrics: [mockMetrics[0], mockMetrics[1], mockMetrics[2], mockMetrics[3]],
-    createdAt: new Date(Date.now() - 10000000).toISOString(),
-    updatedAt: new Date(Date.now() - 1000000).toISOString()
-  }
-]
+export interface BenchmarkDatasetDetail extends BenchmarkDataset {
+  cases: BenchmarkCase[]
+}
 
-const mockResults: Record<string, BenchmarkResult[]> = {
-  "bm_1": [
-    {
-      id: "res_2",
-      benchmarkId: "bm_1",
-      targetId: "wf_1",
-      version: "v4",
-      status: "completed",
-      caseCount: 150,
-      passedCases: 142,
-      failedCases: 8,
-      metrics: [
-        { metricId: "m_acc", value: 94.6 },
-        { metricId: "m_lat", value: 1.8 },
-        { metricId: "m_cost", value: 0.11 },
-        { metricId: "m_succ", value: 98.2 }
-      ],
-      startedAt: new Date(Date.now() - 5000000).toISOString(),
-      completedAt: new Date(Date.now() - 4900000).toISOString()
-    },
-    {
-      id: "res_1",
-      benchmarkId: "bm_1",
-      targetId: "wf_1",
-      version: "v3",
-      status: "completed",
-      caseCount: 150,
-      passedCases: 132,
-      failedCases: 18,
-      metrics: [
-        { metricId: "m_acc", value: 88.0 },
-        { metricId: "m_lat", value: 2.1 },
-        { metricId: "m_cost", value: 0.08 },
-        { metricId: "m_succ", value: 92.1 }
-      ],
-      startedAt: new Date(Date.now() - 9000000).toISOString(),
-      completedAt: new Date(Date.now() - 8900000).toISOString()
-    }
-  ]
+export type BenchmarkRunStatus = "pending" | "running" | "completed" | "failed"
+
+export interface BenchmarkRun {
+  id: string
+  datasetId: string
+  workflowId: string
+  workflowVersionId: string | null
+  status: BenchmarkRunStatus
+  caseCount: number
+  passed: number
+  failed: number
+  errored: number
+  passRate: number | null
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number | null
+  error: string | null
+  requestedBy: string
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+
+export interface BenchmarkRunStep {
+  key: string
+  type: string
+  status: "executed" | "simulated" | "failed"
+  action?: string
+  verdict?: string
+  error?: string
+}
+
+export interface BenchmarkCaseOutcome {
+  caseId: string
+  position: number
+  verdict: "pass" | "fail" | "error"
+  score: number | null
+  threshold: number | null
+  reviewerModel: string | null
+  output: unknown
+  steps: BenchmarkRunStep[]
+  inputTokens: number
+  outputTokens: number
+  estimatedCostUsd: number | null
+  durationMs: number
+  error: string | null
+}
+
+export interface BenchmarkRunDetail extends BenchmarkRun {
+  results: BenchmarkCaseOutcome[]
+}
+
+export interface NewBenchmarkDataset {
+  name: string
+  description: string
+  cases: { input: Record<string, unknown>; successCriteria: string[] }[]
+}
+
+// Demo mode: an in-memory workspace. Demo mode has no engine, so a demo run
+// records each case as not run rather than inventing a verdict.
+const demoDatasets: BenchmarkDatasetDetail[] = []
+const demoRuns: BenchmarkRunDetail[] = []
+
+function demoId() {
+  return crypto.randomUUID()
 }
 
 export const benchmarksService = {
-  list: async (): Promise<Benchmark[]> => {
-    await delay(400)
-    return mockBenchmarks
-  },
-  get: async (id: string): Promise<Benchmark> => {
-    await delay(300)
-    const bm = mockBenchmarks.find(b => b.id === id)
-    if (!bm) throw new Error("Not found")
-    return bm
-  },
-  create: async (data: Partial<Benchmark>): Promise<Benchmark> => {
-    await delay(800)
-    const newBm: Benchmark = {
-      ...data,
-      id: "bm_" + Date.now(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    } as Benchmark
-    mockBenchmarks.unshift(newBm)
-    mockResults[newBm.id] = []
-    return newBm
-  },
-  run: async (id: string, _version?: string): Promise<BenchmarkResult> => {
-    await delay(1200)
-    const newRes: BenchmarkResult = {
-      id: "res_" + Date.now(),
-      benchmarkId: id,
-      targetId: "wf_1",
-      status: "completed",
-      caseCount: 150,
-      passedCases: 145,
-      failedCases: 5,
-      metrics: [
-        { metricId: "m_acc", value: 96.6 },
-        { metricId: "m_lat", value: 1.5 },
-        { metricId: "m_cost", value: 0.12 },
-        { metricId: "m_succ", value: 99.0 }
-      ],
-      startedAt: new Date().toISOString(),
-      completedAt: new Date().toISOString()
-    }
-    if (!mockResults[id]) mockResults[id] = []
-    mockResults[id].unshift(newRes)
-    return newRes
-  },
-  getResults: async (id: string): Promise<BenchmarkResult[]> => {
-    await delay(400)
-    return mockResults[id] || []
-  },
-  getDatasets: async (): Promise<BenchmarkDataset[]> => {
-    await delay(300)
-    return mockDatasets
-  },
-  getMetrics: async (): Promise<BenchmarkMetricDefinition[]> => {
+  async listDatasets(): Promise<BenchmarkDataset[]> {
+    if (isLiveApi) return (await apiGet<{ data: BenchmarkDataset[] }>("/api/v1/benchmarks/datasets")).data
     await delay(200)
-    return mockMetrics
-  }
+    return demoDatasets.map(({ cases: _cases, ...dataset }) => dataset)
+  },
+
+  async getDataset(id: string): Promise<BenchmarkDatasetDetail> {
+    if (isLiveApi) return apiGet<BenchmarkDatasetDetail>(`/api/v1/benchmarks/datasets/${encodeURIComponent(id)}`)
+    await delay(150)
+    const dataset = demoDatasets.find(item => item.id === id)
+    if (!dataset) throw new Error("Benchmark dataset not found")
+    return dataset
+  },
+
+  async createDataset(input: NewBenchmarkDataset): Promise<BenchmarkDatasetDetail> {
+    if (isLiveApi) {
+      return apiPost<BenchmarkDatasetDetail>("/api/v1/benchmarks/datasets", input, { idempotencyKey: mutationKey("benchmark-dataset") })
+    }
+    await delay(300)
+    if (demoDatasets.some(item => item.name === input.name.trim())) throw new Error("A dataset with this name already exists")
+    const dataset: BenchmarkDatasetDetail = {
+      id: demoId(),
+      name: input.name.trim(),
+      description: input.description.trim(),
+      caseCount: input.cases.length,
+      createdBy: "demo-user",
+      createdAt: new Date().toISOString(),
+      cases: input.cases.map((item, position) => ({ id: demoId(), position, ...item })),
+    }
+    demoDatasets.unshift(dataset)
+    return dataset
+  },
+
+  async startRun(datasetId: string, workflowId: string): Promise<BenchmarkRunDetail> {
+    if (isLiveApi) {
+      return apiPost<BenchmarkRunDetail>(`/api/v1/benchmarks/datasets/${encodeURIComponent(datasetId)}/runs`, { workflowId },
+        { idempotencyKey: mutationKey("benchmark-run") })
+    }
+    await delay(400)
+    const dataset = await this.getDataset(datasetId)
+    const now = new Date().toISOString()
+    const run: BenchmarkRunDetail = {
+      id: demoId(), datasetId, workflowId, workflowVersionId: null, status: "completed", caseCount: dataset.caseCount,
+      passed: 0, failed: 0, errored: dataset.caseCount, passRate: 0, inputTokens: 0, outputTokens: 0, estimatedCostUsd: null,
+      error: null, requestedBy: "demo-user", createdAt: now, startedAt: now, completedAt: now,
+      results: dataset.cases.map(item => ({
+        caseId: item.id, position: item.position, verdict: "error", score: null, threshold: null, reviewerModel: null,
+        output: {}, steps: [], inputTokens: 0, outputTokens: 0, estimatedCostUsd: null, durationMs: 0,
+        error: "Demo mode does not run workflows",
+      })),
+    }
+    demoRuns.unshift(run)
+    return run
+  },
+
+  async listRuns(datasetId?: string): Promise<BenchmarkRun[]> {
+    if (isLiveApi) {
+      const query = new URLSearchParams({ limit: "50", ...(datasetId ? { datasetId } : {}) })
+      return (await apiGet<{ data: BenchmarkRun[] }>(`/api/v1/benchmarks/runs?${query}`)).data
+    }
+    await delay(150)
+    return demoRuns.filter(run => !datasetId || run.datasetId === datasetId).map(({ results: _results, ...run }) => run)
+  },
+
+  async getRun(id: string): Promise<BenchmarkRunDetail> {
+    if (isLiveApi) return apiGet<BenchmarkRunDetail>(`/api/v1/benchmarks/runs/${encodeURIComponent(id)}`)
+    await delay(150)
+    const run = demoRuns.find(item => item.id === id)
+    if (!run) throw new Error("Benchmark run not found")
+    return run
+  },
 }
