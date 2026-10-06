@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import { spawn, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -103,23 +103,10 @@ export async function load(stackRoot = fileURLToPath(new URL('../../', import.me
     await helpers.assertPortFree(name, service.port);
     if (name === 'model-gateway') assert.equal(existsSync(permit), false, 'Spend permit appeared; Gateway remains stopped');
     const processEnv = helpers.serviceEnvironment(env);
-    const log = openSync(resolve(dir, `${name}.log`), 'a', 0o600);
-    let child;
-    try {
-      child = spawn(name === 'model-gateway' ? 'bash' : process.execPath,
-        name === 'model-gateway' ? ['scripts/run-service-aws.sh', name] : [`dist/apps/${name}/main.js`],
-        {cwd: root, env: processEnv, detached: true, stdio: ['ignore', log, log]});
-      await new Promise((done, reject) => {child.once('spawn', done); child.once('error', reject);});
-    } finally {closeSync(log);}
-    child.unref();
-    const replacement = {name, pid: child.pid, stamp: helpers.processStamp(child.pid)};
-    state.processes = state.processes.map(row => row.name === name ? replacement : row); save();
-    assert.ok(replacement.stamp, `${name}: exited during restart`);
-    for (let i = 0; ; i++) {
-      assert.equal(helpers.processStamp(child.pid), replacement.stamp, `${name}: exited during restart`);
-      try {await helpers.health(name, service.url); break;}
-      catch {assert.ok(i < 90, `${name}: restart timed out; inspect private log`); await delay(1000);}
-    }
+    state.processes = state.processes.filter(row => row.name !== name);
+    await helpers.start(state, name, name === 'model-gateway' ? 'bash' : process.execPath,
+      name === 'model-gateway' ? ['scripts/run-service-aws.sh', name] : [`dist/apps/${name}/main.js`],
+      processEnv, root, service.url);
     for (const row of grpc.filter(row => row.name.startsWith(name))) await helpers.grpcHealth(row.name, row.address);
     stopped.delete(name);
   }
