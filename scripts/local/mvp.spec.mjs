@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
+import {mkdtempSync, mkdirSync, copyFileSync, readFileSync, rmSync, statSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
 import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -115,4 +119,28 @@ test('restarted services reuse startup mock identity, token references and disar
   assert.equal(env.MODEL_GATEWAY_LOCAL_SMOKE, '1'); assert.equal(env.AWS_MAX_ATTEMPTS, '1');
   assert.ok(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE.endsWith('/tmp/local-mvp/spend-permit.json'));
   assert.equal(base.ENGINE_M2M_TOKEN_URL, undefined, 'Input env stays unchanged');
+});
+
+test('owned startup helper records private process state and refuses a failed native restart', async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'mvp-start-control-'));
+  mkdirSync(resolve(dir, 'scripts/local'), {recursive: true}); mkdirSync(resolve(dir, 'tmp/local-mvp'), {recursive: true});
+  copyFileSync('scripts/local/mvp-stack.mjs', resolve(dir, 'scripts/local/mvp-stack.mjs'));
+  const {start} = await import(pathToFileURL(resolve(dir, 'scripts/local/mvp-stack.mjs')).href);
+  const reservation = createServer(); reservation.listen(0, '127.0.0.1'); await once(reservation, 'listening');
+  const port = reservation.address().port; await new Promise(done => reservation.close(done));
+  const state = {processes: []};
+  const source = `const {createServer}=require('node:http');createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify({status:'ok',service:'audit-service'}))}).listen(Number(process.argv[1]),'127.0.0.1');`;
+  try {
+    await start(state, 'audit-service', process.execPath, ['-e', source, String(port)], process.env, dir, `http://127.0.0.1:${port}/health`);
+    assert.equal(state.processes.length, 1); const row = state.processes[0];
+    assert.equal(processStamp(row.pid), row.stamp);
+    assert.deepEqual(JSON.parse(readFileSync(resolve(dir, 'tmp/local-mvp/state.json'), 'utf8')).processes, state.processes);
+    assert.equal(statSync(resolve(dir, 'tmp/local-mvp/state.json')).mode & 0o777, 0o600);
+    await stopOwnedProcess(row); assert.equal(processStamp(row.pid), '');
+    await assert.rejects(start(state, 'audit-service', process.execPath, ['-e', 'process.exit(1)'], process.env, dir, `http://127.0.0.1:${port}/health`), /audit-service: (startup failed|exited during startup)/);
+    assert.equal(state.processes.length, 2, 'Failed child retains ownership for cleanup');
+  } finally {
+    for (const row of state.processes) await stopOwnedProcess(row);
+    rmSync(dir, {recursive: true, force: true});
+  }
 });

@@ -151,8 +151,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
     observedListPriceUsd += row.input_tokens * rates[0] + row.output_tokens * rates[1];
   }
   assertSmokeCeiling(observedListPriceUsd);
-  const evidence = { recordedAt: new Date().toISOString(), template: 'meeting-notes-summary', boundUsd,
-    gatewayDigest: state.gatewayDigest, smokeDigest: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
+  const evidence = { recordedAt: new Date().toISOString(), models: priced.models, template: 'meeting-notes-summary', boundUsd,
+    gatewayPid: gateway.pid, gatewayStamp: gateway.stamp, gatewayDigest: state.gatewayDigest, smokeDigest: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
     workflowId: created.workflowId, runId: run.id, status: detail.run.status, outcome: detail.outcome,
     verification: detail.verification_results, runCostMinor: detail.run_cost_minor, currency: 'INR', email: 'mock',
     modelCalls, observedListPriceUsd, costScope: 'successful generation/review calls; failed attempts and embeddings remain covered by the lifetime bound' };

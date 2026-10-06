@@ -151,7 +151,7 @@ async function setup(program, args, env, cwd = root) {
 }
 
 function save(state) { writeFileSync(stateFile, JSON.stringify(state, null, 2) + '\n', { mode: 0o600 }); }
-async function start(state, name, program, args, env, cwd = root, url) {
+export async function start(state, name, program, args, env, cwd = root, url) {
   console.log(`Starting ${name}`);
   const log = openSync(resolve(stateDir, `${name}.log`), 'a', 0o600);
   const child = spawn(program, args, { cwd, env, detached: true, stdio: ['ignore', log, log] });
