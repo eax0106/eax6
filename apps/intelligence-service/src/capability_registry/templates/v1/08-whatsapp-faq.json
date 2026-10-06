@@ -1,0 +1,110 @@
+{
+  "template_id": "whatsapp-faq-responder",
+  "title": "WhatsApp FAQ responder",
+  "summary": "Incoming WhatsApp questions are answered from your FAQ documents and replied to on WhatsApp; anything the FAQ does not cover is passed to your team by email instead of guessed.",
+  "requirements": [
+    { "kind": "whatsapp_account", "purpose": "A connected WhatsApp Business account (Meta). Usable once the Meta account exists." },
+    { "kind": "documents", "purpose": "Upload your FAQ documents in this workspace's Knowledge area." },
+    { "kind": "setting", "purpose": "Replace the example escalation address (support@example.com) with your own in the workflow chat." }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "plan_search",
+    "success_criteria": [
+      "A question the FAQ answers gets one WhatsApp reply to the same sender stating only what the FAQ says.",
+      "A question the FAQ does not answer gets no invented WhatsApp answer; it is passed to the team by email with the sender and message.",
+      "A simple greeting or thanks may get a short courteous reply that makes no factual claim."
+    ],
+    "nodes": [
+      {
+        "key": "plan_search",
+        "type": "llm",
+        "config": {
+          "model_alias": "FAST",
+          "prompt": "The upstream output is an inbound WhatsApp message (from, text). Respond with {\"query\": a search query for the FAQ documents, \"from\": the sender unchanged, \"text\": the message unchanged, \"small_talk\": true only when the message is just a greeting or thanks with no question}."
+        },
+        "depends_on": [],
+        "success_criteria": ["from and text are copied unchanged."]
+      },
+      {
+        "key": "search",
+        "type": "tool",
+        "config": {
+          "tool_name": "knowledge.search",
+          "credential_ref": "$alter:credential:knowledge-search",
+          "arguments": { "query": { "$from": "plan_search", "path": "query" }, "topK": 3 }
+        },
+        "depends_on": ["plan_search"]
+      },
+      {
+        "key": "answer",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "Draft the reply to the WhatsApp message in the upstream output. If small_talk is true, reply with one short courteous sentence and no facts. Otherwise answer only from the FAQ passages returned by the search step; if they do not answer the question, set reply to false. Respond with {\"reply\": bool, \"to\": the sender, \"text\": the reply under 600 characters or null, \"escalation\": null or {\"to\": \"support@example.com\", \"subject\": \"WhatsApp question needs a person\", \"body\": the sender and their message unchanged}}."
+        },
+        "depends_on": ["search", "plan_search"],
+        "success_criteria": [
+          "text states only what the FAQ passages say, or is a fact-free courtesy for small talk.",
+          "When the FAQ does not answer, reply is false and escalation carries the sender and message unchanged."
+        ]
+      },
+      {
+        "key": "decide",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "send_reply": "inputs.answer.reply == true",
+            "escalate": "inputs.answer.reply != true"
+          }
+        },
+        "depends_on": ["answer"]
+      },
+      {
+        "key": "send_reply",
+        "type": "tool",
+        "config": {
+          "tool_name": "whatsapp.send",
+          "credential_ref": "$alter:credential:whatsapp-send",
+          "arguments": {
+            "to": { "$from": "answer", "path": "to" },
+            "text": { "$from": "answer", "path": "text" }
+          }
+        },
+        "depends_on": ["decide", "answer"]
+      },
+      {
+        "key": "escalate",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": { "$from": "answer", "path": "escalation.to" },
+            "subject": { "$from": "answer", "path": "escalation.subject" },
+            "body": { "$from": "answer", "path": "escalation.body" }
+          }
+        },
+        "depends_on": ["decide", "answer"]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "unanswered question is escalated, not guessed",
+      "input": { "from": "919812345678", "text": "Do you deliver to Port Blair, and how long does it take?" },
+      "success_criteria": [
+        "No WhatsApp answer about delivery is sent.",
+        "The question is passed to support@example.com with sender 919812345678 and the message unchanged."
+      ]
+    },
+    {
+      "name": "thanks gets a courteous reply",
+      "input": { "from": "919812345678", "text": "Thank you so much!" },
+      "success_criteria": [
+        "One short courteous WhatsApp reply goes to 919812345678.",
+        "The reply makes no factual claim and nothing is escalated."
+      ]
+    }
+  ]
+}

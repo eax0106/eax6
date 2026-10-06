@@ -1,0 +1,132 @@
+{
+  "template_id": "lead-capture-crm-welcome",
+  "title": "Lead capture to CRM with a welcome email",
+  "summary": "A new lead from a form is checked, saved to your CRM table once per email address, and sent a short welcome email.",
+  "requirements": [
+    {
+      "kind": "connection",
+      "connector_type": "postgres",
+      "purpose": "The CRM table that receives each lead (a leads table with a unique email column)."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "check_lead",
+    "success_criteria": [
+      "A lead with a well-formed email address and a name is saved once and receives one welcome email addressed to that email address.",
+      "A lead with a malformed email address or no name is rejected: nothing is saved and no email is sent.",
+      "Nothing in the saved record or the email is invented; every value comes from the submitted lead."
+    ],
+    "nodes": [
+      {
+        "key": "check_lead",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "A new lead was submitted through a form; the submission is the upstream output. Decide whether it can be accepted: it needs a non-empty name and a well-formed email address (one @, a domain with a dot, no spaces). If it is accepted, also write a short, friendly welcome email that greets the lead by name, mentions their company only if one was given, and promises nothing specific (no prices, dates or offers). Respond with {\"valid\": true or false, \"reason\": one sentence naming what was checked or what was wrong, \"name\": the submitted name, \"email\": the submitted email lower-cased, \"company\": the submitted company or null, \"parameters\": [name, email, company or null], \"welcome\": null when not valid, otherwise {\"to\": the lower-cased email, \"subject\": a subject line, \"body\": plain text under 120 words}}. Copy values exactly; never invent a name or a company."
+        },
+        "depends_on": [],
+        "success_criteria": [
+          "valid is false, with the reason, when the email address is malformed or the name is missing, and true otherwise.",
+          "name, email and company are copied from the submission without invented values.",
+          "When valid, welcome.to is the lead's email and the body greets the lead by name and contains no invented facts, prices, dates or offers; when not valid, welcome is null."
+        ]
+      },
+      {
+        "key": "route_lead",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "save_lead": "inputs.check_lead.valid == true",
+            "send_welcome": "inputs.check_lead.valid == true",
+            "rejected": "inputs.check_lead.valid != true"
+          }
+        },
+        "depends_on": [
+          "check_lead"
+        ]
+      },
+      {
+        "key": "save_lead",
+        "type": "tool",
+        "config": {
+          "tool_name": "database.insert",
+          "required_connector": "postgres",
+          "arguments": {
+            "databaseId": "$alter:connection:postgres",
+            "statement": "INSERT INTO leads (name, email, company) VALUES ($1, $2, $3) ON CONFLICT (email) DO UPDATE SET name = EXCLUDED.name, company = EXCLUDED.company",
+            "parameters": {
+              "$from": "check_lead",
+              "path": "parameters"
+            }
+          }
+        },
+        "depends_on": [
+          "route_lead",
+          "check_lead"
+        ]
+      },
+      {
+        "key": "send_welcome",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": {
+              "$from": "check_lead",
+              "path": "welcome.to"
+            },
+            "subject": {
+              "$from": "check_lead",
+              "path": "welcome.subject"
+            },
+            "body": {
+              "$from": "check_lead",
+              "path": "welcome.body"
+            }
+          }
+        },
+        "depends_on": [
+          "route_lead",
+          "check_lead"
+        ]
+      },
+      {
+        "key": "rejected",
+        "type": "join",
+        "config": {},
+        "depends_on": [
+          "route_lead"
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "valid lead is saved and welcomed",
+      "input": {
+        "name": "Priya Raman",
+        "email": "Priya.Raman@example.com",
+        "company": "Raman Textiles"
+      },
+      "success_criteria": [
+        "The lead is saved with name Priya Raman, email priya.raman@example.com and company Raman Textiles.",
+        "A welcome email to priya.raman@example.com greets Priya and invents no offers, prices or dates.",
+        "The lead is not rejected."
+      ]
+    },
+    {
+      "name": "malformed email is rejected",
+      "input": {
+        "name": "Arjun",
+        "email": "arjun-at-example",
+        "company": null
+      },
+      "success_criteria": [
+        "The lead is rejected because the email address is malformed.",
+        "Nothing is saved and no welcome email is sent."
+      ]
+    }
+  ]
+}

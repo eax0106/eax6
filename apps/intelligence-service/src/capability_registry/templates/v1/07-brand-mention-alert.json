@@ -1,0 +1,171 @@
+{
+  "template_id": "brand-mention-alert",
+  "title": "Brand mention monitoring with an alert",
+  "summary": "New mentions of your brand, from your monitoring feed and a web search, are checked for relevance and de-duplicated; genuine new mentions are emailed as one alert with their links.",
+  "requirements": [
+    {
+      "kind": "trigger",
+      "purpose": "A schedule or feed webhook that delivers {brand, description, alert_to, previously_seen: [links], candidates: [{title, url, snippet}]}."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "plan_search",
+    "success_criteria": [
+      "A new mention that is genuinely about the brand produces one alert with its link and what the source says.",
+      "Unrelated namesakes and previously seen links produce no alert.",
+      "The alert never misstates what a source says."
+    ],
+    "nodes": [
+      {
+        "key": "plan_search",
+        "type": "llm",
+        "config": {
+          "model_alias": "FAST",
+          "prompt": "The upstream output describes a brand to monitor and carries feed candidates. Respond with {\"query\": a web search query for recent news or posts about this brand, using its description to exclude namesakes, \"brand\", \"description\", \"alert_to\", \"previously_seen\" and \"candidates\": each copied unchanged from the input}."
+        },
+        "depends_on": [],
+        "success_criteria": [
+          "query names the brand.",
+          "brand, description, alert_to, previously_seen and candidates are copied unchanged."
+        ]
+      },
+      {
+        "key": "search",
+        "type": "tool",
+        "config": {
+          "tool_name": "search.web",
+          "credential_ref": "$alter:credential:web-search",
+          "arguments": {
+            "query": {
+              "$from": "plan_search",
+              "path": "query"
+            }
+          }
+        },
+        "depends_on": [
+          "plan_search"
+        ]
+      },
+      {
+        "key": "assess",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "Decide which items, from the feed candidates and from the search results in the upstream output, are genuinely about the brand as described. Drop namesakes and any link in previously_seen. Respond with {\"alert\": true when at least one new relevant mention remains, \"mentions\": [{\"title\", \"url\", \"what_it_says\": one faithful sentence}], \"dropped\": [{\"url\", \"why\"}], \"to\": alert_to, \"subject\": \"New mentions of <brand>\", \"body\": a plain-text list of the mentions with their links}."
+        },
+        "depends_on": [
+          "search",
+          "plan_search"
+        ],
+        "success_criteria": [
+          "Only new, relevant mentions are kept; namesakes and previously seen links are dropped with a reason.",
+          "what_it_says matches the source snippet."
+        ]
+      },
+      {
+        "key": "decide",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "send_alert": "inputs.assess.alert == true",
+            "no_alert": "inputs.assess.alert != true"
+          }
+        },
+        "depends_on": [
+          "assess"
+        ]
+      },
+      {
+        "key": "send_alert",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": {
+              "$from": "assess",
+              "path": "to"
+            },
+            "subject": {
+              "$from": "assess",
+              "path": "subject"
+            },
+            "body": {
+              "$from": "assess",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "decide",
+          "assess"
+        ]
+      },
+      {
+        "key": "no_alert",
+        "type": "join",
+        "config": {},
+        "depends_on": [
+          "decide"
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "one genuine new mention among a namesake and a repeat",
+      "input": {
+        "brand": "Kalpa Tea",
+        "description": "Kalpa Tea, a Darjeeling tea company in India",
+        "alert_to": "marketing@example.com",
+        "previously_seen": [
+          "https://news.example/kalpa-tea-funding"
+        ],
+        "candidates": [
+          {
+            "title": "Kalpa Tea opens Kolkata tasting room",
+            "url": "https://citynews.example/kalpa-tasting-room",
+            "snippet": "Darjeeling grower Kalpa Tea opened its first tasting room in Kolkata on Saturday."
+          },
+          {
+            "title": "Kalpa yoga retreat adds tea ceremony",
+            "url": "https://travel.example/kalpa-retreat",
+            "snippet": "The Kalpa yoga retreat in Himachal now ends each day with a tea ceremony."
+          },
+          {
+            "title": "Kalpa Tea raises seed round",
+            "url": "https://news.example/kalpa-tea-funding",
+            "snippet": "Kalpa Tea raised a seed round."
+          }
+        ]
+      },
+      "success_criteria": [
+        "An alert to marketing@example.com contains only the Kolkata tasting room mention with its link.",
+        "The yoga retreat is dropped as unrelated and the funding story as previously seen."
+      ]
+    },
+    {
+      "name": "nothing new produces no alert",
+      "input": {
+        "brand": "Kalpa Tea",
+        "description": "Kalpa Tea, a Darjeeling tea company in India",
+        "alert_to": "marketing@example.com",
+        "previously_seen": [
+          "https://news.example/kalpa-tea-funding"
+        ],
+        "candidates": [
+          {
+            "title": "Kalpa Tea raises seed round",
+            "url": "https://news.example/kalpa-tea-funding",
+            "snippet": "Kalpa Tea raised a seed round."
+          }
+        ]
+      },
+      "success_criteria": [
+        "No alert is drafted or sent.",
+        "The funding story is dropped as previously seen."
+      ]
+    }
+  ]
+}

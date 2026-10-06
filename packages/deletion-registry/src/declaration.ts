@@ -203,6 +203,7 @@ export const tenantDataExemptions: readonly TenantDataExemption[] = [
   { database: "cost_db", schema: "public", table: "model_pricing", owner: "cost-ledger-service", reason: "Provider unit prices; Alter's own reference data." },
   { database: "ads_db", schema: "public", table: "alembic_version", owner: "ads-core", reason: "Migration bookkeeping: the applied revision only." },
   { database: "intelligence_db", schema: "public", table: "alembic_version", owner: "intelligence-service", reason: "Migration bookkeeping: the applied revision only." },
+  { database: "intelligence_db", schema: "public", table: "capability_registry_templates", owner: "intelligence-service", reason: "Alter-authored starter templates (D18); a CHECK keeps every row owned by the platform tenant, so no tenant rows." },
   { database: "policy_db", schema: "public", table: "alembic_version", owner: "memory-service", reason: "Migration bookkeeping: the applied revision only." },
   { database: "eval_db", schema: "public", table: "alembic_version", owner: "eval-service", reason: "Migration bookkeeping: the applied revision only." },
   { database: "eval_db", schema: "public", table: "eval_cases", owner: "eval-service", reason: "Alter's own golden-set cases, not customer data." },

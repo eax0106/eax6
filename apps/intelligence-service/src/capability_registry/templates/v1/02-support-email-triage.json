@@ -1,0 +1,64 @@
+{
+  "template_id": "support-email-triage",
+  "title": "Support email triage, label and route",
+  "summary": "Each incoming support email gets one label and urgency and is forwarded to the matching team inbox; unclear requests go to an escalation inbox.",
+  "requirements": [
+    { "kind": "setting", "purpose": "Replace the example team addresses (billing@, technical@, accounts@, escalations@ at example.com) with your own in the workflow chat before activating." }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "classify",
+    "success_criteria": [
+      "Every message gets exactly one label from billing, technical, account or unclear, and an urgency of routine or urgent.",
+      "The message is forwarded to the inbox for its label, with the sender, subject and original text intact.",
+      "An unclear or unsupported request is forwarded to the escalation inbox and is never given an invented destination."
+    ],
+    "nodes": [
+      {
+        "key": "classify",
+        "type": "llm",
+        "config": {
+          "model_alias": "FAST",
+          "prompt": "You triage one incoming support email; it is the upstream output (from, subject, body). Choose exactly one label: billing (invoices, payments, refunds, charges), technical (errors, outages, something not working), account (login, access, profile, cancellation) or unclear (anything else, or more than one of these with no clear main request). Choose urgency: urgent when the sender reports money taken wrongly, a service down, or a deadline today; otherwise routine. Route by label: billing -> billing@example.com, technical -> technical@example.com, account -> accounts@example.com, unclear -> escalations@example.com. Respond with {\"label\": ..., \"urgency\": ..., \"reason\": one sentence, \"forward\": {\"to\": the routed address, \"subject\": \"[label/urgency] \" followed by the original subject, \"body\": \"From: <sender>\\n\\n\" followed by the original body unchanged}}."
+        },
+        "depends_on": [],
+        "success_criteria": [
+          "label is one of billing, technical, account, unclear and matches the main request.",
+          "forward.to is the address listed for that label, and forward.body contains the original sender and body unchanged."
+        ]
+      },
+      {
+        "key": "forward",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": { "$from": "classify", "path": "forward.to" },
+            "subject": { "$from": "classify", "path": "forward.subject" },
+            "body": { "$from": "classify", "path": "forward.body" }
+          }
+        },
+        "depends_on": ["classify"]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "urgent billing complaint goes to billing",
+      "input": { "from": "meera@example.org", "subject": "Charged twice this morning", "body": "Hi, my card was charged twice for invoice INV-2207 today. Please refund the duplicate charge." },
+      "success_criteria": [
+        "The message is labelled billing and urgent.",
+        "It is forwarded to billing@example.com with the sender meera@example.org and the original text unchanged."
+      ]
+    },
+    {
+      "name": "unclear request is escalated",
+      "input": { "from": "dev@example.net", "subject": "question", "body": "Can we talk about a partnership and also my invoice and maybe the API?" },
+      "success_criteria": [
+        "The message is labelled unclear.",
+        "It is forwarded to escalations@example.com, not to a team inbox, with the original text unchanged."
+      ]
+    }
+  ]
+}

@@ -7,9 +7,24 @@ from src.db.session import get_db_session
 
 from .models import CapabilityRecord, CapabilitySearch, RegisterCapability
 from .repository import CapabilityRegistryError, CapabilityRegistryRepository
+from .templates import TemplateNotFoundError, TemplateRecord, TemplateRepository, TemplateSummary
 
 router = APIRouter(prefix="/internal/capability-registry", tags=["capability-registry"])
 SessionDep = Annotated[AsyncSession, Depends(get_db_session)]
+
+
+# Declared before the tenant routes so "templates" is never read as a tenant id.
+@router.get("/templates", response_model=list[TemplateSummary])
+async def list_templates(session: SessionDep) -> list[TemplateSummary]:
+    return await TemplateRepository(session).list_active()
+
+
+@router.get("/templates/{template_id}", response_model=TemplateRecord)
+async def get_template(template_id: str, session: SessionDep) -> TemplateRecord:
+    try:
+        return await TemplateRepository(session).get_active(template_id)
+    except TemplateNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
 
 
 @router.post("/{tenant_id}/records", response_model=CapabilityRecord)

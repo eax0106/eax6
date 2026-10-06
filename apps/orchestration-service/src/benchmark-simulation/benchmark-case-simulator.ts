@@ -13,6 +13,14 @@ import type { VerificationGateReader, VerificationResultRecord } from "../regist
  * outside Alter never execute: their step is recorded as simulated, with the
  * action it would have taken. The case is then judged by the Verification &
  * Quality Gate against the case's own success criteria.
+ *
+ * Routing follows a run's: a node behind conditional edges executes only when
+ * a Gate in front of it chose it, exactly as the Executor decides
+ * (isNodeGatedOff in executor-workflow.ts), and is otherwise recorded as
+ * skipped. The verification gates the compiler puts before each outside
+ * action open the way only when the step they check was executed; that step
+ * has already been scored here, and a failed score has already stopped the
+ * case, so they are not scored a second time.
  */
 
 /** Node types whose execution reaches outside Alter or waits on a person. */
@@ -52,7 +60,7 @@ export interface BenchmarkCaseRequest {
 export interface BenchmarkStep {
   readonly key: string;
   readonly type: string;
-  readonly status: "executed" | "simulated" | "failed";
+  readonly status: "executed" | "simulated" | "skipped" | "failed";
   readonly action?: string;
   readonly verdict?: string;
   readonly error?: string;
@@ -176,6 +184,23 @@ export class BenchmarkCaseSimulator {
         for (const predecessor of predecessors) {
           inputs[predecessor] = outputs.get(predecessor) ?? {};
         }
+        const gates = gatingPredecessors(dag, key, outputs);
+        if (gates !== undefined) {
+          outputs.set(key, { skipped: true, reason: "gated_off_by_condition", gate_node_keys: gates });
+          steps.push({ key, type: node.type, status: "skipped" });
+          continue;
+        }
+        const verifies = node.type === "Gate" ? verificationTarget(config) : undefined;
+        if (verifies !== undefined) {
+          const checked = outputs.get(verifies.source);
+          const executed = checked !== undefined && checked["skipped"] !== true
+            && steps.some((step) => step.key === verifies.source && step.status === "executed");
+          outputs.set(key, executed
+            ? { activeSuccessors: [verifies.protects], verification_status: "passed", verification_source_node_key: verifies.source }
+            : { activeSuccessors: [], verification_status: "source_not_executed", blocked_successor: verifies.protects });
+          steps.push({ key, type: node.type, status: "simulated", action: "verification" });
+          continue;
+        }
         if (SIMULATED_NODE_TYPES.has(node.type)) {
           // The action never runs. What it would have been given is kept, so
           // the judge can check what the workflow would have sent or written.
@@ -235,6 +260,34 @@ export class BenchmarkCaseSimulator {
       return finish("error", undefined, output, errorMessage(error));
     }
   }
+}
+
+/**
+ * The Gates that kept this node from running, when it has conditional
+ * predecessors and none of them chose it; undefined when it runs. Same rule
+ * as the Executor's isNodeGatedOff.
+ */
+function gatingPredecessors(
+  dag: CompiledDag,
+  key: string,
+  outputs: ReadonlyMap<string, Record<string, unknown>>,
+): string[] | undefined {
+  const conditional = dag.edges.filter((edge) => edge.to === key && edge.kind === "conditional");
+  if (conditional.length === 0) return undefined;
+  const chosen = conditional.some((edge) => {
+    const active = outputs.get(edge.from)?.["activeSuccessors"];
+    return Array.isArray(active) && active.includes(key);
+  });
+  return chosen ? undefined : conditional.map((edge) => edge.from);
+}
+
+/** A compiler-inserted verification gate's source step and the action it protects. */
+function verificationTarget(config: Record<string, unknown>): { source: string; protects: string } | undefined {
+  const verification = config["verification"];
+  if (!isPlainObject(verification)) return undefined;
+  const source = verification["source_node_key"];
+  const protects = verification["protected_node_key"];
+  return typeof source === "string" && typeof protects === "string" ? { source, protects } : undefined;
 }
 
 /** The outputs of nodes nothing else consumes: what the workflow produced. */

@@ -1,8 +1,10 @@
 import type { CompiledDag, ScoreNodeInlineRequest, ScoreNodeInlineResponse } from "@alterx/contracts";
 import { describe, expect, it, vi } from "vitest";
 
+import { compileTaskSkeletonToDag } from "../compiler/dag-builder";
 import { GateHandler } from "../registry/handlers/gate.handler";
 import { LlmTaskHandler } from "../registry/handlers/llmtask.handler";
+import { MergeHandler } from "../registry/handlers/merge.handler";
 import { NodeHandlerRegistry } from "../registry/node-handler-registry";
 import type { VerificationGateReader } from "../registry/verification-gate-reader";
 import {
@@ -50,6 +52,7 @@ function setup(options: { dag?: CompiledDag; verdicts?: ScoreNodeInlineResponse[
     (verification) => new NodeHandlerRegistry([
       new LlmTaskHandler({ invoke } as never),
       new GateHandler(verification),
+      new MergeHandler(),
     ]),
     verifier,
   );
@@ -147,6 +150,51 @@ describe("BenchmarkCaseSimulator", () => {
       { gateType: "quality", verdict: "pass", score: 0.95, threshold: 0.7, details: {} },
     ]);
     expect(await reader!.findForSourceNode({ tenantId, runId: "run_x", sourceNodeKey: "send" })).toEqual([]);
+  });
+
+  describe("routing, as a run routes", () => {
+    // check -> route -> (verification gates) -> send, or -> rejected.
+    const routed = compileTaskSkeletonToDag({
+      version: "1",
+      entry_point: "check",
+      nodes: [
+        { key: "check", type: "llm", config: { model_alias: "FAST", prompt: "Check the lead" }, depends_on: [] },
+        { key: "route", type: "branch", config: { conditions: { send: "inputs.check.valid == true", rejected: "inputs.check.valid != true" } }, depends_on: ["check"] },
+        { key: "send", type: "tool", config: { tool_name: "email.send", credential_ref: `/alter/local/tenant/${tenantId}/integration/email-send/default`, arguments: { to: { $from: "check", path: "to" } } }, depends_on: ["route", "check"] },
+        { key: "rejected", type: "join", config: {}, depends_on: ["route"] },
+      ],
+    }, "v1");
+    const llm = (valid: boolean) => async () => ({ output_json: JSON.stringify({ valid, to: "asha@example.test" }), usage_json: "{}", estimated_cost_usd: "", resolved_capability: "fast" });
+
+    it("skips the branch a Gate did not choose and simulates the action it did", async () => {
+      const { simulator } = setup({ dag: routed, invoke: llm(true) });
+      const result = await simulator.simulateCase(caseRequest);
+      const status = Object.fromEntries(result.steps.map((step) => [step.key, step.status]));
+      expect(status).toMatchObject({ check: "executed", route: "executed", send: "simulated", rejected: "skipped" });
+      expect(result.steps.filter((step) => step.action === "verification").map((step) => step.status)).toEqual(["simulated", "simulated"]);
+      expect(result.output["rejected"]).toMatchObject({ skipped: true, gate_node_keys: ["route"] });
+    });
+
+    it("never reaches an action its Gate routed away from", async () => {
+      const { simulator } = setup({ dag: routed, invoke: llm(false) });
+      const result = await simulator.simulateCase(caseRequest);
+      const status = Object.fromEntries(result.steps.map((step) => [step.key, step.status]));
+      expect(status["send"]).toBe("skipped");
+      expect(status["rejected"]).not.toBe("skipped");
+      expect(result.output["send"]).toMatchObject({ skipped: true });
+    });
+
+    it("keeps an action closed when the step its verification checks never ran", async () => {
+      // The route always chooses send, so only the verification of "check",
+      // which was simulated rather than executed, can keep send closed.
+      const unchecked: CompiledDag = { ...routed, nodes: routed.nodes.map((node) =>
+        node.key === "check" ? { ...node, type: "ToolCall", config: { tool_name: "search.web" } }
+        : node.key === "route" ? { ...node, config: { conditions: { verify_step_0: "true", rejected: "false" } } } : node) };
+      const { simulator } = setup({ dag: unchecked });
+      const result = await simulator.simulateCase(caseRequest);
+      expect(result.steps.find((step) => step.key === "verify_step_0")?.status).toBe("simulated");
+      expect(result.output["send"]).toMatchObject({ skipped: true });
+    });
   });
 
   it("refuses a workflow from another workspace", async () => {

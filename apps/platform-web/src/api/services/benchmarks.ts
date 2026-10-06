@@ -51,7 +51,7 @@ export interface BenchmarkRun {
 export interface BenchmarkRunStep {
   key: string
   type: string
-  status: "executed" | "simulated" | "failed"
+  status: "executed" | "simulated" | "skipped" | "failed"
   action?: string
   verdict?: string
   error?: string

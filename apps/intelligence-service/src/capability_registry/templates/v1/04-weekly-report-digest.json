@@ -1,0 +1,73 @@
+{
+  "template_id": "weekly-report-digest",
+  "title": "Weekly report digest by email",
+  "summary": "The week's records sent by your reporting system are counted and totalled for the stated week and emailed as a short digest; a week with no activity says so.",
+  "requirements": [
+    { "kind": "trigger", "purpose": "A weekly schedule or webhook that delivers {period: {start, end}, recipient, records: [{date, type, amount}]}." }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "summarise",
+    "success_criteria": [
+      "Counts and totals include exactly the records dated inside the stated week and match them.",
+      "The email names the week and the recipient, and contains no activity that is not in the records.",
+      "A week with no records produces an explicit no-activity digest."
+    ],
+    "nodes": [
+      {
+        "key": "summarise",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "The upstream output holds a reporting period (start and end dates, both inclusive), a recipient email address and a list of records with date, type and amount. Use only records dated from start to end inclusive; ignore the rest and say how many were ignored. Count records by type and total their amounts by type, to two decimals. Respond with {\"included\": number of records used, \"ignored\": number outside the period, \"by_type\": {type: {\"count\": n, \"total\": amount}}, \"to\": the recipient, \"subject\": \"Weekly digest <start> to <end>\", \"body\": a plain-text digest naming the period and listing each type's count and total, or stating that there was no activity in the period}. Never add records, types or figures that are not in the input."
+        },
+        "depends_on": [],
+        "success_criteria": [
+          "Only records dated inside the period are counted, and every count and total is arithmetically correct.",
+          "The body names the period and invents no activity; an empty period is reported as no activity."
+        ]
+      },
+      {
+        "key": "send_digest",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": { "$from": "summarise", "path": "to" },
+            "subject": { "$from": "summarise", "path": "subject" },
+            "body": { "$from": "summarise", "path": "body" }
+          }
+        },
+        "depends_on": ["summarise"]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "populated week with one record outside it",
+      "input": {
+        "period": { "start": "2026-09-28", "end": "2026-10-04" },
+        "recipient": "owner@example.com",
+        "records": [
+          { "date": "2026-09-28", "type": "order", "amount": 1200.5 },
+          { "date": "2026-10-01", "type": "order", "amount": 799.5 },
+          { "date": "2026-10-02", "type": "refund", "amount": 150 },
+          { "date": "2026-10-05", "type": "order", "amount": 999 }
+        ]
+      },
+      "success_criteria": [
+        "The digest counts 2 orders totalling 2000.00 and 1 refund totalling 150.00, and ignores the 2026-10-05 record.",
+        "It is addressed to owner@example.com and names the period 2026-09-28 to 2026-10-04."
+      ]
+    },
+    {
+      "name": "empty week reports no activity",
+      "input": { "period": { "start": "2026-09-21", "end": "2026-09-27" }, "recipient": "owner@example.com", "records": [] },
+      "success_criteria": [
+        "The digest states there was no activity from 2026-09-21 to 2026-09-27.",
+        "It reports no counts or totals other than zero."
+      ]
+    }
+  ]
+}

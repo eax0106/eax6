@@ -20,6 +20,9 @@ import { WorkflowLifecycleService } from "./workflow-lifecycle/workflow-lifecycl
 import { WorkflowDeploymentController } from "./workflow-lifecycle/workflow-deployment.controller";
 import { WorkflowChatController } from "./workflow-chat/workflow-chat.controller";
 import { WorkflowChatService } from "./workflow-chat/workflow-chat.service";
+import { WorkflowTemplatesController } from "./workflow-templates/workflow-templates.controller";
+import { WorkflowTemplatesService } from "./workflow-templates/workflow-templates.service";
+import { HttpWorkflowTemplateRegistry } from "./workflow-templates/template-registry.client";
 import { WorkflowFoldersController } from "./workflow-folders/workflow-folders.controller";
 import { WorkflowFoldersService } from "./workflow-folders/workflow-folders.service";
 import { WorkflowReadController } from "./workflow-read/workflow-read.controller";
@@ -63,6 +66,7 @@ import { OperationsModule } from "./operations.module";
     WorkflowReadController,
     WorkflowFoldersController,
     WorkflowChatController,
+    WorkflowTemplatesController,
     WorkflowDeploymentController,
     TemplateVariablesController,
     ClarificationsController,
@@ -84,6 +88,18 @@ import { OperationsModule } from "./operations.module";
           address: conversation.modelGatewayAddress, protoPath: MODELGW_CLIENT_PROTO_PATH, accessTokenProvider: internalM2mTokenProvider(),
         }));
       },
+    },
+    {
+      // D18: templates are read from the Capability Registry in
+      // intelligence-service, the same service the planner URL names.
+      provide: WorkflowTemplatesService,
+      inject: [WorkflowChatService],
+      useFactory: (chats: WorkflowChatService) => new WorkflowTemplatesService(
+        orchestrationStore(identityTenantGatewayEnvironment(process.env)),
+        new HttpWorkflowTemplateRegistry(loadRecoveryEnvironment(process.env).plannerBaseUrl),
+        chats,
+        loadConversationManagerEnvironment(process.env).alterEnvironment,
+      ),
     },
     {
       provide: CONVERSATION_HANDLER,
