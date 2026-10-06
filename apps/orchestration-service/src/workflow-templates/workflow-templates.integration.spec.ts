@@ -9,6 +9,9 @@ import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testconta
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { uuidV7 } from "../trigger-bindings/ids";
+import { AppModule } from "../app.module";
+import { WorkflowAuthoringModule } from "../workflow-authoring.module";
+import { WorkflowTemplatesController } from "./workflow-templates.controller";
 import { WorkflowChatService } from "../workflow-chat/workflow-chat.service";
 import { HttpWorkflowTemplateRegistry, WorkflowTemplateNotFoundError } from "./template-registry.client";
 import { WorkflowTemplatesService } from "./workflow-templates.service";
@@ -29,6 +32,11 @@ const tenant = uuidV7(), workspace = uuidV7(), otherWorkspace = uuidV7(), user =
 const actor = (overrides: Partial<ActorContext> = {}): ActorContext => ({ actor_type: "user", tenant_id: `ten_${tenant}`, workspace_id: `ws_${workspace}`,
   user_id: `usr_${user}`, roles: ["admin"], permissions: [], session_id: "session-fixture", jti: "templates-fixture", ...overrides });
 const migrationsFolder = resolve("apps/orchestration-service/drizzle");
+
+it("registers template creation in the production authoring module", () => {
+  expect(Reflect.getMetadata("imports", AppModule)).toContain(WorkflowAuthoringModule);
+  expect(Reflect.getMetadata("controllers", WorkflowAuthoringModule)).toContain(WorkflowTemplatesController);
+});
 
 describe.sequential("D18 template instantiation on restricted PostgreSQL", () => {
   let postgres: StartedPostgreSqlContainer, admin: PostgresOrchestrationStoreProvider, store: PostgresOrchestrationStoreProvider;

@@ -121,6 +121,12 @@ export function ConversationDetail() {
     if (msg.type === "workflow" && data.workflowId) {
       return <div><p>{msg.content}</p><Link to={`/app/workflows/${data.workflowId}`} className="text-primary">Open workflow</Link></div>
     }
+    if (msg.type === "action" && data.type === "template_failed" && typeof data.templateId === "string") {
+      return <div className="space-y-3"><p>{msg.content}</p>
+        <Button disabled={retryTemplate.isPending || conversation.status === "archived"} onClick={() => retryTemplate.mutate(data.templateId)}>Try the template again</Button>
+        {retryTemplate.isError && <p role="alert" className="text-sm text-destructive">{retryTemplate.error.message}</p>}
+      </div>
+    }
     if (msg.type === "action") {
       return (
         <div className="space-y-3">

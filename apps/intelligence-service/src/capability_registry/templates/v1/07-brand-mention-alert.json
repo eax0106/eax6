@@ -1,34 +1,27 @@
 {
   "template_id": "brand-mention-alert",
   "title": "Brand mention monitoring with an alert",
-  "summary": "New mentions of your brand, from your monitoring feed and a web search, are checked for relevance and de-duplicated; genuine new mentions are emailed as one alert with their links.",
+  "summary": "New mentions of your brand, from your monitoring feed and a web search, are checked for relevance and de-duplicated; genuine new mentions are emailed as one alert naming each mention's feed id.",
   "requirements": [
     {
       "kind": "trigger",
-      "purpose": "A schedule or feed webhook that delivers {brand, description, alert_to, previously_seen: [links], candidates: [{title, url, snippet}]}."
+      "purpose": "A schedule or feed webhook that delivers {brand, description, alert_to, previously_seen: [candidate ids], candidates: [{id, title, url, snippet}]}."
     }
   ],
   "skeleton": {
     "version": "1",
-    "entry_point": "plan_search",
+    "entry_point": "intake",
     "success_criteria": [
-      "A new mention that is genuinely about the brand produces one alert with its link and what the source says.",
-      "Unrelated namesakes and previously seen links produce no alert.",
+      "A new mention that is genuinely about the brand produces one alert naming its feed id and what the source says.",
+      "Unrelated namesakes and previously seen candidates produce no alert.",
       "The alert never misstates what a source says."
     ],
     "nodes": [
       {
-        "key": "plan_search",
-        "type": "llm",
-        "config": {
-          "model_alias": "FAST",
-          "prompt": "The upstream output describes a brand to monitor and carries feed candidates. Respond with {\"query\": a web search query for recent news or posts about this brand, using its description to exclude namesakes, \"brand\", \"description\", \"alert_to\", \"previously_seen\" and \"candidates\": each copied unchanged from the input}."
-        },
-        "depends_on": [],
-        "success_criteria": [
-          "query names the brand.",
-          "brand, description, alert_to, previously_seen and candidates are copied unchanged."
-        ]
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
       },
       {
         "key": "search",
@@ -38,13 +31,13 @@
           "credential_ref": "$alter:credential:web-search",
           "arguments": {
             "query": {
-              "$from": "plan_search",
-              "path": "query"
+              "$from": "intake",
+              "path": "brand"
             }
           }
         },
         "depends_on": [
-          "plan_search"
+          "intake"
         ]
       },
       {
@@ -52,15 +45,16 @@
         "type": "llm",
         "config": {
           "model_alias": "STANDARD",
-          "prompt": "Decide which items, from the feed candidates and from the search results in the upstream output, are genuinely about the brand as described. Drop namesakes and any link in previously_seen. Respond with {\"alert\": true when at least one new relevant mention remains, \"mentions\": [{\"title\", \"url\", \"what_it_says\": one faithful sentence}], \"dropped\": [{\"url\", \"why\"}], \"to\": alert_to, \"subject\": \"New mentions of <brand>\", \"body\": a plain-text list of the mentions with their links}."
+          "prompt": "A search output with simulated=true contains only planned arguments and inputs, not retrieved results. Never turn its query or input submission into a search result. Decide which items, from the feed candidates in the submission and from the search results, are genuinely about the brand as described. Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. Drop namesakes and any candidate whose id is in previously_seen. Respond with {\"alert\": true when at least one new relevant mention remains, \"mentions\": [{\"id\": the candidate id or \"search\", \"title\", \"what_it_says\": one faithful sentence}], \"dropped\": [{\"id\", \"why\"}], \"body\": a plain-text list of the mentions with their ids and what each says}. Paraphrase source facts without repeating redacted personal details: refer to the brand as \"the brand\". Candidate ids are opaque feed references, not personal names. Construct body only from the kept mentions array. Never include an item from dropped in body, even to explain why it was dropped. If mentions is empty, body is an empty string."
         },
         "depends_on": [
           "search",
-          "plan_search"
+          "intake"
         ],
         "success_criteria": [
-          "Only new, relevant mentions are kept; namesakes and previously seen links are dropped with a reason.",
-          "what_it_says matches the source snippet."
+          "Every kept mention is new and relevant; every unrelated or previously seen candidate is dropped with its reason.",
+          "Either mentions is empty with no invented claim, or each what_it_says faithfully paraphrases its supplied source. A privacy placeholder may represent an already-redacted source value; never reconstruct the original.",
+          "body contains exactly the kept mentions and their ids; it contains none of the dropped mentions or their ids."
         ]
       },
       {
@@ -84,13 +78,10 @@
           "credential_ref": "$alter:credential:email-send",
           "arguments": {
             "to": {
-              "$from": "assess",
-              "path": "to"
+              "$from": "intake",
+              "path": "alert_to"
             },
-            "subject": {
-              "$from": "assess",
-              "path": "subject"
-            },
+            "subject": "New brand mentions",
             "body": {
               "$from": "assess",
               "path": "body"
@@ -99,7 +90,8 @@
         },
         "depends_on": [
           "decide",
-          "assess"
+          "assess",
+          "intake"
         ]
       },
       {
@@ -107,7 +99,8 @@
         "type": "join",
         "config": {},
         "depends_on": [
-          "decide"
+          "decide",
+          "assess"
         ]
       }
     ]
@@ -116,55 +109,59 @@
     {
       "name": "one genuine new mention among a namesake and a repeat",
       "input": {
-        "brand": "Kalpa Tea",
-        "description": "Kalpa Tea, a Darjeeling tea company in India",
+        "brand": "Zentrova",
+        "description": "Zentrova, a kitchenware brand",
         "alert_to": "marketing@example.com",
         "previously_seen": [
-          "https://news.example/kalpa-tea-funding"
+          "mention-store"
         ],
         "candidates": [
           {
-            "title": "Kalpa Tea opens Kolkata tasting room",
-            "url": "https://citynews.example/kalpa-tasting-room",
-            "snippet": "Darjeeling grower Kalpa Tea opened its first tasting room in Kolkata on Saturday."
+            "id": "mention-bottle",
+            "title": "Zentrova launches a refillable water bottle",
+            "url": "https://news.example/zentrova-bottle",
+            "snippet": "Kitchenware brand Zentrova launched a refillable steel water bottle this week."
           },
           {
-            "title": "Kalpa yoga retreat adds tea ceremony",
-            "url": "https://travel.example/kalpa-retreat",
-            "snippet": "The Kalpa yoga retreat in Himachal now ends each day with a tea ceremony."
+            "id": "mention-yoga",
+            "title": "Zentrova yoga studio adds new classes",
+            "url": "https://local.example/zentrova-yoga",
+            "snippet": "The Zentrova yoga studio added two new beginner classes."
           },
           {
-            "title": "Kalpa Tea raises seed round",
-            "url": "https://news.example/kalpa-tea-funding",
-            "snippet": "Kalpa Tea raised a seed round."
+            "id": "mention-store",
+            "title": "Zentrova opens online store",
+            "url": "https://news.example/zentrova-store",
+            "snippet": "Zentrova opened its online store."
           }
         ]
       },
       "success_criteria": [
-        "An alert to marketing@example.com contains only the Kolkata tasting room mention with its link.",
-        "The yoga retreat is dropped as unrelated and the funding story as previously seen."
+        "An alert is sent that contains only the refillable water bottle mention (mention-bottle).",
+        "The yoga studio (mention-yoga) is dropped as unrelated and the online store (mention-store) as previously seen."
       ]
     },
     {
       "name": "nothing new produces no alert",
       "input": {
-        "brand": "Kalpa Tea",
-        "description": "Kalpa Tea, a Darjeeling tea company in India",
+        "brand": "Zentrova",
+        "description": "Zentrova, a kitchenware brand",
         "alert_to": "marketing@example.com",
         "previously_seen": [
-          "https://news.example/kalpa-tea-funding"
+          "mention-store"
         ],
         "candidates": [
           {
-            "title": "Kalpa Tea raises seed round",
-            "url": "https://news.example/kalpa-tea-funding",
-            "snippet": "Kalpa Tea raised a seed round."
+            "id": "mention-store",
+            "title": "Zentrova opens online store",
+            "url": "https://news.example/zentrova-store",
+            "snippet": "Zentrova opened its online store."
           }
         ]
       },
       "success_criteria": [
-        "No alert is drafted or sent.",
-        "The funding story is dropped as previously seen."
+        "No alert is sent.",
+        "The online store (mention-store) is dropped as previously seen."
       ]
     }
   ]

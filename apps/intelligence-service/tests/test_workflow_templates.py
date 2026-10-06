@@ -47,10 +47,12 @@ def test_each_template_is_well_formed(path: Path) -> None:
     for node in _tool_nodes(definition):
         config = node["config"]
         assert isinstance(config, dict)
+        arguments = config["arguments"]
+        assert isinstance(arguments, dict)
         assert config["tool_name"] in CANONICAL_TOOL_SIDE_EFFECTS
         if "required_connector" in config:
             assert "credential_ref" not in config
-            assert config["arguments"]["databaseId"] == (
+            assert arguments["databaseId"] == (
                 f"$alter:connection:{config['required_connector']}"
             )
         else:
@@ -58,9 +60,10 @@ def test_each_template_is_well_formed(path: Path) -> None:
             assert match is not None and match.group(1) == "credential"
             assert match.group(2) in RUN_SCOPED_CREDENTIALS
     connectors = {
-        node["config"]["required_connector"]
+        config["required_connector"]
         for node in _tool_nodes(definition)
-        if "required_connector" in node["config"]
+        for config in [node["config"]]
+        if isinstance(config, dict) and "required_connector" in config
     }
     assert connectors == {
         requirement.connector_type

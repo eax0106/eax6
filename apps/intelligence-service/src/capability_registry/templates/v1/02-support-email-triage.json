@@ -3,61 +3,181 @@
   "title": "Support email triage, label and route",
   "summary": "Each incoming support email gets one label and urgency and is forwarded to the matching team inbox; unclear requests go to an escalation inbox.",
   "requirements": [
-    { "kind": "setting", "purpose": "Replace the example team addresses (billing@, technical@, accounts@, escalations@ at example.com) with your own in the workflow chat before activating." }
+    {
+      "kind": "trigger",
+      "purpose": "An inbound email webhook that delivers {from, subject, body}."
+    },
+    {
+      "kind": "setting",
+      "purpose": "Replace the example team addresses (billing@, technical@, accounts@, escalations@ at example.com) with your own in the workflow chat before activating."
+    }
   ],
   "skeleton": {
     "version": "1",
-    "entry_point": "classify",
+    "entry_point": "intake",
     "success_criteria": [
       "Every message gets exactly one label from billing, technical, account or unclear, and an urgency of routine or urgent.",
-      "The message is forwarded to the inbox for its label, with the sender, subject and original text intact.",
-      "An unclear or unsupported request is forwarded to the escalation inbox and is never given an invented destination."
+      "The message is forwarded, with its original body unchanged, to exactly one inbox: the one for its label.",
+      "An unclear or unsupported request goes only to the escalation inbox."
     ],
     "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
       {
         "key": "classify",
         "type": "llm",
         "config": {
           "model_alias": "FAST",
-          "prompt": "You triage one incoming support email; it is the upstream output (from, subject, body). Choose exactly one label: billing (invoices, payments, refunds, charges), technical (errors, outages, something not working), account (login, access, profile, cancellation) or unclear (anything else, or more than one of these with no clear main request). Choose urgency: urgent when the sender reports money taken wrongly, a service down, or a deadline today; otherwise routine. Route by label: billing -> billing@example.com, technical -> technical@example.com, account -> accounts@example.com, unclear -> escalations@example.com. Respond with {\"label\": ..., \"urgency\": ..., \"reason\": one sentence, \"forward\": {\"to\": the routed address, \"subject\": \"[label/urgency] \" followed by the original subject, \"body\": \"From: <sender>\\n\\n\" followed by the original body unchanged}}."
+          "prompt": "You triage one incoming support email; it is the upstream output (from, subject, body). Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. Choose exactly one label: billing (invoices, payments, refunds, charges), technical (errors, outages, something not working), account (login, access, profile, cancellation) or unclear (anything else, or several of these with no clear main request). Choose urgency: urgent when the sender reports money taken wrongly, a service down, or a deadline today; otherwise routine. Respond with {\"label\": ..., \"urgency\": ..., \"reason\": one sentence, \"subject\": \"[\" + label + \"/\" + urgency + \"] \" followed by the original subject}."
         },
-        "depends_on": [],
+        "depends_on": [
+          "intake"
+        ],
         "success_criteria": [
           "label is one of billing, technical, account, unclear and matches the main request.",
-          "forward.to is the address listed for that label, and forward.body contains the original sender and body unchanged."
+          "urgency is urgent only for money taken wrongly, a service down or a same-day deadline."
         ]
       },
       {
-        "key": "forward",
+        "key": "route",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "to_billing": "inputs.classify.label == 'billing'",
+            "to_technical": "inputs.classify.label == 'technical'",
+            "to_accounts": "inputs.classify.label == 'account'",
+            "to_escalations": "inputs.classify.label != 'billing' && inputs.classify.label != 'technical' && inputs.classify.label != 'account'"
+          }
+        },
+        "depends_on": [
+          "classify"
+        ]
+      },
+      {
+        "key": "to_billing",
         "type": "tool",
         "config": {
           "tool_name": "email.send",
           "credential_ref": "$alter:credential:email-send",
           "arguments": {
-            "to": { "$from": "classify", "path": "forward.to" },
-            "subject": { "$from": "classify", "path": "forward.subject" },
-            "body": { "$from": "classify", "path": "forward.body" }
+            "to": "billing@example.com",
+            "subject": {
+              "$from": "classify",
+              "path": "subject"
+            },
+            "body": {
+              "$from": "intake",
+              "path": "body"
+            }
           }
         },
-        "depends_on": ["classify"]
+        "depends_on": [
+          "route",
+          "classify",
+          "intake"
+        ]
+      },
+      {
+        "key": "to_technical",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": "technical@example.com",
+            "subject": {
+              "$from": "classify",
+              "path": "subject"
+            },
+            "body": {
+              "$from": "intake",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "route",
+          "classify",
+          "intake"
+        ]
+      },
+      {
+        "key": "to_accounts",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": "accounts@example.com",
+            "subject": {
+              "$from": "classify",
+              "path": "subject"
+            },
+            "body": {
+              "$from": "intake",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "route",
+          "classify",
+          "intake"
+        ]
+      },
+      {
+        "key": "to_escalations",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": "escalations@example.com",
+            "subject": {
+              "$from": "classify",
+              "path": "subject"
+            },
+            "body": {
+              "$from": "intake",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "route",
+          "classify",
+          "intake"
+        ]
       }
     ]
   },
   "test_cases": [
     {
       "name": "urgent billing complaint goes to billing",
-      "input": { "from": "meera@example.org", "subject": "Charged twice this morning", "body": "Hi, my card was charged twice for invoice INV-2207 today. Please refund the duplicate charge." },
+      "input": {
+        "from": "meera@example.org",
+        "subject": "Charged twice this morning",
+        "body": "Hi, my card was charged twice for invoice INV-2207. Please refund the duplicate charge."
+      },
       "success_criteria": [
         "The message is labelled billing and urgent.",
-        "It is forwarded to billing@example.com with the sender meera@example.org and the original text unchanged."
+        "It is forwarded only to billing@example.com, with the original body unchanged."
       ]
     },
     {
       "name": "unclear request is escalated",
-      "input": { "from": "dev@example.net", "subject": "question", "body": "Can we talk about a partnership and also my invoice and maybe the API?" },
+      "input": {
+        "from": "dev@example.net",
+        "subject": "question",
+        "body": "Can we talk about a partnership and also my invoice and maybe the API?"
+      },
       "success_criteria": [
         "The message is labelled unclear.",
-        "It is forwarded to escalations@example.com, not to a team inbox, with the original text unchanged."
+        "It is forwarded only to escalations@example.com, not to a team inbox, with the original body unchanged."
       ]
     }
   ]

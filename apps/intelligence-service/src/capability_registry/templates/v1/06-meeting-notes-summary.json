@@ -1,30 +1,41 @@
 {
   "template_id": "meeting-notes-summary",
   "title": "Meeting notes to a summary email with action items",
-  "summary": "Meeting notes become a short summary email listing the decisions and the action items with their owners and dates, keeping unknown owners and dates unknown.",
+  "summary": "Meeting notes become a short summary email listing the decisions and the action items with their owners and due dates, keeping unknown owners and dates unknown.",
   "requirements": [
-    { "kind": "trigger", "purpose": "A webhook or form that delivers {title, notes, recipients: [email addresses]}." }
+    {
+      "kind": "trigger",
+      "purpose": "A webhook or form that delivers {title, notes, recipient}."
+    }
   ],
   "skeleton": {
     "version": "1",
-    "entry_point": "summarise",
+    "entry_point": "intake",
     "success_criteria": [
-      "Decisions, action items, owners and dates match the notes; an owner or date the notes do not give stays unknown.",
+      "Decisions and action items match the notes; an owner or due date the notes do not give stays unknown.",
       "Open discussion is never described as a decision.",
-      "One summary email goes to the listed recipients and includes every action item."
+      "One summary email goes to the stated recipient and includes every action item."
     ],
     "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
       {
         "key": "summarise",
         "type": "llm",
         "config": {
           "model_alias": "STANDARD",
-          "prompt": "The upstream output holds a meeting title, the raw notes and a list of recipients. Extract decisions (only things the notes say were decided or agreed), action items (task, owner or \"unassigned\", due date or \"no date\") and open questions. Respond with {\"decisions\": [...], \"action_items\": [{\"task\", \"owner\", \"due\"}], \"open_questions\": [...], \"to\": the recipients joined with commas, \"subject\": \"Summary: \" followed by the title, \"body\": a plain-text email with sections Decisions, Action items and Open questions; write \"None recorded\" for an empty section}. Do not invent owners, dates or decisions."
+          "prompt": "The upstream output holds a meeting title and the raw notes. Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. Extract decisions (only things the notes say were decided or agreed), action items (task, owner as written or \"unassigned\", due as written or \"no date\") and open questions. Respond with {\"decisions\": [...], \"action_items\": [{\"task\", \"owner\", \"due\"}], \"open_questions\": [...], \"subject\": \"Meeting summary\", \"body\": a plain-text email with sections Decisions, Action items and Open questions; write \"None recorded\" for an empty section}. Do not invent owners, dates or decisions."
         },
-        "depends_on": [],
+        "depends_on": [
+          "intake"
+        ],
         "success_criteria": [
           "Every decision and action item is stated in the notes; owners and dates not given are unassigned or no date.",
-          "The body lists every action item."
+          "Discussion without a conclusion is an open question, not a decision."
         ]
       },
       {
@@ -34,12 +45,24 @@
           "tool_name": "email.send",
           "credential_ref": "$alter:credential:email-send",
           "arguments": {
-            "to": { "$from": "summarise", "path": "to" },
-            "subject": { "$from": "summarise", "path": "subject" },
-            "body": { "$from": "summarise", "path": "body" }
+            "to": {
+              "$from": "intake",
+              "path": "recipient"
+            },
+            "subject": {
+              "$from": "summarise",
+              "path": "subject"
+            },
+            "body": {
+              "$from": "summarise",
+              "path": "body"
+            }
           }
         },
-        "depends_on": ["summarise"]
+        "depends_on": [
+          "summarise",
+          "intake"
+        ]
       }
     ]
   },
@@ -47,19 +70,23 @@
     {
       "name": "explicit and unassigned actions",
       "input": {
-        "title": "Launch sync 2 Oct",
-        "recipients": ["team@example.com"],
-        "notes": "Agreed: launch moves to 20 Oct. Ravi to update the pricing page by 10 Oct. Someone needs to brief support (no owner yet). Discussed a referral scheme, no conclusion."
+        "title": "Launch sync",
+        "recipient": "team@example.com",
+        "notes": "Agreed: the launch moves to the next release. Marketing lead to update the pricing page before launch. Someone needs to brief support, no owner yet. Discussed a referral scheme, no conclusion."
       },
       "success_criteria": [
-        "The only decision is that the launch moves to 20 Oct; the referral scheme is an open question, not a decision.",
-        "Action items are: Ravi updates the pricing page by 10 Oct, and briefing support with no owner and no date.",
-        "The email is addressed to team@example.com."
+        "The only decision is that the launch moves to the next release; the referral scheme is an open question, not a decision.",
+        "Action items are: the marketing lead updates the pricing page before launch, and briefing support with no owner and no date.",
+        "The email lists both action items."
       ]
     },
     {
       "name": "meeting with no decisions",
-      "input": { "title": "Brainstorm", "recipients": ["lead@example.com"], "notes": "Talked through ideas for the newsletter. Nothing decided. Will continue next week." },
+      "input": {
+        "title": "Brainstorm",
+        "recipient": "lead@example.com",
+        "notes": "Talked through ideas for the newsletter. Nothing decided."
+      },
       "success_criteria": [
         "No decision and no action item is reported; both sections say none recorded.",
         "Nothing is invented beyond the notes."

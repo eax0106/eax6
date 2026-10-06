@@ -84,7 +84,9 @@ def test_seeded_rows_are_exactly_the_reviewed_files(database: tuple[str, str]) -
             )
         ).all()
     engine.dispose()
-    files = {path.name: sha256(path.read_bytes()).hexdigest() for path in TEMPLATE_DIR.glob("*.json")}
+    files = {
+        path.name: sha256(path.read_bytes()).hexdigest() for path in TEMPLATE_DIR.glob("*.json")
+    }
     assert len(rows) == 8
     assert {row[4] for row in rows} == set(files.values())
     assert all(row[1] == 1 and row[2] == "active" for row in rows)
@@ -106,9 +108,11 @@ def test_routes_list_and_read_templates_for_any_caller(database: tuple[str, str]
         assert detail.status_code == 200
         body = detail.json()
         assert body["version"] == 1
-        assert body["skeleton"]["entry_point"] == "plan_search"
+        assert body["skeleton"]["entry_point"] == "intake"
         assert len(body["test_cases"]) == 2
-        assert client.get("/internal/capability-registry/templates/not-a-template").status_code == 404
+        assert (
+            client.get("/internal/capability-registry/templates/not-a-template").status_code == 404
+        )
 
 
 def test_a_tenant_cannot_store_or_own_a_template(database: tuple[str, str]) -> None:
@@ -121,6 +125,14 @@ def test_a_tenant_cannot_store_or_own_a_template(database: tuple[str, str]) -> N
         "'t', 's', '{}', repeat('a', 64), '{}')"
     )
     with engine.connect() as connection:
+        protected = connection.execute(sa.text(
+            "SELECT c.relrowsecurity, c.relforcerowsecurity, "
+            "r.rolsuper, r.rolbypassrls, c.relowner = r.oid "
+            "FROM pg_class c JOIN pg_roles r ON r.rolname = current_user "
+            "WHERE c.relname = 'capability_registry_templates'"
+        )).one()
+        assert tuple(protected) == (True, True, False, False, False)
+        connection.rollback()
         # A tenant writing a template it owns: refused by the platform-only CHECK.
         with pytest.raises(sa.exc.IntegrityError), connection.begin():
             connection.execute(
@@ -145,18 +157,26 @@ def test_a_tenant_cannot_store_or_own_a_template(database: tuple[str, str]) -> N
     engine.dispose()
 
 
-def test_downgrade_removes_the_table_and_upgrade_restores_the_set(database: tuple[str, str]) -> None:
+def test_downgrade_removes_the_table_and_upgrade_restores_the_set(
+    database: tuple[str, str],
+) -> None:
     owner_url, _ = database
     config = _alembic(owner_url)
     command.downgrade(config, "0010")
     engine = sa.create_engine(owner_url)
     with engine.connect() as connection:
-        assert connection.execute(
-            sa.text("SELECT to_regclass('capability_registry_templates')")
-        ).scalar_one() is None
+        assert (
+            connection.execute(
+                sa.text("SELECT to_regclass('capability_registry_templates')")
+            ).scalar_one()
+            is None
+        )
     command.upgrade(config, "head")
     with engine.connect() as connection:
-        assert connection.execute(
-            sa.text("SELECT count(*) FROM capability_registry_templates")
-        ).scalar_one() == 8
+        assert (
+            connection.execute(
+                sa.text("SELECT count(*) FROM capability_registry_templates")
+            ).scalar_one()
+            == 8
+        )
     engine.dispose()

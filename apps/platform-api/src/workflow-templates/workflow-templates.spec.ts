@@ -8,7 +8,7 @@ import { PlatformWorkflowTemplatesService } from "./workflow-templates.service";
 
 const id = (prefix: string, n = 1) => `${prefix}_018f4d6e-2b4a-7a3e-8c1a-${String(n).padStart(12, "0")}`;
 const time = "2026-10-06T12:00:00.000Z";
-const actor: ActorContext = { user_id: id("usr"), tenant_id: id("ten"), workspace_id: id("ws"), roles: ["editor"], permissions: [], session_id: "tpl", auth_time: 1 };
+const actor: ActorContext = { user_id: id("usr"), tenant_id: id("ten"), workspace_id: id("ws"), roles: ["editor"], workspaceRoles: [{ workspaceId: id("ws"), role: "editor" }], permissions: [], session_id: "tpl", auth_time: 1 };
 const conversation = { id: id("cnv"), title: "Weekly report digest by email", type: "workflow_builder", status: "active", createdAt: time, updatedAt: time, linkedWorkflowId: id("wf") };
 const summary = { template_id: "weekly-report-digest", version: 1, title: "Weekly report digest by email", summary: "Digest.", requirements: [] };
 

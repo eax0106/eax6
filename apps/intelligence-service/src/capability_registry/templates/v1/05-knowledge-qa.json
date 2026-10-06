@@ -3,25 +3,28 @@
   "title": "Knowledge Q&A over your documents",
   "summary": "A question is answered only from your workspace's uploaded documents (and any text attached to the question), with the sources named; when the documents do not say, the answer says so.",
   "requirements": [
-    { "kind": "documents", "purpose": "Upload the documents to answer from in this workspace's Knowledge area." }
+    {
+      "kind": "documents",
+      "purpose": "Upload the documents to answer from in this workspace's Knowledge area."
+    },
+    {
+      "kind": "trigger",
+      "purpose": "A form or webhook that delivers {question, attached_text}."
+    }
   ],
   "skeleton": {
     "version": "1",
-    "entry_point": "plan_search",
+    "entry_point": "intake",
     "success_criteria": [
       "A supported answer states only what the retrieved passages or attached text say and names its sources.",
       "When no passage or attached text supports an answer, the reply says the documents do not answer the question and makes no claim of its own."
     ],
     "nodes": [
       {
-        "key": "plan_search",
-        "type": "llm",
-        "config": {
-          "model_alias": "FAST",
-          "prompt": "The upstream output is a question (and possibly attached_text). Write one search query for the workspace's documents that would find the passage answering it. Respond with {\"query\": the query, \"question\": the question unchanged, \"attached_text\": the attached text unchanged or null}."
-        },
-        "depends_on": [],
-        "success_criteria": ["question and attached_text are copied unchanged."]
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
       },
       {
         "key": "search",
@@ -30,23 +33,30 @@
           "tool_name": "knowledge.search",
           "credential_ref": "$alter:credential:knowledge-search",
           "arguments": {
-            "query": { "$from": "plan_search", "path": "query" },
+            "query": {
+              "$from": "intake",
+              "path": "question"
+            },
             "topK": 5
           }
         },
-        "depends_on": ["plan_search"]
+        "depends_on": [
+          "intake"
+        ]
       },
       {
         "key": "answer",
         "type": "llm",
         "config": {
           "model_alias": "STANDARD",
-          "prompt": "Answer the question in the upstream output using only the passages returned by the search step and the attached_text. Each passage has a title. If they do not contain the answer, say that the documents do not answer the question. Respond with {\"supported\": bool, \"answer\": the answer, \"sources\": [titles of the passages used, or \"attached text\"]}. Never use outside knowledge."
+          "prompt": "A search output with simulated=true contains only planned arguments and inputs, not retrieved passages. Its query and the original question are not evidence; when no passages or attached text are available, there is no supporting source. Answer the question in the upstream output using only the passages returned by the search step and the attached_text in the submission. Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. If neither contains the answer, say that the documents do not answer the question. Respond with {\"supported\": bool, \"answer\": the answer, \"sources\": [titles of the passages used, or \"attached text\"]}. Never use outside knowledge."
         },
-        "depends_on": ["search", "plan_search"],
+        "depends_on": [
+          "search",
+          "intake"
+        ],
         "success_criteria": [
-          "Every statement in answer is found in a passage or the attached text, and sources names where.",
-          "supported is false, sources is empty and answer says the documents do not answer when nothing supports an answer."
+          "Either supported is true and every answer claim is supported by a retrieved passage or attached text with its source named, or supported is false and the answer says the documents do not answer without inventing facts."
         ]
       }
     ]
@@ -54,15 +64,21 @@
   "test_cases": [
     {
       "name": "answer from the attached text",
-      "input": { "question": "How many days do customers have to return an item?", "attached_text": "Returns policy (v3): Unused items can be returned within 14 days of delivery for a full refund. Sale items are final." },
+      "input": {
+        "question": "Is shipping free for an order of INR 1500?",
+        "attached_text": "Shipping policy: shipping is free on orders above INR 999. Orders below that pay a flat INR 79."
+      },
       "success_criteria": [
-        "The answer says 14 days from delivery, for unused items, and cites the attached text.",
+        "The answer says shipping is free because the order is above INR 999, and cites the attached text.",
         "It adds nothing the policy text does not say."
       ]
     },
     {
       "name": "unsupported question is not answered",
-      "input": { "question": "What is the warranty period for the X200 blender?", "attached_text": null },
+      "input": {
+        "question": "What is the warranty period for the X200 blender?",
+        "attached_text": null
+      },
       "success_criteria": [
         "The reply says the documents do not answer the question.",
         "It states no warranty period."

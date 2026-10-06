@@ -23,9 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
 
-TemplateId = Annotated[
-    str, StringConstraints(pattern=r"^[a-z][a-z0-9-]{2,63}$", strict=True)
-]
+TemplateId = Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9-]{2,63}$", strict=True)]
 Text = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=600)]
 Criterion = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=400)]
 

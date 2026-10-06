@@ -16,10 +16,10 @@ const summaries = ["lead-capture-crm-welcome", "support-email-triage", "invoice-
 const missing = { type: "connections_required", templateId: "lead-capture-crm-welcome", templateVersion: 1,
   missing_connections: [{ connector_type: "postgres", node_keys: ["save_lead"], reason: "missing" }], text: "Connect postgres, then use the template again." }
 
-let existingChats: unknown[] = [], registryDown = false, compiled = false
+let existingChats: unknown[] = [], registryDown = false, compiled = false, compileFailed = false
 const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
-  existingChats = []; registryDown = false; compiled = false; fetchMock.mockReset(); vi.stubGlobal("fetch", fetchMock)
+  existingChats = []; registryDown = false; compiled = false; compileFailed = false; fetchMock.mockReset(); vi.stubGlobal("fetch", fetchMock)
   fetchMock.mockImplementation(async (input, init) => {
     const path = String(input)
     if (path.endsWith("/api/v1/workflow-templates")) return registryDown ? Response.json({ detail: "Registry offline" }, { status: 503 }) : Response.json(summaries)
@@ -33,7 +33,7 @@ beforeEach(() => {
     if (path.endsWith("/api/v1/conversations")) return Response.json(existingChats)
     if (path.endsWith(`/conversations/${chatId}`)) return Response.json(chat)
     if (path.endsWith(`/conversations/${chatId}/messages`)) return Response.json([{ id: "msg_00000000-0000-7000-8000-000000000001", conversationId: chatId,
-      role: "system", kind: "action", content: missing, createdAt: time }])
+      role: "system", kind: "action", content: compileFailed ? { type: "template_failed", templateId: "lead-capture-crm-welcome", text: "Template could not compile. Try it again from here." } : missing, createdAt: time }])
     return Response.json({ detail: `unexpected ${path}` }, { status: 404 })
   })
 })
@@ -83,6 +83,16 @@ describe("first-run starter templates (D18, design log §19)", () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).endsWith("/workflow-templates"))).toBe(true))
     await waitFor(() => expect(screen.queryByRole("heading", { name: "Start from a template" })).toBeNull())
     expect(screen.getByRole("textbox")).toBeTruthy()
+  })
+
+  it("shows a failed template in its chat and retries into the same draft", async () => {
+    compileFailed = true
+    mount(`/app/conversations/${chatId}`)
+    expect(await screen.findByText("Template could not compile. Try it again from here.")).toBeTruthy()
+    fireEvent.click(screen.getByRole("button", { name: "Try the template again" }))
+    await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes("/instantiate"))).toBe(true))
+    const call = fetchMock.mock.calls.find(([path]) => String(path).includes("/instantiate"))!
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ workflowId })
   })
 
   it("retries the same template into the same workflow once its connection exists", async () => {

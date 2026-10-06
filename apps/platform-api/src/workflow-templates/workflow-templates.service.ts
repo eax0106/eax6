@@ -7,6 +7,7 @@ import type { AuditEventHandler } from "@alterx/shared-clients";
 import { EngineClient, type EnginePath, type EngineRequestBody } from "../engine";
 import type { ActorContext } from "../rbac/types";
 import { workflowCallerContext } from "../workflows/workflow.service";
+import { WorkflowHttpError } from "../workflows/problem";
 import { parseWorkflowInput } from "../workflows/validation";
 
 export const WORKFLOW_TEMPLATES_AUDIT_CLIENT = Symbol("WORKFLOW_TEMPLATES_AUDIT_CLIENT");
@@ -27,6 +28,10 @@ export class PlatformWorkflowTemplatesService {
   }
 
   async instantiate(templateId: string, body: unknown, actor: ActorContext, traceparent: string | undefined, key: string): Promise<InstantiateWorkflowTemplateResult> {
+    const binding = actor.workspaceRoles?.find(row => row.workspaceId.replace(/^ws_/, "") === actor.workspace_id?.replace(/^ws_/, ""));
+    if (!binding || !["admin", "editor"].includes(binding.role)) {
+      throw new WorkflowHttpError(403, "TEMPLATE_WORKSPACE_ROLE_REQUIRED", "Edit rights in this workspace are required", "/api/v1/workflow-templates");
+    }
     const id = parseWorkflowInput(WorkflowTemplateIdSchema, templateId, "/api/v1/workflow-templates");
     const path: EnginePath = `/api/v1/workflow-templates/${encodeURIComponent(id)}/instantiate`;
     const input = parseWorkflowInput(InstantiateWorkflowTemplateRequestSchema, body ?? {}, path);
