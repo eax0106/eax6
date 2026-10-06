@@ -14,6 +14,8 @@ import { createMockMutableSecretsProvider } from "@alterx/shared-clients";
 import { PlatformDeletionService } from "../deletion/platform-deletion.service";
 import { PlatformDeletionModule } from "../deletion/platform-deletion.module";
 import { AdminBillingRepository } from "./admin-billing.repository";
+import { CreditPurchaseModule } from "../credit-purchases/credit-purchase.module";
+import { CreditPurchaseRepository } from "../credit-purchases/credit-purchase.repository";
 
 const tenantA = "00000000-0000-7000-8000-0000000000a1";
 const tenantB = "00000000-0000-7000-8000-0000000000b1";
@@ -23,9 +25,9 @@ const appPassword = randomUUID(), operationsPassword = randomUUID(), retentionPa
 const appFunctions = [
   "erase_tenant_action_annotations(uuid,text)", "erase_tenant_payout_ledger(uuid,text)",
   "erase_tenant_listings(uuid,text)", "erase_tenant_marketplace_governance(uuid,text)",
-  "erase_tenant_abuse_signal_actions(uuid,text)", "erase_tenant_billing_admin_operations(uuid,text)",
+  "erase_tenant_abuse_signal_actions(uuid,text)", "erase_tenant_billing_admin_operations(uuid,text)", "erase_tenant_credit_purchases(uuid,text)",
 ];
-const operationsFunctions = ["admin_list_staff_billing_issues()", "list_billing_sync_tenants(uuid,integer)", "pseudonymise_orphan_users(uuid[])"];
+const operationsFunctions = ["admin_list_staff_billing_issues()", "list_billing_sync_tenants(uuid,integer)", "pseudonymise_orphan_users(uuid[])", "list_due_credit_purchases(integer)"];
 
 // Own isolated server: the real deployment kit changes runtime passwords and
 // must never be exercised against another local test's shared database roles.
@@ -116,6 +118,13 @@ describe("billing actual EC2 runtime database identities", () => {
       factoryPools.add(policy.pool); factoryPools.add(policy.inventoryPool);
       expect((await policy.pool.query("SELECT current_user AS identity")).rows).toEqual([{ identity: "platform_app" }]);
       expect((await policy.inventoryPool.query("SELECT current_user AS identity")).rows).toEqual([{ identity: "platform_operations" }]);
+      const purchaseProviders = Reflect.getMetadata("providers", CreditPurchaseModule) as { provide: unknown; useFactory: () => unknown }[];
+      const purchases = purchaseProviders.find(provider => provider.provide === CreditPurchaseRepository)!.useFactory() as CreditPurchaseRepository;
+      const purchasePools = purchases as unknown as { pool: pg.Pool; inventoryPool: pg.Pool };
+      factoryPools.add(purchasePools.pool); factoryPools.add(purchasePools.inventoryPool);
+      expect((await purchasePools.pool.query("SELECT current_user AS identity")).rows).toEqual([{ identity: "platform_app" }]);
+      expect((await purchasePools.inventoryPool.query("SELECT current_user AS identity")).rows).toEqual([{ identity: "platform_operations" }]);
+      expect(await purchases.due()).toEqual([]);
       delete process.env.OPERATIONS_PLATFORM_DATABASE_URL; process.env.DATABASE_URL = container.getConnectionUri();
       const local = providers.find(provider => provider.provide === AdminBillingRepository)!.useFactory!() as AdminBillingRepository;
       factoryPools.add((local as unknown as { pool: pg.Pool }).pool);

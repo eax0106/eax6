@@ -4,6 +4,7 @@ import {
   RazorpayBillingProvider,
 } from "@alterx/adapters";
 import type { SecretsProvider } from "@alterx/shared-clients";
+import { CreditPurchaseModule } from "../credit-purchases/credit-purchase.module";
 import {billingDatabaseFromEnvironment, billingOperationsDatabaseFromEnvironment} from "./config";
 import { sharedPool } from "../db/shared-pool";
 import {
@@ -36,7 +37,7 @@ import {
 } from "./tokens";
 
 @Module({
-  imports: [IdempotencyModule, EntitlementsModule, AdminAuditModule, StaffModule, BillingPolicyModule],
+  imports: [IdempotencyModule, EntitlementsModule, AdminAuditModule, StaffModule, BillingPolicyModule, CreditPurchaseModule],
   controllers: [BillingController, AdminBillingController],
   providers: [
     {
