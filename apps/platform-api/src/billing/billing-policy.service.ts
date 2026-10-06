@@ -16,7 +16,7 @@ export class BillingPolicyService implements OnModuleInit, OnModuleDestroy {
   private cursor: string | null=null;
   private readonly logger=new Logger(BillingPolicyService.name);
   constructor(private readonly pool: Pool, private readonly config: ConfigProvider, private readonly definitions: PlanDefinitionStore,
-    private readonly client?: BillingPolicyClient,private readonly entitlements?: EntitlementProvider) {}
+    private readonly client?: BillingPolicyClient,private readonly entitlements?: EntitlementProvider, private readonly inventoryPool: Pick<Pool,"query"> = pool) {}
   onModuleInit(): void { this.startBillingPolicyPublication(); }
   private startBillingPolicyPublication(): void {
     if(!this.client)return;
@@ -108,7 +108,7 @@ export class BillingPolicyService implements OnModuleInit, OnModuleDestroy {
   private async drain(): Promise<void> {
     if(this.draining)return;this.draining=true;
     try{
-      const result=await this.pool.query<{tenant_id:string}>("SELECT tenant_id FROM list_billing_sync_tenants($1,100)",[this.cursor]);
+      const result=await this.inventoryPool.query<{tenant_id:string}>("SELECT tenant_id FROM list_billing_sync_tenants($1,100)",[this.cursor]);
       for(let offset=0;offset<result.rows.length;offset+=4){
         const batch=result.rows.slice(offset,offset+4);
         const outcomes=await Promise.allSettled(batch.map(row=>this.synchronize(row.tenant_id)));

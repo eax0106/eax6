@@ -7,6 +7,7 @@ import { CredentialModule } from "../credentials/credential.module";
 import { ENGINE_CONFIG, type EngineConfig } from "../engine";
 import { EngineModule } from "../engine/engine.module";
 import { resolveRuntimeSecret } from "../identity/identity.module";
+import { erasureAdministrationReferenceFromEnvironment } from "./config";
 import { PgErasureStore } from "./pg-erasure-store";
 import { PLATFORM_DELETION_TOKEN_HASH, PlatformDeletionController } from "./platform-deletion.controller";
 import { PlatformDeletionService } from "./platform-deletion.service";
@@ -25,12 +26,13 @@ import { PlatformDeletionService } from "./platform-deletion.service";
       provide: PlatformDeletionService,
       inject: [CREDENTIAL_SECRETS_PROVIDER],
       // The database URL comes through the runtime reference resolver, like the token below, so
-      // this module reads no environment itself.
+      // configured identities are selected explicitly before references resolve.
       useFactory: async (secrets: MutableSecretsProvider) =>
         new PlatformDeletionService(
           new PgErasureStore(sharedPool(await resolveRuntimeSecret("env:DATABASE_URL"))),
           secrets,
           new PgErasureStore(sharedPool(await resolveRuntimeSecret("env:PLATFORM_RETENTION_DATABASE_URL"))),
+          new PgErasureStore(sharedPool(await resolveRuntimeSecret(erasureAdministrationReferenceFromEnvironment(process.env)))),
         ),
     },
     {
