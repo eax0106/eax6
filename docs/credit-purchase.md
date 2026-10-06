@@ -50,5 +50,6 @@ tax record for its statutory window, without actor or GSTIN.
 Verification exercises ordinary PostgreSQL,
 actual tenant sessions, central audit HTTP, the deployed role kit, signed
 notifications, real Engine grants and rendered live UI. Full suites, coverage
-and 23 behavioral fault controls protect these outcomes. Fresh verification and
-exact-head CI remain required before merge.
+and 23 behavioral fault controls protect these outcomes. Fresh verification
+passed all six acceptance gates on the repaired source. Exact-head CI remains
+required before merge.
