@@ -1,0 +1,180 @@
+{
+  "template_id": "whatsapp-faq-responder",
+  "title": "WhatsApp FAQ responder",
+  "summary": "Incoming WhatsApp questions are answered from your FAQ documents and replied to on WhatsApp; anything the FAQ does not cover is passed to your team by email instead of guessed.",
+  "requirements": [
+    {
+      "kind": "whatsapp_account",
+      "purpose": "A connected WhatsApp Business account (Meta). Usable once the Meta account exists."
+    },
+    {
+      "kind": "documents",
+      "purpose": "Upload your FAQ documents in this workspace's Knowledge area."
+    },
+    {
+      "kind": "setting",
+      "purpose": "Replace the example escalation address (support@example.com) with your own in the workflow chat."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "intake",
+    "success_criteria": [
+      "A question the FAQ answers gets one WhatsApp reply to the same sender stating only what the FAQ says.",
+      "A question the FAQ does not answer gets no WhatsApp answer; the original message is passed to the team by email.",
+      "A simple greeting or thanks may get a short courteous reply that makes no factual claim."
+    ],
+    "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
+      {
+        "key": "plan_search",
+        "type": "llm",
+        "config": {
+          "model_alias": "FAST",
+          "prompt": "The upstream output is an inbound WhatsApp message (from, text). Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. Respond with {\"query\": a search query for the FAQ documents (for a greeting or thanks, the message itself), \"small_talk\": true only when the message is just a greeting or thanks with no question}."
+        },
+        "depends_on": [
+          "intake"
+        ],
+        "success_criteria": [
+          "small_talk is true only for a greeting or thanks with no question."
+        ]
+      },
+      {
+        "key": "search",
+        "type": "tool",
+        "config": {
+          "tool_name": "knowledge.search",
+          "credential_ref": "$alter:credential:knowledge-search",
+          "arguments": {
+            "query": {
+              "$from": "plan_search",
+              "path": "query"
+            },
+            "topK": 3
+          }
+        },
+        "depends_on": [
+          "plan_search"
+        ]
+      },
+      {
+        "key": "have_sources",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "answer": "inputs.plan_search.small_talk == true || inputs.search.results.0.text != null",
+            "escalate": "!(inputs.plan_search.small_talk == true || inputs.search.results.0.text != null)"
+          }
+        },
+        "depends_on": [
+          "search",
+          "plan_search"
+        ]
+      },
+      {
+        "key": "answer",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "A search output with simulated=true contains only planned arguments and inputs, not retrieved passages. Its query and the original question are not evidence; when no passages or attached text are available, there is no supporting source. Decide the reply to the WhatsApp message in the submission. Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. If small_talk is true, reply with one short courteous sentence and no facts. Otherwise answer only from the FAQ passages returned by the search step; if they do not answer the question, do not reply. Respond with {\"reply\": bool, \"text\": the reply under 600 characters or null, \"reason\": one sentence}."
+        },
+        "depends_on": [
+          "search",
+          "intake",
+          "plan_search",
+          "have_sources"
+        ],
+        "success_criteria": [
+          "Either the message is just a greeting or thanks and reply is true with a fact-free courtesy, or it is a question and reply is true only if FAQ passages support every claim; otherwise reply is false and text is null."
+        ]
+      },
+      {
+        "key": "decide",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "send_reply": "inputs.answer.reply == true",
+            "escalate": "inputs.answer.reply != true"
+          }
+        },
+        "depends_on": [
+          "answer"
+        ]
+      },
+      {
+        "key": "send_reply",
+        "type": "tool",
+        "config": {
+          "tool_name": "whatsapp.send",
+          "credential_ref": "$alter:credential:whatsapp-send",
+          "arguments": {
+            "to": {
+              "$from": "intake",
+              "path": "from"
+            },
+            "text": {
+              "$from": "answer",
+              "path": "text"
+            }
+          }
+        },
+        "depends_on": [
+          "decide",
+          "answer",
+          "intake"
+        ]
+      },
+      {
+        "key": "escalate",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": "support@example.com",
+            "subject": "WhatsApp question needs a person",
+            "body": {
+              "$from": "intake",
+              "path": "text"
+            }
+          }
+        },
+        "depends_on": [
+          "have_sources",
+          "decide",
+          "intake"
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "unanswered question is escalated, not guessed",
+      "input": {
+        "from": "919812345678",
+        "text": "Do you deliver to the islands, and how long does it take?"
+      },
+      "success_criteria": [
+        "The case plans exactly one escalation email and zero WhatsApp replies.",
+        "The escalation email goes to support@example.com with its body exactly equal to the submitted text field; its subject labels the escalation."
+      ]
+    },
+    {
+      "name": "thanks gets a courteous reply",
+      "input": {
+        "from": "919812345678",
+        "text": "Thank you so much!"
+      },
+      "success_criteria": [
+        "One short courteous WhatsApp reply goes to the sender.",
+        "The reply makes no factual claim and nothing is escalated."
+      ]
+    }
+  ]
+}

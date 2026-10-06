@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { PlatformWorkflowChatModule } from "./workflow-chat/platform-workflow-chat.module";
+import { PlatformWorkflowTemplatesModule } from "./workflow-templates/workflow-templates.module";
 import { DbModule } from "./db/db.module";
 import { AbuseModule } from "./abuse/abuse.module";
 import { EntitlementsModule } from "./entitlements/entitlements.module";
@@ -81,6 +82,7 @@ import { TenantBenchmarksModule } from "./tenant-benchmarks/tenant-benchmarks.mo
     WorkflowModule,
     WorkflowFoldersModule,
     PlatformWorkflowChatModule,
+    PlatformWorkflowTemplatesModule,
     ProjectModule,
     RunModule,
     EventModule,
