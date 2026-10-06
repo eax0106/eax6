@@ -44,6 +44,7 @@ import {
 import { MODELGW_PROTO_PATH } from "./gateway/grpc.constants";
 import { resolve } from "node:path";
 import { OperationalConfigProvider } from "./operations/operational-config-provider";
+import { LocalSmokeBudget, LOCAL_SMOKE_CEILING_USD, localSmokePermitted } from "./gateway/local-smoke-budget";
 
 function createConfigProvider(
   environment: ReturnType<typeof loadModelGatewayEnvironment>,
@@ -88,6 +89,11 @@ async function createModelProvider(
   }
 
   const appConfigEnvironment: ModelGatewayAppConfigEnvironment = environment;
+  if (environment.localSmokePermitFile) {
+    return new FailoverModelProvider(new AwsBedrockModelProvider({ region: environment.region }), {}, {
+      store, parameterName: providerControlParameterName(environment),
+    });
+  }
   const secretsProvider = new AwsSecretsManagerProvider({
     region: environment.region,
   });
@@ -220,6 +226,12 @@ function createQueueProvider(
 
 async function bootstrap(): Promise<void> {
   const environment = loadModelGatewayEnvironment(process.env);
+  let localSmokeBudget: LocalSmokeBudget | undefined;
+  if (environment.localSmokePermitFile) {
+    const permitFile = environment.localSmokePermitFile;
+    localSmokeBudget = new LocalSmokeBudget((tenantId, runId) => localSmokePermitted(permitFile, tenantId, runId));
+    console.info(`Local smoke lifetime ceiling: USD ${LOCAL_SMOKE_CEILING_USD}`);
+  }
   const parameterStore = createParameterStore(environment);
   const configProvider = createConfigProvider(environment, parameterStore);
   const modelProvider = await createModelProvider(environment, parameterStore);
@@ -255,6 +267,7 @@ async function bootstrap(): Promise<void> {
       costEventsQueueName,
       adminServiceToken,
       costClient,
+      localSmokeBudget,
     ),
     new FastifyAdapter(),
   );

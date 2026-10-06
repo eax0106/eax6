@@ -319,3 +319,10 @@ review of the eight templates, account/credential setup, live tool-policy
 activation, Transcribe subscription, replacement image model/region and GHCR
 package-write permission remain the recorded launch prerequisites. D30's actual
 Titan re-embed and Polly results stand; unavailable provider behavior is retained.
+
+
+### C148 — M1 local MVP startup and guarded smoke
+
+| Item | Change and evidence | State | Branch |
+| --- | --- | --- | --- |
+| C148 | Checkout-owned startup/shutdown reuses Compose, bootstrap, migrations, issuer and seed; every HTTP identity and gRPC transport is checked. Smoke signs in, instantiates and compiles an email-only template, then reads persisted run verdicts and cost. The local real-model profile starts disarmed and requires a process/tenant/run permit; output limits, one SDK attempt, priced models and a conservative USD0.25 lifetime allowance apply before paid dispatch. Native lifecycle controls8 pass; Gateway97 pass with3 existing integration skips, typecheck/lint/build and architecture checks pass with0 added findings. Dispatch and environment controls fail on their original implementations. | Build in review; full fresh-stack, stopped-service and two specifically approved paid-smoke proofs remain pending. No new paid inference has run. Merge requires those proofs and directly read exact-head-green CI. | codex/local-mvp-c148 |

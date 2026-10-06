@@ -4,6 +4,50 @@ Root Compose stack runs Engine dependencies without live AWS, Temporal Cloud,
 Grafana Cloud, or Sentry accounts. `platform-db` remains Platform-owned and is
 not used by Engine services.
 
+## MVP quick start
+
+Use Node 22 (see `.nvmrc`), pnpm 9.15.9, `uv`, and Docker Desktop with
+Compose v2. The AWS credential chain must already have access to the local
+AppConfig/SSM/Secrets Manager references below and Bedrock in `ap-south-1`.
+These scripts do not create accounts or configure cloud resources.
+
+From the repository root:
+
+```bash
+scripts/local/mvp-up.sh
+node scripts/local/mvp-smoke.mjs --health-only
+node scripts/local/mvp-smoke.mjs
+# Only after explicit approval for the displayed spend ceiling:
+node scripts/local/mvp-smoke.mjs --apply
+scripts/local/mvp-down.sh
+```
+
+Startup builds the services, starts a checkout-specific Compose project,
+migrates the databases, seeds the local member, then starts the issuer and
+every application. It refuses occupied ports before starting resources.
+Open the printed web URL; HTTP health requires the expected service identity,
+and gRPC readiness requires an HTTP/2 acknowledgement. Logs and process
+ownership live in `tmp/local-mvp/`; configuration is generated once in
+`.env.mvp.local`. Both are private and gitignored. Stop preserves database
+volumes and credentials, and only stops resources recorded for this checkout.
+
+Smoke signs in as the seeded mock member, lists and instantiates the meeting
+notes template, supplies a small local intake, recompiles, and reads the real
+run's persisted status, verification and cost. Without `--apply`, it stops
+before creating a run. Email and other outside actions remain mocked.
+
+The dedicated real Bedrock gateway reserves conservative cost **before** paid
+invoke, stream, or embedding requests. It starts disarmed; `--apply` creates
+a private permit for the owned Gateway process, seeded tenant and created run,
+then removes it on exit. Embeddings share the tenant's allowance.
+Its entire process lifetime has a
+USD 0.25 allowance, including failed attempts and recovery; smoke prints this
+bound first. Output is capped at 1,024 tokens, SDK attempts at one, and direct
+provider failover is unavailable in this local profile. Unknown model prices
+or exhausted allowance refuse the next paid request. A stack restart resets
+the allowance and requires renewed spend approval before another paid smoke.
+Cost Ledger's reported INR charge is distinct from AWS's USD list-price bound.
+
 ## Prerequisites
 
 - Docker Desktop with Compose v2

@@ -116,6 +116,9 @@ jobs:
         # C16 fixes), this fails the gate.
         run: scripts/check-stack-health-script.sh
 
+      - name: local MVP lifecycle controls
+        run: node --test scripts/local/mvp.spec.mjs
+
       - name: set up terraform
         uses: hashicorp/setup-terraform@v3
         with:

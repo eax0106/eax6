@@ -18,6 +18,7 @@ import {
 } from "./operations/model-gateway-operations.controller";
 import { OperationalConfigProvider } from "./operations/operational-config-provider";
 import { FailoverModelProvider, type CostHandlerClient } from "@alterx/adapters";
+import type { LocalSmokeBudget } from "./gateway/local-smoke-budget";
 
 @Module({})
 export class AppModule {
@@ -31,6 +32,7 @@ export class AppModule {
     costEventsQueueName: string,
     adminServiceToken: string,
     costClient: CostHandlerClient,
+    localSmokeBudget?: LocalSmokeBudget,
   ): DynamicModule {
     return {
       module: AppModule,
@@ -55,6 +57,7 @@ export class AppModule {
             queueProvider,
             costEventsQueueName,
             costClient,
+            localSmokeBudget,
           ),
         },
       ],

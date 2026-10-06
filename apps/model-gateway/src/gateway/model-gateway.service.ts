@@ -27,6 +27,7 @@ import {
 import type { CostHandlerClient } from "@alterx/adapters";
 
 import { costEventId } from "./cost-event-id";
+import type { LocalSmokeBudget } from "./local-smoke-budget";
 
 // Constant used as a last-resort fallback if Cost Ledger is unreachable.
 const ESTIMATED_USD_PER_TOKEN = 0.00001;
@@ -121,6 +122,7 @@ export class ModelGatewayService implements ModelgwHandler {
     private readonly queueProvider: QueueProvider,
     private readonly costEventsQueueName: string,
     private readonly costClient: CostHandlerClient,
+    private readonly localSmokeBudget?: Pick<LocalSmokeBudget, "prepareInput" | "reserveModel" | "reserveEmbedding">,
   ) {}
 
 
@@ -202,6 +204,7 @@ export class ModelGatewayService implements ModelgwHandler {
       request.tenant_id,
       request.input_json,
     );
+    if (this.localSmokeBudget) redacted.redactedText = this.localSmokeBudget.prepareInput(redacted.redactedText);
 
     // Keyed once and reused for both the lookup and (on a miss) the store
     // below.
@@ -220,6 +223,7 @@ export class ModelGatewayService implements ModelgwHandler {
     }
 
     let result: Awaited<ReturnType<ModelProvider["invoke"]>>;
+    this.localSmokeBudget?.reserveModel(binding.model_id, redacted.redactedText, binding.fallback_chain, request.tenant_id, request.run_id);
     try {
       result = await this.modelProvider.invoke({
         tenantId: request.tenant_id,
@@ -244,6 +248,7 @@ export class ModelGatewayService implements ModelgwHandler {
     this.#validateOutputShape(result.outputJson);
 
     const usage = this.#parseUsage(result.usageJson);
+    this.#recordLocalSmokeUsage(request, result.servedModelId ?? binding.model_id, result.servedBy, usage);
     const totalTokens = usage.input_tokens + usage.output_tokens;
     
     const unitPriceMinor = await this.#resolveUnitPriceBestEffort(result.servedBy, "tokens");
@@ -311,6 +316,7 @@ export class ModelGatewayService implements ModelgwHandler {
       request.tenant_id,
       request.input_json,
     );
+    if (this.localSmokeBudget) redacted.redactedText = this.localSmokeBudget.prepareInput(redacted.redactedText);
 
     // ENGINE-FIX-B5-19: mirrors invoke()'s own key-once-then-check-cache
     // sequence above -- same reasons apply here (cache check before any
@@ -358,6 +364,7 @@ export class ModelGatewayService implements ModelgwHandler {
     let accumulatedContent = "";
     let finalUsageJson: string | undefined;
     let finalCostUsd = "";
+    this.localSmokeBudget?.reserveModel(binding.model_id, redacted.redactedText, binding.fallback_chain, request.tenant_id, request.run_id);
     try {
       for await (const chunk of this.modelProvider.stream({
         tenantId: request.tenant_id,
@@ -393,6 +400,7 @@ export class ModelGatewayService implements ModelgwHandler {
           finalSeen = true;
           finalUsageJson = chunk.usageJson;
           const usage = this.#parseUsage(chunk.usageJson);
+          this.#recordLocalSmokeUsage(request, chunk.servedModelId ?? binding.model_id, chunk.servedBy, usage);
           const totalTokens = usage.input_tokens + usage.output_tokens;
           const unitPriceMinor = await this.#resolveUnitPriceBestEffort(chunk.servedBy, "tokens");
           const estimatedCostUsd = (totalTokens * unitPriceMinor) / (100 * FALLBACK_USD_TO_INR_RATE);
@@ -490,6 +498,7 @@ export class ModelGatewayService implements ModelgwHandler {
       throw new InvalidEmbeddingDimensionsError(request.dimensions);
     }
     const dimensions: EmbeddingDimensions = request.dimensions;
+    this.localSmokeBudget?.reserveEmbedding(request.text, request.tenant_id);
     const result = await this.embeddingProvider.embed({
       tenantId: request.tenant_id,
       text: request.text,
@@ -520,6 +529,17 @@ export class ModelGatewayService implements ModelgwHandler {
         "output_json must decode to a JSON object",
       );
     }
+  }
+
+  #recordLocalSmokeUsage(
+    request: ModelgwInvokeRequest | ModelgwStreamRequest,
+    modelId: string,
+    provider: string,
+    usage: { input_tokens: number; output_tokens: number },
+  ): void {
+    if (this.localSmokeBudget) console.info(JSON.stringify({ localSmokeUsage: {
+      runId: request.run_id, nodeExecutionId: request.node_execution_id, modelId, provider, ...usage,
+    } }));
   }
 
   #parseUsage(usageJson: string) {

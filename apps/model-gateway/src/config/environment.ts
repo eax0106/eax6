@@ -1,4 +1,5 @@
 import { createEnvironmentValidators } from "@alterx/adapters";
+import { isAbsolute } from "node:path";
 
 const ALTER_ENVIRONMENTS = ["local", "dev", "staging", "prod"] as const;
 
@@ -10,6 +11,7 @@ interface ModelGatewayEnvironmentBase {
   readonly httpPort: number;
   readonly grpcBindAddress: string;
   readonly costLedgerGrpcAddress: string;
+  readonly localSmokePermitFile?: string;
 }
 
 export interface ModelGatewayAppConfigEnvironment
@@ -123,6 +125,16 @@ export function loadModelGatewayEnvironment(
   // running against the local mocks.
   const mode = runtimeMode(environment);
   const configSource = readConfigSource(environment);
+  const localSmoke = environment.MODEL_GATEWAY_LOCAL_SMOKE;
+  if (localSmoke !== undefined && (localSmoke !== "1" || alterEnvironment !== "local"
+    || mode !== "real" || environment.AWS_MAX_ATTEMPTS !== "1")) {
+    throw new ModelGatewayConfigurationError("MODEL_GATEWAY_LOCAL_SMOKE",
+      "requires local real runtime and AWS_MAX_ATTEMPTS=1");
+  }
+  const permitFile = localSmoke === "1" ? requireValue(environment, "MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE") : undefined;
+  if (permitFile && !isAbsolute(permitFile)) {
+    throw new ModelGatewayConfigurationError("MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE", "must be an absolute local path");
+  }
   if (mode === "real" && configSource !== "appconfig") {
     throw new ModelGatewayConfigurationError(
       "ALTER_CONFIG_SOURCE",
@@ -163,6 +175,7 @@ export function loadModelGatewayEnvironment(
   }
 
   const baseEnvironment: ModelGatewayEnvironmentBase = {
+    ...(permitFile ? { localSmokePermitFile: permitFile } : {}),
     alterEnvironment:
       alterEnvironment as ModelGatewayEnvironment["alterEnvironment"],
     serviceName,
