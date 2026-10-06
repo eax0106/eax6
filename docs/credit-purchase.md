@@ -18,7 +18,9 @@ Central audit acknowledgement and local commit are separate durable operations.
 The adapter creates a Razorpay Payment Link using the durable purchase id as
 its unique reference, with partial payments, reminders and customer notifications
 disabled. Its reference lookup and named reads validate actual tenant, link,
-amount, currency, GSTIN and captured payment evidence. Only a matching fully
+amount, currency, GSTIN and captured payment evidence. Nested payment receipts
+are bound to that validated parent checkout; an explicit link id must match,
+while documented receipts that omit it remain valid. Only a matching fully
 paid purchase enqueues its original credit quantity through the existing Engine
 delivery. A lost or malformed acknowledgement retains the same payment key and
 quantity for recovery. Delivery is shown only after the durable outbox records
@@ -45,8 +47,8 @@ erasure removes purchase history through the exact active manifest helper while
 preserving other tenants. The existing legal hold retains only the minimal
 tax record for its statutory window, without actor or GSTIN.
 
-All six self-verification gates pass. Native tests cover ordinary PostgreSQL,
+Verification exercises ordinary PostgreSQL,
 actual tenant sessions, central audit HTTP, the deployed role kit, signed
 notifications, real Engine grants and rendered live UI. Full suites, coverage
-and 22 behavioral fault controls pass. Fresh verification and exact-head CI
-remain required before merge.
+and 23 behavioral fault controls protect these outcomes. Fresh verification and
+exact-head CI remain required before merge.

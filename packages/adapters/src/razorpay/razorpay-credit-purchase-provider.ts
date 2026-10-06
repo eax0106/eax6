@@ -107,7 +107,7 @@ function parseCheckout(value: unknown, input: CreditPurchaseProviderInput): Cred
   const payments = rawPayments.map((raw): CreditPurchasePayment => {
     const payment = object(raw), paymentId = payment["payment_id"], created = payment["created_at"];
     if (typeof paymentId !== "string" || !/^pay_[A-Za-z0-9]{1,100}$/.test(paymentId) ||
-        payment["plink_id"] !== id || payment["status"] !== "captured" ||
+        (payment["plink_id"] !== undefined && payment["plink_id"] !== id) || payment["status"] !== "captured" ||
         typeof created !== "number" || !Number.isSafeInteger(created) || created <= 0 || created > 253_402_300_799) {
       throw new Error("Malformed captured credit checkout payment");
     }

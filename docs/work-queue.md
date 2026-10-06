@@ -269,3 +269,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change and evidence | Status | Branch |
 | --- | --- | --- | --- |
 | C140 | Six advisories published 2026-10-06 (1241202 sprintf-js, 1241205 smol-toml, 1241209 source-map-js, 1241210 proxy-addr, 1241217 and 1241219 nx) failed the dependency scan for every open PR, as C84 did on 1 October. All are in development tooling (the Nx toolchain, its Vite and Nest plugins). `nx` and the four `@nx/*` packages move from 23.1.1 to 23.2.1; four root overrides lift `smol-toml`, `source-map-js` and `proxy-addr` to their patched lines and take `argparse` to 2.x (js-yaml 3 loads argparse only for its command-line tool, which nothing here runs; this removes sprintf-js, which has no patched release). The audit baseline is unchanged. **Verification:** `pnpm audit` before the change listed the six new ids plus baselined 1102341; after it lists only 1102341. Typecheck passes for all 23 projects, the shared packages build, platform-web tests 487 passed, tool-gateway lint has no errors, architecture gates ok. **Not done:** the full engine and platform suites were not rerun locally; CI runs them. | done (this PR) | `build/deps-audit-1006` |
+
+### C142 — D22 purchase continuation and provider contract
+
+| Item | Change | State | Branch |
+|---|---|---|---|
+| C142 | Continue C133 on current main; preserve runtime and benchmark merges. Accept documented captured Razorpay receipts with validated parent checkout binding. Regression fails on old parser and passes after repair; native and full-suite verification continues with 23 distinct fault controls. Original C133 worktree remains preserved. | Current-source verification and exact-head CI pending | codex/credit-finish-c142 |

@@ -91,6 +91,16 @@ describe("actual Razorpay credit purchase HTTP on a controlled provider edge", (
       await expect(provider.get(input, "plink_CreditFixture")).rejects.toThrow();
     }
   });
+  it("accepts documented captured receipts bound by the validated parent checkout", async () => {
+    // Razorpay fetch-id-standard returns these receipt fields without plink_id.
+    response = { ...fixture(), status: "paid", amount_paid: 358, payments: [{
+      payment_id: "pay_CreditFixture", amount: 358, method: "card", status: "captured",
+      created_at: Date.parse("2026-10-05T12:01:00.000Z") / 1000,
+    }] };
+    expect(await provider.get(input, "plink_CreditFixture")).toMatchObject({ status: "paid", payments: [{
+      id: "pay_CreditFixture", linkId: "plink_CreditFixture", amountMinor: 358, status: "captured",
+    }] });
+  });
   it("fails before submission when expiry or credentials are unavailable", async () => {
     await expect(provider.create({ ...input, expiresAt: now.toISOString() })).rejects.toBeInstanceOf(BillingOperationNotSubmittedError);
     const unavailable = new RazorpayCreditPurchaseProvider({ keyIdSecretRef: "missing", keySecretSecretRef: "missing" },
