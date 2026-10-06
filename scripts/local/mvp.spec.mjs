@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
-import {mkdtempSync, mkdirSync, copyFileSync, readFileSync, rmSync, statSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, copyFileSync, readFileSync, rmSync, statSync, writeFileSync, realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
+import {createHash} from 'node:crypto';
 import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -122,7 +123,7 @@ test('restarted services reuse startup mock identity, token references and disar
 });
 
 test('owned startup helper records private process state and refuses a failed native restart', async () => {
-  const dir = mkdtempSync(resolve(tmpdir(), 'mvp-start-control-'));
+  const dir = realpathSync(mkdtempSync(resolve(tmpdir(), 'mvp-start-control-')));
   mkdirSync(resolve(dir, 'scripts/local'), {recursive: true}); mkdirSync(resolve(dir, 'tmp/local-mvp'), {recursive: true});
   copyFileSync('scripts/local/mvp-stack.mjs', resolve(dir, 'scripts/local/mvp-stack.mjs'));
   const {start} = await import(pathToFileURL(resolve(dir, 'scripts/local/mvp-stack.mjs')).href);
@@ -143,4 +144,42 @@ test('owned startup helper records private process state and refuses a failed na
     for (const row of state.processes) await stopOwnedProcess(row);
     rmSync(dir, {recursive: true, force: true});
   }
+});
+
+test('failed-init role recovery targets only the owned project and preserves existing roles', async () => {
+  const dir = realpathSync(mkdtempSync(resolve(tmpdir(), 'mvp-role-control-')));
+  mkdirSync(resolve(dir, 'scripts/local'), {recursive: true}); mkdirSync(resolve(dir, 'tmp/local-mvp'), {recursive: true});
+  copyFileSync('scripts/local/mvp-stack.mjs', resolve(dir, 'scripts/local/mvp-stack.mjs'));
+  const log = resolve(dir, 'calls.jsonl'), repaired = resolve(dir, 'repaired');
+  writeFileSync(resolve(dir, 'docker'), String.raw`#!/bin/sh
+printf '%s\n' "$@" >> "$MVP_CONTROL_FILE"
+printf 'END\n' >> "$MVP_CONTROL_FILE"
+case " $* " in
+  *" bash "*) : > "$MVP_REPAIR_MARKER" ;;
+  *) if [ -f "$MVP_REPAIR_MARKER" ]; then printf true; else printf '%s' "$MVP_ROLE_PROBE"; fi ;;
+esac
+`, {mode: 0o700});
+  const {ensureRetentionRole} = await import(pathToFileURL(resolve(dir, 'scripts/local/mvp-stack.mjs')).href);
+  const env = {...process.env, PATH: `${dir}:${process.env.PATH}`, MVP_CONTROL_FILE: log, MVP_REPAIR_MARKER: repaired, MVP_ROLE_PROBE: ''};
+  try {
+    const nativeProbe = spawnSync(resolve(dir, 'docker'), ['fixture-check'], {env, encoding: 'utf8'});
+    assert.equal(nativeProbe.status, 0, `fixture command: ${nativeProbe.error?.code ?? nativeProbe.stderr}`);
+    rmSync(log);
+    await ensureRetentionRole(env);
+    const calls = readFileSync(log, 'utf8').trim().split('\nEND').filter(Boolean).map(line => line.trim().split('\n'));
+    assert.equal(calls.length, 3, 'Probe, original initializer, restored login probe');
+    const project = `alter-mvp-${createHash('sha256').update(dir + '/').digest('hex').slice(0, 10)}`;
+    for (const args of calls) {
+      assert.deepEqual(args.slice(0, 8), ['compose', '-p', project, '--env-file', resolve(dir, '.env.mvp.local'), 'exec', '-T', 'platform-db']);
+      assert.ok(!args.includes('down') && !args.includes('volume'), 'No DB volume replacement');
+    }
+    assert.deepEqual(calls[1].slice(8), ['bash', '/docker-entrypoint-initdb.d/10-platform-retention.sh']);
+    rmSync(log); await ensureRetentionRole(env);
+    assert.equal(readFileSync(log, 'utf8').trim().split('\nEND').filter(Boolean).length, 1, 'Existing login remains untouched');
+    rmSync(repaired);
+    for (const probe of ['false', 'malformed']) {
+      rmSync(log); await assert.rejects(ensureRetentionRole({...env, MVP_ROLE_PROBE: probe}), /platform_retention role cannot log in/);
+      assert.equal(readFileSync(log, 'utf8').trim().split('\nEND').filter(Boolean).length, 1, 'Existing role not altered');
+    }
+  } finally {rmSync(dir, {recursive: true, force: true});}
 });

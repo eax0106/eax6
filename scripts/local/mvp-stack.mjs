@@ -198,6 +198,20 @@ export function serviceEnvironment(base = loadEnvironment()) {
   return env;
 }
 
+export async function ensureRetentionRole(env) {
+  const args = ['compose', '-p', project, '--env-file', envFile, 'exec', '-T', 'platform-db'];
+  const probe = () => command('docker', [...args, 'psql', '--username=platform_api', '--dbname=platform_db',
+    '-tAc', "SELECT rolcanlogin::text FROM pg_roles WHERE rolname = 'platform_retention'"], env).trim();
+  const login = probe();
+  if (login === 'true') return;
+  if (login === '') {
+    // Recover a failed first init without replacing the checkout's DB volume.
+    await setup('docker', [...args, 'bash', '/docker-entrypoint-initdb.d/10-platform-retention.sh'], env);
+    if (probe() === 'true') return;
+  }
+  throw new Error('platform-db: existing platform_retention role cannot log in; repair local role configuration before startup');
+}
+
 async function up() {
   if (existsSync(stateFile)) throw new Error('MVP state exists; run scripts/local/mvp-down.sh before starting again');
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
@@ -226,6 +240,7 @@ async function up() {
   save(state);
   try {
     await setup('docker', ['compose', '-p', project, '--env-file', envFile, 'up', '-d', '--wait'], env);
+    await ensureRetentionRole(env);
     const byName = new Map(all.map(row => [row.name, row]));
     await start(state, 'local-mock-auth0', process.execPath, ['scripts/local-mock-auth0/server.js'], env, root, byName.get('local-mock-auth0').url);
     await setup('pnpm', ['--filter', '@alterx/platform-api', 'db:migrate'], env);
