@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { api } from "@/api/client"
 import { isLiveApi } from "@/api/http"
 import { queryKeys } from "@/api/query-keys"
+import { Input } from "@/components/ui/input"
+import { PendingDeletionWorkspaces } from "@/features/workspace/pages/workspace-settings"
 import type { DataExport } from "@/api/live-data-export"
 
 function statusLabel(status: DataExport["status"]): string {
@@ -75,8 +77,17 @@ export function DataControlsPage() {
     }
   }
 
+  const workspace = workspacesQuery.data?.find(item => item.id === workspaceId)
+  const [confirmName, setConfirmName] = React.useState("")
   const deleteMutation = useMutation({
-    mutationFn: () => api.deleteWorkspaceData("all"),
+    mutationFn: () => api.deleteWorkspaceData(isLiveApi ? workspaceId! : "all", isLiveApi ? confirmName : undefined),
+    onSuccess: () => {
+      if (isLiveApi) {
+        setConfirmName("")
+        void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.all })
+        void queryClient.invalidateQueries({ queryKey: queryKeys.workspace.pendingDeletion })
+      }
+    },
   })
 
   const pending = exports.filter((item) => item.status === "requested" || item.status === "running")
@@ -93,8 +104,8 @@ export function DataControlsPage() {
           <label className="flex items-center gap-3 text-sm">
             Workspace
             <select aria-label="Export workspace" className="rounded-md border p-2 bg-background"
-              value={workspaceId} disabled={exportMutation.isPending || Boolean(downloadingId)}
-              onChange={(event) => { setSelectedWorkspaceId(event.target.value); setDownloadError(null) }}>
+              value={workspaceId} disabled={exportMutation.isPending || Boolean(downloadingId) || deleteMutation.isPending}
+              onChange={(event) => { setSelectedWorkspaceId(event.target.value); setDownloadError(null); setConfirmName(""); deleteMutation.reset() }}>
               {workspacesQuery.data.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}
             </select>
           </label>
@@ -170,6 +181,26 @@ export function DataControlsPage() {
             </Button>
           </CardFooter>
         </Card>
+
+        {isLiveApi && <>
+          {workspace && <Card className="border-destructive/50">
+            <CardHeader><CardTitle>Workspace deletion</CardTitle>
+              <CardDescription>Hide this workspace and stop new runs. Restore it within the restore window (7 days by default); after that, its data is permanently deleted.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <label className="block space-y-2">
+                <span>Type {workspace.name} exactly to confirm</span>
+                <Input aria-label="Workspace name to confirm deletion" value={confirmName} onChange={event => setConfirmName(event.target.value)} />
+              </label>
+              {deleteMutation.isError && <p role="alert">Workspace deletion failed. Try again.</p>}
+              {deleteMutation.isSuccess && deleteMutation.data && <p role="status">Workspace scheduled for deletion. Restore until {new Date(deleteMutation.data.deletionDueAt).toLocaleString()}.</p>}
+            </CardContent>
+            <CardFooter><Button variant="danger" disabled={deleteMutation.isPending || confirmName !== workspace.name} onClick={() => deleteMutation.mutate()}>
+              {deleteMutation.isPending ? "Scheduling…" : "Delete workspace"}
+            </Button></CardFooter>
+          </Card>}
+          <PendingDeletionWorkspaces />
+        </>}
 
         {!isLiveApi && (
           <Card className="border-destructive/50 shadow-sm shadow-destructive/10">

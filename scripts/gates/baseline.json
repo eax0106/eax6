@@ -65,7 +65,7 @@
     "apps/platform-web/src/api/services/usage.ts :: Background capability — calls setTimeout() at line 5 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 1,
     "apps/platform-web/src/api/stream.ts :: Background capability — calls setTimeout() at line 25 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 1,
     "apps/platform-web/src/api/stream.ts :: Background capability — runs an awaiting while(true) loop at line 156 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 1,
-    "apps/platform-web/src/features/connections/components/connect-flow-dialog.tsx :: Background capability — calls setTimeout() at line 53 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 2,
+    "apps/platform-web/src/features/connections/components/connect-flow-dialog.tsx :: Background capability — calls setTimeout() at line 56 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 2,
     "apps/platform-web/src/features/money/pages/billing-plans.tsx :: Background capability — calls subscribe() at line 25 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 2,
     "apps/platform-web/src/features/search/components/global-search-modal.tsx :: Background capability — calls setTimeout() at line 23 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 2,
     "packages/adapters/src/agentcore/agentcore-sandbox-provider.ts :: Background capability — calls setTimeout() at line 199 — with no @driver declaration. Name what starts this, or it is machinery with no driver.": 2,

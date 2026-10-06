@@ -319,3 +319,10 @@ review of the eight templates, account/credential setup, live tool-policy
 activation, Transcribe subscription, replacement image model/region and GHCR
 package-write permission remain the recorded launch prerequisites. D30's actual
 Titan re-embed and Polly results stand; unavailable provider behavior is retained.
+
+
+### C150 — M2 local MVP web live wiring
+
+| Item | Change and evidence | State | Branch |
+| --- | --- | --- | --- |
+| C150 | Owner authorized M2 and reuse of D2 workspace deletion. Live create/reconnect use the existing authenticated OAuth authorize and callback routes; tab state carries the original context and reconnect target. Callback clears provider parameters, completes once under React StrictMode, and reports pending Engine synchronization honestly. Reconnect retains the original provider account and connection id through durable state and the existing account upsert. Data controls send the selected workspace and exact typed name to D2 pending deletion and reuse its restore list. Demo behavior remains. Native cookie HTTP, restricted PostgreSQL, idempotency, migration rollback, rendered UI and original-code controls pass. Initial full API1938 plus21 existing skips passes coverage; full web547 and added router/demo checks pass; inventory measures134 async methods with0 missing live paths. Static/build and governance pass; architecture baseline changes only the line of the retained demo timer, with unchanged normalized findings. | Implementation verified locally; current-main integration, exact-head CI and squash merge remain pending. Live GitHub sign-in awaits owner app setup; no outside action or paid call. | codex/mvp-web-c150 |

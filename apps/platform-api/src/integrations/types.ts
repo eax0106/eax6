@@ -10,6 +10,7 @@ export interface ConnectorCatalogEntry {
 
 export interface OAuthAuthorizeInput {
   readonly redirect_uri: string;
+  readonly connection_id?: string;
   readonly tenant_config?: ConnectorTenantConfig;
 }
 
@@ -34,6 +35,7 @@ export interface OAuthCallbackInput {
 }
 
 export interface OAuthStateRecord {
+  readonly connectionId?: string | null;
   readonly tenantId: string;
   readonly id: string;
   readonly workspaceId: string;
