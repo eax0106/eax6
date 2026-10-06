@@ -989,7 +989,9 @@
                       "browser.click",
                       "browser.extract",
                       "browser.session.close",
-                      "email.send"
+                      "email.send",
+                      "knowledge.search",
+                      "whatsapp.send"
                     ]
                   }
                 },
@@ -1056,7 +1058,9 @@
                           "browser.click",
                           "browser.extract",
                           "browser.session.close",
-                          "email.send"
+                          "email.send",
+                          "knowledge.search",
+                          "whatsapp.send"
                         ]
                       }
                     },
@@ -1190,7 +1194,9 @@
                       "browser.click",
                       "browser.extract",
                       "browser.session.close",
-                      "email.send"
+                      "email.send",
+                      "knowledge.search",
+                      "whatsapp.send"
                     ]
                   }
                 },
@@ -1441,7 +1447,9 @@
                       "browser.click",
                       "browser.extract",
                       "browser.session.close",
-                      "email.send"
+                      "email.send",
+                      "knowledge.search",
+                      "whatsapp.send"
                     ]
                   }
                 },
@@ -3720,7 +3728,9 @@
                                 "browser.click",
                                 "browser.extract",
                                 "browser.session.close",
-                                "email.send"
+                                "email.send",
+                                "knowledge.search",
+                                "whatsapp.send"
                               ]
                             }
                           },
@@ -3779,7 +3789,9 @@
                                     "browser.click",
                                     "browser.extract",
                                     "browser.session.close",
-                                    "email.send"
+                                    "email.send",
+                                    "knowledge.search",
+                                    "whatsapp.send"
                                   ]
                                 }
                               },
@@ -4324,7 +4336,9 @@
                                 "browser.click",
                                 "browser.extract",
                                 "browser.session.close",
-                                "email.send"
+                                "email.send",
+                                "knowledge.search",
+                                "whatsapp.send"
                               ]
                             }
                           },
@@ -4383,7 +4397,9 @@
                                     "browser.click",
                                     "browser.extract",
                                     "browser.session.close",
-                                    "email.send"
+                                    "email.send",
+                                    "knowledge.search",
+                                    "whatsapp.send"
                                   ]
                                 }
                               },

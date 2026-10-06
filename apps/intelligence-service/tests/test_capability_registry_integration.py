@@ -284,7 +284,7 @@ def test_migrations_0007_and_0008_upgrade_and_roll_back() -> None:
                 "SELECT count(*) FROM capability_registry_versions "
                 "WHERE provenance ->> 'source' = 'canonical-tool-catalog'"
             )
-            assert connection.execute(seeded).scalar_one() == 11
+            assert connection.execute(seeded).scalar_one() == len(CANONICAL_TOOL_SIDE_EFFECTS)
         command.downgrade(config, "0007")
         with engine.begin() as connection:
             connection.execute(

@@ -28,6 +28,8 @@ CANONICAL_TOOL_SIDE_EFFECTS: dict[str, bool] = {
     "browser.extract": False,
     "browser.session.close": True,
     "email.send": True,
+    "knowledge.search": False,
+    "whatsapp.send": True,
 }
 
 TOOL_CAPABILITY_PREFIX = "tool."

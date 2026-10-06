@@ -21,6 +21,15 @@ describe("mechanicalCheck", () => {
     expect(mechanicalCheck("email.send", {})).toMatchObject({ confirmed: false });
   });
 
+  it("confirms a WhatsApp message only as accepted by WhatsApp", () => {
+    expect(mechanicalCheck("whatsapp.send", { messageId: "wamid.HBgL" })).toMatchObject({
+      confirmed: true,
+      basis: expect.stringContaining("delivery is not confirmed"),
+    });
+    expect(mechanicalCheck("whatsapp.send", { messageId: " " })).toMatchObject({ confirmed: false });
+    expect(mechanicalCheck("whatsapp.send", {})).toMatchObject({ confirmed: false });
+  });
+
   it("records a click as unconfirmable, never as confirmed", () => {
     expect(mechanicalCheck("browser.click", {})).toEqual({
       unconfirmable: true,

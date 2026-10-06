@@ -97,6 +97,7 @@ const POLICY_COLUMNS = `node_key, mode, side_effect_consequence, auto_confirmed_
 
 const CONSEQUENCES: Readonly<Record<string, string>> = {
   "email.send": "this will send emails without asking",
+  "whatsapp.send": "this will send WhatsApp messages without asking",
   "database.insert": "this will write to databases without asking",
   "database.update": "this will write to databases without asking",
   "database.delete": "this will delete database records without asking",

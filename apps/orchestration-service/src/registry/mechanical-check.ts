@@ -11,6 +11,8 @@
  * - email.send: the provider's message id. That proves the provider
  *   accepted the message, not that it was delivered; delivery needs the
  *   provider's event stream; later Delivery/Bounce updates the side-effect.
+ * - whatsapp.send: the WhatsApp Cloud API's message id, same standing as
+ *   email.send: accepted by Meta, not delivered.
  * - browser.click: a declared expected page state is checked against the
  *   post-click snapshot; without one the action stays unconfirmed.
  */
@@ -39,6 +41,12 @@ export function mechanicalCheck(
     return typeof messageId === "string" && messageId.trim().length > 0
       ? { confirmed: true, basis: "provider accepted the message (message id returned); delivery is not confirmed" }
       : { confirmed: false, reason: "email.send returned no provider message id" };
+  }
+  if (toolName === "whatsapp.send") {
+    const messageId = output["messageId"];
+    return typeof messageId === "string" && messageId.trim().length > 0
+      ? { confirmed: true, basis: "WhatsApp accepted the message (message id returned); delivery is not confirmed" }
+      : { confirmed: false, reason: "whatsapp.send returned no WhatsApp message id" };
   }
   if (toolName === "browser.click") {
     const confirmation = output["confirmation"];

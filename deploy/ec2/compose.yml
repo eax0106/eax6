@@ -156,6 +156,12 @@ services:
     <<: *python
     image: ${ALTER_REGISTRY:-alter}/ads-core:${ALTER_IMAGE_TAG:-dev}
     command: ["uvicorn", "src.main:app", "--host", "127.0.0.1", "--port", "${ADS_CORE_PORT:-8010}"]
+  # The ADS query surface (ADS_Q_GRPC_BIND_ADDRESS, default 0.0.0.0:50050) that
+  # tool-gateway's knowledge.search reads through.
+  ads-grpc:
+    <<: *python
+    image: ${ALTER_REGISTRY:-alter}/ads-core:${ALTER_IMAGE_TAG:-dev}
+    command: ["python", "-m", "src.query.grpc_server"]
   intelligence-service:
     <<: *python
     image: ${ALTER_REGISTRY:-alter}/intelligence-service:${ALTER_IMAGE_TAG:-dev}
