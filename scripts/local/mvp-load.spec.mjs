@@ -3,14 +3,15 @@ import { test } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
-import { simulationBatch, assertStack, assertOwnedProcess, validateTrace, summarize } from './mvp-load.mjs';
+import { simulationBatch, assertStack, assertOwnedProcess, validateTrace, summarize, mockGatewayEnvironment, durableDag, assertDurableCompletion } from './mvp-load.mjs';
 
 const root = '/owned/checkout/';
 const state = { root, ready: true, project: `alter-mvp-${createHash('sha256').update(root).digest('hex').slice(0, 10)}`,
   smokeCeilingUsd: .25, gatewayDigest: 'guarded-build', processes: [
     { name: 'orchestration-service', pid: 123, stamp: 'engine-start' },
-    { name: 'model-gateway', pid: 124, stamp: 'gateway-start' } ] };
-const stamp = pid => ({123: 'engine-start', 124: 'gateway-start'})[pid];
+    { name: 'model-gateway', pid: 124, stamp: 'gateway-start' },
+    { name: 'background-workers', pid: 125, stamp: 'worker-start' } ] };
+const stamp = pid => ({123: 'engine-start', 124: 'gateway-start', 125: 'worker-start'})[pid];
 
 test('ownership and zero-spend prerequisites fail closed before lifecycle changes', () => {
   assert.doesNotThrow(() => assertStack(state, root, stamp, 'guarded-build', false));
@@ -83,4 +84,39 @@ test('invalid trace and missing samples cannot certify recovery', () => {
   assert.deepEqual(summarize([{ok: true, ms: 1}, {ok: true, ms: 2}, {ok: false, ms: 100}]),
     {total: 3, errors: 1, errorRate: 1/3, p50Ms: 1, p95Ms: 2});
   assert.throws(() => summarize([]));
+});
+
+test('durable evidence refuses duplicate effects, replaced executions and paid mock settings', () => {
+  const env = mockGatewayEnvironment({ALTER_ENV: 'local', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566',
+    RUNTIME_MODE: 'real', MODEL_GATEWAY_LOCAL_SMOKE: '1', MODEL_GATEWAY_EMBEDDING_PROVIDER: 'titan', AWS_PROFILE: 'paid',
+    AWS_ENDPOINT_URL_BEDROCK_RUNTIME: 'https://bedrock.example'});
+  assert.equal(env.RUNTIME_MODE, 'mock'); assert.equal(env.ALTER_CONFIG_SOURCE, 'local-file');
+  assert.equal(env.MODEL_GATEWAY_EMBEDDING_PROVIDER, 'mock'); assert.equal(env.MODEL_GATEWAY_LOCAL_SMOKE, undefined);
+  assert.equal(env.AWS_EC2_METADATA_DISABLED, 'true'); assert.equal(env.AWS_PROFILE, undefined);
+  assert.equal(env.AWS_ENDPOINT_URL_BEDROCK_RUNTIME, undefined);
+  assert.throws(() => mockGatewayEnvironment({...env, ALTER_ENV: 'prod'}));
+  assert.throws(() => mockGatewayEnvironment({...env, AWS_ENDPOINT_URL: 'https://sqs.amazonaws.com'}));
+  const probe = 'durable-native-control', dag = durableDag(probe);
+  assert.deepEqual(dag.nodes.map(row => row.type), ['YAMLImport', 'HumanApproval', 'YAMLImport']);
+  assert.deepEqual(dag.success_criteria, []); // No model judge or external action in this fixture.
+  const before = {workflowExecutionInfo: {execution: {runId: 'temporal-execution', workflowId: 'run_fixture'}, status: 'WORKFLOW_EXECUTION_STATUS_RUNNING'},
+    parkedEvents: ['EVENT_TYPE_TIMER_STARTED']};
+  const after = structuredClone(before); after.workflowExecutionInfo.status = 'WORKFLOW_EXECUTION_STATUS_COMPLETED';
+  const history = {events: ['STARTED', 'SIGNALED', 'COMPLETED'].map(type => ({eventType: `EVENT_TYPE_WORKFLOW_EXECUTION_${type}`}))};
+  const snapshot = {run: {id: 'run_fixture', status: 'completed'}, approvals: [{status: 'approved', requested_action: {probe}, node_execution_id: 'node_approval', decided_at: 'fixture-time'}], outcomes: [{run_id: 'run_fixture', verdict: 'completed_verified'}],
+    nodes: dag.nodes.map(row => ({id: `node_${row.key}`, dag_node_id: row.key, status: 'succeeded', attempt: 1})),
+    checkpoints: dag.nodes.map(row => ({context_key: row.key, revision: row.key === 'approval' ? 2 : 1,
+      value_json: row.key === 'approval' ? {approved: true} : {probe, phase: row.key}}))};
+  assertDurableCompletion(before, after, history, snapshot, probe);
+  for (const mutate of [row => row.approvals.push(row.approvals[0]), row => row.outcomes.push(row.outcomes[0]),
+    row => row.nodes.push(row.nodes[0]), row => row.nodes[0].attempt++, row => row.checkpoints[0].revision++,
+    row => row.checkpoints[0].value_json.probe = 'wrong', row => row.run.status = 'failed',
+    row => row.approvals[0].node_execution_id = 'wrong', row => row.outcomes[0].run_id = 'other']) {
+    const broken = structuredClone(snapshot); mutate(broken);
+    assert.throws(() => assertDurableCompletion(before, after, history, broken, probe));
+  }
+  const replaced = structuredClone(after); replaced.workflowExecutionInfo.execution.runId = 'new-execution';
+  assert.throws(() => assertDurableCompletion(before, replaced, history, snapshot, probe));
+  assert.throws(() => assertDurableCompletion(before, after, {events: [...history.events, history.events[1]]}, snapshot, probe));
+  assert.throws(() => assertDurableCompletion({...before, parkedEvents: []}, after, history, snapshot, probe));
 });
