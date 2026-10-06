@@ -13,7 +13,6 @@ afterEach(cleanup)
 describe("live feature availability", () => {
   const unfinishedFeatures: LiveFeature[] = [
     "admin-deployments",
-    "benchmarks",
   ]
 
   it.each(unfinishedFeatures)("keeps %s available in demo mode", (feature) => {
@@ -24,7 +23,7 @@ describe("live feature availability", () => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(false)
   })
 
-  it.each(["admin-tenants", "admin-users", "admin-audit", "admin-feature-flags", "admin-providers", "admin-policies", "admin-system-status", "admin-incidents", "admin-security", "admin-support", "admin-marketplace", "admin-billing", "budgets", "discovery", "notifications"] as const)("shows %s in live mode once its adapter is wired (Track B)", (feature) => {
+  it.each(["admin-tenants", "admin-users", "admin-audit", "admin-feature-flags", "admin-providers", "admin-policies", "admin-system-status", "admin-incidents", "admin-security", "admin-support", "admin-marketplace", "admin-billing", "benchmarks", "budgets", "discovery", "notifications"] as const)("shows %s in live mode once its adapter is wired (Track B)", (feature) => {
     expect(isLiveFeatureAvailable(feature, true)).toBe(true)
   })
 
@@ -50,14 +49,14 @@ describe("live feature availability", () => {
   it("blocks direct live-mode access without rendering demo content", () => {
     render(
       <MemoryRouter>
-        <LiveFeatureGate feature="benchmarks" live>
-          <div>Invented benchmark results</div>
+        <LiveFeatureGate feature="admin-deployments" live>
+          <div>Invented deployment records</div>
         </LiveFeatureGate>
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole("heading", { name: "Benchmarks is not available in live mode" })).toBeTruthy()
+    expect(screen.getByRole("heading", { name: "Admin: Deployments is not available in live mode" })).toBeTruthy()
     expect(screen.getByText("Demo data is not shown when AlterX is connected to live services.")).toBeTruthy()
-    expect(screen.queryByText("Invented benchmark results")).toBeNull()
+    expect(screen.queryByText("Invented deployment records")).toBeNull()
   })
 })
