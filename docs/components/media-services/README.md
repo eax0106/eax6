@@ -23,6 +23,23 @@ Media upload, storage and retrieval for the product surface.
 
 ## Current state
 
+### Local MVP policy — 6 October 2026
+
+The owner chose to hide unavailable image generation and transcription while
+keeping speech. Authenticated, valid `POST /api/v1/media/image` and
+`POST /api/v1/media/stt` requests return HTTP 503 with
+`MEDIA_ACTION_UNAVAILABLE`; they do not invoke a provider. Authentication,
+workspace permissions and input validation still apply. Speech remains enabled
+at `POST /api/v1/media/tts`.
+
+The current web app has no image-generation or transcription controls or API
+methods. Its source inventory guards that absence, including endpoint and
+visible-action positive controls. This is source evidence, not a rendered-screen
+test. Demo web behavior and mock provider ports remain unchanged. Restoring an
+unavailable action requires an owner decision and working provider proof.
+
+The earlier assessment below is historical.
+
 *Verbatim from the readiness assessment — engine verified against main 4–6 September 2026; platform reported as received and not independently verified.*
 
 Source read only — **not observed live.** Confirm before counting it.

@@ -34,16 +34,10 @@ function setup() {
 }
 
 describe("MediaController", () => {
-  it("generateImage: delegates the actor's tenant and parsed body to the service", async () => {
+  it("generateImage: refuses a valid request without invoking a provider", async () => {
     const { controller, service } = setup();
-    const result = await controller.generateImage({ prompt: "a red bicycle", options: { width: 512 } }, actor);
-
-    expect(service.generateImage).toHaveBeenCalledWith(
-      actor.tenant_id,
-      { prompt: "a red bicycle", options: { width: 512 } },
-      "/api/v1/media/image",
-    );
-    expect(result).toMatchObject({ mime_type: "image/png", width: 512 });
+    await expect(controller.generateImage({ prompt: "a red bicycle", options: { width: 512 } }, actor)).rejects.toMatchObject({ status: 503 });
+    expect(service.generateImage).not.toHaveBeenCalled();
   });
 
   it("generateImage: rejects an unauthenticated call before touching the service", async () => {
@@ -75,16 +69,10 @@ describe("MediaController", () => {
     expect(result).toMatchObject({ mime_type: "audio/wav", duration_ms: 500 });
   });
 
-  it("transcribe: maps audio_ref to audioRef and delegates to the service", async () => {
+  it("transcribe: refuses a valid request without invoking a provider", async () => {
     const { controller, service } = setup();
-    const result = await controller.transcribe({ audio_ref: "s3://bucket/clip.wav" }, actor);
-
-    expect(service.transcribe).toHaveBeenCalledWith(
-      actor.tenant_id,
-      { audioRef: "s3://bucket/clip.wav" },
-      "/api/v1/media/stt",
-    );
-    expect(result).toEqual({ transcript: "hello", confidence: 0.9 });
+    await expect(controller.transcribe({ audio_ref: "s3://bucket/clip.wav" }, actor)).rejects.toMatchObject({ status: 503 });
+    expect(service.transcribe).not.toHaveBeenCalled();
   });
 
   it("transcribe: rejects a body with no audio_ref before touching the service", async () => {
