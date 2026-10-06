@@ -194,7 +194,7 @@ function validateExecution(
 }
 
 /** A class, so a failure can never be mistaken for a resolved upstream value. */
-class ReferenceProblem implements ValidationFailure {
+export class ReferenceProblem implements ValidationFailure {
   constructor(
     readonly field: string,
     readonly detail: string,
@@ -212,7 +212,7 @@ class ReferenceProblem implements ValidationFailure {
  * value, never spliced into a string, so every argument is either written in
  * the plan or copied verbatim from one upstream output.
  */
-function resolveArgumentReferences(
+export function resolveArgumentReferences(
   value: unknown,
   inputs: NodeExecutionContext["inputs"],
   field: string,

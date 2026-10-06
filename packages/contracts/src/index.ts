@@ -458,6 +458,7 @@ export {
 export * from "./memory-settings";
 export * from "./tenant-activity";
 export * from "./workflow-chat";
+export * from "./workflow-templates";
 export * from "./workflow-plan";
 
 export * from "./workflow-folders";

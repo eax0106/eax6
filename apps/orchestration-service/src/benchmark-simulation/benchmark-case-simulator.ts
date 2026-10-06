@@ -1,6 +1,8 @@
 import { v7 as uuidv7 } from "uuid";
 import { CompiledDagSchema, type CompiledDag, type ScoreNodeInlineRequest, type ScoreNodeInlineResponse } from "@alterx/contracts";
 
+import { ReferenceProblem, resolveArgumentReferences } from "../registry/handlers/toolcall.handler";
+
 import type { NodeExecutionContext, NodeExecutionResult } from "../registry/handler";
 import type { VerificationGateReader, VerificationResultRecord } from "../registry/verification-gate-reader";
 
@@ -12,7 +14,16 @@ import type { VerificationGateReader, VerificationResultRecord } from "../regist
  * the Verification & Quality Gate as it is in a run. Nodes that would act
  * outside Alter never execute: their step is recorded as simulated, with the
  * action it would have taken. The case is then judged by the Verification &
- * Quality Gate against the case's own success criteria.
+ * Quality Gate against the case's own success criteria, with the rubric a
+ * run's own acceptance check uses.
+ *
+ * Routing follows a run's: a node behind conditional edges executes only when
+ * a Gate in front of it chose it, exactly as the Executor decides
+ * (isNodeGatedOff in executor-workflow.ts), and is otherwise recorded as
+ * skipped. The verification gates the compiler puts before each outside
+ * action open the way only when the step they check was executed; that step
+ * has already been scored here, and a failed score has already stopped the
+ * case, so they are not scored a second time.
  */
 
 /** Node types whose execution reaches outside Alter or waits on a person. */
@@ -52,7 +63,7 @@ export interface BenchmarkCaseRequest {
 export interface BenchmarkStep {
   readonly key: string;
   readonly type: string;
-  readonly status: "executed" | "simulated" | "failed";
+  readonly status: "executed" | "simulated" | "skipped" | "failed";
   readonly action?: string;
   readonly verdict?: string;
   readonly error?: string;
@@ -176,12 +187,43 @@ export class BenchmarkCaseSimulator {
         for (const predecessor of predecessors) {
           inputs[predecessor] = outputs.get(predecessor) ?? {};
         }
+        const gates = gatingPredecessors(dag, key, outputs);
+        if (gates !== undefined) {
+          outputs.set(key, { skipped: true, reason: "gated_off_by_condition", gate_node_keys: gates });
+          steps.push({ key, type: node.type, status: "skipped" });
+          continue;
+        }
+        const verifies = node.type === "Gate" ? verificationTarget(config) : undefined;
+        if (verifies !== undefined) {
+          const checked = outputs.get(verifies.source);
+          const executed = checked !== undefined && checked["skipped"] !== true
+            && steps.some((step) => step.key === verifies.source && step.status === "executed" && step.verdict === "pass");
+          outputs.set(key, executed
+            ? { activeSuccessors: [verifies.protects], verification_status: "passed", verification_source_node_key: verifies.source }
+            : { activeSuccessors: [], verification_status: "source_not_verified", blocked_successor: verifies.protects });
+          steps.push({ key, type: node.type, status: "simulated", action: "verification" });
+          continue;
+        }
         if (SIMULATED_NODE_TYPES.has(node.type)) {
           // The action never runs. What it would have been given is kept, so
           // the judge can check what the workflow would have sent or written.
           const action = simulatedAction(node.type, config);
-          outputs.set(key, { simulated: true, action, inputs });
-          steps.push({ key, type: node.type, status: "simulated", action });
+          try {
+            let arguments_: unknown;
+            if (node.type === "ToolCall") {
+              if (!isPlainObject(config["arguments"])) throw new Error("ToolCall requires config.arguments as an object");
+              arguments_ = resolveArgumentReferences(config["arguments"], inputs, "config.arguments");
+              if (arguments_ instanceof ReferenceProblem) throw new Error(arguments_.detail);
+              if (config["tool_name"] === "browser.click" && config["expected_page_state"] !== undefined && isPlainObject(arguments_)) {
+                arguments_ = { ...arguments_, expected_page_state: config["expected_page_state"] };
+              }
+            }
+            outputs.set(key, { simulated: true, action, inputs, ...(node.type === "ToolCall" ? { arguments: arguments_ } : {}) });
+            steps.push({ key, type: node.type, status: "simulated", action });
+          } catch (error: unknown) {
+            steps.push({ key, type: node.type, status: "failed", error: errorMessage(error) });
+            return finish("error", undefined, finalOutput(dag, outputs), errorMessage(error));
+          }
           continue;
         }
         const nodeExecutionId = `node_${uuidv7()}`;
@@ -202,7 +244,7 @@ export class BenchmarkCaseSimulator {
             node_execution_id: nodeExecutionId,
             node_key: key,
             node_type: node.type,
-            config_json: JSON.stringify(config),
+            config_json: JSON.stringify({ ...config, upstream_inputs: inputs }),
             output_json: JSON.stringify(result.output),
             success_criteria: [...(node.success_criteria ?? [])],
           });
@@ -225,9 +267,22 @@ export class BenchmarkCaseSimulator {
         run_id: simulationRunId,
         node_execution_id: `node_${uuidv7()}`,
         node_key: inputKey,
-        node_type: "Synthesis",
-        config_json: JSON.stringify({ benchmark_case_id: request.caseId }),
-        output_json: JSON.stringify(output),
+        // The same rubric a run's end-of-run acceptance check uses
+        // (run-acceptance-check.ts): the outputs taken together against the
+        // stated criteria.
+        node_type: "RunOutcome",
+        config_json: JSON.stringify({ benchmark_case_id: request.caseId, input: request.input, success_criteria: request.successCriteria, mode: "simulate",
+          outside_actions: "Outside actions are never executed in Simulate. Their resolved arguments describe the planned outcome to assess against the case criteria. Skipped branches were intentionally not selected; they are not missing actions. PII placeholders preserve detected values without revealing them." }),
+        // Execution flags are engine metadata, not the content being judged.
+        // Keep every planned argument (including untrusted text) in the review.
+        output_json: JSON.stringify(Object.fromEntries(Object.entries(output)
+          .filter(([, value]) => (value as Record<string, unknown>)["skipped"] !== true)
+          .map(([key, value]) => {
+            const planned = value as Record<string, unknown>;
+            return [key, planned["simulated"] === true && typeof planned["action"] === "string" && planned["arguments"] !== undefined
+              ? { tool_name: planned["action"].replace(/^ToolCall:/, ""), arguments: planned["arguments"] }
+              : value];
+          }))),
         success_criteria: [...request.successCriteria],
       });
       return finish(judged.verdict === "pass" ? "pass" : "fail", judged, output, null);
@@ -235,6 +290,34 @@ export class BenchmarkCaseSimulator {
       return finish("error", undefined, output, errorMessage(error));
     }
   }
+}
+
+/**
+ * The Gates that kept this node from running, when it has conditional
+ * predecessors and none of them chose it; undefined when it runs. Same rule
+ * as the Executor's isNodeGatedOff.
+ */
+function gatingPredecessors(
+  dag: CompiledDag,
+  key: string,
+  outputs: ReadonlyMap<string, Record<string, unknown>>,
+): string[] | undefined {
+  const conditional = dag.edges.filter((edge) => edge.to === key && edge.kind === "conditional");
+  if (conditional.length === 0) return undefined;
+  const chosen = conditional.some((edge) => {
+    const active = outputs.get(edge.from)?.["activeSuccessors"];
+    return Array.isArray(active) && active.includes(key);
+  });
+  return chosen ? undefined : conditional.map((edge) => edge.from);
+}
+
+/** A compiler-inserted verification gate's source step and the action it protects. */
+function verificationTarget(config: Record<string, unknown>): { source: string; protects: string } | undefined {
+  const verification = config["verification"];
+  if (!isPlainObject(verification)) return undefined;
+  const source = verification["source_node_key"];
+  const protects = verification["protected_node_key"];
+  return typeof source === "string" && typeof protects === "string" ? { source, protects } : undefined;
 }
 
 /** The outputs of nodes nothing else consumes: what the workflow produced. */

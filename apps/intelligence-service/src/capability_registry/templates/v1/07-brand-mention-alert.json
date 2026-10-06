@@ -1,0 +1,168 @@
+{
+  "template_id": "brand-mention-alert",
+  "title": "Brand mention monitoring with an alert",
+  "summary": "New mentions of your brand, from your monitoring feed and a web search, are checked for relevance and de-duplicated; genuine new mentions are emailed as one alert naming each mention's feed id.",
+  "requirements": [
+    {
+      "kind": "trigger",
+      "purpose": "A schedule or feed webhook that delivers {brand, description, alert_to, previously_seen: [candidate ids], candidates: [{id, title, url, snippet}]}."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "intake",
+    "success_criteria": [
+      "A new mention that is genuinely about the brand produces one alert naming its feed id and what the source says.",
+      "Unrelated namesakes and previously seen candidates produce no alert.",
+      "The alert never misstates what a source says."
+    ],
+    "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
+      {
+        "key": "search",
+        "type": "tool",
+        "config": {
+          "tool_name": "search.web",
+          "credential_ref": "$alter:credential:web-search",
+          "arguments": {
+            "query": {
+              "$from": "intake",
+              "path": "brand"
+            }
+          }
+        },
+        "depends_on": [
+          "intake"
+        ]
+      },
+      {
+        "key": "assess",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "A search output with simulated=true contains only planned arguments and inputs, not retrieved results. Never turn its query or input submission into a search result. Decide which items, from the feed candidates in the submission and from the search results, are genuinely about the brand as described. Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. Drop namesakes and any candidate whose id is in previously_seen. Respond with {\"alert\": true when at least one new relevant mention remains, \"mentions\": [{\"id\": the candidate id or \"search\", \"title\", \"what_it_says\": one faithful sentence}], \"dropped\": [{\"id\", \"why\"}], \"body\": a plain-text list of the mentions with their ids and what each says}. Paraphrase source facts without repeating redacted personal details: refer to the brand as \"the brand\". Candidate ids are opaque feed references, not personal names. Construct body only from the kept mentions array. Never include an item from dropped in body, even to explain why it was dropped. If mentions is empty, body is an empty string."
+        },
+        "depends_on": [
+          "search",
+          "intake"
+        ],
+        "success_criteria": [
+          "Every kept mention is new and relevant; every unrelated or previously seen candidate is dropped with its reason.",
+          "Either mentions is empty with no invented claim, or each what_it_says faithfully paraphrases its supplied source. A privacy placeholder may represent an already-redacted source value; never reconstruct the original.",
+          "body contains exactly the kept mentions and their ids; it contains none of the dropped mentions or their ids."
+        ]
+      },
+      {
+        "key": "decide",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "send_alert": "inputs.assess.alert == true",
+            "no_alert": "inputs.assess.alert != true"
+          }
+        },
+        "depends_on": [
+          "assess"
+        ]
+      },
+      {
+        "key": "send_alert",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": {
+              "$from": "intake",
+              "path": "alert_to"
+            },
+            "subject": "New brand mentions",
+            "body": {
+              "$from": "assess",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "decide",
+          "assess",
+          "intake"
+        ]
+      },
+      {
+        "key": "no_alert",
+        "type": "join",
+        "config": {},
+        "depends_on": [
+          "decide",
+          "assess"
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "one genuine new mention among a namesake and a repeat",
+      "input": {
+        "brand": "Zentrova",
+        "description": "Zentrova, a kitchenware brand",
+        "alert_to": "marketing@example.com",
+        "previously_seen": [
+          "mention-store"
+        ],
+        "candidates": [
+          {
+            "id": "mention-bottle",
+            "title": "Zentrova launches a refillable water bottle",
+            "url": "https://news.example/zentrova-bottle",
+            "snippet": "Kitchenware brand Zentrova launched a refillable steel water bottle this week."
+          },
+          {
+            "id": "mention-yoga",
+            "title": "Zentrova yoga studio adds new classes",
+            "url": "https://local.example/zentrova-yoga",
+            "snippet": "The Zentrova yoga studio added two new beginner classes."
+          },
+          {
+            "id": "mention-store",
+            "title": "Zentrova opens online store",
+            "url": "https://news.example/zentrova-store",
+            "snippet": "Zentrova opened its online store."
+          }
+        ]
+      },
+      "success_criteria": [
+        "An alert is sent that contains only the refillable water bottle mention (mention-bottle).",
+        "The yoga studio (mention-yoga) is dropped as unrelated and the online store (mention-store) as previously seen."
+      ]
+    },
+    {
+      "name": "nothing new produces no alert",
+      "input": {
+        "brand": "Zentrova",
+        "description": "Zentrova, a kitchenware brand",
+        "alert_to": "marketing@example.com",
+        "previously_seen": [
+          "mention-store"
+        ],
+        "candidates": [
+          {
+            "id": "mention-store",
+            "title": "Zentrova opens online store",
+            "url": "https://news.example/zentrova-store",
+            "snippet": "Zentrova opened its online store."
+          }
+        ]
+      },
+      "success_criteria": [
+        "No alert is sent.",
+        "The online store (mention-store) is dropped as previously seen."
+      ]
+    }
+  ]
+}

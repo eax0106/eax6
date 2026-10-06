@@ -72,6 +72,9 @@ export const queryKeys = {
   verifications: {
     node: (runId: string, nodeId: string) => ["verifications", "node", runId, nodeId] as const,
   },
+  workflowTemplates: {
+    list: ["workflow-templates", "list"] as const,
+  },
   conversations: {
     list: (filters?: any) => ["conversations", "list", filters] as const,
     detail: (id: string) => ["conversations", "detail", id] as const,
