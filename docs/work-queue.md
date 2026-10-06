@@ -281,3 +281,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change and evidence | Status | Branch |
 | --- | --- | --- | --- |
 | C144 | The existing node-picker mount assertion waits up to five seconds for the actual editing-rights response on a loaded CI runner. All editor/viewer, selected-value, request, comparison and graph assertions remain intact. Production UI and global timeouts are unchanged. The original assertion fails normally under a controlled 1.6-second rights response; the repaired assertion and restored six-case suite pass. Full web tests, typecheck, lint and build pass. | Squash merged [PR163](https://github.com/eax0106/eax6/pull/163); exact-head CI and all image checks passed | codex/node-picker-readiness-c144 |
+
+### C146 — Carry task criteria into rubric review
+
+| Item | What changed and proof | State |
+|---|---|---|
+| C146 | The rubric reviewer now receives the request's own success criteria alongside the configured node goal. Previously only the separate per-criterion judgement received them, so a correct conditional outcome could receive an unrelated generic score. Both ordinary model nodes and RunOutcome use the shared kernel path. Review instructions also clarify forbidden-action absence, exact stated numeric expectations and privacy placeholders; these preserve the supplied criteria rather than inventing another goal. The criteria veto, thresholds, injection screen and Model Gateway redaction are retained. Scope follows the recorded C29/C37 Verification & Quality Gate exemptions; no RPC or shared contract changes. Two old-code assertions fail normally, restored kernel checks pass; full verification 94 passed, Ruff/mypy/proto checks, architecture/RBAC/identity/migration/placeholder checks, and zero new normalized AST findings pass. Template model measurements remain in their own D18 completion item. | done (this PR) |
