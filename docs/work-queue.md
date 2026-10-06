@@ -233,6 +233,13 @@ Admin golden-set history now reads actual eval-service run records through servi
 | --- | --- | --- | --- |
 | C132 | D26 real staff billing operations: reasoned exact-revision run-credit grants, provider-bound hosted recovery and paid-only resolution, durable Engine credit delivery and guarded erasure | In progress: native proofs and five acceptance gates; no completion or merge claim | codex/billing-ops-c132 |
 
+
+### C134 — Billing runtime database identities
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C134 | Billing staff inventory and system reconciliation use the configured operations database identity. Scoped billing writes and manifest-guarded erasure stay on the ordinary tenant identity; orphan-user finalization and subject inventory use operations after scoped deletion. Explicit deployment grants and the actual reapplication driver cover the required helpers without changing existing manifest, tenant, staff or retention rules. Seven native cases use an isolated actual-role-kit PostgreSQL server. Three self-verification gates pass: seven native runtime cases, full API 1,890 tests, database 131 tests and ten distinct behavioral fault controls. Independent verification and exact-head CI remain required. | self-verification passed; independent verification and CI pending | codex/billing-runtime-c134 |
+
 ### C135 — D30 spend runs: re-embed and media check
 
 | Item | Change and evidence | Status | Branch |
