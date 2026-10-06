@@ -275,3 +275,9 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change | State | Branch |
 |---|---|---|---|
 | C142 | Continue C133 on current main; preserve runtime and benchmark merges. Accept documented captured Razorpay receipts with validated parent checkout binding. Regression fails on old parser and passes after repair. Fresh six-gate verification passes: native storage12, cookie HTTP9, runtime7, Engine delivery4, billing/API41; full API1922 plus21 skips with coverage, database131 plus1 skip, web518, shared239, adapters613 plus1 skip and Engine1317 plus5 skips. Original wiring and 23 distinct faults fail normally and pass after restoration; static/build and zero added normalized AST findings pass. Original C133 worktree remains preserved. | Current-source six gates passed; exact-head CI pending | codex/credit-finish-c142 |
+
+### C144 — Tool-picker test readiness
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C144 | The existing node-picker mount assertion waits up to five seconds for the actual editing-rights response on a loaded CI runner. All editor/viewer, selected-value, request, comparison and graph assertions remain intact. Production UI and global timeouts are unchanged. The original assertion fails normally under a controlled 1.6-second rights response; the repaired assertion and restored six-case suite pass. Full web tests, typecheck, lint and build pass. | Squash merged [PR163](https://github.com/eax0106/eax6/pull/163); exact-head CI and all image checks passed | codex/node-picker-readiness-c144 |

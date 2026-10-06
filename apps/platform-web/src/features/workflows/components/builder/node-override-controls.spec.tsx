@@ -36,7 +36,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 async function mount(label = "Model alias") {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><Inspector /><ValidationPanel /></QueryClientProvider>)
-  await waitFor(() => expect((screen.getByRole("combobox", { name: label }) as HTMLSelectElement).disabled).toBe(!canEdit))
+  await waitFor(() => expect((screen.getByRole("combobox", { name: label }) as HTMLSelectElement).disabled).toBe(!canEdit), { timeout: 5000 })
 }
 const posts = () => fetchMock.mock.calls.filter(([, options]) => options?.method === "POST")
 
