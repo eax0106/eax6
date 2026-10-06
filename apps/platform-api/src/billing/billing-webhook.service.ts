@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { TenantIdSchema } from "@alterx/contracts";
 import { checkoutAmounts } from "../entitlements/plan-commercial";
 import { BillingPolicyService } from "./billing-policy.service";
-import { Inject, Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import type {
   BillingEvent,
   BillingProvider,
@@ -18,6 +18,7 @@ import {
   type EntitlementProvider,
 } from "../entitlements";
 import { PgIdempotencyStore } from "../idempotency";
+import { CreditPurchaseService, creditPurchaseEventContext } from "../credit-purchases/credit-purchase.service";
 import { BillingWebhookRepository } from "./billing-webhook.repository";
 import { BillingHttpError } from "./problem";
 import {
@@ -54,6 +55,7 @@ export class BillingWebhookService {
     @Inject(CONFIG_PROVIDER)
     private readonly config: ConfigProvider,
     private readonly policy: BillingPolicyService,
+    @Optional() private readonly creditPurchases?: CreditPurchaseService,
   ) {}
 
   private readonly now = (): Date => new Date();
@@ -99,6 +101,20 @@ export class BillingWebhookService {
       ...this.parseEvent(rawBody, instance),
       id: providerEventId,
     };
+    if (event.type === "payment_link.paid") {
+      const purchase = creditPurchaseEventContext(event.payload);
+      if (purchase) {
+        if (!this.creditPurchases) throw new BillingHttpError(503, "CREDIT_PURCHASE_UNAVAILABLE", "Credit purchase reconciliation is unavailable", instance);
+        const tenantId = purchase.tenantId.slice(4);
+        const result = await this.idempotency.execute({ tenantId, key: `${providerId}:${event.id}`,
+          fingerprint: createHash("sha256").update(rawBody).digest("hex"), instance }, async () => {
+          await this.creditPurchases!.paidNotification(purchase, event.id);
+          const current = await this.repository.transaction(tenantId, tx => this.repository.getDunningState(tx, tenantId));
+          return { status: 202, body: { accepted: true, event_id: event.id, state: current.state } };
+        });
+        return { ...result.body as Omit<BillingWebhookResult, "replayed">, replayed: result.replayed };
+      }
+    }
     if (!event.type.startsWith("subscription.")) {
       return { accepted: true, event_id: event.id, state: "active", replayed: false };
     }

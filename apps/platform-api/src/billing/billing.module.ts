@@ -4,7 +4,8 @@ import {
   RazorpayBillingProvider,
 } from "@alterx/adapters";
 import type { SecretsProvider } from "@alterx/shared-clients";
-import {billingDatabaseFromEnvironment} from "./config";
+import { CreditPurchaseModule } from "../credit-purchases/credit-purchase.module";
+import {billingDatabaseFromEnvironment, billingOperationsDatabaseFromEnvironment} from "./config";
 import { sharedPool } from "../db/shared-pool";
 import {
   ConcurrencyExceptionFilter,
@@ -36,7 +37,7 @@ import {
 } from "./tokens";
 
 @Module({
-  imports: [IdempotencyModule, EntitlementsModule, AdminAuditModule, StaffModule, BillingPolicyModule],
+  imports: [IdempotencyModule, EntitlementsModule, AdminAuditModule, StaffModule, BillingPolicyModule, CreditPurchaseModule],
   controllers: [BillingController, AdminBillingController],
   providers: [
     {
@@ -45,7 +46,7 @@ import {
     },
     {
       provide: AdminBillingRepository,
-      useFactory: () => new AdminBillingRepository(sharedPool(billingDatabaseFromEnvironment(process.env)), false),
+      useFactory: () => new AdminBillingRepository(sharedPool(billingOperationsDatabaseFromEnvironment(process.env)), false),
     },
     {
       provide: BILLING_SECRETS_PROVIDER,

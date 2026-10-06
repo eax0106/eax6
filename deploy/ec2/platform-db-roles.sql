@@ -37,7 +37,9 @@ END
 $roles$;
 
 -- Runtime function grants are explicit: signup uses the tenant plane and
--- administrative functions use the staff plane.
+-- administrative and system inventory functions use the staff plane. Tenant
+-- erasure helpers retain their exact active-manifest guards; ordinary scoped
+-- transactions never receive the staff inventory or orphan-user helpers.
 DO $grants$
 DECLARE
   target text;
@@ -50,9 +52,15 @@ BEGIN
     EXECUTE format('GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', target);
     EXECUTE format('REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM %I', target);
     FOREACH signature IN ARRAY CASE WHEN target = 'platform_app'
-      THEN ARRAY['public.resolve_existing_signup(text,uuid)', 'public.resolve_workspace_invitation(text,text,text)', 'public.resolve_existing_organization_member(text,text)']
+      THEN ARRAY['public.resolve_existing_signup(text,uuid)', 'public.resolve_workspace_invitation(text,text,text)', 'public.resolve_existing_organization_member(text,text)',
+                 'public.erase_tenant_action_annotations(uuid,text)', 'public.erase_tenant_payout_ledger(uuid,text)',
+                 'public.erase_tenant_listings(uuid,text)', 'public.erase_tenant_marketplace_governance(uuid,text)',
+                 'public.erase_tenant_abuse_signal_actions(uuid,text)', 'public.erase_tenant_billing_admin_operations(uuid,text)',
+                 'public.erase_tenant_credit_purchases(uuid,text)']
       ELSE ARRAY['public.admin_list_tenants()', 'public.admin_list_users(uuid)',
-                 'public.admin_revoke_user_sessions(uuid)', 'public.admin_list_billing_issues()']
+                 'public.admin_revoke_user_sessions(uuid)', 'public.admin_list_billing_issues()',
+                 'public.admin_list_staff_billing_issues()', 'public.list_billing_sync_tenants(uuid,integer)',
+                 'public.pseudonymise_orphan_users(uuid[])', 'public.list_platform_tenant_ids()', 'public.list_due_credit_purchases(integer)']
     END LOOP
       IF to_regprocedure(signature) IS NOT NULL THEN
         EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I', signature, target);

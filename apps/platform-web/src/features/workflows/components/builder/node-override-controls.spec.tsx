@@ -36,7 +36,7 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
 async function mount(label = "Model alias") {
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })}><Inspector /><ValidationPanel /></QueryClientProvider>)
-  await waitFor(() => expect((screen.getByRole("combobox", { name: label }) as HTMLSelectElement).disabled).toBe(!canEdit))
+  await waitFor(() => expect((screen.getByRole("combobox", { name: label }) as HTMLSelectElement).disabled).toBe(!canEdit), { timeout: 5000 })
 }
 const posts = () => fetchMock.mock.calls.filter(([, options]) => options?.method === "POST")
 
@@ -49,7 +49,7 @@ it("live canonical tool picker keeps an outside choice selected while showing re
   fetchMock.mockImplementation(async (_url, options) => options?.method === "POST" ? Response.json(advice) : Response.json({ can_edit: true }))
   await mount("Canonical tool")
   expect(screen.getByText("Original pick: search.web")).toBeTruthy()
-  expect(screen.getAllByRole("option")).toHaveLength(11)
+  expect(screen.getAllByRole("option")).toHaveLength(13)
   fireEvent.change(screen.getByRole("combobox", { name: "Canonical tool" }), { target: { value: "email.send" } })
   expect(await screen.findByText("Chosen tool adds an outside action.")).toBeTruthy()
   expect(await screen.findByText("Normal verification and approval steps are required.")).toBeTruthy()

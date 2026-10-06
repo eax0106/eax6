@@ -46,6 +46,7 @@ export const LEGAL_HOLD_SOURCES: readonly {
   readonly idColumn: string;
   readonly columns: readonly string[];
 }[] = [
+  { table: "credit_purchases", kind: "tax_invoice", idColumn: "id", columns: ["id", "credits", "unit_price_minor", "base_price_minor", "gst_minor", "total_minor", "state", "payment_ref", "created_at"] },
   { table: "billing_events", kind: "tax_invoice", idColumn: "provider_event_id", columns: ["provider_id", "provider_event_id", "type", "created_at"] },
   { table: "orders", kind: "books_of_account", idColumn: "id", columns: ["id", "listing_id", "listing_version_id", "amount_minor", "currency", "status", "payment_reference", "created_at"] },
   { table: "payouts", kind: "seller_payout", idColumn: "id", columns: ["id", "order_id", "publisher_id", "total_minor", "seller_share_minor", "platform_share_minor", "status", "created_at"] },

@@ -233,6 +233,19 @@ Admin golden-set history now reads actual eval-service run records through servi
 | --- | --- | --- | --- |
 | C132 | D26 real staff billing operations: reasoned exact-revision run-credit grants, provider-bound hosted recovery and paid-only resolution, durable Engine credit delivery and guarded erasure | In progress: native proofs and five acceptance gates; no completion or merge claim | codex/billing-ops-c132 |
 
+
+### C133 — D22 configured customer extra-credit purchase
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C133 | Actual configured Razorpay hosted checkout, immutable quantity and GST snapshot, current owner/session authorization, acknowledged audit, durable provider uncertainty recovery, existing exact-once Engine credit delivery and truthful live billing UI. Six self-verification gates pass, including native storage 12, cookie HTTP 9, runtime 7, Engine delivery 4, rendered billing/API 41, full API 1,915 with coverage, database 131, web 507 and 22 behavioral fault controls. See `credit-purchase.md`. | Self-verification passed; fresh verification and exact-head CI remain required | codex/credit-purchase-c133 |
+
+### C134 — Billing runtime database identities
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C134 | Billing staff inventory and system reconciliation use the configured operations database identity. Scoped billing writes and manifest-guarded erasure stay on the ordinary tenant identity; orphan-user finalization and subject inventory use operations after scoped deletion. Explicit deployment grants and the actual reapplication driver cover the required helpers without changing existing manifest, tenant, staff or retention rules. Seven native cases use an isolated actual-role-kit PostgreSQL server. Three self-verification gates pass: seven native runtime cases, full API 1,890 tests, database 131 tests and ten distinct behavioral fault controls. Independent verification and exact-head CI remain required. | self-verification passed; independent verification and CI pending | codex/billing-runtime-c134 |
+
 ### C135 — D30 spend runs: re-embed and media check
 
 | Item | Change and evidence | Status | Branch |
@@ -256,3 +269,15 @@ Admin golden-set history now reads actual eval-service run records through servi
 | Item | Change and evidence | Status | Branch |
 | --- | --- | --- | --- |
 | C140 | Six advisories published 2026-10-06 (1241202 sprintf-js, 1241205 smol-toml, 1241209 source-map-js, 1241210 proxy-addr, 1241217 and 1241219 nx) failed the dependency scan for every open PR, as C84 did on 1 October. All are in development tooling (the Nx toolchain, its Vite and Nest plugins). `nx` and the four `@nx/*` packages move from 23.1.1 to 23.2.1; four root overrides lift `smol-toml`, `source-map-js` and `proxy-addr` to their patched lines and take `argparse` to 2.x (js-yaml 3 loads argparse only for its command-line tool, which nothing here runs; this removes sprintf-js, which has no patched release). The audit baseline is unchanged. **Verification:** `pnpm audit` before the change listed the six new ids plus baselined 1102341; after it lists only 1102341. Typecheck passes for all 23 projects, the shared packages build, platform-web tests 487 passed, tool-gateway lint has no errors, architecture gates ok. **Not done:** the full engine and platform suites were not rerun locally; CI runs them. | done (this PR) | `build/deps-audit-1006` |
+
+### C142 — D22 purchase continuation and provider contract
+
+| Item | Change | State | Branch |
+|---|---|---|---|
+| C142 | Continue C133 on current main; preserve runtime and benchmark merges. Accept documented captured Razorpay receipts with validated parent checkout binding. Regression fails on old parser and passes after repair. Fresh six-gate verification passes: native storage12, cookie HTTP9, runtime7, Engine delivery4, billing/API41; full API1922 plus21 skips with coverage, database131 plus1 skip, web518, shared239, adapters613 plus1 skip and Engine1317 plus5 skips. Original wiring and 23 distinct faults fail normally and pass after restoration; static/build and zero added normalized AST findings pass. Original C133 worktree remains preserved. | Current-source six gates passed; exact-head CI pending | codex/credit-finish-c142 |
+
+### C144 — Tool-picker test readiness
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C144 | The existing node-picker mount assertion waits up to five seconds for the actual editing-rights response on a loaded CI runner. All editor/viewer, selected-value, request, comparison and graph assertions remain intact. Production UI and global timeouts are unchanged. The original assertion fails normally under a controlled 1.6-second rights response; the repaired assertion and restored six-case suite pass. Full web tests, typecheck, lint and build pass. | Squash merged [PR163](https://github.com/eax0106/eax6/pull/163); exact-head CI and all image checks passed | codex/node-picker-readiness-c144 |
