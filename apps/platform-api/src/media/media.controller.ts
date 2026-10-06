@@ -33,8 +33,9 @@ export class MediaController {
     @ActorContext() actor: ActorContextType | undefined,
   ): Promise<GeneratedImageResult> {
     const instance = "/api/v1/media/image";
-    const tenantId = requireActor(actor, instance).tenant_id;
-    return this.media.generateImage(tenantId, parseGenerateImageInput(body, instance), instance);
+    requireActor(actor, instance);
+    parseGenerateImageInput(body, instance);
+    throw new MediaHttpError(503, "MEDIA_ACTION_UNAVAILABLE", "Image generation is not available in the MVP", instance);
   }
 
   @Post("tts")
@@ -57,8 +58,9 @@ export class MediaController {
     @ActorContext() actor: ActorContextType | undefined,
   ): Promise<TranscriptionResult> {
     const instance = "/api/v1/media/stt";
-    const tenantId = requireActor(actor, instance).tenant_id;
-    return this.media.transcribe(tenantId, parseTranscribeInput(body, instance), instance);
+    requireActor(actor, instance);
+    parseTranscribeInput(body, instance);
+    throw new MediaHttpError(503, "MEDIA_ACTION_UNAVAILABLE", "Transcription is not available in the MVP", instance);
   }
 }
 
