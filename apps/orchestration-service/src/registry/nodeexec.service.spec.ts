@@ -80,7 +80,7 @@ describe("NodeexecService.executeNode", () => {
 
     expect(verifyGate.scoreNodeInline).toHaveBeenCalledWith({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
-      node_key: "node_merge", node_type: "Merge", config_json: "{}", output_json: "{\"x\":1}",
+      node_key: "node_merge", node_type: "Merge", config_json: JSON.stringify({ upstream_inputs: { node_a: { x: 1 } } }), output_json: "{\"x\":1}",
       success_criteria: [],
     });
     expect(ledger.recordSucceeded).toHaveBeenCalledOnce();
@@ -117,11 +117,15 @@ describe("NodeexecService.executeNode", () => {
     await expect(nodeexec.executeNode({
       tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
       node_key: "summarise", node_type: "LLMTask", config_json: JSON.stringify({ prompt: "x", model_alias: "FAST" }),
-      inputs_json: "{}", success_criteria: ["Refund total stated"],
+      inputs_json: JSON.stringify({ refunds: { total: 150 } }), success_criteria: ["Refund total stated"],
     })).rejects.toBeInstanceOf(VerifyGateError);
     expect(seen[0]!.success_criteria).toEqual(["Refund total stated"]);
+    expect(seen[0]!.inputs).toEqual({ refunds: { total: 150 } });
+    expect(seen[0]!.config).toEqual({ prompt: "x", model_alias: "FAST" });
     expect(verifyGate.scoreNodeInline).toHaveBeenCalledWith(
-      expect.objectContaining({ node_key: "summarise", success_criteria: ["Refund total stated"] }),
+      expect.objectContaining({ node_key: "summarise", success_criteria: ["Refund total stated"],
+        config_json: JSON.stringify({ prompt: "x", model_alias: "FAST", upstream_inputs: { refunds: { total: 150 } } }),
+      }),
     );
     expect(ledger.recordSucceeded).not.toHaveBeenCalled();
   });

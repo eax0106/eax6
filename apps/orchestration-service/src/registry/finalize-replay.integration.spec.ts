@@ -136,7 +136,7 @@ it("retries a lost finalize response through real engine and verification proces
       invoke: async (request: ModelgwInvokeRequest) => {
         calls.push(request);
         const messages = (JSON.parse(request.input_json) as { messages: { content: string }[] }).messages;
-        const criterionCall = messages[1]?.content.includes("success_criteria") ?? false;
+        const criterionCall = Object.hasOwn(JSON.parse(messages[1]!.content) as object, "success_criteria");
         const content = request.model_alias === "FAST" ? { injection_detected: false, confidence: 0.99, reason: "structured fixture output" }
           : criterionCall ? { criteria: [{ index: 0, met: true, reason: "gate decision appears in terminal merge" }] }
             : { score: 1, rationale: "terminal merge contains the gate decision" };
@@ -179,6 +179,8 @@ it("retries a lost finalize response through real engine and verification proces
     expect(finalizations).toBe(2);
     expect(calls.map((request) => request.model_alias)).toEqual(["FAST", "ADVANCED", "ADVANCED"]);
     for (const call of calls) expect(call).toMatchObject({ tenant_id: `ten_${TENANT}`, run_id: RUN });
+    const rubricCall = JSON.parse(calls[1]!.input_json) as { messages: { content: string }[] };
+    expect(JSON.parse(rubricCall.messages[1]!.content)).toMatchObject({ config: { success_criteria: [CRITERION] } });
     const criterionCall = JSON.parse(calls[2]!.input_json) as { messages: { content: string }[] };
     expect(JSON.parse(criterionCall.messages[1]!.content)).toMatchObject({ success_criteria: [{ index: 0, criterion: CRITERION }], untrusted_node_output: { merge: output } });
     const stored = await runtime.withTenant(TENANT, async (tx) => ({

@@ -333,7 +333,7 @@ export class NodeexecService {
           node_execution_id: request.node_execution_id,
           node_key: request.node_key,
           node_type: request.node_type,
-          config_json: JSON.stringify(executionConfig),
+          config_json: JSON.stringify({ ...executionConfig, upstream_inputs: inputs }),
           output_json: outputJson,
           success_criteria: successCriteria,
         });
