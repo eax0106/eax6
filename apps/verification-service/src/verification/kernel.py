@@ -195,13 +195,22 @@ class VerificationKernel:
                 details_json=json.dumps(blocked),
             )
 
+        review_config_json = request.config_json
+        if request.success_criteria:
+            config = json.loads(request.config_json or "{}")
+            if not isinstance(config, dict):
+                raise VerificationValidationError("config_json must contain an object")
+            review_config_json = json.dumps(
+                {**config, "success_criteria": request.success_criteria}
+            )
+
         score, rationale = await self._llm.review(
             tenant_id=request.tenant_id,
             run_id=request.run_id,
             node_execution_id=request.node_execution_id,
             node_type=request.node_type,
             rubric=rubric,
-            config_json=request.config_json,
+            config_json=review_config_json,
             output_json=request.output_json,
         )
         if not 0.0 <= score <= 1.0:
