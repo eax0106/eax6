@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, services, stopOwnedProcess } from './mvp-stack.mjs';
+import { assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, services, stopOwnedProcess } from './mvp-stack.mjs';
 import { assertSmokeCeiling, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
@@ -99,4 +99,20 @@ test('installation guard ignores dependency paths containing pnpm', async () => 
   await once(child, 'spawn');
   try { assert.doesNotThrow(assertNoPnpm); }
   finally { child.kill('SIGTERM'); await once(child, 'exit'); }
+});
+
+test('restarted services reuse startup mock identity, token references and disarmed model guard', () => {
+  const base = {INTERNAL_SERVICE_TOKEN: 'test-only', PLATFORM_API_PORT: '3100', ADS_CORE_PORT: '8100',
+    COST_PORT: '5100', AUDIT_PORT: '8101', AUTH0_M2M_TOKEN_URL: 'http://127.0.0.1:4999/oauth/token',
+    AUTH0_M2M_AUDIENCE: 'local-engine', AUTH0_M2M_CLIENT_ID: 'local-client', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566'};
+  const env = serviceEnvironment(base);
+  assert.equal(env.IDENTITY_PROVIDER, 'mock'); assert.equal(env.EMAIL_PROVIDER, 'mock');
+  assert.equal(env.ENGINE_M2M_TOKEN_URL, base.AUTH0_M2M_TOKEN_URL);
+  assert.equal(env.ENGINE_M2M_CLIENT_SECRET_REF, 'env:AUTH0_M2M_CLIENT_SECRET');
+  assert.equal(env.EVAL_FACADE_TOKEN_REF, 'env:INTERNAL_SERVICE_TOKEN');
+  assert.equal(env.AWS_ENDPOINT_URL_SQS, base.AWS_ENDPOINT_URL);
+  assert.equal(env.ADS_CORE_BASE_URL, 'http://127.0.0.1:8100');
+  assert.equal(env.MODEL_GATEWAY_LOCAL_SMOKE, '1'); assert.equal(env.AWS_MAX_ATTEMPTS, '1');
+  assert.ok(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE.endsWith('/tmp/local-mvp/spend-permit.json'));
+  assert.equal(base.ENGINE_M2M_TOKEN_URL, undefined, 'Input env stays unchanged');
 });

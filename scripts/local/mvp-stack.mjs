@@ -177,11 +177,8 @@ async function down(state) {
   console.log('MVP stopped; local data and credentials preserved');
 }
 
-async function up() {
-  if (existsSync(stateFile)) throw new Error('MVP state exists; run scripts/local/mvp-down.sh before starting again');
-  mkdirSync(stateDir, { recursive: true, mode: 0o700 });
-  if (!existsSync(envFile)) await setup('bash', ['scripts/bootstrap-env-local.sh', '--out', envFile], { ...process.env, COMPOSE_PROJECT_NAME: project });
-  const env = { ...loadEnvironment(), NODE_ENV: 'development', NX_DAEMON: 'false', NX_INTERACTIVE: 'false',
+export function serviceEnvironment(base = loadEnvironment()) {
+  const env = { ...base, NODE_ENV: 'development', NX_DAEMON: 'false', NX_INTERACTIVE: 'false',
     IDENTITY_PROVIDER: 'mock', EMAIL_PROVIDER: 'mock', VITE_API_MODE: 'live',
     PLATFORM_API_PROXY_TARGET: 'http://127.0.0.1:3020', ALTER_LOCAL_ENV_FILE: envFile, COMPOSE_PROJECT_NAME: project };
   env.ADS_CORE_BASE_URL = `http://127.0.0.1:${env.ADS_CORE_PORT}`;
@@ -198,6 +195,14 @@ async function up() {
   env.MODEL_GATEWAY_LOCAL_SMOKE = '1';
   env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE = resolve(stateDir, 'spend-permit.json');
   env.AWS_MAX_ATTEMPTS = '1';
+  return env;
+}
+
+async function up() {
+  if (existsSync(stateFile)) throw new Error('MVP state exists; run scripts/local/mvp-down.sh before starting again');
+  mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  if (!existsSync(envFile)) await setup('bash', ['scripts/bootstrap-env-local.sh', '--out', envFile], { ...process.env, COMPOSE_PROJECT_NAME: project });
+  const env = serviceEnvironment();
   rmSync(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE, { force: true });
   const all = services(env);
   // Refuse every collision before creating a container or starting a process.

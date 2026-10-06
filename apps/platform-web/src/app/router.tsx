@@ -44,6 +44,7 @@ import { RetrievalTestPage } from "@/features/knowledge/pages/retrieval-test"
 import { MemorySettingsPage } from "@/features/knowledge/pages/memory-settings"
 import { DataControlsPage } from "@/features/knowledge/pages/data-controls"
 import { IntegrationCatalogPage } from "@/features/connections/pages/catalog"
+import { ConnectionCallbackPage } from "@/features/connections/pages/connection-callback"
 import { ConnectionDetailPage } from "@/features/connections/pages/connection-detail"
 import { CredentialsVaultPage } from "@/features/connections/pages/credentials-vault"
 import { WhatsAppChannelPage } from "@/features/connections/pages/whatsapp-channel"
@@ -304,6 +305,10 @@ export const router = createBrowserRouter([
       {
         path: "connections/whatsapp",
         element: <RequirePermission permission="channel.read"><WhatsAppChannelPage /></RequirePermission>
+      },
+      {
+        path: "connections/callback",
+        element: <RequirePermission permission="connection.manage"><ConnectionCallbackPage /></RequirePermission>
       },
       {
         path: "connections/:id",

@@ -40,6 +40,7 @@ import * as live from "./live"
 import * as workspaceMembers from "./members"
 import * as liveDataExport from "./live-data-export"
 import * as liveMemorySettings from "./live-memory-settings"
+import * as liveConnections from "./live-connections"
 import { 
   mockWorkflows, mockRuns, mockDashboardSummary, 
   mockWorkspaces, mockProfile, mockSessions, delay,
@@ -1279,7 +1280,11 @@ class ApiClient {
     return { exportedAt: new Date().toISOString(), workspaceId, workflows: [], workflowVersions: [], runs: [], knowledgeSources: [], knowledgeDocuments: [], members: [] }
   }
   
-  async deleteWorkspaceData(_scope: string): Promise<void> {
+  async deleteWorkspaceData(scope: string, confirmName?: string): Promise<{ deletionDueAt: string } | void> {
+    if (isLiveApi) {
+      if (!confirmName) throw new Error("Type the selected workspace name to confirm")
+      return live.deleteWorkspace(scope, confirmName)
+    }
     await delay(MOCK_DELAY * 3)
   }
 
@@ -1312,16 +1317,8 @@ class ApiClient {
     return c
   }
 
-  async createConnection(data: Partial<Connection>): Promise<Connection> {
-    // Not wired to the live API -- the real backend requires a genuine
-    // OAuth authorize/callback redirect round trip
-    // (POST /api/v1/integrations/:connector/actions/authorize +
-    // .../actions/callback) that the frontend has never implemented.
-    // connect-flow-dialog.tsx's own code admits this: it mocks creating
-    // the connection directly with a fake setTimeout "simulate OAuth
-    // redirect" instead of a real one. Wiring this straight to a REST
-    // call would silently create a connection with no real OAuth token
-    // behind it. See PR description for what the real flow needs.
+  async createConnection(data: Partial<Connection> & { tenantConfig?: Record<string, string> }): Promise<Connection | void> {
+    if (isLiveApi) return liveConnections.beginConnection(data.integrationId ?? "", data.tenantConfig)
     await delay(MOCK_DELAY * 2)
     const c: Connection = {
       id: `conn_${Date.now()}`,
@@ -1350,9 +1347,8 @@ class ApiClient {
     return { success: true, message: "Connection test successful." }
   }
 
-  async reconnectConnection(id: string): Promise<Connection> {
-    // Not wired -- same real OAuth redirect gap as createConnection
-    // (see PR description). No UI call site currently exists either.
+  async reconnectConnection(id: string): Promise<Connection | void> {
+    if (isLiveApi) return liveConnections.reconnectConnection(id)
     await delay(MOCK_DELAY * 2)
     const c = mockConnections.find(c => c.id === id)
     if (!c) throw new Error("Connection not found")

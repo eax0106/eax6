@@ -67,11 +67,13 @@ export function parseOAuthAuthorizeInput(
   connector: ConnectorId,
   instance: string,
 ): OAuthAuthorizeInput {
-  const base = z.object({ redirect_uri: z.url(), tenant_config: z.unknown().optional() }).strict();
+  const base = z.object({ redirect_uri: z.url(), tenant_config: z.unknown().optional(), connection_id: z.string().regex(uuidPattern).optional() }).strict();
   const parsed = parse(base, value, instance);
-  const tenantConfig = parseTenantConfig(connector, parsed.tenant_config, instance);
+  const tenantConfig = parsed.connection_id && parsed.tenant_config === undefined
+    ? undefined : parseTenantConfig(connector, parsed.tenant_config, instance);
   return {
     redirect_uri: parsed.redirect_uri,
+    ...(parsed.connection_id ? { connection_id: parsed.connection_id } : {}),
     ...(tenantConfig ? { tenant_config: tenantConfig } : {}),
   };
 }

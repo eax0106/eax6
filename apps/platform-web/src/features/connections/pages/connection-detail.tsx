@@ -39,6 +39,9 @@ export function ConnectionDetailPage() {
     }
   })
 
+  const reconnectMutation = useMutation({ mutationFn: () => api.reconnectConnection(id!),
+    onSuccess: () => { void queryClient.invalidateQueries({ queryKey: queryKeys.connections.detail(id!) }) } })
+
   const deleteMutation = useMutation({
     mutationFn: () => api.deleteConnection(id!),
     onSuccess: () => {
@@ -70,6 +73,9 @@ export function ConnectionDetailPage() {
               <RefreshCw className={`mr-2 h-4 w-4 ${testMutation.isPending ? 'animate-spin' : ''}`} />
               Test Connection
             </Button>
+            <Button variant="outline" onClick={() => reconnectMutation.mutate()} disabled={reconnectMutation.isPending || !integration.available}>
+              {reconnectMutation.isPending ? "Opening authorization…" : "Reconnect"}
+            </Button>
             <Button 
               variant="danger" 
               onClick={() => {
@@ -85,6 +91,8 @@ export function ConnectionDetailPage() {
           </div>
         }
       />
+
+      {reconnectMutation.isError && <p role="alert" className="mt-4 text-destructive">Reconnect failed. Try again with the original provider account.</p>}
 
       {testMutation.isSuccess && (
         <div className={`mt-4 p-4 border rounded-md mb-6 ${testMutation.data.success ? 'bg-green-500/10 border-green-500/20 text-green-700' : 'bg-destructive/10 border-destructive/20 text-destructive'}`}>
