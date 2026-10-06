@@ -73,7 +73,7 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
     for (const cookie of response.headers.getSetCookie()) {
       const pair = cookie.split(';')[0], at = pair.indexOf('='); cookies.set(pair.slice(0, at), pair.slice(at + 1));
     }
-    if (!response.ok) throw new Error(`platform-api: ${method} ${path} failed HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`platform-api: ${method} ${path.split('?')[0]} failed HTTP ${response.status}`);
     const data = response.status === 204 ? null : await response.json();
     return { data, etag: response.headers.get('etag') };
   }
