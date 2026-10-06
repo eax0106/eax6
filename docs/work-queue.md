@@ -320,6 +320,11 @@ activation, Transcribe subscription, replacement image model/region and GHCR
 package-write permission remain the recorded launch prerequisites. D30's actual
 Titan re-embed and Polly results stand; unavailable provider behavior is retained.
 
+### C149 — M3 local MVP media policy
+
+| Item | Change and evidence | State | Branch |
+| --- | --- | --- | --- |
+| C149 | The owner chose to hide unavailable image generation and transcription while keeping speech. Valid live image/transcription HTTP requests return clear non-retryable 503 problems before any provider call; existing validation and current cookie/DB membership guards remain. Speech still reaches the real service and Polly adapter and produces a WAV under a fake SDK edge. Mock service/provider ports and demo web behavior remain. No media UI exists today; a web source inventory and injected endpoint/action controls protect that absence, without claiming rendered-screen proof. Both original HTTP201 paths fail the new native refusal controls, then media18 pass. Full API1936 pass/21 existing skips with coverage thresholds, web528, static/build, governance and zero added/stale normalized architecture findings pass. The initial full API sweep hit an existing billing setup timeout; billing19 passed alone and the full four-worker coverage sweep passed. No paid media invocation. | Implementation verified locally; PR checks and exact-head-green squash merge required. Full provider activation remains launch work. | codex/mvp-media-c149 |
 
 ### C150 — M2 local MVP web live wiring
 
