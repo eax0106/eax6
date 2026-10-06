@@ -261,6 +261,9 @@ jobs:
           node scripts/check-injection-parity.mjs
           node scripts/gates/safety-duplicate.spec.mjs
 
+      - name: local simulation load controls
+        run: node --test scripts/local/mvp-load.spec.mjs
+
       - name: spend guard
         run: node scripts/spend/spend-guard.spec.mjs
 
