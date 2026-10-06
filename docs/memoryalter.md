@@ -1840,6 +1840,20 @@ against the API on the third run before merge.
 
 ---
 
+### 2026-10-06 — D1–D32 build-session closure
+
+**Scope.** The build session's original forty acceptance gates remain the contract. All thirty-nine feature gates were freshly verified by the original verifier against actual merged PRs, one-parent squash commits, directly read successful gate checks and recorded work-queue rows. Final records have their own PR and exact-head CI; after its squash merge, Z1 and all forty are verified again. No gate, feature outcome or existing owner decision is removed to make the ledger pass.
+
+**Final feature evidence.** Final slices: [purchase PR162](https://github.com/eax0106/eax6/pull/162), [shared review PR164](https://github.com/eax0106/eax6/pull/164), [templates PR165](https://github.com/eax0106/eax6/pull/165), [Executor context PR166](https://github.com/eax0106/eax6/pull/166). Customer hosted subscriptions and extra-credit purchase reuse verified-run credit delivery and configured GST; staff billing operations, tenant detail/notes, review assignment, deployment actions, benchmark datasets/Simulate and marketplace resubmission are merged with their native proofs. D18 has eight versioned Alter-authored templates, first-login selection and compiled draft/chat retry. Simulate records resolved planned arguments and conditional outcomes without performing outside actions. The producing node and its reviewer share the criteria and actual upstream facts through the existing C29 Executor and Verification Gate scope.
+
+**Measured template behavior.** Earlier complete real-model baselines were 5/16, 6/16, 12/16 and 11/16; later full runs reached 14/16. Final current catalog 16/16 is matched to tested versions: twelve unchanged cases from the latest full run and four corrected invoice/brand cases rerun together. Authored fixture and criterion refinements accompany the preserved failures; this is not a claim that the original catalog passed unchanged or that one final sixteen-case run was perfect. Template iterations made 722 paid calls at published token-rate cost USD 0.454262955. Two independent normal-Executor review polarity runs made fourteen more calls at USD 0.006176970, accepted the correct total and rejected a wrong total both times. The cumulative conservative 1.5-times bound plus USD 0.20 reserved for earlier work is USD 0.890659888, below the approved USD 1 total; provider invoice cost is unknown. Outside actions executed: zero.
+
+**Preserved work and authority.** C145 continues C141 only after the owner's explicit transfer; the original checkpoint and all fourteen saved dirty/untracked source hashes were rechecked intact. C143 continues C138 in its own worktree. The user authorized immediate continuation and independent work while PR CI/merge follow-up runs. Scope stays Workflow Mode v1; Project Mode remains deferred under design log §23.
+
+**Production limits.** This closes the authorized implementation and merged verification scope; it does not claim production deployment or live customer payment. D30 actually re-embedded two local fixture rows through Titan and produced verified Polly speech. Amazon Transcribe still needs the account subscription; the configured image model is unavailable, requiring an owner-approved replacement model/region. Live knowledge.search/whatsapp.send policy activation, connected provider accounts and owner review of all eight templates remain launch prerequisites. Main GHCR publication after the repository move needs package-write permission. Existing account, credential and deployment decisions remain with the owner.
+
+---
+
 ## 6. Component ledger
 
 61 components. Status from the assessment (engine verified against main, 4–6 September
