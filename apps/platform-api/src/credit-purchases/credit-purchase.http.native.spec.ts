@@ -131,6 +131,14 @@ describe.skipIf(!database)("credit purchase real tenant cookie and central audit
     const pending=await create(d.input,key);expect(pending.json().state).toBe("submitting");expect(d.creates).toBe(1);
     expect((await refresh(pending.json().id,String(pending.headers.etag))).json().state).toBe("checkout_ready");expect(d.creates).toBe(1);
   });
+  it("bounds hung provider writes and reads, retaining durable state and exact revision for recovery",async()=>{
+    d.hangCreate=true;const key=randomUUID().replaceAll("-","");let started=Date.now();
+    expect((await create(d.input,key)).statusCode).toBe(502);expect(Date.now()-started).toBeLessThan(6_500);
+    d.hangCreate=false;const pending=await create(d.input,key);expect(pending.json().state).toBe("submitting");expect(d.creates).toBe(1);
+    d.hangRead=true;started=Date.now();expect((await refresh(pending.json().id,String(pending.headers.etag))).statusCode).toBe(503);
+    expect(Date.now()-started).toBeLessThan(6_500);expect((await get(pending.json().id)).headers.etag).toBe(pending.headers.etag);
+    d.hangRead=false;expect((await refresh(pending.json().id,String(pending.headers.etag))).json().state).toBe("checkout_ready");expect(d.creates).toBe(1);
+  },15_000);
   it("authenticates exact raw signed paid notification, replays once and attributes service reconciliation",async()=>{
     const first=await create(),purchase=first.json();
     await d.admin.query("INSERT INTO billing_dunning_states(tenant_id,state,current_plan) VALUES($1,'limited','basic')",[d.tenantA]);

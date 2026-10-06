@@ -31,9 +31,13 @@ export function CreditPurchaseCard({plan, subscription}: {plan: BillingPlan | un
   const purchase = selected.data
   useEffect(()=>{
     if (purchase && completed.has(purchase.state) && attempt.current?.purchaseId === purchase.id) attempt.current = null
+    if (purchase && completed.has(purchase.state) && attempt.current && !attempt.current.purchaseId &&
+      attempt.current.fingerprint === JSON.stringify({credits:purchase.quote.credits,plan_version:purchase.quote.planVersion,...(purchase.gstin?{gstin:purchase.gstin}:{})})) attempt.current = null
     if(purchase?.state === "delivered") void client.invalidateQueries({queryKey:queryKeys.billing.credits})
-  },[purchase?.id,purchase?.state,client])
-  function reload() {void client.invalidateQueries({queryKey:historyKey}); void client.invalidateQueries({queryKey:queryKeys.billing.credits})}
+  },[purchase?.id,purchase?.state,selected.dataUpdatedAt,client])
+  function reload() {
+    for (const queryKey of [historyKey, queryKeys.billing.credits, queryKeys.billing.plans, queryKeys.billing.subscription]) void client.invalidateQueries({queryKey})
+  }
   const create = useMutation({mutationFn: async ()=> {
     const input = CreateCreditPurchaseSchema.parse({credits:Number(credits),plan_version:plan!.version,...(gstin.trim()?{gstin:gstin.trim().toUpperCase()}:{})})
     const fingerprint = JSON.stringify(input)
@@ -51,7 +55,8 @@ export function CreditPurchaseCard({plan, subscription}: {plan: BillingPlan | un
   let amounts: ReturnType<typeof creditPurchaseAmounts> | undefined
   if(configured) {try {amounts = creditPurchaseAmounts(Number(credits),plan.commercial!.extraCreditPriceMinor!)} catch { /* Invalid totals cannot start checkout. */ }}
   const validInput = amounts && CreateCreditPurchaseSchema.safeParse({credits:Number(credits),plan_version:plan?.version,...(gstin.trim()?{gstin:gstin.trim().toUpperCase()}:{})}).success
-  const blocked = role !== "owner" || !validInput || history.isLoading || history.isError || Boolean(pending) || create.isPending
+  const blocked = role !== "owner" || !validInput || history.isLoading || history.isError || selected.isError ||
+    (Boolean(selectedId) && selected.isLoading) || Boolean(pending) || create.isPending
   const link = purchase && !completed.has(purchase.state) && ["checkout_ready","payment_pending"].includes(purchase.state) ? hostedCheckoutUrl(purchase.checkoutUrl ?? undefined) : undefined
   return <Card><CardHeader><CardTitle>Buy extra execution credits</CardTitle></CardHeader><CardContent className="space-y-4">
     {!configured?<p>{isLiveApi?"Extra-credit checkout is unavailable until your active paid plan has configured credit prices.":"Demo extra-credit checkout is unavailable. No paid price is configured."}</p>:<>
@@ -71,7 +76,7 @@ export function CreditPurchaseCard({plan, subscription}: {plan: BillingPlan | un
     {purchase&&<div className="space-y-2">
       <p>{labels[purchase.state]}: {purchase.quote.credits} credits, {formatProviderMoney(purchase.quote.totalMinor,"INR")} including GST.</p>
       {link&&<a className="text-primary underline" href={link} target="_blank" rel="noopener noreferrer">Continue extra-credit Razorpay checkout</a>}
-      {!completed.has(purchase.state)&&<Button variant="outline" disabled={role!=="owner"||refresh.isPending} onClick={()=>refresh.mutate()}>{refresh.isPending?"Checking payment...":"Check extra-credit payment"}</Button>}
+      {!completed.has(purchase.state)&&<Button variant="outline" disabled={role!=="owner"||refresh.isPending||selected.isError||history.isError} onClick={()=>refresh.mutate()}>{refresh.isPending?"Checking payment...":"Check extra-credit payment"}</Button>}
     </div>}
     {history.data&&history.data.length>0&&<ul aria-label="Extra-credit purchase history" className="space-y-2">
       {history.data.map(item=><li key={item.id}>{item.quote.credits} credits · {formatProviderMoney(item.quote.totalMinor,"INR")} · {labels[item.state]}</li>)}

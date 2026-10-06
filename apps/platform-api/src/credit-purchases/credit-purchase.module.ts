@@ -18,7 +18,10 @@ export const CREDIT_PURCHASE_PROVIDER = Symbol("CREDIT_PURCHASE_PROVIDER");
   imports: [EngineModule, BillingPolicyModule],
   controllers: [CreditPurchaseController],
   providers: [
-    { provide: CreditPurchaseRepository, useFactory: () => new CreditPurchaseRepository(sharedPool(creditPurchaseConfigFromEnvironment(process.env).databaseUrl)) },
+    { provide: CreditPurchaseRepository, useFactory: () => {
+      const config = creditPurchaseConfigFromEnvironment(process.env);
+      return new CreditPurchaseRepository(sharedPool(config.databaseUrl), sharedPool(config.operationsDatabaseUrl));
+    } },
     { provide: CREDIT_PURCHASE_PROVIDER, useFactory: () => {
       const config = creditPurchaseConfigFromEnvironment(process.env);
       return new RazorpayCreditPurchaseProvider(config, new AwsSecretsManagerProvider({ region: config.region }));

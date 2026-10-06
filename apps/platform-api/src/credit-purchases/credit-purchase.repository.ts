@@ -17,7 +17,7 @@ export interface CreditPurchaseRow {
 export type CreditPurchaseAudit = (row: CreditPurchaseRow, from: string | null, actor: { type: "user" | "service"; ref: string }) => Promise<string>;
 
 export class CreditPurchaseRepository {
-  constructor(private readonly pool: Pool) {}
+  constructor(private readonly pool: Pool, private readonly inventoryPool: Pick<Pool, "query"> = pool) {}
 
   async transaction<T>(tenantId: string, operation: (tx: PoolClient) => Promise<T>): Promise<T> {
     const tenant = TenantIdSchema.parse(tenantId).slice(4), tx = await this.pool.connect();
@@ -119,7 +119,7 @@ export class CreditPurchaseRepository {
   }
 
   async due(): Promise<{ tenant_id: string; purchase_id: string }[]> {
-    return (await this.pool.query<{ tenant_id: string; purchase_id: string }>("SELECT * FROM list_due_credit_purchases(100)")).rows;
+    return (await this.inventoryPool.query<{ tenant_id: string; purchase_id: string }>("SELECT * FROM list_due_credit_purchases(100)")).rows;
   }
 }
 

@@ -12,6 +12,10 @@ const reconciler = { type: "service" as const, ref: "svc_billing-credit-purchase
 type PurchaseActor = { type: "user" | "service"; ref: string };
 const terminal = new Set(["delivered", "cancelled", "expired"]);
 
+/**
+ * @driver bootstrap Platform API bootstrap initializes CreditPurchaseModule;
+ * Nest's module lifecycle starts and stops the durable reconciler.
+ */
 export class CreditPurchaseService implements OnModuleInit, OnModuleDestroy {
   private timer?: ReturnType<typeof setInterval>;
   private draining = false;
@@ -170,6 +174,7 @@ export function creditPurchaseEventContext(payload: unknown): { tenantId: string
 function record(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
+/** @driver create Customer checkout and reconciliation bound provider and audit confirmations. */
 async function deadline<T>(operation: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

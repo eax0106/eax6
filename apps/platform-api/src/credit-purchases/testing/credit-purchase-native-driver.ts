@@ -36,17 +36,18 @@ export async function createCreditPurchaseNativeDriver(databaseUrl: string) {
   const pool = new pg.Pool({ connectionString: url.href });
   const repository = new CreditPurchaseRepository(pool), webhook = new BillingWebhookRepository(pool);
   const audits: RecordEventRequest[] = [], providerInputs: CreditPurchaseProviderInput[] = [];
-  let auditHash = "a".repeat(64), failAudit = false, failCreate = false, creates = 0, reads = 0, synchronizeCalls = 0;
+  let auditHash = "a".repeat(64), failAudit = false, failCreate = false, hangCreate = false, hangRead = false, creates = 0, reads = 0, synchronizeCalls = 0;
   let checkout: CreditPurchaseCheckout | null = null;
   const provider: CreditPurchaseProvider = {
     create: async input => {
       creates++; providerInputs.push(input);
       checkout = { id: `plink_${randomUUID().replaceAll("-", "")}`, referenceId: input.purchaseId, tenantId: input.tenantId,
         amountMinor: input.quote.totalMinor, amountPaidMinor: 0, currency: "INR", status: "created", checkoutUrl: "https://rzp.io/rzp/native", payments: [] };
+      if (hangCreate) return new Promise<never>(()=>{});
       if (failCreate) throw new Error("Provider response lost after creation"); return checkout;
     },
-    get: async () => { reads++; if (!checkout) throw new Error("Provider checkout unavailable"); return checkout; },
-    find: async () => { reads++; return checkout; },
+    get: async () => { reads++; if (hangRead) return new Promise<never>(()=>{}); if (!checkout) throw new Error("Provider checkout unavailable"); return checkout; },
+    find: async () => { reads++; if (hangRead) return new Promise<never>(()=>{}); return checkout; },
   };
   const service = new CreditPurchaseService(repository, provider, { record: async input => {
     audits.push(input); if (failAudit) throw new Error("Audit unavailable"); return { id: `aud_${uuidv7()}`, entry_hash: auditHash };
@@ -57,6 +58,7 @@ export async function createCreditPurchaseNativeDriver(databaseUrl: string) {
     get checkout() { return checkout; }, set checkout(value: CreditPurchaseCheckout | null) { checkout = value; },
     get creates() { return creates; }, get reads() { return reads; }, get synchronizes() { return synchronizeCalls; },
     set failCreate(value: boolean) { failCreate = value; }, set failAudit(value: boolean) { failAudit = value; }, set auditHash(value: string) { auditHash = value; },
+    set hangCreate(value: boolean) { hangCreate = value; }, set hangRead(value: boolean) { hangRead = value; },
     async close() { service.onModuleDestroy(); await pool.end(); await admin.query(`DROP SCHEMA IF EXISTS "${schema}" CASCADE; DROP ROLE IF EXISTS "${role}"`); await admin.end(); },
   };
 }

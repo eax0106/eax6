@@ -121,7 +121,7 @@ CREATE OR REPLACE FUNCTION list_due_credit_purchases(batch_size integer) RETURNS
   LANGUAGE sql STABLE SECURITY DEFINER SET search_path FROM CURRENT SET row_security TO off AS $$
   SELECT p.tenant_id,p.id FROM credit_purchases p JOIN tenants t ON t.id=p.tenant_id
     WHERE p.state IN ('submitting','checkout_ready','payment_pending','delivery_pending') AND p.next_check_at<=clock_timestamp()
-    AND t.deleted_at IS NULL AND t.status<>'deleted'
+    AND t.deleted_at IS NULL AND t.status='active'
     ORDER BY p.next_check_at,p.id LIMIT LEAST(GREATEST(batch_size,1),100)
   $$;
 --> statement-breakpoint

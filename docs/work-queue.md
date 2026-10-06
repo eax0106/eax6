@@ -234,6 +234,12 @@ Admin golden-set history now reads actual eval-service run records through servi
 | C132 | D26 real staff billing operations: reasoned exact-revision run-credit grants, provider-bound hosted recovery and paid-only resolution, durable Engine credit delivery and guarded erasure | In progress: native proofs and five acceptance gates; no completion or merge claim | codex/billing-ops-c132 |
 
 
+### C133 — D22 configured customer extra-credit purchase
+
+| Item | Change and evidence | Status | Branch |
+| --- | --- | --- | --- |
+| C133 | Actual configured Razorpay hosted checkout, immutable quantity and GST snapshot, current owner/session authorization, acknowledged audit, durable provider uncertainty recovery, existing exact-once Engine credit delivery and truthful live billing UI. Six self-verification gates pass, including native storage 12, cookie HTTP 9, runtime 7, Engine delivery 4, rendered billing/API 41, full API 1,915 with coverage, database 131, web 507 and 22 behavioral fault controls. See `credit-purchase.md`. | Self-verification passed; fresh verification and exact-head CI remain required | codex/credit-purchase-c133 |
+
 ### C134 — Billing runtime database identities
 
 | Item | Change and evidence | Status | Branch |

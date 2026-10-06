@@ -83,6 +83,7 @@ export default defineConfig({
         "apps/platform-api/src/integrations/**/*.ts",
         "apps/platform-api/src/triggers/**/*.ts",
         "apps/platform-api/src/billing/**/*.ts",
+        "apps/platform-api/src/credit-purchases/**/*.ts",
         "apps/platform-api/src/discovery/**/*.ts",
         "apps/platform-api/src/publisher/**/*.ts",
         "apps/platform-api/src/admin-tenants/**/*.ts",
@@ -114,6 +115,8 @@ export default defineConfig({
         "apps/platform-api/src/integrations/**/*.spec.ts",
         "apps/platform-api/src/triggers/**/*.spec.ts",
         "apps/platform-api/src/billing/**/*.spec.ts",
+        "apps/platform-api/src/credit-purchases/**/*.spec.ts",
+        "apps/platform-api/src/credit-purchases/testing/**/*.ts",
         "apps/platform-api/src/discovery/**/*.spec.ts",
         "apps/platform-api/src/admin-tenants/**/*.spec.ts",
         "apps/platform-api/src/admin-policy/**/*.spec.ts",
@@ -244,6 +247,10 @@ export default defineConfig({
           branches: 90
         },
         "apps/platform-api/src/billing/**/*.ts": {
+          lines: 85,
+          branches: 80
+        },
+        "apps/platform-api/src/credit-purchases/**/*.ts": {
           lines: 85,
           branches: 80
         },

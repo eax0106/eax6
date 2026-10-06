@@ -23,7 +23,7 @@ export function BillingOverviewPage() {
   return <div className="space-y-8">
     <PageHeader title="Billing Overview" description={isLiveApi?"Your subscription and verified-run credits.":"Demo billing. Paid prices await configuration."}/>
     {(subscription.isError||plans.isError)&&<p role="alert" className="text-destructive">{subscription.error?.message??plans.error?.message}</p>}
-    <Button variant="outline" onClick={()=>{void subscription.refetch();void credits.refetch()}}>Refresh billing status</Button>
+    <Button variant="outline" onClick={()=>{void subscription.refetch();void plans.refetch();void credits.refetch()}}>Refresh billing status</Button>
     <div className="grid gap-6 md:grid-cols-2">
       <Card><CardHeader><CardTitle>Subscription</CardTitle></CardHeader><CardContent className="space-y-4">
         {current?<>

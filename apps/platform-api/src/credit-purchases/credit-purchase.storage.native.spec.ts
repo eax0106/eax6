@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { CreditPurchaseCheckout } from "@alterx/shared-clients";
 import { etag } from "./credit-purchase.service";
 import { createCreditPurchaseNativeDriver, type CreditPurchaseNativeDriver } from "./testing/credit-purchase-native-driver";
 
@@ -90,6 +91,9 @@ describe.skipIf(!databaseUrl)("credit purchases ordinary PostgreSQL", () => {
     const partial = await d.service.refresh(d.tenant, d.user, purchase.id, etag(purchase)); expect(partial.state).toBe("payment_pending");
     d.checkout = { ...d.checkout!, status: "paid", amountPaidMinor: purchase.quote.totalMinor, payments: [] };
     expect((await d.service.refresh(d.tenant, d.user, purchase.id, etag(partial))).state).toBe("payment_pending");
+    d.checkout = { ...d.checkout!, payments: [0,1].map(index => ({ id: `pay_duplicate${index}`, linkId: d.checkout!.id,
+      amountMinor: purchase.quote.totalMinor, status: "captured", createdAt: new Date().toISOString() })) };
+    expect((await d.service.refresh(d.tenant, d.user, purchase.id, etag(partial))).state).toBe("payment_pending");
     expect(await deliveries()).toEqual([]);
     await expect(d.repository.transaction(d.tenant, tx => tx.query("UPDATE credit_purchases SET credits=4 WHERE id=$1", [purchase.id]))).rejects.toThrow("immutable");
     expect((await d.repository.transaction(d.tenant, tx => tx.query("UPDATE credit_purchase_events SET actor_ref='made-up' WHERE purchase_id=$1", [purchase.id]))).rowCount).toBe(0);
@@ -99,12 +103,15 @@ describe.skipIf(!databaseUrl)("credit purchases ordinary PostgreSQL", () => {
 
   it("rejects wrong tenant, amount, link identity and late captured payment without an outbox write", async () => {
     const purchase = await paid(), valid = d.checkout!;
-    for (const wrong of [{ tenantId: d.otherTenant }, { amountMinor: 100 }, { id: "plink_wrong" },
+    for (const wrong of [{ tenantId: d.otherTenant }, { amountMinor: 100 }, { id: "plink_wrong" }, { checkoutUrl: "https://outside.test/pay" },
+      // Deliberately malformed provider-edge value cannot satisfy its declared contract.
+      { payments: [{ ...valid.payments[0]!, status: "authorized" }] } as unknown as Partial<CreditPurchaseCheckout>,
       { payments: [{ ...valid.payments[0]!, createdAt: "2020-01-01T00:00:00.000Z" }] },
-      { payments: [{ ...valid.payments[0]!, createdAt: new Date(Date.now() + 600_000).toISOString() }] }]) {
+      { payments: [{ ...valid.payments[0]!, createdAt: new Date(Date.now() + 600_000).toISOString() }] }] satisfies Partial<CreditPurchaseCheckout>[]) {
       d.checkout = { ...valid, ...wrong };
       await expect(d.service.refresh(d.tenant, d.user, purchase.id, etag(purchase))).rejects.toThrow();
       expect(await deliveries()).toEqual([]);
+      expect(await d.service.get(d.tenant, d.user, purchase.id)).toEqual(purchase);
     }
   });
 
@@ -113,12 +120,24 @@ describe.skipIf(!databaseUrl)("credit purchases ordinary PostgreSQL", () => {
     const pending = await d.service.refresh(d.tenant, d.user, purchase.id, etag(purchase));
     expect(pending.state).toBe("delivery_pending"); expect(await deliveries()).toHaveLength(1);
     expect((await deliveries())[0]).toMatchObject({ payment_ref: "pay_purchaseNative", credits: 3, published_at: null });
-    await d.service.reconcile(d.tenant, purchase.id); await d.service.reconcile(d.tenant, purchase.id);
+    expect((await d.service.reconcile(d.tenant, purchase.id)).state).toBe("delivery_pending");
+    expect((await d.service.reconcile(d.tenant, purchase.id)).state).toBe("delivery_pending");
     expect(await deliveries()).toHaveLength(1);
     await d.admin.query("UPDATE billing_credit_deliveries SET published_at=clock_timestamp() WHERE tenant_id=$1", [d.tenantA]);
     expect((await d.service.reconcile(d.tenant, purchase.id)).state).toBe("delivered");
     expect((await d.admin.query("SELECT revision,to_state FROM credit_purchase_events ORDER BY revision")).rows).toEqual([
       { revision: 1, to_state: "submitting" }, { revision: 2, to_state: "checkout_ready" }, { revision: 3, to_state: "delivery_pending" }, { revision: 4, to_state: "delivered" }]);
+  });
+
+  it("keeps inactive tenants out of bounded reconciliation inventory and resumes them after reactivation", async () => {
+    const purchase = await create();
+    const other = await d.service.create(d.otherTenant, d.otherUser, d.input, key());
+    await d.admin.query("UPDATE tenants SET status='suspended' WHERE id=$1", [d.tenantA]);
+    expect(await d.repository.due()).toEqual([{ tenant_id: d.tenantB, purchase_id: other.id }]);
+    await expect(d.repository.reserveDue(d.tenant, purchase.id)).rejects.toMatchObject({ response: { error_code: "CREDIT_PURCHASE_TENANT_UNAVAILABLE" } });
+    await d.admin.query("UPDATE tenants SET status='active' WHERE id=$1", [d.tenantA]);
+    expect(await d.repository.due()).toContainEqual({ tenant_id: d.tenantA, purchase_id: purchase.id });
+    expect(await d.repository.reserveDue(d.tenant, purchase.id)).toBe(true);
   });
 
   it("persists reconciliation backoff without changing the displayed revision or monopolizing failed inventory", async () => {
