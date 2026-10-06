@@ -105,9 +105,15 @@ export function processStamp(pid) {
 export function assertNoPnpm() {
   // Match process arguments privately: pnpm's executable often appears as
   // "node" in comm. Never print other processes' argument strings.
-  const result = spawnSync('pgrep', ['-f', '[p]npm'], { stdio: 'ignore' });
+  const result = spawnSync('pgrep', ['-f', '[p]npm'], { encoding: 'utf8' });
   if (result.error || ![0, 1].includes(result.status)) throw new Error('Cannot check concurrent pnpm; installation refused');
-  if (result.status === 0) throw new Error('pnpm already running; installation refused');
+  for (const pid of result.stdout.trim().split(/\s+/).filter(Boolean)) {
+    const args = spawnSync('ps', ['-p', pid, '-o', 'args='], { encoding: 'utf8' });
+    if (args.error) throw new Error('Cannot inspect concurrent pnpm; installation refused');
+    if (/(?:^|\s)(?:\S*\/)?pnpm(?:\.(?:c?js|mjs))?(?:\s|$)/.test(args.stdout)) {
+      throw new Error('pnpm already running; installation refused');
+    }
+  }
 }
 
 export async function stopOwnedProcess(row) {

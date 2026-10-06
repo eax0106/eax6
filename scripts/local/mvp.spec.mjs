@@ -88,8 +88,15 @@ test('port checks refuse malformed values before opening a socket', async () => 
 });
 
 test('installation guard detects pnpm arguments even when process executable is node', async () => {
-  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'pnpm-install-control'], { stdio: 'ignore' });
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '/tmp/pnpm.cjs'], { stdio: 'ignore' });
   await once(child, 'spawn');
   try { assert.throws(assertNoPnpm, /pnpm already running/); }
+  finally { child.kill('SIGTERM'); await once(child, 'exit'); }
+});
+
+test('installation guard ignores dependency paths containing pnpm', async () => {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '/tmp/node_modules/.pnpm/server-pdf/node_modules/server-pdf/index.js'], { stdio: 'ignore' });
+  await once(child, 'spawn');
+  try { assert.doesNotThrow(assertNoPnpm); }
   finally { child.kill('SIGTERM'); await once(child, 'exit'); }
 });
