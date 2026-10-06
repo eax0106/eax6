@@ -43,6 +43,14 @@ import {
 } from "./tool-catalog";
 
 import { createCostEventId } from "./cost-event-id";
+import {
+  KNOWLEDGE_SEARCH_TOOL_NAME,
+  WHATSAPP_SEND_TOOL_NAME,
+  parseKnowledgeSearchInput,
+  parseWhatsappSendInput,
+  type KnowledgeSearchPort,
+  type WhatsappSendPort,
+} from "./workspace-tools";
 
 interface CredentialRecord {
   readonly secretReference: string;
@@ -64,6 +72,10 @@ interface ArtifactRecord {
 
 export interface ToolGatewayServiceOptions {
   readonly resolveConnection?: (input: ConnectionCredentialLookup) => Promise<string>;
+  /** knowledge.search: the run workspace's own documents. */
+  readonly knowledgeSearch?: KnowledgeSearchPort;
+  /** whatsapp.send: the run workspace's connected WhatsApp account. */
+  readonly whatsappSend?: WhatsappSendPort;
   readonly credentialTokenTtlMs?: number;
   readonly maxCredentialTokens?: number;
   readonly artifactTtlMs?: number;
@@ -163,6 +175,8 @@ export class ToolGatewayService implements ToolgwHandler {
   readonly #mintId: () => string;
   readonly #mintCostEventId: () => string;
   readonly #resolveConnection: ToolGatewayServiceOptions["resolveConnection"];
+  readonly #knowledgeSearch: KnowledgeSearchPort | undefined;
+  readonly #whatsappSend: WhatsappSendPort | undefined;
 
   constructor(
     private readonly configProvider: ConfigProvider,
@@ -200,6 +214,8 @@ export class ToolGatewayService implements ToolgwHandler {
     this.#mintId = options.mintId ?? uuidV7;
     this.#mintCostEventId = options.mintCostEventId ?? createCostEventId;
     this.#resolveConnection = options.resolveConnection;
+    this.#knowledgeSearch = options.knowledgeSearch;
+    this.#whatsappSend = options.whatsappSend;
   }
 
   async invokeTool(
@@ -265,6 +281,19 @@ export class ToolGatewayService implements ToolgwHandler {
       // to scope email.send against.
       if (request.tool_name === EMAIL_SEND_TOOL_NAME) {
         const response = await this.#dispatchEmail(request);
+        await this.#auditToolInvocation(request, "success");
+        return response;
+      }
+
+      // The run's own workspace scopes both: the engine names it, the input
+      // cannot.
+      if (request.tool_name === KNOWLEDGE_SEARCH_TOOL_NAME && this.#knowledgeSearch !== undefined) {
+        const response = await this.#dispatchKnowledgeSearch(request, this.#knowledgeSearch);
+        await this.#auditToolInvocation(request, "success");
+        return response;
+      }
+      if (request.tool_name === WHATSAPP_SEND_TOOL_NAME && this.#whatsappSend !== undefined) {
+        const response = await this.#dispatchWhatsappSend(request, this.#whatsappSend);
         await this.#auditToolInvocation(request, "success");
         return response;
       }
@@ -465,6 +494,28 @@ export class ToolGatewayService implements ToolgwHandler {
       output_json: outputJson,
       audit_id: `aud_${this.#mintId()}`,
     };
+  }
+
+  async #dispatchKnowledgeSearch(request: ToolgwInvokeToolRequest, port: KnowledgeSearchPort): Promise<ToolgwInvokeToolResponse> {
+    const input = parseKnowledgeSearchInput(request.input_json);
+    const results = await port.search({ tenantId: request.tenant_id, runId: request.run_id }, input);
+    // Whole results only: a cut passage could change what it says.
+    const kept: typeof results[number][] = [];
+    for (const result of results) {
+      if (Buffer.byteLength(JSON.stringify({ results: [...kept, result] }), "utf8") > MAX_TOOL_OUTPUT_BYTES) break;
+      kept.push(result);
+    }
+    return { output_json: JSON.stringify({ results: kept }), audit_id: `aud_${this.#mintId()}` };
+  }
+
+  async #dispatchWhatsappSend(request: ToolgwInvokeToolRequest, port: WhatsappSendPort): Promise<ToolgwInvokeToolResponse> {
+    const input = parseWhatsappSendInput(request.input_json);
+    const outputJson = await this.#costed(
+      request,
+      { provider: "meta.whatsapp", resourceType: `tool_gateway.${WHATSAPP_SEND_TOOL_NAME}`, units: 1 },
+      async () => JSON.stringify(await port.send({ tenantId: request.tenant_id, runId: request.run_id }, input)),
+    );
+    return { output_json: outputJson, audit_id: `aud_${this.#mintId()}` };
   }
 
   // ENGINE-RESTRUCTURE-P4-3: cache is acceleration only, never a hard
@@ -784,7 +835,8 @@ export class ToolGatewayService implements ToolgwHandler {
       // per-tenant browser-automation secret exists or needs to.
       if (
         isBrowserAutomationCredentialReference(reference) ||
-        isEmailSendCredentialReference(reference)
+        isEmailSendCredentialReference(reference) ||
+        isRunScopedCredentialReference(reference)
       ) {
         return reference;
       }
@@ -1192,6 +1244,17 @@ function isEmailSendCredentialReference(reference: string): boolean {
   return (
     ownership !== undefined && ownership.integrationId === EMAIL_SEND_INTEGRATION
   );
+}
+
+// knowledge.search and whatsapp.send hold no per-reference secret: the engine
+// resolves the run's workspace, and with it the documents or the connected
+// WhatsApp account and its own token reference (workspace-tools.ts). The same
+// holds for search.web, whose provider key is platform-wide. These reserved
+// segments name that, exactly as email-send and browser-automation do.
+const RUN_SCOPED_INTEGRATIONS: ReadonlySet<string> = new Set(["knowledge-search", "whatsapp-send", "web-search"]);
+function isRunScopedCredentialReference(reference: string): boolean {
+  const ownership = parseTenantIntegrationSecretReference(reference);
+  return ownership !== undefined && RUN_SCOPED_INTEGRATIONS.has(ownership.integrationId);
 }
 
 interface EmailSendInput {

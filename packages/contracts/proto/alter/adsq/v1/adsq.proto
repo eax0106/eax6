@@ -16,6 +16,7 @@ message RetrievalHit {
   double score = 3;
   double confidence = 4;
   string provenance_json = 5;
+  string context = 6; // the chunk's text, so a caller can answer from it
 }
 message RetrieveRequest {
   reserved 100 to 199;

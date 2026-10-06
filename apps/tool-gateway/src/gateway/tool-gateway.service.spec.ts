@@ -1293,7 +1293,13 @@ describe("ToolGatewayService dispatch agrees with the catalogue", () => {
   // ToolGatewayNotImplementedError. So "not that error" is exactly the
   // assertion "dispatch was reached", without needing eleven valid payloads.
   it.each(dispatchedToolNames())("reaches a real dispatch for %s", async (toolName) => {
-    const service = buildService();
+    // knowledge.search and whatsapp.send dispatch only once their ports are wired.
+    const service = buildService({
+      options: {
+        knowledgeSearch: { search: async () => [] },
+        whatsappSend: { send: async () => ({ messageId: "unused" }) },
+      },
+    });
 
     const outcome = await service
       .invokeTool(invokeRequest({ tool_name: toolName, input_json: "{}" }))
@@ -1311,5 +1317,118 @@ describe("ToolGatewayService dispatch agrees with the catalogue", () => {
     await expect(
       service.invokeTool(invokeRequest({ tool_name: "browser.screenshot" })),
     ).rejects.toThrow(/is not a tool this gateway offers/);
+  });
+});
+
+describe("knowledge.search and whatsapp.send dispatch (run-scoped workspace tools)", () => {
+  const KNOWLEDGE_REF = `/alter/prod/tenant/${TENANT_A}/integration/knowledge-search/default`;
+  const WHATSAPP_REF = `/alter/prod/tenant/${TENANT_A}/integration/whatsapp-send/default`;
+
+  function knowledgeRequest(inputOverrides: Record<string, unknown> = {}) {
+    return invokeRequest({
+      tool_name: "knowledge.search",
+      input_json: JSON.stringify({ query: "refund policy", ...inputOverrides }),
+      credential_ref: KNOWLEDGE_REF,
+    });
+  }
+
+  function whatsappRequest(inputOverrides: Record<string, unknown> = {}) {
+    return invokeRequest({
+      tool_name: "whatsapp.send",
+      input_json: JSON.stringify({ to: "919876543210", text: "Your order shipped.", ...inputOverrides }),
+      credential_ref: WHATSAPP_REF,
+    });
+  }
+
+  it("searches through the port with the request's tenant and run", async () => {
+    const search = vi.fn(async () => [{ documentId: "doc-1", title: "Policy", text: "Refunds within 30 days.", score: 0.9 }]);
+    const service = buildService({ options: { knowledgeSearch: { search } } });
+
+    const response = await service.invokeTool(knowledgeRequest({ topK: 2 }));
+
+    expect(search).toHaveBeenCalledWith(
+      { tenantId: TENANT_A, runId: "run_018f47a2-7b11-7b11-8a11-1234567890ab" },
+      { query: "refund policy", topK: 2 },
+    );
+    expect(JSON.parse(response.output_json)).toEqual({
+      results: [{ documentId: "doc-1", title: "Policy", text: "Refunds within 30 days.", score: 0.9 }],
+    });
+  });
+
+  it("keeps whole results only when the output would pass the size cap", async () => {
+    const big = "x".repeat(400_000);
+    const search = vi.fn(async () => [
+      { documentId: "a", title: null, text: big, score: 0.9 },
+      { documentId: "b", title: null, text: big, score: 0.8 },
+      { documentId: "c", title: null, text: big, score: 0.7 },
+      { documentId: "d", title: null, text: big, score: 0.6 },
+    ]);
+    const service = buildService({ options: { knowledgeSearch: { search } } });
+
+    const response = await service.invokeTool(knowledgeRequest());
+    const kept = (JSON.parse(response.output_json) as { results: { documentId: string }[] }).results;
+
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.length).toBeLessThan(4);
+    expect(kept.map((result) => result.documentId)).toEqual(["a", "b", "c", "d"].slice(0, kept.length));
+  });
+
+  it("rejects a bad knowledge.search input before the port is called", async () => {
+    const search = vi.fn(async () => []);
+    const service = buildService({ options: { knowledgeSearch: { search } } });
+
+    await expect(service.invokeTool(knowledgeRequest({ topK: 99 }))).rejects.toBeInstanceOf(ToolGatewayValidationError);
+    expect(search).not.toHaveBeenCalled();
+  });
+
+  it("sends a WhatsApp message through the port and emits a cost event", async () => {
+    const send = vi.fn(async () => ({ messageId: "wamid.42" }));
+    const publish = vi.fn<(queueName: string, message: unknown) => Promise<void>>(async () => undefined);
+    const service = buildService({ costQueue: createMockQueueProvider({ publish }), options: { whatsappSend: { send } } });
+
+    const response = await service.invokeTool(whatsappRequest());
+
+    expect(JSON.parse(response.output_json)).toEqual({ messageId: "wamid.42" });
+    expect(send).toHaveBeenCalledWith(
+      { tenantId: TENANT_A, runId: "run_018f47a2-7b11-7b11-8a11-1234567890ab" },
+      { to: "919876543210", text: "Your order shipped." },
+    );
+    const [, event] = publish.mock.calls[0] as [string, Record<string, unknown>];
+    expect(JSON.parse(event.usage_json as string)).toMatchObject({ resource_type: "tool_gateway.whatsapp.send", outcome: "success" });
+  });
+
+  it("denies whatsapp.send without a grant, audits it and never sends", async () => {
+    const send = vi.fn(async () => ({ messageId: "never" }));
+    const auditClient = createMockAuditEventHandler();
+    const service = buildService({
+      configProvider: createMockConfigProvider({ toolPermission: { allowed: false, rateLimitPerMinute: 60, requiredScopes: [] } }),
+      auditClient,
+      options: { whatsappSend: { send } },
+    });
+
+    await expect(service.invokeTool(whatsappRequest())).rejects.toBeInstanceOf(ToolGatewayPermissionError);
+    expect(send).not.toHaveBeenCalled();
+    expect((auditClient as ReturnType<typeof createMockAuditEventHandler>).getRecordedEvents()).toContainEqual(
+      expect.objectContaining({ target_ref: "whatsapp.send", result: "denied" }),
+    );
+  });
+
+  it("rejects a credential_ref owned by another tenant for both tools", async () => {
+    const search = vi.fn(async () => []);
+    const send = vi.fn(async () => ({ messageId: "never" }));
+    const service = buildService({ options: { knowledgeSearch: { search }, whatsappSend: { send } } });
+    const other = (integration: string) => `/alter/prod/tenant/${TENANT_B}/integration/${integration}/default`;
+
+    await expect(service.invokeTool({ ...knowledgeRequest(), credential_ref: other("knowledge-search") })).rejects.toThrow();
+    await expect(service.invokeTool({ ...whatsappRequest(), credential_ref: other("whatsapp-send") })).rejects.toThrow();
+    expect(search).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it("stays not-implemented when the workspace ports are not wired", async () => {
+    const service = buildService();
+
+    await expect(service.invokeTool(knowledgeRequest())).rejects.toBeInstanceOf(ToolGatewayNotImplementedError);
+    await expect(service.invokeTool(whatsappRequest())).rejects.toBeInstanceOf(ToolGatewayNotImplementedError);
   });
 });

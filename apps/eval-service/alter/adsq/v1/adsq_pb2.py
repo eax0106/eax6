@@ -24,27 +24,27 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18\x61lter/adsq/v1/adsq.proto\x12\ralter.adsq.v1\"\x7f\n\x0cRetrievalHit\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x17\n\x0f\x63hunk_reference\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x01\x12\x12\n\nconfidence\x18\x04 \x01(\x01\x12\x17\n\x0fprovenance_json\x18\x05 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\xa3\x01\n\x0fRetrieveRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\r\n\x05query\x18\x03 \x01(\t\x12\x11\n\tscope_ids\x18\x04 \x03(\t\x12\r\n\x05top_k\x18\x05 \x01(\r\x12\x1c\n\x14metadata_filter_json\x18\x06 \x01(\t\x12\x11\n\trequester\x18\x07 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"D\n\x10RetrieveResponse\x12)\n\x04hits\x18\x01 \x03(\x0b\x32\x1b.alter.adsq.v1.RetrievalHitJ\x05\x08\x64\x10\xc8\x01\"\x7f\n\rRerankRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\r\n\x05query\x18\x03 \x01(\t\x12/\n\ncandidates\x18\x04 \x03(\x0b\x32\x1b.alter.adsq.v1.RetrievalHitJ\x05\x08\x64\x10\xc8\x01\"B\n\x0eRerankResponse\x12)\n\x04hits\x18\x01 \x03(\x0b\x32\x1b.alter.adsq.v1.RetrievalHitJ\x05\x08\x64\x10\xc8\x01\"E\n\x14GetProvenanceRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x13\n\x0b\x64ocument_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"K\n\x15GetProvenanceResponse\x12\x17\n\x0fprovenance_json\x18\x01 \x01(\t\x12\x12\n\nconfidence\x18\x02 \x01(\x01J\x05\x08\x64\x10\xc8\x01\x32\xfd\x01\n\x0b\x41\x64sqService\x12K\n\x08Retrieve\x12\x1e.alter.adsq.v1.RetrieveRequest\x1a\x1f.alter.adsq.v1.RetrieveResponse\x12\x45\n\x06Rerank\x12\x1c.alter.adsq.v1.RerankRequest\x1a\x1d.alter.adsq.v1.RerankResponse\x12Z\n\rGetProvenance\x12#.alter.adsq.v1.GetProvenanceRequest\x1a$.alter.adsq.v1.GetProvenanceResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18\x61lter/adsq/v1/adsq.proto\x12\ralter.adsq.v1\"\x90\x01\n\x0cRetrievalHit\x12\x13\n\x0b\x64ocument_id\x18\x01 \x01(\t\x12\x17\n\x0f\x63hunk_reference\x18\x02 \x01(\t\x12\r\n\x05score\x18\x03 \x01(\x01\x12\x12\n\nconfidence\x18\x04 \x01(\x01\x12\x17\n\x0fprovenance_json\x18\x05 \x01(\t\x12\x0f\n\x07\x63ontext\x18\x06 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"\xa3\x01\n\x0fRetrieveRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\r\n\x05query\x18\x03 \x01(\t\x12\x11\n\tscope_ids\x18\x04 \x03(\t\x12\r\n\x05top_k\x18\x05 \x01(\r\x12\x1c\n\x14metadata_filter_json\x18\x06 \x01(\t\x12\x11\n\trequester\x18\x07 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"D\n\x10RetrieveResponse\x12)\n\x04hits\x18\x01 \x03(\x0b\x32\x1b.alter.adsq.v1.RetrievalHitJ\x05\x08\x64\x10\xc8\x01\"\x7f\n\rRerankRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x14\n\x0cworkspace_id\x18\x02 \x01(\t\x12\r\n\x05query\x18\x03 \x01(\t\x12/\n\ncandidates\x18\x04 \x03(\x0b\x32\x1b.alter.adsq.v1.RetrievalHitJ\x05\x08\x64\x10\xc8\x01\"B\n\x0eRerankResponse\x12)\n\x04hits\x18\x01 \x03(\x0b\x32\x1b.alter.adsq.v1.RetrievalHitJ\x05\x08\x64\x10\xc8\x01\"E\n\x14GetProvenanceRequest\x12\x11\n\ttenant_id\x18\x01 \x01(\t\x12\x13\n\x0b\x64ocument_id\x18\x02 \x01(\tJ\x05\x08\x64\x10\xc8\x01\"K\n\x15GetProvenanceResponse\x12\x17\n\x0fprovenance_json\x18\x01 \x01(\t\x12\x12\n\nconfidence\x18\x02 \x01(\x01J\x05\x08\x64\x10\xc8\x01\x32\xfd\x01\n\x0b\x41\x64sqService\x12K\n\x08Retrieve\x12\x1e.alter.adsq.v1.RetrieveRequest\x1a\x1f.alter.adsq.v1.RetrieveResponse\x12\x45\n\x06Rerank\x12\x1c.alter.adsq.v1.RerankRequest\x1a\x1d.alter.adsq.v1.RerankResponse\x12Z\n\rGetProvenance\x12#.alter.adsq.v1.GetProvenanceRequest\x1a$.alter.adsq.v1.GetProvenanceResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'alter.adsq.v1.adsq_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
-  _globals['_RETRIEVALHIT']._serialized_start=43
-  _globals['_RETRIEVALHIT']._serialized_end=170
-  _globals['_RETRIEVEREQUEST']._serialized_start=173
-  _globals['_RETRIEVEREQUEST']._serialized_end=336
-  _globals['_RETRIEVERESPONSE']._serialized_start=338
-  _globals['_RETRIEVERESPONSE']._serialized_end=406
-  _globals['_RERANKREQUEST']._serialized_start=408
-  _globals['_RERANKREQUEST']._serialized_end=535
-  _globals['_RERANKRESPONSE']._serialized_start=537
-  _globals['_RERANKRESPONSE']._serialized_end=603
-  _globals['_GETPROVENANCEREQUEST']._serialized_start=605
-  _globals['_GETPROVENANCEREQUEST']._serialized_end=674
-  _globals['_GETPROVENANCERESPONSE']._serialized_start=676
-  _globals['_GETPROVENANCERESPONSE']._serialized_end=751
-  _globals['_ADSQSERVICE']._serialized_start=754
-  _globals['_ADSQSERVICE']._serialized_end=1007
+  _globals['_RETRIEVALHIT']._serialized_start=44
+  _globals['_RETRIEVALHIT']._serialized_end=188
+  _globals['_RETRIEVEREQUEST']._serialized_start=191
+  _globals['_RETRIEVEREQUEST']._serialized_end=354
+  _globals['_RETRIEVERESPONSE']._serialized_start=356
+  _globals['_RETRIEVERESPONSE']._serialized_end=424
+  _globals['_RERANKREQUEST']._serialized_start=426
+  _globals['_RERANKREQUEST']._serialized_end=553
+  _globals['_RERANKRESPONSE']._serialized_start=555
+  _globals['_RERANKRESPONSE']._serialized_end=621
+  _globals['_GETPROVENANCEREQUEST']._serialized_start=623
+  _globals['_GETPROVENANCEREQUEST']._serialized_end=692
+  _globals['_GETPROVENANCERESPONSE']._serialized_start=694
+  _globals['_GETPROVENANCERESPONSE']._serialized_end=769
+  _globals['_ADSQSERVICE']._serialized_start=772
+  _globals['_ADSQSERVICE']._serialized_end=1025
 # @@protoc_insertion_point(module_scope)

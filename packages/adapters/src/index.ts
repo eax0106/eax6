@@ -282,6 +282,14 @@ export {
   type EvalServiceHandlerClient,
 } from "./grpc/eval-client";
 export {
+  AdsQueryClient,
+  AdsQueryClientError,
+  type AdsQueryClientConfig,
+  type AdsQueryHandlerClient,
+  type AdsRetrievalHit,
+  type AdsRetrieveRequest,
+} from "./grpc/adsq-client";
+export {
   VerifyServiceClient,
   VerifyServiceClientError,
   type VerifyServiceClientConfig,

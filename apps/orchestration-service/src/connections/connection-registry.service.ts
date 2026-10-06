@@ -1,4 +1,4 @@
-import { ConnectionCredentialLookupSchema, parseConnectionSecretReference, ConnectionRegistrySnapshotSchema, type ConnectionCredentialLookup, type ConnectionRegistrySnapshot } from "@alterx/contracts";
+import { ConnectionCredentialLookupSchema, parseConnectionSecretReference, ConnectionRegistrySnapshotSchema, RunScopeLookupSchema, RunScopeSchema, type ConnectionCredentialLookup, type ConnectionRegistrySnapshot, type RunScope, type RunScopeLookup } from "@alterx/contracts";
 import type { OrchestrationTenantStore } from "../compiler/graph-compiler.service";
 
 export class ConnectionRegistryConflictError extends Error {}
@@ -48,6 +48,24 @@ export class ConnectionRegistryService {
       )).rows[0];
       if (!row || row.secret_ref !== request.credential_ref) throw new ConnectionRegistryUnavailableError("CREDENTIAL_MISSING");
       return ConnectionRegistrySnapshotSchema.parse(row);
+    });
+  }
+
+  /** The run's workspace and its connected WhatsApp accounts, for Tool Gateway's knowledge and WhatsApp tools. */
+  async runScope(input: RunScopeLookup): Promise<RunScope> {
+    const request = RunScopeLookupSchema.parse(input);
+    const tenantId = request.tenant_id.slice("ten_".length);
+    return this.store.withTenant(tenantId, async tx => {
+      const run = (await tx.query<{ workspace_id: string }>(
+        "SELECT workspace_id FROM runs WHERE tenant_id=$1 AND id=$2", [tenantId, request.run_id],
+      )).rows[0];
+      if (!run) throw new ConnectionRegistryUnavailableError("RUN_NOT_FOUND");
+      const accounts = (await tx.query<{ account_id: string; phone_number_id: string; access_token_ref: string }>(
+        `SELECT id AS account_id, phone_number_id, access_token_ref FROM whatsapp_accounts
+         WHERE tenant_id=$1 AND workspace_id=$2 AND status='connected' ORDER BY created_at, id LIMIT 20`,
+        [tenantId, run.workspace_id],
+      )).rows;
+      return RunScopeSchema.parse({ workspace_id: run.workspace_id, whatsapp_accounts: accounts });
     });
   }
 

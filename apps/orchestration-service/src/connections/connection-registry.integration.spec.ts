@@ -72,6 +72,30 @@ describe.sequential("Engine connection registry HTTP and restricted PostgreSQL",
     await admin.withTenant(other, tx => tx.query("INSERT INTO runs(id,tenant_id,workspace_id,parent_kind) VALUES ($1,$2,$3,'workflow')", [foreignRunId, other, workspace]));
   }
 
+  it("tells Tool Gateway a run's workspace and only that workspace's connected WhatsApp accounts", async () => {
+    await seedRuns();
+    const scope = (body: unknown, credential = lookupToken) => app.getHttpAdapter().getInstance().inject({
+      method: "POST", url: "/internal/connections/run-scope", payload: body as Record<string, unknown>,
+      headers: credential ? { authorization: `Bearer ${credential}` } : {},
+    });
+    await admin.withTenant(tenant, tx => tx.query(
+      `INSERT INTO whatsapp_accounts(id,tenant_id,workspace_id,phone_number_id,waba_id,access_token_ref,status) VALUES
+       ('wa_here',$1,$2,'1001','waba','/alter/whatsapp/here','connected'),
+       ('wa_off',$1,$2,'1002','waba','/alter/whatsapp/off','disconnected'),
+       ('wa_elsewhere',$1,$3,'1003','waba','/alter/whatsapp/elsewhere','connected')`, [tenant, workspace, otherWorkspace]));
+    try {
+      const found = await scope({ tenant_id: `ten_${tenant}`, run_id: runId });
+      expect(found.statusCode).toBe(200);
+      expect(found.json()).toEqual({ workspace_id: workspace, whatsapp_accounts: [
+        { account_id: "wa_here", phone_number_id: "1001", access_token_ref: "/alter/whatsapp/here" }] });
+      expect((await scope({ tenant_id: `ten_${tenant}`, run_id: runId }, token)).statusCode).toBe(401);
+      expect((await scope({ tenant_id: `ten_${tenant}`, run_id: foreignRunId })).statusCode).toBe(404);
+      expect((await scope({ tenant_id: `ten_${tenant}`, run_id: "run_x" })).statusCode).toBe(400);
+    } finally {
+      await admin.withTenant(tenant, tx => tx.query("DELETE FROM whatsapp_accounts WHERE id = ANY($1::text[])", [["wa_here", "wa_off", "wa_elsewhere"]]));
+    }
+  });
+
   it("authenticates reference-only run lookups with the separate read credential", async () => {
     await seedRuns();
     const record = snapshot(); await registry.upsert(record);

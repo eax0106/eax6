@@ -44,6 +44,7 @@ class TestMigrationFileStructure:
             "0007_capability_side_effects.py",
             "0008_register_canonical_tools.py",
             "0009_agent_owner_tenant.py",
+            "0010_register_workspace_tools.py",
         ]
 
     def test_all_tables_defined(self) -> None:
