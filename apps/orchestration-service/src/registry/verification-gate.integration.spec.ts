@@ -40,10 +40,11 @@ describe.sequential("verification Gate real Postgres path", () => {
   }, 90_000);
 
   it("persists a real quality row when Verify Gate scores a node, so Gate/Synthesis can read it back", async () => {
+    const scoreNodeInline = vi.fn().mockResolvedValue({
+      verdict: "pass", score: 0.95, threshold: 0.7, reviewer_model: "ADVANCED", details_json: "{\"rationale\":\"ok\"}",
+    });
     const verifyGate = new VerifyGateService({
-      scoreNodeInline: vi.fn().mockResolvedValue({
-        verdict: "pass", score: 0.95, threshold: 0.7, reviewer_model: "ADVANCED", details_json: "{\"rationale\":\"ok\"}",
-      }),
+      scoreNodeInline,
     });
     const scoredNodeexec = new NodeexecService(
       new NodeHandlerRegistry([new MergeHandler()]), ledger, undefined, undefined, undefined,
@@ -53,9 +54,12 @@ describe.sequential("verification Gate real Postgres path", () => {
 
     await scoredNodeexec.executeNode({
       tenant_id: TENANT_REQUEST, run_id: RUN, node_execution_id: nodeExecutionId,
-      node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: "{}",
+      node_key: "node_merge", node_type: "Merge", config_json: "{}", inputs_json: JSON.stringify({ reviewed: { total: 150 } }),
       success_criteria: [],
     });
+    expect(scoreNodeInline).toHaveBeenCalledWith(expect.objectContaining({
+      config_json: JSON.stringify({ upstream_inputs: { reviewed: { total: 150 } } }), output_json: JSON.stringify({ total: 150 }),
+    }));
 
     const row = await store.withTenant(TENANT, async (tx) => {
       const result = await tx.query<{ readonly gate_type: string; readonly verdict: string; readonly score: string; readonly threshold: string; readonly reviewer_model: string }>(
