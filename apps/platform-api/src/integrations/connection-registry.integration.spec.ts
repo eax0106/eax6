@@ -57,7 +57,7 @@ describe.skipIf(!process.env.CONNECTION_REGISTRY_TEST_URL).sequential("Platform 
   beforeAll(async () => {
     postgres = await new PostgreSqlContainer("postgres:16.6-alpine").withDatabase("platform_db").start();
     admin = new pg.Pool({ connectionString: postgres.getConnectionUri() });
-    for (const file of ["0000_platform_db_identity_foundation.sql", "0003_onboarding_states.sql", "0009_oauth_hub.sql", "0015_workspace_connector_configs.sql", "0032_connection_sync_revision.sql"]) await migrate(file);
+    for (const file of ["0000_platform_db_identity_foundation.sql", "0003_onboarding_states.sql", "0009_oauth_hub.sql", "0015_workspace_connector_configs.sql", "0032_connection_sync_revision.sql", "0039_oauth_reconnect_state.sql"]) await migrate(file);
     await admin.query("INSERT INTO tenants(id,name,status) VALUES($1,'Registry A','active'),($2,'Registry B','active')", [tenant, other]);
     await admin.query("INSERT INTO workspaces(id,tenant_id,name,status) VALUES($1,$2,'Main','active'),($3,$2,'Other','active')", [workspace, tenant, otherWorkspace]);
     const role = `connections_${randomBytes(6).toString("hex")}`, password = randomBytes(24).toString("hex");
@@ -96,8 +96,26 @@ describe.skipIf(!process.env.CONNECTION_REGISTRY_TEST_URL).sequential("Platform 
     } as ConnectorRuntimeConfigMap, registry, 300, new SystemIntegrationStore(system));
   });
   afterAll(async () => {
-    vi.unstubAllGlobals(); await engine?.end(); await runtime?.end(); await system?.end(); await admin?.end(); await postgres?.stop();
+    vi.unstubAllGlobals(); await engine?.end(); await runtime?.end(); await system?.end(); await admin?.end();
+    // Pool.end() resolves before its clients' sockets close. Stopping the container while a
+    // backend is still open makes Postgres send 57P01 to a client with no error listener,
+    // which Vitest reports as an unhandled error. Wait for every other backend to go first.
+    if (postgres) await waitForClientsToClose(postgres.getConnectionUri());
+    await postgres?.stop();
   });
+
+  async function waitForClientsToClose(connectionString: string): Promise<void> {
+    const probe = new pg.Client({ connectionString });
+    await probe.connect();
+    try {
+      for (let attempt = 0; attempt < 200; attempt += 1) {
+        const result = await probe.query<{ open: number }>("SELECT count(*)::int AS open FROM pg_stat_activity WHERE backend_type='client backend' AND pid<>pg_backend_pid()");
+        if (result.rows[0]?.open === 0) return;
+        await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+      }
+      throw new Error("Postgres client connections stayed open after their pools ended");
+    } finally { await probe.end(); }
+  }
 
   it("connects, reconnects the same account and propagates health using references only", async () => {
     const first = await connect();
