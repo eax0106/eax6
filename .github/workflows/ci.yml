@@ -259,6 +259,10 @@ jobs:
       - name: build all projects
         run: pnpm exec nx run-many -t build --all --parallel=2
 
+      - name: local Intelligence restricted migration proof
+        working-directory: apps/intelligence-service
+        run: uv run --frozen pytest -q -s ../../scripts/local/test_mvp_intelligence_migrate.py
+
       - name: safety classifier parity and duplicate implementation probes
         run: |
           node scripts/check-injection-parity.mjs

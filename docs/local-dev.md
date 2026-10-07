@@ -31,6 +31,14 @@ ownership live in `tmp/local-mvp/`; configuration is generated once in
 `.env.mvp.local`. Both are private and gitignored. Stop preserves database
 volumes and credentials, and only stops resources recorded for this checkout.
 
+The MVP startup migrates Intelligence through revision 0008 as
+`intelligence_service`, runs only revision 0009 as the existing `engine_admin`
+to transfer the lookup function's ownership, then applies remaining revisions
+as `intelligence_service`. The administrative password is used only by that
+local migration step. The application keeps its restricted runtime connection;
+production migration files, grants and RLS policies are unchanged. Already
+upgraded databases skip the administrative step.
+
 Smoke signs in as the seeded mock member, lists and instantiates the meeting
 notes template, supplies a small local intake, recompiles, and reads the real
 run's persisted status, verification and cost. Without `--apply`, it stops

@@ -244,7 +244,12 @@ async function up() {
     const byName = new Map(all.map(row => [row.name, row]));
     await start(state, 'local-mock-auth0', process.execPath, ['scripts/local-mock-auth0/server.js'], env, root, byName.get('local-mock-auth0').url);
     await setup('pnpm', ['--filter', '@alterx/platform-api', 'db:migrate'], env);
-    for (const name of pythonServices.filter(name => name !== 'verification-service')) await setup('uv', ['run', '--frozen', 'alembic', 'upgrade', 'head'], env, resolve(root, 'apps', name));
+    for (const name of pythonServices.filter(name => name !== 'verification-service')) {
+      const args = name === 'intelligence-service'
+        ? ['run', '--frozen', 'python', resolve(root, 'scripts/local/mvp-intelligence-migrate.py')]
+        : ['run', '--frozen', 'alembic', 'upgrade', 'head'];
+      await setup('uv', args, env, resolve(root, 'apps', name));
+    }
     for (const name of nodeServices.filter(name => !['platform-api', 'background-workers'].includes(name))) {
       const args = name === 'model-gateway' ? ['scripts/run-service-aws.sh', name] : [`dist/apps/${name}/main.js`];
       await start(state, name, name === 'model-gateway' ? 'bash' : process.execPath, args, env, root, byName.get(name).url);
