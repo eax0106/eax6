@@ -130,9 +130,11 @@ test('owned startup helper records private process state and refuses a failed na
   const reservation = createServer(); reservation.listen(0, '127.0.0.1'); await once(reservation, 'listening');
   const port = reservation.address().port; await new Promise(done => reservation.close(done));
   const state = {processes: []};
-  const source = `const {createServer}=require('node:http');createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify({status:'ok',service:'audit-service'}))}).listen(Number(process.argv[1]),'127.0.0.1');`;
+  const env = {...process.env, ALTER_SERVICE_NAME: 'foreign-service'};
+  const source = `if(process.env.ALTER_SERVICE_NAME!=='audit-service')throw Error('native child service identity missing');const {createServer}=require('node:http');createServer((req,res)=>{res.setHeader('content-type','application/json');res.end(JSON.stringify({status:'ok',service:'audit-service'}))}).listen(Number(process.argv[1]),'127.0.0.1');`;
   try {
-    await start(state, 'audit-service', process.execPath, ['-e', source, String(port)], process.env, dir, `http://127.0.0.1:${port}/health`);
+    await start(state, 'audit-service', process.execPath, ['-e', source, String(port)], env, dir, `http://127.0.0.1:${port}/health`);
+    assert.equal(env.ALTER_SERVICE_NAME, 'foreign-service', 'Parent environment stays unchanged');
     assert.equal(state.processes.length, 1); const row = state.processes[0];
     assert.equal(processStamp(row.pid), row.stamp);
     assert.deepEqual(JSON.parse(readFileSync(resolve(dir, 'tmp/local-mvp/state.json'), 'utf8')).processes, state.processes);

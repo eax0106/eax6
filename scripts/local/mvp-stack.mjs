@@ -154,7 +154,7 @@ function save(state) { writeFileSync(stateFile, JSON.stringify(state, null, 2) +
 export async function start(state, name, program, args, env, cwd = root, url) {
   console.log(`Starting ${name}`);
   const log = openSync(resolve(stateDir, `${name}.log`), 'a', 0o600);
-  const child = spawn(program, args, { cwd, env, detached: true, stdio: ['ignore', log, log] });
+  const child = spawn(program, args, { cwd, env: { ...env, ALTER_SERVICE_NAME: name }, detached: true, stdio: ['ignore', log, log] });
   closeSync(log);
   await new Promise((done, reject) => { child.once('spawn', done); child.once('error', reject); });
   child.unref();
