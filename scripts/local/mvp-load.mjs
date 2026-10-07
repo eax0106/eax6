@@ -80,7 +80,7 @@ export function durableDag(probe) {
     {key: 'approval', type: 'HumanApproval', config: {requested_action: {probe, action: 'local recovery fixture'}, expiry_seconds: 600}},
     {key: 'after', type: 'YAMLImport', config: {yaml: JSON.stringify({probe, phase: 'after'})}},
   ].map(node => ({...node, metadata: {ui: {}}}));
-  return {schema_version: 'v1', entry_node_keys: ['before'], nodes, success_criteria: [],
+  return {schema_version: 'v1', entry_node_keys: ['before'], nodes,
     edges: ['before', 'approval'].map((key, i) => ({key: `${key}-next`, from: key, to: nodes[i + 1].key, kind: 'sequential'})),
     waves: nodes.map((node, order) => ({key: `wave_${order}`, order, node_keys: [node.key], depends_on: order ? [`wave_${order - 1}`] : []}))};
 }

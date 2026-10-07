@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { createHash } from 'node:crypto';
+import { CompiledDagSchema } from '../../packages/contracts/dist/index.js';
 import { simulationBatch, assertStack, assertOwnedProcess, validateTrace, summarize, mockGatewayEnvironment, durableDag, assertDurableCompletion } from './mvp-load.mjs';
 
 const root = '/owned/checkout/';
@@ -98,7 +99,8 @@ test('durable evidence refuses duplicate effects, replaced executions and paid m
   assert.throws(() => mockGatewayEnvironment({...env, AWS_ENDPOINT_URL: 'https://sqs.amazonaws.com'}));
   const probe = 'durable-native-control', dag = durableDag(probe);
   assert.deepEqual(dag.nodes.map(row => row.type), ['YAMLImport', 'HumanApproval', 'YAMLImport']);
-  assert.deepEqual(dag.success_criteria, []); // No model judge or external action in this fixture.
+  CompiledDagSchema.parse(dag);
+  assert.equal(dag.success_criteria, undefined); // Optional absent; present empty is invalid.
   const before = {workflowExecutionInfo: {execution: {runId: 'temporal-execution', workflowId: 'run_fixture'}, status: 'WORKFLOW_EXECUTION_STATUS_RUNNING'},
     parkedEvents: ['EVENT_TYPE_TIMER_STARTED']};
   const after = structuredClone(before); after.workflowExecutionInfo.status = 'WORKFLOW_EXECUTION_STATUS_COMPLETED';
