@@ -57,7 +57,7 @@ describe.skipIf(!process.env.CONNECTION_REGISTRY_TEST_URL).sequential("Platform 
   beforeAll(async () => {
     postgres = await new PostgreSqlContainer("postgres:16.6-alpine").withDatabase("platform_db").start();
     admin = new pg.Pool({ connectionString: postgres.getConnectionUri() });
-    for (const file of ["0000_platform_db_identity_foundation.sql", "0003_onboarding_states.sql", "0009_oauth_hub.sql", "0015_workspace_connector_configs.sql", "0032_connection_sync_revision.sql"]) await migrate(file);
+    for (const file of ["0000_platform_db_identity_foundation.sql", "0003_onboarding_states.sql", "0009_oauth_hub.sql", "0015_workspace_connector_configs.sql", "0032_connection_sync_revision.sql", "0039_oauth_reconnect_state.sql"]) await migrate(file);
     await admin.query("INSERT INTO tenants(id,name,status) VALUES($1,'Registry A','active'),($2,'Registry B','active')", [tenant, other]);
     await admin.query("INSERT INTO workspaces(id,tenant_id,name,status) VALUES($1,$2,'Main','active'),($3,$2,'Other','active')", [workspace, tenant, otherWorkspace]);
     const role = `connections_${randomBytes(6).toString("hex")}`, password = randomBytes(24).toString("hex");
