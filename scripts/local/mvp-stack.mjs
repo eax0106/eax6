@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { connect as connectHttp2 } from 'node:http2';
 import { resolve } from 'node:path';
@@ -27,6 +27,106 @@ function realAwsEnvironment(env) {
   delete aws.AWS_ENDPOINT_URL;
   if (env.ALTER_AWS_PROFILE) aws.AWS_PROFILE = env.ALTER_AWS_PROFILE;
   return aws;
+}
+
+function preflightCommand(label, args, env) {
+  const result = spawnSync('aws', args, { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  if (result.error || result.status !== 0) throw new Error(`AWS preflight ${label} failed; no resources started`);
+  return result.stdout.trim();
+}
+
+function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
+function exactKeys(value, keys) {
+  return isObject(value) && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
+}
+function nonEmpty(value) { return typeof value === 'string' && value.trim().length > 0; }
+
+export function validateModelPolicy(value) {
+  const invalid = () => { throw new Error('AWS preflight AppConfig policy does not match ModelAliasPolicySchema'); };
+  if (!isObject(value) || !nonEmpty(value.version)
+    || !Object.keys(value).every(key => ['version', 'bindings', 'tool_permissions', 'cost_limits'].includes(key))
+    || !exactKeys(value.bindings, ['FAST', 'STANDARD', 'ADVANCED', 'CEILING'])) invalid();
+  for (const binding of Object.values(value.bindings)) {
+    if (!isObject(binding) || !Object.keys(binding).every(key => ['model_id', 'capability_tags', 'fallback_chain'].includes(key))
+      || !nonEmpty(binding.model_id) || !Array.isArray(binding.capability_tags) || !binding.capability_tags.every(nonEmpty)) invalid();
+    if (binding.fallback_chain !== undefined && (!Array.isArray(binding.fallback_chain)
+      || binding.fallback_chain.length > 10 || binding.fallback_chain.some(fallback => !exactKeys(fallback, ['provider', 'model_id'])
+        || !['anthropic', 'openai'].includes(fallback.provider) || !nonEmpty(fallback.model_id)))) invalid();
+  }
+  if (value.tool_permissions !== undefined && (!isObject(value.tool_permissions) || Object.entries(value.tool_permissions).some(([key, permission]) =>
+    !nonEmpty(key) || !exactKeys(permission, ['allowed', 'rate_limit_per_minute', 'required_scopes'])
+    || typeof permission.allowed !== 'boolean' || !Number.isInteger(permission.rate_limit_per_minute) || permission.rate_limit_per_minute <= 0
+    || !Array.isArray(permission.required_scopes) || !permission.required_scopes.every(nonEmpty)))) invalid();
+  if (value.cost_limits !== undefined && (!isObject(value.cost_limits) || Object.entries(value.cost_limits).some(([key, limit]) =>
+    !nonEmpty(key) || !exactKeys(limit, ['max_tokens_per_call', 'max_cost_usd_per_call'])
+    || !Number.isInteger(limit.max_tokens_per_call) || limit.max_tokens_per_call <= 0
+    || !Number.isFinite(limit.max_cost_usd_per_call) || limit.max_cost_usd_per_call <= 0))) invalid();
+  return value;
+}
+
+export function assertConfiguredModelPricing(policy, migrationSql) {
+  const prices = new Set();
+  const rows = /\('([^']+)',\s*'([^']+)',\s*'(input_tokens|output_tokens)',\s*([0-9.]+),\s*'([A-Z]+)'\)/g;
+  for (const match of migrationSql.matchAll(rows)) {
+    if (Number(match[4]) > 0 && match[5] === 'USD') prices.add(`${match[1]}/${match[2]}/${match[3]}`);
+  }
+  const models = new Map();
+  for (const [alias, binding] of Object.entries(policy.bindings)) {
+    models.set(`aws-bedrock/${binding.model_id}`, alias);
+    for (const fallback of binding.fallback_chain ?? []) models.set(`${fallback.provider}/${fallback.model_id}`, `${alias} fallback`);
+  }
+  for (const [model, alias] of models) {
+    for (const resource of ['input_tokens', 'output_tokens']) {
+      if (!prices.has(`${model}/${resource}`)) throw new Error(`AWS preflight missing Cost Ledger pricing for ${alias} ${model} ${resource}`);
+    }
+  }
+}
+
+function committedEnvironmentValue(name) {
+  const source = readFileSync(resolve(root, '.env.local.example'), 'utf8');
+  const matches = [...source.matchAll(new RegExp(`^${name}=([^\\r\\n]+)$`, 'gm'))];
+  if (matches.length !== 1 || !nonEmpty(matches[0][1])) throw new Error(`AWS preflight committed ${name} is missing`);
+  return matches[0][1];
+}
+
+export function awsPreflight(env) {
+  const aws = realAwsEnvironment(env);
+  const expected = {
+    PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF: committedEnvironmentValue('PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF'),
+    MODEL_GATEWAY_APPCONFIG_APPLICATION_ID: committedEnvironmentValue('MODEL_GATEWAY_APPCONFIG_APPLICATION_ID'),
+    MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID: committedEnvironmentValue('MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID'),
+    MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID: committedEnvironmentValue('MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID'),
+  };
+  for (const [key, value] of Object.entries(expected)) {
+    if (env[key] !== value) throw new Error(`AWS preflight ${key} differs from the committed local MVP reference`);
+  }
+  const account = preflightCommand('STS get-caller-identity', ['sts', 'get-caller-identity', '--region', env.ALTER_REGION,
+    '--query', 'Account', '--output', 'text'], aws);
+  assertLocalMvpAwsAccount(account);
+  const version = preflightCommand('Secrets Manager admin secret resolution', ['secretsmanager', 'get-secret-value',
+    '--region', env.ALTER_REGION, '--secret-id', expected.PLATFORM_ADMIN_SERVICE_TOKEN_SECRET_REF,
+    '--query', 'VersionId', '--output', 'text'], aws);
+  if (!nonEmpty(version) || version === 'None') throw new Error('AWS preflight admin secret has no current version');
+  const policyFile = resolve(stateDir, `appconfig-preflight-${process.pid}.json`);
+  closeSync(openSync(policyFile, 'w', 0o600));
+  try {
+    const token = preflightCommand('AppConfig start-configuration-session', ['appconfigdata', 'start-configuration-session',
+      '--region', env.ALTER_REGION, '--application-identifier', expected.MODEL_GATEWAY_APPCONFIG_APPLICATION_ID,
+      '--environment-identifier', expected.MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID,
+      '--configuration-profile-identifier', expected.MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID,
+      '--query', 'InitialConfigurationToken', '--output', 'text'], aws);
+    if (!nonEmpty(token) || token === 'None') throw new Error('AWS preflight AppConfig returned no session token');
+    preflightCommand('AppConfig get-latest-configuration', ['appconfigdata', 'get-latest-configuration',
+      '--region', env.ALTER_REGION, '--configuration-token', token, policyFile], aws);
+    let policy;
+    try { policy = validateModelPolicy(JSON.parse(readFileSync(policyFile, 'utf8'))); }
+    catch (error) { throw error instanceof Error && error.message.startsWith('AWS preflight') ? error : new Error('AWS preflight AppConfig returned invalid JSON'); }
+    const migrations = readdirSync(resolve(root, 'apps/cost-ledger-service/drizzle'))
+      .filter(file => file.endsWith('.sql')).sort()
+      .map(file => readFileSync(resolve(root, 'apps/cost-ledger-service/drizzle', file), 'utf8')).join('\n');
+    assertConfiguredModelPricing(policy, migrations);
+  } finally { rmSync(policyFile, { force: true }); }
+  console.log('AWS preflight passed: account, admin secret, AppConfig policy, and model pricing verified');
 }
 
 export function gatewayDigest() {
@@ -239,9 +339,7 @@ async function up() {
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   if (!existsSync(envFile)) await setup('bash', ['scripts/bootstrap-env-local.sh', '--out', envFile], { ...process.env, COMPOSE_PROJECT_NAME: project });
   const env = serviceEnvironment();
-  const awsAccount = command('aws', ['sts', 'get-caller-identity', '--region', env.ALTER_REGION,
-    '--query', 'Account', '--output', 'text'], realAwsEnvironment(env)).trim();
-  assertLocalMvpAwsAccount(awsAccount);
+  awsPreflight(env);
   rmSync(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE, { force: true });
   const all = services(env);
   // Refuse every collision before creating a container or starting a process.

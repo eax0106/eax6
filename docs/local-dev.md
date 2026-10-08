@@ -10,8 +10,11 @@ Use Node 22 (see `.nvmrc`), pnpm 9.15.9, `uv`, and Docker Desktop with
 Compose v2, and AWS CLI v2. The AWS credential chain must resolve to account
 `233151233288` and already have access to the local AppConfig/SSM/Secrets
 Manager references below and Bedrock in `ap-south-1`. Startup verifies the
-account with STS before building or starting resources. These scripts do not
-create accounts or configure cloud resources.
+account with STS, resolves the exact committed admin secret, opens the
+committed Model Gateway AppConfig session, validates its policy, and confirms
+that every primary and fallback model has input and output token prices in the
+Cost Ledger migrations. All checks finish before builds or containers start.
+These scripts do not create accounts or configure cloud resources.
 
 From the repository root:
 

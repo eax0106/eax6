@@ -10,7 +10,7 @@ import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, services, stopOwnedProcess } from './mvp-stack.mjs';
+import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
 import { assertSmokeCeiling, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
@@ -23,6 +23,23 @@ test('local MVP accepts only the canonical AWS account', () => {
   assert.doesNotThrow(() => assertLocalMvpAwsAccount('233151233288'));
   assert.throws(() => assertLocalMvpAwsAccount('899659211912'), /expected 233151233288.*got 899659211912/);
   assert.throws(() => assertLocalMvpAwsAccount(''), /expected 233151233288/);
+});
+
+test('AWS preflight validates all policy aliases, fallbacks and committed token prices', () => {
+  const binding = modelId => ({ model_id: modelId, capability_tags: [] });
+  const policy = validateModelPolicy({ version: 'test', bindings: {
+    FAST: binding('fast'), STANDARD: { ...binding('standard'), fallback_chain: [{ provider: 'openai', model_id: 'fallback' }] },
+    ADVANCED: binding('advanced'), CEILING: binding('advanced'),
+  } });
+  const sql = [
+    "('aws-bedrock', 'fast', 'input_tokens', 1, 'USD')", "('aws-bedrock', 'fast', 'output_tokens', 1, 'USD')",
+    "('aws-bedrock', 'standard', 'input_tokens', 1, 'USD')", "('aws-bedrock', 'standard', 'output_tokens', 1, 'USD')",
+    "('aws-bedrock', 'advanced', 'input_tokens', 1, 'USD')", "('aws-bedrock', 'advanced', 'output_tokens', 1, 'USD')",
+    "('openai', 'fallback', 'input_tokens', 1, 'USD')", "('openai', 'fallback', 'output_tokens', 1, 'USD')",
+  ].join(',\n');
+  assert.doesNotThrow(() => assertConfiguredModelPricing(policy, sql));
+  assert.throws(() => assertConfiguredModelPricing(policy, sql.replace("('openai', 'fallback', 'output_tokens', 1, 'USD')", '')), /openai\/fallback.*output_tokens/);
+  assert.throws(() => validateModelPolicy({ version: 'test', bindings: { FAST: binding('fast') } }), /AppConfig policy/);
 });
 
 test('gRPC readiness requires a live HTTP/2 acknowledgement, not an open HTTP port', async () => {
@@ -140,6 +157,11 @@ test('restarted services reuse startup mock identity, token references and disar
 
 test('startup migrates orchestration before seeding and owns the ADS gRPC server', () => {
   const source = readFileSync('scripts/local/mvp-stack.mjs', 'utf8');
+  const preflight = 'awsPreflight(env);';
+  const build = "await setup('pnpm', ['exec', 'nx', 'run-many', '-t', 'build', '--all', '--parallel=2'], env);";
+  const compose = "await setup('docker', ['compose', '-p', project, '--env-file', envFile, 'up', '-d', '--wait'], env);";
+  assert.ok(source.indexOf(preflight) > 0 && source.indexOf(preflight) < source.indexOf(build));
+  assert.ok(source.indexOf(preflight) < source.indexOf(compose));
   const migration = "await setup('pnpm', ['--filter', '@alterx/orchestration-service', 'db:migrate'], env);";
   const seed = "'postgres:16-alpine', 'sh', 'scripts/seed-local.sh'], env);";
   assert.ok(source.indexOf(migration) > 0 && source.indexOf(migration) < source.indexOf(seed));
