@@ -10,13 +10,19 @@ import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, services, stopOwnedProcess } from './mvp-stack.mjs';
+import { assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, services, stopOwnedProcess } from './mvp-stack.mjs';
 import { assertSmokeCeiling, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
   assertSmokeCeiling(0.25);
   for (const usd of [0.25000001, -1, NaN, Infinity]) assert.throws(() => assertSmokeCeiling(usd), /no model run started/);
   await assert.rejects(smoke({ apply: true, healthOnly: true }), /mutually exclusive/);
+});
+
+test('local MVP accepts only the canonical AWS account', () => {
+  assert.doesNotThrow(() => assertLocalMvpAwsAccount('233151233288'));
+  assert.throws(() => assertLocalMvpAwsAccount('899659211912'), /expected 233151233288.*got 899659211912/);
+  assert.throws(() => assertLocalMvpAwsAccount(''), /expected 233151233288/);
 });
 
 test('gRPC readiness requires a live HTTP/2 acknowledgement, not an open HTTP port', async () => {

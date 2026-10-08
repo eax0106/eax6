@@ -14,6 +14,20 @@ const envFile = resolve(root, '.env.mvp.local');
 const project = `alter-mvp-${createHash('sha256').update(root).digest('hex').slice(0, 10)}`;
 const pythonServices = ['ads-core', 'memory-service', 'intelligence-service', 'verification-service', 'eval-service'];
 const nodeServices = ['audit-service', 'cost-ledger-service', 'model-gateway', 'tool-gateway', 'sandbox-service', 'provisioning-service', 'orchestration-service', 'platform-api', 'background-workers'];
+export const LOCAL_MVP_AWS_ACCOUNT_ID = '233151233288';
+
+export function assertLocalMvpAwsAccount(accountId) {
+  if (accountId !== LOCAL_MVP_AWS_ACCOUNT_ID) {
+    throw new Error(`Local MVP AWS account mismatch: expected ${LOCAL_MVP_AWS_ACCOUNT_ID}, got ${accountId || 'no account'}`);
+  }
+}
+
+function realAwsEnvironment(env) {
+  const aws = { ...env, AWS_REGION: env.ALTER_REGION };
+  delete aws.AWS_ENDPOINT_URL;
+  if (env.ALTER_AWS_PROFILE) aws.AWS_PROFILE = env.ALTER_AWS_PROFILE;
+  return aws;
+}
 
 export function gatewayDigest() {
   const digest = createHash('sha256');
@@ -225,6 +239,9 @@ async function up() {
   mkdirSync(stateDir, { recursive: true, mode: 0o700 });
   if (!existsSync(envFile)) await setup('bash', ['scripts/bootstrap-env-local.sh', '--out', envFile], { ...process.env, COMPOSE_PROJECT_NAME: project });
   const env = serviceEnvironment();
+  const awsAccount = command('aws', ['sts', 'get-caller-identity', '--region', env.ALTER_REGION,
+    '--query', 'Account', '--output', 'text'], realAwsEnvironment(env)).trim();
+  assertLocalMvpAwsAccount(awsAccount);
   rmSync(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE, { force: true });
   const all = services(env);
   // Refuse every collision before creating a container or starting a process.
