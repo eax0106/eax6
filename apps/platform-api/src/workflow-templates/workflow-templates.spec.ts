@@ -34,7 +34,7 @@ describe("workflow templates relay", () => {
     expect(f.audit.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       tenant_id: actor.tenant_id, actor_ref: actor.user_id, action: "workflow.template.instantiate", target_type: "workflow", target_ref: id("wf"), reason_code: "compiled",
     }));
-    expect(JSON.parse((f.audit.recordEvent.mock.calls[0] as unknown as [{ context_json: string }])[0].context_json)).toEqual({ templateId: "weekly-report-digest", templateVersion: 1, retry: false, versionId: id("wfv") });
+    expect(JSON.parse((f.audit.recordEvent.mock.calls[0] as unknown as [{ context_json: string }])[0].context_json)).toEqual({ scope: { templateId: "weekly-report-digest", templateVersion: 1, retry: false, versionId: id("wfv") } });
   });
 
   it("audits a connections-required result with the connectors it named", async () => {
@@ -42,7 +42,7 @@ describe("workflow templates relay", () => {
       missingConnections: [{ connector_type: "postgres", node_keys: ["save_lead"], reason: "missing" }] });
     await f.service.instantiate("lead-capture-crm-welcome", { workflowId: id("wf") }, actor, undefined, "key-2");
     expect(f.audit.recordEvent).toHaveBeenCalledWith(expect.objectContaining({ reason_code: "connections_required",
-      context_json: JSON.stringify({ templateId: "lead-capture-crm-welcome", templateVersion: 1, retry: true, missingConnections: ["postgres"] }) }));
+      context_json: JSON.stringify({ scope: { templateId: "lead-capture-crm-welcome", templateVersion: 1, retry: true, missingConnections: ["postgres"] } }) }));
   });
 
   it("refuses a malformed template id or body before calling the engine", async () => {

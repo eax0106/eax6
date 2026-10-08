@@ -185,8 +185,16 @@ export function serviceEnvironment(base = loadEnvironment()) {
   env.COST_LEDGER_BASE_URL = `http://127.0.0.1:${env.COST_PORT}`;
   env.AUDIT_SERVICE_BASE_URL = `http://127.0.0.1:${env.AUDIT_PORT}`;
   env.PLATFORM_API_PROXY_TARGET = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;
+  env.PLATFORM_API_INTERNAL_BASE_URL = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;
+  env.ORCHESTRATION_SERVICE_INTERNAL_BASE_URL = `http://127.0.0.1:${env.ORCHESTRATION_PORT}`;
+  env.AUDIT_SERVICE_INTERNAL_BASE_URL = `http://127.0.0.1:${env.AUDIT_PORT}`;
+  env.ADS_CORE_INTERNAL_BASE_URL = `http://127.0.0.1:${env.ADS_CORE_PORT}`;
+  env.MEMORY_SERVICE_INTERNAL_BASE_URL = `http://127.0.0.1:${env.MEMORY_SERVICE_PORT}`;
+  env.INTELLIGENCE_SERVICE_INTERNAL_BASE_URL = `http://127.0.0.1:${env.INTELLIGENCE_SERVICE_PORT}`;
   for (const key of ['EVAL_FACADE_TOKEN_REF', 'DEPLOYMENT_ADMIN_SERVICE_TOKEN_REF', 'AUDIT_QUERY_SERVICE_TOKEN_REF',
-    'CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF', 'NOTIFICATION_DIGEST_SERVICE_TOKEN_REF']) env[key] = 'env:INTERNAL_SERVICE_TOKEN';
+    'CONNECTOR_HEALTH_SWEEP_SERVICE_TOKEN_REF', 'NOTIFICATION_DIGEST_SERVICE_TOKEN_REF', 'RETENTION_SWEEP_SERVICE_TOKEN_REF',
+    'ORCHESTRATION_RETENTION_SWEEP_SERVICE_TOKEN_REF', 'EVAL_FACADE_SERVICE_TOKEN_REF', 'DRIFT_SWEEP_SERVICE_TOKEN_REF',
+    'AUDIT_CHAIN_VERIFY_SERVICE_TOKEN_REF']) env[key] = 'env:INTERNAL_SERVICE_TOKEN';
   env.ENGINE_M2M_TOKEN_URL = env.AUTH0_M2M_TOKEN_URL;
   env.ENGINE_M2M_AUDIENCE = env.AUTH0_M2M_AUDIENCE;
   env.ENGINE_M2M_CLIENT_ID = env.AUTH0_M2M_CLIENT_ID;
@@ -244,6 +252,7 @@ async function up() {
     const byName = new Map(all.map(row => [row.name, row]));
     await start(state, 'local-mock-auth0', process.execPath, ['scripts/local-mock-auth0/server.js'], env, root, byName.get('local-mock-auth0').url);
     await setup('pnpm', ['--filter', '@alterx/platform-api', 'db:migrate'], env);
+    await setup('pnpm', ['--filter', '@alterx/orchestration-service', 'db:migrate'], env);
     for (const name of pythonServices.filter(name => name !== 'verification-service')) {
       const args = name === 'intelligence-service'
         ? ['run', '--frozen', 'python', resolve(root, 'scripts/local/mvp-intelligence-migrate.py')]
@@ -261,6 +270,7 @@ async function up() {
     for (const name of pythonServices) {
       await start(state, name, 'uv', ['run', '--frozen', 'uvicorn', 'src.main:app', '--host', '127.0.0.1', '--port', byName.get(name).port], env, resolve(root, 'apps', name), byName.get(name).url);
     }
+    await start(state, 'ads-core-grpc', 'uv', ['run', '--frozen', 'python', '-m', 'src.query.grpc_server'], env, resolve(root, 'apps', 'ads-core'));
     for (const name of ['verification-service', 'memory-service', 'eval-service']) await start(state, `${name}-grpc`, 'uv', ['run', '--frozen', 'python', '-m', 'src.grpc_server'], env, resolve(root, 'apps', name));
     for (const row of grpcServices(env)) {
       for (let i = 0; ; i++) {

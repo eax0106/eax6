@@ -108,18 +108,36 @@ test('installation guard ignores dependency paths containing pnpm', async () => 
 
 test('restarted services reuse startup mock identity, token references and disarmed model guard', () => {
   const base = {INTERNAL_SERVICE_TOKEN: 'test-only', PLATFORM_API_PORT: '3100', ADS_CORE_PORT: '8100',
-    COST_PORT: '5100', AUDIT_PORT: '8101', AUTH0_M2M_TOKEN_URL: 'http://127.0.0.1:4999/oauth/token',
+    ORCHESTRATION_PORT: '3101', COST_PORT: '5100', AUDIT_PORT: '8101', MEMORY_SERVICE_PORT: '8102',
+    INTELLIGENCE_SERVICE_PORT: '8103', AUTH0_M2M_TOKEN_URL: 'http://127.0.0.1:4999/oauth/token',
     AUTH0_M2M_AUDIENCE: 'local-engine', AUTH0_M2M_CLIENT_ID: 'local-client', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566'};
   const env = serviceEnvironment(base);
   assert.equal(env.IDENTITY_PROVIDER, 'mock'); assert.equal(env.EMAIL_PROVIDER, 'mock');
   assert.equal(env.ENGINE_M2M_TOKEN_URL, base.AUTH0_M2M_TOKEN_URL);
   assert.equal(env.ENGINE_M2M_CLIENT_SECRET_REF, 'env:AUTH0_M2M_CLIENT_SECRET');
   assert.equal(env.EVAL_FACADE_TOKEN_REF, 'env:INTERNAL_SERVICE_TOKEN');
+  for (const key of ['RETENTION_SWEEP_SERVICE_TOKEN_REF', 'ORCHESTRATION_RETENTION_SWEEP_SERVICE_TOKEN_REF',
+    'EVAL_FACADE_SERVICE_TOKEN_REF', 'DRIFT_SWEEP_SERVICE_TOKEN_REF', 'AUDIT_CHAIN_VERIFY_SERVICE_TOKEN_REF']) {
+    assert.equal(env[key], 'env:INTERNAL_SERVICE_TOKEN');
+  }
   assert.equal(env.AWS_ENDPOINT_URL_SQS, base.AWS_ENDPOINT_URL);
   assert.equal(env.ADS_CORE_BASE_URL, 'http://127.0.0.1:8100');
+  assert.equal(env.PLATFORM_API_INTERNAL_BASE_URL, 'http://127.0.0.1:3100');
+  assert.equal(env.ORCHESTRATION_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:3101');
+  assert.equal(env.AUDIT_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:8101');
+  assert.equal(env.MEMORY_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:8102');
+  assert.equal(env.INTELLIGENCE_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:8103');
   assert.equal(env.MODEL_GATEWAY_LOCAL_SMOKE, '1'); assert.equal(env.AWS_MAX_ATTEMPTS, '1');
   assert.ok(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE.endsWith('/tmp/local-mvp/spend-permit.json'));
   assert.equal(base.ENGINE_M2M_TOKEN_URL, undefined, 'Input env stays unchanged');
+});
+
+test('startup migrates orchestration before seeding and owns the ADS gRPC server', () => {
+  const source = readFileSync('scripts/local/mvp-stack.mjs', 'utf8');
+  const migration = "await setup('pnpm', ['--filter', '@alterx/orchestration-service', 'db:migrate'], env);";
+  const seed = "'postgres:16-alpine', 'sh', 'scripts/seed-local.sh'], env);";
+  assert.ok(source.indexOf(migration) > 0 && source.indexOf(migration) < source.indexOf(seed));
+  assert.match(source, /await start\(state, 'ads-core-grpc', 'uv', \['run', '--frozen', 'python', '-m', 'src\.query\.grpc_server'\]/);
 });
 
 test('owned startup helper records private process state and refuses a failed native restart', async () => {
