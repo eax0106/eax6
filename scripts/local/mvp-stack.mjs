@@ -320,6 +320,15 @@ export function serviceEnvironment(base = loadEnvironment()) {
   return env;
 }
 
+export function serviceStartEnvironment(name, env) {
+  if (name !== 'orchestration-service') return env;
+  return { ...env, RUNTIME_MODE: 'real',
+    APPCONFIG_APPLICATION_ID: env.MODEL_GATEWAY_APPCONFIG_APPLICATION_ID,
+    APPCONFIG_ENVIRONMENT_ID: env.MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID,
+    APPCONFIG_CONFIGURATION_PROFILE_ID: env.MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID,
+    AWS_ENDPOINT_URL_APPCONFIGDATA: `https://appconfigdata.${env.ALTER_REGION}.amazonaws.com` };
+}
+
 export async function ensureRetentionRole(env) {
   const args = ['compose', '-p', project, '--env-file', envFile, 'exec', '-T', 'platform-db'];
   const probe = () => command('docker', [...args, 'psql', '--username=platform_api', '--dbname=platform_db',
@@ -376,7 +385,7 @@ async function up() {
     }
     for (const name of nodeServices.filter(name => !['platform-api', 'background-workers'].includes(name))) {
       const args = name === 'model-gateway' ? ['scripts/run-service-aws.sh', name] : [`dist/apps/${name}/main.js`];
-      await start(state, name, name === 'model-gateway' ? 'bash' : process.execPath, args, env, root, byName.get(name).url);
+      await start(state, name, name === 'model-gateway' ? 'bash' : process.execPath, args, serviceStartEnvironment(name, env), root, byName.get(name).url);
     }
     await setup('docker', ['run', '--rm', '--network', `${project}_default`, '-v', `${root}:/repo:ro`, '-w', '/repo',
       '-e', 'AUDIT_DB_PASSWORD', '-e', 'PLATFORM_DB_PASSWORD', '-e', 'INTELLIGENCE_DB_PASSWORD', '-e', 'ORCHESTRATION_DB_PASSWORD',

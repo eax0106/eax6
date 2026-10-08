@@ -10,7 +10,7 @@ import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
+import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
 import { assertSmokeCeiling, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
@@ -40,6 +40,17 @@ test('AWS preflight validates all policy aliases, fallbacks and committed token 
   assert.doesNotThrow(() => assertConfiguredModelPricing(policy, sql));
   assert.throws(() => assertConfiguredModelPricing(policy, sql.replace("('openai', 'fallback', 'output_tokens', 1, 'USD')", '')), /openai\/fallback.*output_tokens/);
   assert.throws(() => validateModelPolicy({ version: 'test', bindings: { FAST: binding('fast') } }), /AppConfig policy/);
+});
+
+test('orchestration estimates against the Model Gateway AppConfig policy without changing sibling services', () => {
+  const env = { ALTER_REGION: 'ap-south-1', RUNTIME_MODE: 'mock', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566',
+    MODEL_GATEWAY_APPCONFIG_APPLICATION_ID: 'app', MODEL_GATEWAY_APPCONFIG_ENVIRONMENT_ID: 'environment',
+    MODEL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID: 'profile' };
+  assert.equal(serviceStartEnvironment('cost-ledger-service', env), env);
+  assert.deepEqual(serviceStartEnvironment('orchestration-service', env), { ...env, RUNTIME_MODE: 'real',
+    APPCONFIG_APPLICATION_ID: 'app', APPCONFIG_ENVIRONMENT_ID: 'environment', APPCONFIG_CONFIGURATION_PROFILE_ID: 'profile',
+    AWS_ENDPOINT_URL_APPCONFIGDATA: 'https://appconfigdata.ap-south-1.amazonaws.com' });
+  assert.equal(env.RUNTIME_MODE, 'mock');
 });
 
 test('gRPC readiness requires a live HTTP/2 acknowledgement, not an open HTTP port', async () => {
