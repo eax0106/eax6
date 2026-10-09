@@ -33,6 +33,7 @@ import type { GeneratedFileMaterializer } from "./generated-file-materializer";
 import type { SelectionBindingFailClosedConfig } from "./selection-binding-fail-closed-config";
 import type { RunFinalizationMemoryWriter } from "./run-finalization-memory-writer";
 import {
+  DETERMINISTIC_REVIEWER_MODEL,
   INJECTION_SCREENED_REVIEWER_MODEL,
   SAFETY_BLOCKED_REVIEWER_MODEL,
   SafetyViolationError,
@@ -371,15 +372,22 @@ export class NodeexecService {
               "Verify Gate rejected node output",
             );
           }
-          // An ADVANCED review runs only after the output passed Verify
-          // Service's prompt-injection screen (a detected injection comes
-          // back as SAFETY_BLOCKED_REVIEWER_MODEL and halted above). Record
-          // that screen as the node's safety result: the Gate in front of an
-          // external action requires one, and nothing else writes it for a
-          // node, so every protected action was blocked. A deterministic
-          // review ran no screen and records none, so its Gate still fails
-          // closed.
-          if (verification.reviewer_model === INJECTION_SCREENED_REVIEWER_MODEL) {
+          // The Gate in front of an external action requires a non-critical
+          // safety result for each step feeding it, and nothing else writes
+          // one for a node, so every protected action was blocked.
+          //  - An ADVANCED review runs only after the output passed Verify
+          //    Service's prompt-injection screen (a detected injection comes
+          //    back as SAFETY_BLOCKED_REVIEWER_MODEL and halted above).
+          //  - A deterministic step (an import, merge, gate) produced no
+          //    model text; data it passes on reaches a model only through a
+          //    later step, which is screened there. Owner decision.
+          const safetyBasis =
+            verification.reviewer_model === INJECTION_SCREENED_REVIEWER_MODEL
+              ? "output passed the prompt-injection screen"
+              : verification.reviewer_model === DETERMINISTIC_REVIEWER_MODEL && verification.verdict === "pass"
+                ? "deterministic step: no model generated this output"
+                : undefined;
+          if (safetyBasis !== undefined) {
             await this.ledger.recordVerificationResult({
               id: createVerificationResultId(),
               tenantId: request.tenant_id,
@@ -390,10 +398,7 @@ export class NodeexecService {
               score: null,
               threshold: null,
               reviewerModel: verification.reviewer_model,
-              detailsJson: JSON.stringify({
-                severity: "low",
-                basis: "output passed the prompt-injection screen",
-              }),
+              detailsJson: JSON.stringify({ severity: "low", basis: safetyBasis }),
             });
           }
         }

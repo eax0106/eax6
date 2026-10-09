@@ -131,11 +131,47 @@ describe("NodeexecService.executeNode", () => {
     expect(decision.output).toMatchObject({ activeSuccessors: ["send_summary"], verification_status: "passed" });
   });
 
-  it("records no safety result when no injection screen ran, so the Gate still fails closed", async () => {
+  it("records a deterministic pass-through step as safe, so the Gate on the intake step opens", async () => {
     const ledger = fakeLedger();
     const verifyGate = {
       scoreNodeInline: vi.fn().mockResolvedValue({
         verdict: "pass", score: 1, threshold: 1, reviewer_model: "deterministic", details_json: "{}",
+      }),
+    } as unknown as VerifyGateService;
+    const nodeexec = new NodeexecService(
+      new NodeHandlerRegistry([new MergeHandler()]), ledger, undefined, undefined, undefined,
+      undefined, undefined, verifyGate,
+    );
+
+    await nodeexec.executeNode({
+      tenant_id: TENANT_ID, run_id: RUN_ID, node_execution_id: NODE_EXECUTION_ID,
+      node_key: "intake", node_type: "Merge", config_json: "{}",
+      inputs_json: JSON.stringify({ trigger: { recipient: "team@example.com" } }), success_criteria: [],
+    });
+
+    const recorded = vi.mocked(ledger.recordVerificationResult).mock.calls.map(([row]) => row);
+    expect(recorded.map((row) => row.gateType)).toEqual(["quality", "safety"]);
+    expect(JSON.parse(recorded[1]!.detailsJson)).toEqual({
+      severity: "low", basis: "deterministic step: no model generated this output",
+    });
+    const gate = new GateHandler({
+      findForSourceNode: async () => recorded.map((row) => ({
+        gateType: row.gateType, verdict: row.verdict, score: row.score, threshold: row.threshold,
+        details: row.detailsJson,
+      })),
+    });
+    const decision = await gate.execute({
+      tenant_id: TENANT_ID, run_id: RUN_ID, node_key: "verify_step_1", inputs: {},
+      config: { verification: { source_node_key: "intake", protected_node_key: "send_summary" } },
+    } as unknown as NodeExecutionContext);
+    expect(decision.output).toMatchObject({ activeSuccessors: ["send_summary"], verification_status: "passed" });
+  });
+
+  it("records no safety result for a reviewer that ran no injection screen, so the Gate still fails closed", async () => {
+    const ledger = fakeLedger();
+    const verifyGate = {
+      scoreNodeInline: vi.fn().mockResolvedValue({
+        verdict: "pass", score: 1, threshold: 0.7, reviewer_model: "unscreened-reviewer", details_json: "{}",
       }),
     } as unknown as VerifyGateService;
     const nodeexec = new NodeexecService(
