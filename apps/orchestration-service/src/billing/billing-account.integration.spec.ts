@@ -142,7 +142,7 @@ describe.sequential("billing admission and verified settlement on ordinary Postg
       await ledger.recordSucceeded({tenantId:ten,runId:run.id,nodeExecutionId});
       await store.withTenant(tenant,tx=>tx.query("INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES($1,$2,'receive',$3::jsonb)",[tenant,run.id,JSON.stringify({accepted:verdict==="pass"})]));
       const scoreNodeInline=vi.fn(async(request:{success_criteria:readonly string[];output_json:string})=>{
-        expect(request.success_criteria).toEqual(criteria);expect(JSON.parse(request.output_json)).toEqual({receive:{accepted:verdict==="pass"}});
+        expect(request.success_criteria).toEqual(criteria);expect(JSON.parse(request.output_json)).toEqual({final_outputs:{receive:{accepted:verdict==="pass"}},actions_taken:{},upstream_outputs:{}});
         if(verdict==="unavailable")throw new Error("Verification edge unavailable");
         return {verdict,score:verdict==="pass"?1:0,threshold:1,reviewer_model:"native-verification-edge",details_json:"{}"};
       });
