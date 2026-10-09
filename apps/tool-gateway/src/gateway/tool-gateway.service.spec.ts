@@ -907,7 +907,7 @@ describe("ToolGatewayService", () => {
 
       const response = await service.invokeTool(emailInvokeRequest());
 
-      expect(JSON.parse(response.output_json)).toMatchObject({ messageId: "mock-email-1" });
+      expect(JSON.parse(response.output_json)).toMatchObject({ messageId: expect.stringMatching(/^mock-email-[0-9a-f-]{36}$/) });
       expect((emailProvider as MockEmailProvider).sentRaw).toEqual([
         {
           to: "recipient@example.com",
