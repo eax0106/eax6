@@ -17,25 +17,36 @@ const RUN_NO_CRITERIA = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c3";
 const RUN_PASS = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c4";
 const RUN_UNAVAILABLE = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c5";
 const RUN_DONE = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c6";
+const RUN_PARTIAL = "run_018f4d6e-2b4a-7a3e-8c1a-1234567890c7";
 const CRITERIA = ["Refund total stated", "Customer is emailed"];
 
-// node_a feeds node_b and node_c; node_b and node_c are the run's outcome.
+// node_a feeds node_c directly and node_b through gate_a; node_b and node_c
+// are the run's outcome. node_c sends node_a's output on.
+const NODE_KEYS = ["node_a", "gate_a", "node_b", "node_c"];
 function dag(successCriteria?: readonly string[]) {
   return {
     schema_version: "v1",
     entry_node_keys: ["node_a"],
     nodes: [
       { key: "node_a", type: "LLMTask", config: {}, metadata: { ui: {} } },
+      { key: "gate_a", type: "Gate", config: {}, metadata: { ui: {} } },
       { key: "node_b", type: "LLMTask", config: {}, metadata: { ui: {} } },
-      { key: "node_c", type: "ToolCall", config: {}, metadata: { ui: {} } },
+      {
+        key: "node_c",
+        type: "ToolCall",
+        config: { tool_name: "email.send", arguments: { to: "team@example.com", body: { $from: "node_a", path: "from" } } },
+        metadata: { ui: {} },
+      },
     ],
     edges: [
-      { key: "e1", from: "node_a", to: "node_b", kind: "sequential" },
-      { key: "e2", from: "node_a", to: "node_c", kind: "sequential" },
+      { key: "e1", from: "node_a", to: "gate_a", kind: "sequential" },
+      { key: "e2", from: "gate_a", to: "node_b", kind: "sequential" },
+      { key: "e3", from: "node_a", to: "node_c", kind: "sequential" },
     ],
     waves: [
       { key: "w0", order: 0, node_keys: ["node_a"], depends_on: [] },
-      { key: "w1", order: 1, node_keys: ["node_b", "node_c"], depends_on: ["w0"] },
+      { key: "w1", order: 1, node_keys: ["gate_a", "node_c"], depends_on: ["w0"] },
+      { key: "w2", order: 2, node_keys: ["node_b"], depends_on: ["w1"] },
     ],
     ...(successCriteria === undefined ? {} : { success_criteria: successCriteria }),
   };
@@ -74,8 +85,23 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
         "INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id,status) VALUES ($2,$1,$1,'workflow','wf_acc','wfv_acc1','running'),($3,$1,$1,'workflow','wf_acc','wfv_acc1','running'),($4,$1,$1,'workflow','wf_acc','wfv_acc1','completed')",
         [BARE_TENANT, RUN_PASS, RUN_UNAVAILABLE, RUN_DONE],
       );
+      await tx.query(
+        "INSERT INTO runs(id,tenant_id,workspace_id,parent_kind,workflow_id,workflow_version_id,status) VALUES ($2,$1,$1,'workflow','wf_acc','wfv_acc1','running')",
+        [BARE_TENANT, RUN_PARTIAL],
+      );
+      // node_a left no checkpoint, and node_b's is not an object.
+      for (const key of NODE_KEYS) {
+        await tx.query(
+          "INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,$4,'LLMTask','succeeded')",
+          [`node_${key}_${RUN_PARTIAL.slice(-4)}`, BARE_TENANT, RUN_PARTIAL, key],
+        );
+      }
+      await tx.query(
+        "INSERT INTO blackboard_checkpoints(tenant_id,run_id,context_key,value_json) VALUES ($1,$2,'node_b',$3),($1,$2,'node_c',$4)",
+        [BARE_TENANT, RUN_PARTIAL, JSON.stringify("text"), JSON.stringify({ from: "node_c" })],
+      );
       for (const run of [RUN, RUN_PASS, RUN_UNAVAILABLE, RUN_DONE]) {
-        for (const key of ["node_a", "node_b", "node_c"]) {
+        for (const key of NODE_KEYS) {
           await tx.query(
             "INSERT INTO node_executions(id,tenant_id,run_id,dag_node_id,node_type,status) VALUES ($1,$2,$3,$4,'LLMTask','succeeded')",
             [`node_${key}_${run.slice(-4)}`, BARE_TENANT, run, key],
@@ -103,7 +129,7 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
     } as unknown as VerifyGateService & { scoreNodeInline: ReturnType<typeof vi.fn> };
   }
 
-  it("judges the run's terminal outputs together against the intake criteria, and records the verdict", async () => {
+  it("judges the run's outcome, what its tool calls were asked to send and the steps that fed them, and records the verdict", async () => {
     const verifyGate = gate("fail");
     const result = await new PostgresRunAcceptanceCheck(store, verifyGate, ledger).check(TENANT, RUN);
 
@@ -111,8 +137,14 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
     const call = verifyGate.scoreNodeInline.mock.calls[0]![0];
     expect(call).toMatchObject({ node_type: "RunOutcome", success_criteria: CRITERIA, run_id: RUN });
     expect(call.node_execution_id).toMatch(/^node_[0-9a-f-]{36}$/);
-    // node_a fed both leaves, so the outcome is node_b and node_c only.
-    expect(JSON.parse(call.output_json)).toEqual({ node_b: { from: "node_b" }, node_c: { from: "node_c" } });
+    // node_a fed both leaves, so the outcome is node_b and node_c only. A tool's
+    // output can be just a receipt, so the reviewer also sees what node_c was
+    // asked to send and node_a's output behind it; the gate only routed.
+    expect(JSON.parse(call.output_json)).toEqual({
+      final_outputs: { node_b: { from: "node_b" }, node_c: { from: "node_c" } },
+      actions_taken: { node_c: { tool_name: "email.send", arguments: { to: "team@example.com", body: "node_a" } } },
+      upstream_outputs: { node_a: { from: "node_a" } },
+    });
     const stored = await store.withTenant(BARE_TENANT, (tx) =>
       tx.query<{ gate_type: string; verdict: string; node_execution_id: string | null }>(
         "SELECT gate_type, verdict, node_execution_id FROM verification_results WHERE run_id = $1",
@@ -120,6 +152,16 @@ describe.sequential("PostgresRunAcceptanceCheck", () => {
       ),
     );
     expect(stored.rows).toEqual([{ gate_type: "acceptance", verdict: "fail", node_execution_id: null }]);
+  });
+
+  it("leaves out a tool call's arguments when a step it read from left no output", async () => {
+    const verifyGate = gate("pass");
+    await new PostgresRunAcceptanceCheck(store, verifyGate, ledger).check(TENANT, RUN_PARTIAL);
+    expect(JSON.parse(verifyGate.scoreNodeInline.mock.calls[0]![0].output_json)).toEqual({
+      final_outputs: { node_b: {}, node_c: { from: "node_c" } },
+      actions_taken: {},
+      upstream_outputs: {},
+    });
   });
 
   it("passes a run whose combined output meets the criteria", async () => {
