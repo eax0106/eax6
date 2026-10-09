@@ -116,6 +116,9 @@ jobs:
         # C16 fixes), this fails the gate.
         run: scripts/check-stack-health-script.sh
 
+      - name: local MVP lifecycle controls
+        run: node --test scripts/local/mvp.spec.mjs
+
       - name: set up terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -255,6 +258,10 @@ jobs:
       # cache hits rather than extra minutes.
       - name: build all projects
         run: pnpm exec nx run-many -t build --all --parallel=2
+
+      - name: local Intelligence restricted migration proof
+        working-directory: apps/intelligence-service
+        run: uv run --frozen pytest -q -s ../../scripts/local/test_mvp_intelligence_migrate.py
 
       - name: safety classifier parity and duplicate implementation probes
         run: |

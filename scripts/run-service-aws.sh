@@ -50,7 +50,7 @@ fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repo_root"
 
-env_file=.env.local
+env_file=${ALTER_LOCAL_ENV_FILE:-.env.local}
 [[ "$mode" == "--check" || ! -f "$env_file" ]] && env_file=.env.local.example
 
 # Read the file as dotenv, not as shell: the committed example carries
@@ -73,7 +73,7 @@ load_env_file() {
     export "$key=$value"
   done <"$1"
 }
-load_env_file "./$env_file"
+load_env_file "$env_file"
 
 # The variables that decide whether AWS calls reach AWS.
 unset AWS_ENDPOINT_URL AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN

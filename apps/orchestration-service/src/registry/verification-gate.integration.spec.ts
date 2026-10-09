@@ -63,11 +63,20 @@ describe.sequential("verification Gate real Postgres path", () => {
 
     const row = await store.withTenant(TENANT, async (tx) => {
       const result = await tx.query<{ readonly gate_type: string; readonly verdict: string; readonly score: string; readonly threshold: string; readonly reviewer_model: string }>(
-        "SELECT gate_type, verdict, score, threshold, reviewer_model FROM verification_results WHERE tenant_id = $1 AND node_execution_id = $2",
+        "SELECT gate_type, verdict, score, threshold, reviewer_model FROM verification_results WHERE tenant_id = $1 AND node_execution_id = $2 AND gate_type = 'quality'",
         [TENANT, nodeExecutionId],
       );
       return result.rows[0];
     });
+    // The passed injection screen is recorded too, as the safety result the
+    // Gate in front of an external action requires.
+    const safety = await store.withTenant(TENANT, async (tx) =>
+      (await tx.query<{ readonly verdict: string; readonly details: unknown }>(
+        "SELECT verdict, details FROM verification_results WHERE tenant_id = $1 AND node_execution_id = $2 AND gate_type = 'safety'",
+        [TENANT, nodeExecutionId],
+      )).rows,
+    );
+    expect(safety).toEqual([{ verdict: "pass", details: { severity: "low", basis: "output passed the prompt-injection screen" } }]);
     expect(row).toMatchObject({ gate_type: "quality", verdict: "pass", reviewer_model: "ADVANCED" });
     expect(Number(row!.score)).toBeCloseTo(0.95);
     expect(Number(row!.threshold)).toBeCloseTo(0.7);

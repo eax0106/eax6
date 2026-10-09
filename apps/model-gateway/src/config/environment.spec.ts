@@ -349,6 +349,20 @@ describe("loadModelGatewayEnvironment", () => {
     CACHE_REDIS_PORT: "6379",
   } as const;
 
+  it("enables bounded smoke only in local real mode with SDK retries disabled", () => {
+    expect(loadModelGatewayEnvironment(environment({ ...appConfigOverrides,
+      MODEL_GATEWAY_LOCAL_SMOKE: "1", AWS_MAX_ATTEMPTS: "1",
+      MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE: "/tmp/local-smoke-permit" }))).toHaveProperty("localSmokePermitFile", "/tmp/local-smoke-permit");
+    for (const override of [{ ALTER_ENV: "prod" }, { AWS_MAX_ATTEMPTS: "3" },
+      { MODEL_GATEWAY_LOCAL_SMOKE: "0" }, { RUNTIME_MODE: "mock" }]) {
+      expect(() => loadModelGatewayEnvironment(environment({ ...appConfigOverrides,
+        MODEL_GATEWAY_LOCAL_SMOKE: "1", AWS_MAX_ATTEMPTS: "1",
+        MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE: "/tmp/local-smoke-permit", ...override }))).toThrow(/MODEL_GATEWAY_LOCAL_SMOKE/);
+    }
+    for (const path of [undefined, "relative-file"]) expect(() => loadModelGatewayEnvironment(environment({ ...appConfigOverrides,
+      MODEL_GATEWAY_LOCAL_SMOKE: "1", AWS_MAX_ATTEMPTS: "1", MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE: path }))).toThrow(/MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE/);
+  });
+
   it("ignores retired MODEL_GATEWAY_CONFIG_SOURCE overrides", () => {
     expect(
       loadModelGatewayEnvironment(

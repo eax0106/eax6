@@ -182,7 +182,7 @@ it("retries a lost finalize response through real engine and verification proces
     const rubricCall = JSON.parse(calls[1]!.input_json) as { messages: { content: string }[] };
     expect(JSON.parse(rubricCall.messages[1]!.content)).toMatchObject({ config: { success_criteria: [CRITERION] } });
     const criterionCall = JSON.parse(calls[2]!.input_json) as { messages: { content: string }[] };
-    expect(JSON.parse(criterionCall.messages[1]!.content)).toMatchObject({ success_criteria: [{ index: 0, criterion: CRITERION }], untrusted_node_output: { merge: output } });
+    expect(JSON.parse(criterionCall.messages[1]!.content)).toMatchObject({ success_criteria: [{ index: 0, criterion: CRITERION }], untrusted_node_output: { final_outputs: { merge: output } } });
     const stored = await runtime.withTenant(TENANT, async (tx) => ({
       runs: (await tx.query("SELECT status FROM runs WHERE id=$1", [RUN])).rows,
       acceptance: (await tx.query("SELECT verdict,reviewer_model,node_execution_id FROM verification_results WHERE run_id=$1 AND gate_type='acceptance'", [RUN])).rows,

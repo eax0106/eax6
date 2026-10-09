@@ -7,6 +7,7 @@ import type {
   EngineResponse,
 } from "../engine";
 import type { ActorContext } from "../rbac/types";
+import { EngineProblemError } from "../engine/problem";
 import { RunService } from "./run.service";
 import type { EnginePage, EngineResource } from "./types";
 
@@ -294,6 +295,76 @@ describe("RunService", () => {
         ),
       }),
     );
+  });
+
+  it("returns a running run with no outcome yet instead of a 404", async () => {
+    // The Engine records an outcome only when the run finishes, and answers
+    // 404 before that. Detail must still show the run while it is running.
+    const engine = engineStub(async (path) => {
+      if (path === `/api/v1/runs/${runId}`) {
+        return { status: 200, body: { run_id: runId, status: "running" } };
+      }
+      if (path.endsWith("/outcome")) {
+        throw new EngineProblemError({
+          type: "about:blank",
+          title: "Not Found",
+          status: 404,
+          detail: `Run ${runId} has no recorded outcome yet`,
+          instance: `/api/v1/runs/${runId}/outcome`,
+          error_code: "RUN_OUTCOME_NOT_FOUND",
+        } as never);
+      }
+      return { status: 200, body: page([]) };
+    });
+    const service = new RunService(engine.value, costLedgerStub().value);
+
+    const response = await service.detail(runId, actor, traceparent);
+
+    expect(response.body.run).toEqual({ run_id: runId, status: "running" });
+    expect(response.body.outcome).toBeNull();
+  });
+
+  it("still fails detail when the run itself is not found", async () => {
+    const missing = new EngineProblemError({
+      type: "about:blank",
+      title: "Not Found",
+      status: 404,
+      detail: "no such run",
+      instance: `/api/v1/runs/${runId}`,
+    } as never);
+    const engine = engineStub(async (path) => {
+      if (path === `/api/v1/runs/${runId}`) throw missing;
+      if (path.endsWith("/outcome")) throw missing;
+      return { status: 200, body: page([]) };
+    });
+    const service = new RunService(engine.value, costLedgerStub().value);
+
+    await expect(service.detail(runId, actor, traceparent)).rejects.toBe(missing);
+  });
+
+  it.each([
+    [
+      "an Engine error other than 404",
+      new EngineProblemError({
+        type: "about:blank",
+        title: "Bad Gateway",
+        status: 502,
+        detail: "outcome store down",
+        instance: `/api/v1/runs/${runId}/outcome`,
+      } as never),
+    ],
+    ["a transport failure", new Error("socket hang up")],
+  ])("still fails detail when the outcome read fails with %s", async (_, failure) => {
+    const engine = engineStub(async (path) => {
+      if (path === `/api/v1/runs/${runId}`) {
+        return { status: 200, body: { run_id: runId } };
+      }
+      if (path.endsWith("/outcome")) throw failure;
+      return { status: 200, body: page([]) };
+    });
+    const service = new RunService(engine.value, costLedgerStub().value);
+
+    await expect(service.detail(runId, actor, traceparent)).rejects.toBe(failure);
   });
 
   it("rejects malformed Engine pagination rather than returning partial data", async () => {

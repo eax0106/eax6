@@ -23,6 +23,7 @@ describe("cost_db migration files", () => {
       "0006_price_models_per_token_direction.sql",
       "0007_create_run_verdicts.sql",
       "0008_erasure_grants.sql",
+      "0009_price_nova_2_lite.sql",
     ]);
     expect(
       readdirSync(resolve(COST_MIGRATIONS_PATH, "rollback"))
@@ -38,7 +39,18 @@ describe("cost_db migration files", () => {
       "0006_drop_model_price_dimension.sql",
       "0007_drop_run_verdicts.sql",
       "0008_drop_erasure_grants.sql",
+      "0009_drop_nova_2_lite_price.sql",
     ]);
+  });
+
+  it("prices the local MVP Nova 2 Lite profile at the current Mumbai rates", () => {
+    const sql = migrationSql.find(
+      ({ file }) => file === "0009_price_nova_2_lite.sql",
+    )?.sql;
+
+    expect(sql).toContain("global.amazon.nova-2-lite-v1:0");
+    expect(sql).toContain("'input_tokens', 0.000035, 'USD'");
+    expect(sql).toContain("'output_tokens', 0.000295, 'USD'");
   });
 
   it.each(migrationSql.filter(({ sql }) => sql.includes("CREATE TABLE")))(

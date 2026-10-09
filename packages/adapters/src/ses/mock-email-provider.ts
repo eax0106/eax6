@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { ProviderCapabilities } from "@alterx/contracts";
 import type {
   EmailProvider,
@@ -33,6 +35,13 @@ export class MockEmailProvider implements EmailProvider {
 
   constructor(private readonly now: () => Date = () => new Date()) {}
 
+  // A counter would restart at 1 with every new process, and side_effects
+  // keeps provider message ids unique across runs, so a restarted local stack
+  // would collide with the ids its previous process already handed out.
+  private nextMessageId(): string {
+    return `mock-email-${randomUUID()}`;
+  }
+
   async sendTemplatedEmail(
     to: string,
     templateId: string,
@@ -41,7 +50,7 @@ export class MockEmailProvider implements EmailProvider {
   ): Promise<EmailSendResult> {
     this.sent.push({ to, templateId, variables: { ...variables }, locale });
     return {
-      messageId: `mock-email-${this.sent.length}`,
+      messageId: this.nextMessageId(),
       acceptedAt: this.now().toISOString(),
     };
   }
@@ -54,7 +63,7 @@ export class MockEmailProvider implements EmailProvider {
   ): Promise<EmailSendResult> {
     this.sentRaw.push({ to, subject, body, html: options?.html });
     return {
-      messageId: `mock-email-${this.sentRaw.length}`,
+      messageId: this.nextMessageId(),
       acceptedAt: this.now().toISOString(),
     };
   }

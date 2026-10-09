@@ -46,8 +46,8 @@ export class PlatformWorkflowTemplatesService {
       target_ref: parsed.workflowId,
       result: "success",
       reason_code: parsed.status,
-      context_json: JSON.stringify({ templateId: parsed.templateId, templateVersion: parsed.templateVersion, retry: input.workflowId !== undefined,
-        ...(parsed.status === "compiled" ? { versionId: parsed.versionId } : { missingConnections: parsed.missingConnections.map((gap) => gap.connector_type) }) }),
+      context_json: JSON.stringify({ scope: { templateId: parsed.templateId, templateVersion: parsed.templateVersion, retry: input.workflowId !== undefined,
+        ...(parsed.status === "compiled" ? { versionId: parsed.versionId } : { missingConnections: parsed.missingConnections.map((gap) => gap.connector_type) }) } }),
       occurred_at: new Date().toISOString(),
     });
     return parsed;

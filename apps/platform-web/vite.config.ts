@@ -18,6 +18,13 @@ export default defineConfig({
       },
     },
   },
+  // @alterx/contracts is a workspace package built as CommonJS. Vite serves a
+  // linked package as source and never converts it, so the browser loads the
+  // raw CommonJS file and every named import from it fails, leaving a blank
+  // page. Pre-bundling converts it to ES modules.
+  optimizeDeps: {
+    include: ["@alterx/contracts"],
+  },
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "./src"),
