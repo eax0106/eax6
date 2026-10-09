@@ -29,6 +29,9 @@ export const SAFETY_BLOCKED_REVIEWER_MODEL = "injection-blocked";
  */
 export const INJECTION_SCREENED_REVIEWER_MODEL = "ADVANCED";
 
+/** Verify Service's structural check for steps that run no model. */
+export const DETERMINISTIC_REVIEWER_MODEL = "deterministic";
+
 export class SafetyViolationError extends VerifyGateError {
   constructor(message: string) {
     super("SAFETY_VIOLATION", message);
