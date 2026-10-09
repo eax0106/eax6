@@ -342,6 +342,31 @@ describe("RunService", () => {
     await expect(service.detail(runId, actor, traceparent)).rejects.toBe(missing);
   });
 
+  it.each([
+    [
+      "an Engine error other than 404",
+      new EngineProblemError({
+        type: "about:blank",
+        title: "Bad Gateway",
+        status: 502,
+        detail: "outcome store down",
+        instance: `/api/v1/runs/${runId}/outcome`,
+      } as never),
+    ],
+    ["a transport failure", new Error("socket hang up")],
+  ])("still fails detail when the outcome read fails with %s", async (_, failure) => {
+    const engine = engineStub(async (path) => {
+      if (path === `/api/v1/runs/${runId}`) {
+        return { status: 200, body: { run_id: runId } };
+      }
+      if (path.endsWith("/outcome")) throw failure;
+      return { status: 200, body: page([]) };
+    });
+    const service = new RunService(engine.value, costLedgerStub().value);
+
+    await expect(service.detail(runId, actor, traceparent)).rejects.toBe(failure);
+  });
+
   it("rejects malformed Engine pagination rather than returning partial data", async () => {
     const engine = engineStub(async (path) => {
       if (path === `/api/v1/runs/${runId}`) {
