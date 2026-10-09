@@ -309,6 +309,10 @@ export function serviceEnvironment(base = loadEnvironment()) {
     PLATFORM_API_PROXY_TARGET: 'http://127.0.0.1:3020', ALTER_LOCAL_ENV_FILE: envFile, COMPOSE_PROJECT_NAME: project };
   env.ADS_CORE_BASE_URL = `http://127.0.0.1:${env.ADS_CORE_PORT}`;
   env.COST_LEDGER_BASE_URL = `http://127.0.0.1:${env.COST_PORT}`;
+  // background-workers' cost-events consumer reaches the Cost Ledger over
+  // gRPC; unset, it falls back to a port memory-service owns locally and
+  // every cost event is dropped after its redeliveries.
+  env.COST_LEDGER_SERVICE_ADDRESS = grpcServices(env).find(({ name }) => name === 'cost-ledger-service').address;
   env.AUDIT_SERVICE_BASE_URL = `http://127.0.0.1:${env.AUDIT_PORT}`;
   env.PLATFORM_API_PROXY_TARGET = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;
   env.PLATFORM_API_INTERNAL_BASE_URL = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;

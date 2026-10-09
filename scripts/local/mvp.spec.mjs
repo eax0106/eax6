@@ -161,6 +161,8 @@ test('restarted services reuse startup mock identity, token references and disar
   assert.equal(env.AUDIT_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:8101');
   assert.equal(env.MEMORY_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:8102');
   assert.equal(env.INTELLIGENCE_SERVICE_INTERNAL_BASE_URL, 'http://127.0.0.1:8103');
+  assert.equal(env.COST_LEDGER_SERVICE_ADDRESS, '127.0.0.1:50069');
+  assert.equal(serviceEnvironment({ ...base, COST_GRPC_BIND_ADDRESS: '0.0.0.0:51069' }).COST_LEDGER_SERVICE_ADDRESS, '127.0.0.1:51069');
   assert.equal(env.MODEL_GATEWAY_LOCAL_SMOKE, '1'); assert.equal(env.AWS_MAX_ATTEMPTS, '1');
   assert.ok(env.MODEL_GATEWAY_LOCAL_SMOKE_PERMIT_FILE.endsWith('/tmp/local-mvp/spend-permit.json'));
   assert.equal(base.ENGINE_M2M_TOKEN_URL, undefined, 'Input env stays unchanged');
