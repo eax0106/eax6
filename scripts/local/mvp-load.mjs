@@ -51,13 +51,14 @@ export async function simulationBatch(simulate, whilePending = async () => {}) {
   const pending = Array.from({length: 20}, async () => {
     const started = performance.now();
     try { await simulate(); return {ok: true, ms: performance.now() - started}; }
-    catch { return {ok: false, ms: performance.now() - started}; }
+    catch (error) { return {ok: false, ms: performance.now() - started, error}; }
   });
   // All twenty requests are launched before the failure hook. This observes
   // request-batch recovery; structural Simulate creates no durable run IDs.
   let samples;
   try { await whilePending(); } finally { samples = await Promise.all(pending); }
-  return summarize(samples);
+  const failed = samples.find(row => !row.ok);
+  return {...summarize(samples), ...(failed ? {firstError: String(failed.error?.message ?? failed.error)} : {})};
 }
 
 export function mockGatewayEnvironment(env) {
@@ -206,17 +207,22 @@ export async function load(stackRoot = fileURLToPath(new URL('../../', import.me
     assert.equal(signedIn.userId, userId); assert.ok(cookies.has('alter_access'));
     const created = await request('/api/v1/workflow-templates/meeting-notes-summary/instantiate', 'POST', {});
     assert.match(created.workflowId, /^wf_[0-9a-f-]+$/); assert.equal(created.status, 'compiled');
-    const workflow = await request(`/api/v1/workflows/${created.workflowId}`);
+    const read = await request(`/api/v1/workflows/${created.workflowId}`, 'GET', undefined, {}, true);
+    assert.ok(read.etag);
+    // Simulate validates the saved builder canvas, which instantiate does not
+    // write; save the compiled template DAG as the canvas, as the durable phase does.
+    await request(`/api/v1/workflows/${created.workflowId}`, 'PATCH', {dag: read.data.dag}, {'if-match': read.etag});
+    const workflow = read.data;
     const keys = [...workflow.dag.waves].sort((a, b) => a.order - b.order).flatMap(wave => wave.node_keys);
     const input = {loadProbe: randomUUID()};
     const simulate = async () => validateTrace(await request(`/api/v1/workflows/${created.workflowId}/actions/simulate`, 'POST', {input}), keys, input);
-    const baseline = await simulationBatch(simulate); assert.equal(baseline.errors, 0, 'Baseline simulations failed');
+    const baseline = await simulationBatch(simulate); assert.equal(baseline.errors, 0, `Baseline simulations failed: ${baseline.firstError}`);
     const killedAt = performance.now();
     const outage = await simulationBatch(simulate, () => stop('orchestration-service', true));
     assert.ok(outage.errors > 0, 'Failure was not observed; no recovery certified');
     await restart('orchestration-service');
     cancelled.signal.throwIfAborted();
-    const recovered = await simulationBatch(simulate); assert.equal(recovered.errors, 0, 'Restored simulations failed');
+    const recovered = await simulationBatch(simulate); assert.equal(recovered.errors, 0, `Restored simulations failed: ${recovered.firstError}`);
     assert.equal(existsSync(permit), false); await helpers.assertPortFree('model-gateway', all.find(row => row.name === 'model-gateway').port);
     evidence = {recordedAt: new Date().toISOString(), scope: 'local structural Simulate HTTP batches; no durable Temporal runs',
       concurrency: 20, spendCapUsd: 0, modelCalls: 0, modelCallsProof: 'Owned guarded model-gateway stopped for all structural workload phases; no spend permit',
