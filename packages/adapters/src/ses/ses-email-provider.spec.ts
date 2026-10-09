@@ -4,6 +4,7 @@ import { MockEmailProvider } from "./mock-email-provider";
 import { SesEmailProvider, type SesCommandClient } from "./ses-email-provider";
 
 const now = () => new Date("2026-08-05T00:00:00.000Z");
+const MOCK_MESSAGE_ID = /^mock-email-[0-9a-f-]{36}$/;
 
 describe("SesEmailProvider", () => {
   it("tags workflow email for read-back while notification templates stay outside that route", async () => {
@@ -65,7 +66,7 @@ describe("SesEmailProvider", () => {
   it("mock adapter records same contract input", async () => {
     const provider = new MockEmailProvider(now);
     await expect(provider.sendTemplatedEmail("user@example.com", "notification-system", { title: "Hello" })).resolves.toEqual({
-      messageId: "mock-email-1",
+      messageId: expect.stringMatching(MOCK_MESSAGE_ID),
       acceptedAt: now().toISOString(),
     });
     expect(provider.sent).toEqual([
@@ -148,10 +149,16 @@ describe("SesEmailProvider", () => {
     );
   });
 
+  it("mock adapter never repeats a message id, even from a fresh instance after a restart", async () => {
+    const first = await new MockEmailProvider(now).sendEmail("user@example.com", "Subject", "Body");
+    const second = await new MockEmailProvider(now).sendEmail("user@example.com", "Subject", "Body");
+    expect(first.messageId).not.toEqual(second.messageId);
+  });
+
   it("mock adapter records sendEmail calls separately from sendTemplatedEmail", async () => {
     const provider = new MockEmailProvider(now);
     await expect(provider.sendEmail("user@example.com", "Subject", "Body text")).resolves.toEqual({
-      messageId: "mock-email-1",
+      messageId: expect.stringMatching(MOCK_MESSAGE_ID),
       acceptedAt: now().toISOString(),
     });
     expect(provider.sentRaw).toEqual([
