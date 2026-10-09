@@ -14,6 +14,7 @@ not a per-request channel. See selection_binding_lifespan below and
 embedding_client.py's own module doc for what closed this gap.
 """
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
@@ -143,6 +144,8 @@ EmbeddingClientDep = Annotated[EmbeddingClient, Depends(get_embedding_client)]
 PolicyClientDep = Annotated[RoutingPolicyClient, Depends(get_policy_client)]
 InstructionsClientDep = Annotated[AgentInstructionsClient, Depends(get_instructions_client)]
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/selection-binding", tags=["selection-binding"])
 
 
@@ -211,6 +214,7 @@ async def bind_agent_model_tool(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except EmbeddingResultError as exc:
         await session.rollback()
+        logger.warning("bind-agent-model-tool: invalid embedding result: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except EmbeddingTransportUnavailableError as exc:
         await session.rollback()
@@ -220,6 +224,7 @@ async def bind_agent_model_tool(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except AgentInstructionsError as exc:
         await session.rollback()
+        logger.warning("bind-agent-model-tool: invalid agent instructions: %s", exc)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     except Exception:
         await session.rollback()
