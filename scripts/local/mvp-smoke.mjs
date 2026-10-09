@@ -111,8 +111,13 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   // node. Every remaining template step and its success criteria stay intact.
   const intake = dag.nodes.find(node => node.key === 'intake');
   assert.equal(intake.type, 'Merge');
+  // The notes are the template's own first test case: a decision, an owned
+  // and an unowned action item, and an undecided topic, so every success
+  // criterion has something real to judge.
   intake.type = 'YAMLImport'; intake.config = { yaml: JSON.stringify({
-    title: `Local MVP ${randomUUID()}`, recipient: 'probe@local.invalid', notes: 'Nothing decided. No action items.' }) };
+    title: `Local MVP ${randomUUID()}`, recipient: 'probe@local.invalid',
+    notes: 'Agreed: the launch moves to the next release. Marketing lead to update the pricing page before launch. '
+      + 'Someone needs to brief support, no owner yet. Discussed a referral scheme, no conclusion.' }) };
   assert.ok(workflow.etag, 'workflow ETag required');
   await request(`/api/v1/workflows/${created.workflowId}`, 'PATCH', { dag }, { 'if-match': workflow.etag });
   const compiled = (await request(`/api/v1/workflows/${created.workflowId}/actions/compile`, 'POST', {})).data;
