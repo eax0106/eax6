@@ -23,6 +23,12 @@ export class VerifyGateError extends Error {
  */
 export const SAFETY_BLOCKED_REVIEWER_MODEL = "injection-blocked";
 
+/**
+ * Verify Service's ADVANCED reviewer, which only ever sees output that
+ * already passed its prompt-injection screen.
+ */
+export const INJECTION_SCREENED_REVIEWER_MODEL = "ADVANCED";
+
 export class SafetyViolationError extends VerifyGateError {
   constructor(message: string) {
     super("SAFETY_VIOLATION", message);
