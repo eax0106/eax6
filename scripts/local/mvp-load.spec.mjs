@@ -31,7 +31,9 @@ test('twenty native HTTP simulations expose a killed service and restored recove
     const {createServer} = require('node:http'); let active = 0, peak = 0;
     const server = createServer(async (request, response) => {
       active++; peak = Math.max(peak, active);
-      await new Promise(done => setTimeout(done, 30));
+      // Hold each response until the whole batch is in flight (bounded), so a
+      // slow runner cannot finish early requests before the last one arrives.
+      for (let waited = 0; active < 20 && waited < 500; waited += 5) await new Promise(done => setTimeout(done, 5));
       response.writeHead(request.method === 'POST' && request.url === '/simulate' ? 200 : 400,
         {'content-type': 'application/json', 'x-peak': String(peak)});
       response.end(JSON.stringify({trace: ['start', 'end'].map(key => ({key, status: 'simulated', input: {loadProbe: 'probe'}}))}));
@@ -47,7 +49,7 @@ test('twenty native HTTP simulations expose a killed service and restored recove
   }
   const simulate = async () => {
     const response = await fetch(`http://127.0.0.1:${port}/simulate`, {method: 'POST', signal: AbortSignal.timeout(1000)});
-    assert.equal(response.status, 200); peak = Number(response.headers.get('x-peak'));
+    assert.equal(response.status, 200); peak = Math.max(peak, Number(response.headers.get('x-peak')));
     validateTrace(await response.json(), keys, input);
   };
   try {
