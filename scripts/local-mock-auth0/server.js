@@ -44,7 +44,7 @@ const jwk = publicKey.export({ format: "jwk" });
 const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", (chunk) => (body += chunk));
-  req.on("end", () => { console.log(req.method, req.url, body);
+  req.on("end", () => {
     res.setHeader("content-type", "application/json");
 
     if (req.url === "/.well-known/jwks.json") {
@@ -60,7 +60,7 @@ const server = http.createServer((req, res) => {
         // fall through with empty payload
       }
       const token = signToken({ audience: payload.audience, tenantId: payload.tenantId || payload.organization, payloadWorkspaceId: payload.workspaceId });
-      console.log("GENERATED TOKEN:", token); res.end(JSON.stringify({ access_token: token, expires_in: 3600, token_type: "Bearer" }));
+      res.end(JSON.stringify({ access_token: token, expires_in: 3600, token_type: "Bearer" }));
       return;
     }
 

@@ -64,6 +64,13 @@
       "when": 1786994007000,
       "tag": "0008_erasure_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791426600000,
+      "tag": "0009_price_nova_2_lite",
+      "breakpoints": true
     }
   ]
 }

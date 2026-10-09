@@ -86,8 +86,16 @@ VALUES ('$WORKSPACE_ID', '$TENANT_ID', 'Local Probe Workspace', 'active')
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO users (id, identity_ref, email, display_name, status)
-VALUES ('$USER_ID', 'local|probe-user', 'probe@local.invalid', 'Probe User', 'active')
+VALUES ('$USER_ID', 'auth0|$USER_ID', 'probe@local.invalid', 'Probe User', 'active')
 ON CONFLICT (id) DO NOTHING;
+
+SELECT set_config('app.current_tenant_id', '$TENANT_ID', false);
+INSERT INTO tenant_members (id, tenant_id, user_id, role)
+VALUES (gen_random_uuid(), '$TENANT_ID', '$USER_ID', 'owner')
+ON CONFLICT (tenant_id, user_id) DO NOTHING;
+INSERT INTO workspace_members (id, tenant_id, workspace_id, user_id, role)
+VALUES (gen_random_uuid(), '$TENANT_ID', '$WORKSPACE_ID', '$USER_ID', 'admin')
+ON CONFLICT (workspace_id, user_id) DO NOTHING;
 
 SQL
 
