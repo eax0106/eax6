@@ -3,6 +3,7 @@ import { Injectable } from "@nestjs/common";
 import {
   CostLedgerClient,
   EngineClient,
+  EngineProblemError,
   type EngineCallerContext,
   type EnginePath,
   type EngineResponse,
@@ -149,10 +150,7 @@ export class RunService {
           context,
           instance,
         ),
-        this.engine.get<EngineResource>(
-          `/api/v1/runs/${encodedId}/outcome`,
-          context,
-        ),
+        this.outcomeIfRecorded(encodedId, context),
         this.costLedger.getNodeCosts(id, context),
         this.costLedger.getRunTotals([id], context, instance),
       ]);
@@ -184,10 +182,33 @@ export class RunService {
         verification_results: verification,
         recovery_actions: recovery,
         quality_gates: qualityGates,
-        outcome: outcome.body,
+        outcome,
         run_cost_minor: runTotals.get(id) ?? "0",
       },
     };
+  }
+
+  // The Engine records a run's outcome only when the run finishes and answers
+  // 404 until then. That is "no outcome yet", not "no such run": a running
+  // run must still have a detail page. A missing run still 404s through the
+  // run read itself.
+  private async outcomeIfRecorded(
+    encodedId: string,
+    context: EngineCallerContext,
+  ): Promise<EngineResource | null> {
+    try {
+      return (
+        await this.engine.get<EngineResource>(
+          `/api/v1/runs/${encodedId}/outcome`,
+          context,
+        )
+      ).body;
+    } catch (error) {
+      if (error instanceof EngineProblemError && error.problem.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   // Dedicated single-resource reads of the same two sub-resources detail()
