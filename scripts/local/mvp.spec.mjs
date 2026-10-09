@@ -11,7 +11,7 @@ import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
-import { assertSmokeCeiling, smoke } from './mvp-smoke.mjs';
+import { assertSmokeCeiling, pollRunDetail, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
   assertSmokeCeiling(0.25);
@@ -241,4 +241,14 @@ esac
       assert.equal(readFileSync(log, 'utf8').trim().split('\nEND').filter(Boolean).length, 1, 'Existing role not altered');
     }
   } finally {rmSync(dir, {recursive: true, force: true});}
+});
+
+test('smoke run polling treats a not-yet-visible run as pending and still fails on other errors', async () => {
+  const notFound = Object.assign(new Error('HTTP 404'), { status: 404 });
+  const replies = [notFound, notFound, { run: { status: 'running' } }, { run: { status: 'completed' } }];
+  const detail = await pollRunDetail(async () => { const next = replies.shift(); if (next instanceof Error) throw next; return next; }, { pauseMs: 0 });
+  assert.equal(detail.run.status, 'completed');
+  assert.equal(await pollRunDetail(async () => { throw notFound; }, { attempts: 3, pauseMs: 0 }), undefined);
+  const serverError = Object.assign(new Error('HTTP 500'), { status: 500 });
+  await assert.rejects(pollRunDetail(async () => { throw serverError; }, { pauseMs: 0 }), /HTTP 500/);
 });

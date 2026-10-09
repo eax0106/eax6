@@ -42,6 +42,19 @@ async function policy(env) {
   } finally { baseline.close(); store.close(); }
 }
 
+// A just-started run is visible to the detail endpoint only after its first
+// projection lands, so a 404 while polling means "not ready yet".
+export async function pollRunDetail(fetchDetail, { attempts = 120, pauseMs = 1000 } = {}) {
+  let detail;
+  for (let i = 0; i < attempts; i++) {
+    try { detail = await fetchDetail(); }
+    catch (error) { if (error.status !== 404) throw error; detail = undefined; }
+    if (['completed', 'failed', 'cancelled', 'paused'].includes(detail?.run.status)) break;
+    await delay(pauseMs);
+  }
+  return detail;
+}
+
 export async function smoke({ apply = false, healthOnly = false, evidenceFile } = {}) {
   if (apply && healthOnly) throw new Error('--apply and --health-only are mutually exclusive');
   if (process.versions.node.split('.')[0] !== '22') throw new Error('MVP smoke requires Node 22');
@@ -73,7 +86,10 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
     for (const cookie of response.headers.getSetCookie()) {
       const pair = cookie.split(';')[0], at = pair.indexOf('='); cookies.set(pair.slice(0, at), pair.slice(at + 1));
     }
-    if (!response.ok) throw new Error(`platform-api: ${method} ${path.split('?')[0]} failed HTTP ${response.status}`);
+    if (!response.ok) {
+      const error = new Error(`platform-api: ${method} ${path.split('?')[0]} failed HTTP ${response.status}`);
+      error.status = response.status; throw error;
+    }
     const data = response.status === 204 ? null : await response.json();
     return { data, etag: response.headers.get('etag') };
   }
@@ -115,11 +131,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   run = (await request('/api/v1/runs', 'POST', { workflow_id: created.workflowId, workflow_version_id: compiled.id })).data;
   assert.match(run.id, /^run_/);
   writeFileSync(permitFile, JSON.stringify({ gatewayPid: gateway.pid, tenantId, runId: run.id }), { mode: 0o600 });
-  for (let i = 0; i < 120; i++) {
-    detail = (await request(`/api/v1/runs/${run.id}`)).data;
-    if (['completed', 'failed', 'cancelled', 'paused'].includes(detail.run.status)) break;
-    await delay(1000);
-  }
+  detail = await pollRunDetail(async () => (await request(`/api/v1/runs/${run.id}`)).data);
+  assert.ok(detail, `run ${run.id} never became visible to run detail`);
   assert.equal(detail.run.status, 'completed', `run ${run.id} did not complete`);
   assert.equal(detail.outcome.verdict, 'completed_verified');
   assert.ok(detail.verification_results.length > 0, 'No persisted verification verdicts');
