@@ -348,8 +348,9 @@ export class NodeExecutionLedgerService {
     readonly nodeExecutionId: string;
     readonly gateType: string;
     readonly verdict: string;
-    readonly score: number;
-    readonly threshold: number;
+    /** Null for a safety result, which has a severity instead of a score. */
+    readonly score: number | null;
+    readonly threshold: number | null;
     readonly reviewerModel: string;
     readonly detailsJson: string;
   }): Promise<void> {
