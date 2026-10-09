@@ -105,3 +105,57 @@ async def test_rejects_an_unusable_model_answer(content: str) -> None:
             node_key="node.one",
             requirement=NodeRequirement(capabilities=["analysis.reasoning"]),
         )
+
+
+@pytest.mark.parametrize(
+    ("content", "expected"),
+    [
+        # A bulleted draft with raw line breaks inside the JSON string: valid
+        # to every reader of the instructions, rejected by strict json.loads.
+        (
+            '{"instructions":"You handle analysis.reasoning work.\n- Check the result.\n'
+            '- Report uncertainty."}',
+            "You handle analysis.reasoning work.\n- Check the result.\n- Report uncertainty.",
+        ),
+        # A sentence of preamble before the object.
+        (
+            'Here are the instructions:\n{"instructions":"Check the work."}',
+            "Check the work.",
+        ),
+        # A fence that is not the first thing in the answer.
+        (
+            'Sure.\n```json\n{"instructions":"Check the work."}\n```',
+            "Check the work.",
+        ),
+    ],
+)
+async def test_accepts_the_shapes_models_wrap_a_valid_answer_in(
+    content: str, expected: str
+) -> None:
+    client = client_with_stub(RecordingStub(content))
+
+    result = await client.draft_instructions(
+        tenant_id="ten_a",
+        run_id="run_a",
+        node_key="node.one",
+        requirement=NodeRequirement(capabilities=["analysis.reasoning"]),
+    )
+
+    assert result == expected
+
+
+async def test_leaves_room_for_the_longest_instructions_it_accepts() -> None:
+    stub = RecordingStub('{"instructions":"Check the work."}')
+    client = client_with_stub(stub)
+
+    await client.draft_instructions(
+        tenant_id="ten_a",
+        run_id="run_a",
+        node_key="node.one",
+        requirement=NodeRequirement(capabilities=["analysis.reasoning"]),
+    )
+
+    request, _ = stub.requests[0]
+    # 4,000 characters is about 1,000 tokens; 700 cut long drafts off
+    # mid-string, which then failed to parse.
+    assert json.loads(request.input_json)["max_tokens"] >= 1_100
