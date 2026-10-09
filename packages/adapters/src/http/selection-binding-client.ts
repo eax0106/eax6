@@ -28,13 +28,38 @@ export function createFetchSelectionBindingHttpClient(
         body: JSON.stringify(body),
       });
       if (!response.ok) {
+        const detail = await failureDetail(response);
         throw new Error(
-          `Selection & Binding request to ${url} failed with status ${response.status}`,
+          `Selection & Binding request to ${url} failed with status ${response.status}` +
+            (detail ? `: ${detail}` : ""),
         );
       }
       return response.json();
     },
   };
+}
+
+const MAX_FAILURE_DETAIL_CHARS = 300;
+
+/**
+ * The service answers a failed bind with FastAPI's `{"detail": "..."}`, which
+ * names the cause (for example invalid generated agent instructions versus a
+ * bad embedding). Without it a failed run only shows the status code.
+ */
+async function failureDetail(response: Response): Promise<string> {
+  try {
+    const body: unknown = await response.json();
+    const detail =
+      typeof body === "object" && body !== null && "detail" in body
+        ? (body as { detail: unknown }).detail
+        : undefined;
+    const text = typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
+    return text.length > MAX_FAILURE_DETAIL_CHARS
+      ? `${text.slice(0, MAX_FAILURE_DETAIL_CHARS)}...`
+      : text;
+  } catch {
+    return "";
+  }
 }
 
 export interface SelectionBindingClientConfig {
