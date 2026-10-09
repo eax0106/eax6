@@ -40,7 +40,8 @@ export interface RunDetail {
   verification_results: readonly EngineResource[];
   recovery_actions: readonly EngineResource[];
   quality_gates: readonly EngineResource[];
-  outcome: EngineResource;
+  /** Null until the run finishes and the Engine records its outcome. */
+  outcome: EngineResource | null;
   /** D24: what the run cost the tenant so far, billed price, in minor units. */
   run_cost_minor: string;
 }
