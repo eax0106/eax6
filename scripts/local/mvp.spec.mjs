@@ -243,9 +243,10 @@ esac
   } finally {rmSync(dir, {recursive: true, force: true});}
 });
 
-test('smoke run polling treats a not-yet-visible run as pending and still fails on other errors', async () => {
+test('smoke run polling waits out a not-yet-visible run and rate limiting, and still fails on other errors', async () => {
   const notFound = Object.assign(new Error('HTTP 404'), { status: 404 });
-  const replies = [notFound, notFound, { run: { status: 'running' } }, { run: { status: 'completed' } }];
+  const limited = Object.assign(new Error('HTTP 429'), { status: 429 });
+  const replies = [notFound, notFound, { run: { status: 'running' } }, limited, { run: { status: 'completed' } }];
   const detail = await pollRunDetail(async () => { const next = replies.shift(); if (next instanceof Error) throw next; return next; }, { pauseMs: 0 });
   assert.equal(detail.run.status, 'completed');
   assert.equal(await pollRunDetail(async () => { throw notFound; }, { attempts: 3, pauseMs: 0 }), undefined);

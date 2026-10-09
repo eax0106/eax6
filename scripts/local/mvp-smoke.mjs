@@ -43,12 +43,14 @@ async function policy(env) {
 }
 
 // A just-started run is visible to the detail endpoint only after its first
-// projection lands, so a 404 while polling means "not ready yet".
-export async function pollRunDetail(fetchDetail, { attempts = 120, pauseMs = 1000 } = {}) {
+// projection lands, so a 404 while polling means "not ready yet". Each detail
+// read fans out to several engine calls that count against the per-tenant
+// limit of 120 a minute, so poll every 3s and wait out a 429 rather than fail.
+export async function pollRunDetail(fetchDetail, { attempts = 60, pauseMs = 3000 } = {}) {
   let detail;
   for (let i = 0; i < attempts; i++) {
     try { detail = await fetchDetail(); }
-    catch (error) { if (error.status !== 404) throw error; detail = undefined; }
+    catch (error) { if (error.status !== 404 && error.status !== 429) throw error; if (error.status === 404) detail = undefined; }
     if (['completed', 'failed', 'cancelled', 'paused'].includes(detail?.run.status)) break;
     await delay(pauseMs);
   }
@@ -139,8 +141,10 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   assert.ok(detail.verification_results.every(row => row.verdict === 'pass'), 'Verification failed');
   // Cost ingestion is asynchronous. A real model smoke must not certify zero
   // just because the cost-events consumer has not caught up yet.
-  for (let i = 0; i < 30 && BigInt(detail.run_cost_minor) === 0n; i++) {
-    await delay(1000); detail = (await request(`/api/v1/runs/${run.id}`)).data;
+  for (let i = 0; i < 20 && BigInt(detail.run_cost_minor) === 0n; i++) {
+    await delay(3000);
+    try { detail = (await request(`/api/v1/runs/${run.id}`)).data; }
+    catch (error) { if (error.status !== 429) throw error; }
   }
   assert.ok(BigInt(detail.run_cost_minor) > 0n, 'No persisted run cost');
   } catch (error) {
