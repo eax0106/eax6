@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import json
-import re
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import grpc
 
@@ -103,7 +102,9 @@ class ModelGatewayAgentInstructionsClient:
                     },
                 ],
                 "temperature": 0.1,
-                "max_tokens": 700,
+                # Room for the longest draft we accept (4,000 characters is
+                # about 1,000 tokens): a draft cut off mid-string cannot parse.
+                "max_tokens": 1_200,
             },
             separators=(",", ":"),
         )
@@ -128,7 +129,7 @@ class ModelGatewayAgentInstructionsClient:
 
         try:
             envelope = json.loads(response.output_json)
-            answer = json.loads(_json_object_text(envelope["message"]["content"]))
+            answer = _json_object(envelope["message"]["content"])
             if set(answer) != {"instructions"}:
                 raise ValueError("answer must contain only instructions")
             instructions = answer["instructions"]
@@ -144,9 +145,16 @@ class ModelGatewayAgentInstructionsClient:
         return instructions
 
 
-def _json_object_text(content: object) -> str:
-    text = str(content).strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[A-Za-z]*\n?", "", text)
-        text = re.sub(r"\n?```$", "", text).strip()
-    return text
+def _json_object(content: object) -> Any:
+    """The first JSON object in the answer, however the model wrapped it.
+
+    Models put a sentence or a code fence around the object, and raw line
+    breaks inside a bulleted instructions string (strict=False accepts those,
+    as the planner's parser does).
+    """
+    text = str(content)
+    start = text.find("{")
+    if start < 0:
+        raise ValueError("answer contains no JSON object")
+    answer, _ = json.JSONDecoder(strict=False).raw_decode(text, start)
+    return answer
