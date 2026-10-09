@@ -252,3 +252,15 @@ test('smoke run polling treats a not-yet-visible run as pending and still fails 
   const serverError = Object.assign(new Error('HTTP 500'), { status: 500 });
   await assert.rejects(pollRunDetail(async () => { throw serverError; }, { pauseMs: 0 }), /HTTP 500/);
 });
+
+test('shutdown still stops a process recorded with the older lstart stamp', async () => {
+  const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { detached: true, stdio: 'ignore' });
+  await once(child, 'spawn');
+  try {
+    const legacy = spawnSync('ps', ['-p', String(child.pid), '-o', 'lstart='], { encoding: 'utf8' }).stdout.trim();
+    assert.ok(legacy);
+    assert.equal(processStamp(child.pid, legacy), legacy);
+    await stopOwnedProcess({ pid: child.pid, stamp: legacy });
+    assert.equal(processStamp(child.pid), '');
+  } finally { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }
+});

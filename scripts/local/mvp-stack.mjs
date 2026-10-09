@@ -211,7 +211,19 @@ export function grpcServices(env) {
   { name: 'eval-service', address: '127.0.0.1:50062' }];
 }
 
-export function processStamp(pid) {
+// Identity of a running process: its start time. On Linux (including WSL)
+// use the kernel's boot-relative start ticks from /proc; `ps -o lstart` derives
+// wall-clock time from them and shifts when the WSL clock is adjusted, which
+// made live services look exited and skipped their shutdown. `like` keeps
+// stamps recorded in the older lstart format comparable.
+export function processStamp(pid, like) {
+  if ((like === undefined || like.startsWith('proc:')) && existsSync('/proc/self/stat')) {
+    try {
+      const stat = readFileSync(`/proc/${Number(pid)}/stat`, 'utf8');
+      const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+      return fields[19] ? `proc:${fields[19]}` : '';
+    } catch { return ''; }
+  }
   const result = spawnSync('ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' });
   return result.status === 0 ? result.stdout.trim() : '';
 }
@@ -231,13 +243,13 @@ export function assertNoPnpm() {
 }
 
 export async function stopOwnedProcess(row) {
-  if (!row.stamp || processStamp(row.pid) !== row.stamp) return;
+  if (!row.stamp || processStamp(row.pid, row.stamp) !== row.stamp) return;
   try { process.kill(-row.pid, 'SIGTERM'); } catch (error) { if (error.code !== 'ESRCH') throw error; }
   for (let i = 0; i < 100; i++) {
-    if (processStamp(row.pid) !== row.stamp) return;
+    if (processStamp(row.pid, row.stamp) !== row.stamp) return;
     await delay(100);
   }
-  if (processStamp(row.pid) === row.stamp) process.kill(-row.pid, 'SIGKILL');
+  if (processStamp(row.pid, row.stamp) === row.stamp) process.kill(-row.pid, 'SIGKILL');
 }
 
 export function services(env) {

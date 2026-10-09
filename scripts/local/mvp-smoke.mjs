@@ -67,7 +67,7 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   console.log('MVP HTTP health identities verified');
   if (healthOnly) return;
   const gateway = state.processes.find(row => row.name === 'model-gateway');
-  if (!gateway?.stamp || processStamp(gateway.pid) !== gateway.stamp || state.smokeCeilingUsd !== MAX_SMOKE_USD || state.gatewayDigest !== gatewayDigest()) {
+  if (!gateway?.stamp || processStamp(gateway.pid, gateway.stamp) !== gateway.stamp || state.smokeCeilingUsd !== MAX_SMOKE_USD || state.gatewayDigest !== gatewayDigest()) {
     throw new Error('Guarded model-gateway ownership not verified; refusing smoke');
   }
   const gatewayLog = readFileSync(resolve(root, 'tmp/local-mvp/model-gateway.log'), 'utf8');
