@@ -10,7 +10,7 @@ import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, emailMode, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
+import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, emailMode, realTools, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
 import { assertSmokeCeiling, pollRunDetail, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
@@ -51,6 +51,27 @@ test('orchestration estimates against the Model Gateway AppConfig policy without
     APPCONFIG_APPLICATION_ID: 'app', APPCONFIG_ENVIRONMENT_ID: 'environment', APPCONFIG_CONFIGURATION_PROFILE_ID: 'profile',
     AWS_ENDPOINT_URL_APPCONFIGDATA: 'https://appconfigdata.ap-south-1.amazonaws.com' });
   assert.equal(env.RUNTIME_MODE, 'mock');
+});
+
+test('real tools are opt-in: tool-gateway alone runs real, on LocalStack secrets with AWS AppConfig', () => {
+  const env = { ALTER_REGION: 'ap-south-1', RUNTIME_MODE: 'mock', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566',
+    TOOL_GATEWAY_APPCONFIG_APPLICATION_ID: 'app', TOOL_GATEWAY_APPCONFIG_ENVIRONMENT_ID: 'environment',
+    TOOL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID: 'profile', TAVILY_API_KEY_SECRET_REF: '/alter/local/tavily',
+    BROWSERBASE_API_KEY_REF: 'alter/local/browserbase' };
+  assert.equal(realTools(env), false);
+  assert.equal(realTools({ ...env, MVP_REAL_TOOLS: '0' }), false);
+  const real = { ...env, MVP_REAL_TOOLS: '1' };
+  assert.equal(realTools(real), true);
+  assert.deepEqual(serviceStartEnvironment('tool-gateway', real), { ...real, RUNTIME_MODE: 'real', ALTER_CONFIG_SOURCE: 'appconfig',
+    APPCONFIG_APPLICATION_ID: 'app', APPCONFIG_ENVIRONMENT_ID: 'environment', APPCONFIG_CONFIGURATION_PROFILE_ID: 'profile',
+    AWS_ENDPOINT_URL_APPCONFIGDATA: 'https://appconfigdata.ap-south-1.amazonaws.com' });
+  assert.equal(serviceStartEnvironment('tool-gateway', real).AWS_ENDPOINT_URL, 'http://127.0.0.1:4566', 'secrets and queue stay on LocalStack');
+  assert.equal(serviceStartEnvironment('platform-api', real), real);
+  const both = serviceStartEnvironment('tool-gateway', { ...real, MVP_EMAIL_PROVIDER: 'ses', MVP_SES_FROM_ADDRESS: 'sender@example.test' });
+  assert.equal(both.RUNTIME_MODE, 'real'); assert.equal(both.EMAIL_PROVIDER, 'ses');
+  assert.throws(() => realTools({ ...env, MVP_REAL_TOOLS: 'yes' }), /MVP_REAL_TOOLS must be 0 or 1/);
+  assert.throws(() => realTools({ ...real, TOOL_GATEWAY_APPCONFIG_ENVIRONMENT_ID: '' }), /TOOL_GATEWAY_APPCONFIG_ENVIRONMENT_ID/);
+  assert.throws(() => realTools({ ...real, BROWSERBASE_API_KEY_REF: '' }), /BROWSERBASE_API_KEY_REF/);
 });
 
 test('real SES email is opt-in, tool-gateway only, and reaches SES past LocalStack', () => {

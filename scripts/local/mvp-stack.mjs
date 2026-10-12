@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, openSync, closeSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { connect as connectHttp2 } from 'node:http2';
 import { resolve } from 'node:path';
@@ -359,12 +359,70 @@ export function emailMode(env) {
   return 'ses';
 }
 
+/**
+ * Opt-in real tools: MVP_REAL_TOOLS=1 runs tool-gateway in its real runtime,
+ * so web search calls Tavily and the database tool resolves the connection
+ * secrets platform-api stored. Secrets and the cost queue stay on LocalStack,
+ * where platform-api keeps connection credentials; AppConfig is read from AWS.
+ */
+export function realTools(env) {
+  const value = env.MVP_REAL_TOOLS ?? '';
+  if (value === '' || value === '0') return false;
+  if (value !== '1') throw new Error('MVP_REAL_TOOLS must be 0 or 1');
+  for (const part of ['APPLICATION_ID', 'ENVIRONMENT_ID', 'CONFIGURATION_PROFILE_ID']) {
+    if (!env[`TOOL_GATEWAY_APPCONFIG_${part}`]) throw new Error(`MVP_REAL_TOOLS=1 needs TOOL_GATEWAY_APPCONFIG_${part}`);
+  }
+  for (const key of toolSecretKeys) if (!env[key]) throw new Error(`MVP_REAL_TOOLS=1 needs ${key}`);
+  return true;
+}
+
+// The platform-wide tool keys live in AWS Secrets Manager; a real tool-gateway
+// here reads LocalStack's, so the stack copies them across at startup.
+const toolSecretKeys = ['TAVILY_API_KEY_SECRET_REF', 'BROWSERBASE_API_KEY_REF'];
+
+function copyToolSecretsToLocalStack(env) {
+  for (const key of toolSecretKeys) {
+    const name = env[key];
+    const read = spawnSync('aws', ['secretsmanager', 'get-secret-value', '--secret-id', name, '--query', 'SecretString', '--output', 'text'],
+      { cwd: root, env: realAwsEnvironment(env), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (read.error || read.status !== 0 || !read.stdout.trim()) throw new Error(`${key}: secret not readable in AWS; no tools started`);
+    const value = read.stdout.replace(/\n$/, '');
+    // The value goes through a private file that is removed at once, never on
+    // a command line or in a log. Some AWS CLI builds cannot read /dev/stdin.
+    const dir = mkdtempSync(resolve(stateDir, 'tool-secret-'));
+    const file = resolve(dir, 'input.json');
+    const write = (verb, body) => {
+      writeFileSync(file, JSON.stringify(body), { mode: 0o600 });
+      return spawnSync('aws', ['secretsmanager', verb, '--cli-input-json', `file://${file}`],
+        { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
+    };
+    let result;
+    try {
+      result = write('create-secret', { Name: name, SecretString: value });
+      if (result.status !== 0) result = write('put-secret-value', { SecretId: name, SecretString: value });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+    if (result.error || result.status !== 0) {
+      throw new Error(`${key}: copy to LocalStack failed (${(result.stderr || String(result.error)).trim().split('\n').at(-1)}); no tools started`);
+    }
+  }
+}
+
 export function serviceStartEnvironment(name, env) {
-  if (name === 'tool-gateway' && emailMode(env) === 'ses') {
-    const ses = { ...env, EMAIL_PROVIDER: 'ses', SES_FROM_ADDRESS: env.MVP_SES_FROM_ADDRESS, SES_USE_DEFAULT_CREDENTIALS: 'true',
-      AWS_ENDPOINT_URL_SESV2: `https://email.${env.ALTER_REGION}.amazonaws.com` };
-    if (env.ALTER_AWS_PROFILE) ses.AWS_PROFILE = env.ALTER_AWS_PROFILE;
-    return ses;
+  if (name === 'tool-gateway') {
+    let tool = env;
+    if (realTools(env)) {
+      tool = { ...tool, RUNTIME_MODE: 'real', ALTER_CONFIG_SOURCE: 'appconfig',
+        APPCONFIG_APPLICATION_ID: env.TOOL_GATEWAY_APPCONFIG_APPLICATION_ID,
+        APPCONFIG_ENVIRONMENT_ID: env.TOOL_GATEWAY_APPCONFIG_ENVIRONMENT_ID,
+        APPCONFIG_CONFIGURATION_PROFILE_ID: env.TOOL_GATEWAY_APPCONFIG_CONFIGURATION_PROFILE_ID,
+        AWS_ENDPOINT_URL_APPCONFIGDATA: `https://appconfigdata.${env.ALTER_REGION}.amazonaws.com` };
+    }
+    if (emailMode(env) === 'ses') {
+      tool = { ...tool, EMAIL_PROVIDER: 'ses', SES_FROM_ADDRESS: env.MVP_SES_FROM_ADDRESS, SES_USE_DEFAULT_CREDENTIALS: 'true',
+        AWS_ENDPOINT_URL_SESV2: `https://email.${env.ALTER_REGION}.amazonaws.com` };
+      if (env.ALTER_AWS_PROFILE) tool.AWS_PROFILE = env.ALTER_AWS_PROFILE;
+    }
+    return tool;
   }
   if (name !== 'orchestration-service') return env;
   return { ...env, RUNTIME_MODE: 'real',
@@ -403,7 +461,7 @@ async function up() {
     if (ports.has(number)) throw new Error(`${name}: port ${port} also configured for ${ports.get(number)}`);
     ports.set(number, name);
   };
-  const email = emailMode(env);
+  const email = emailMode(env), tools = realTools(env) ? 'real' : 'mock';
   for (const row of all) addPort(row.port, row.name);
   const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
   for (const [, key, fallback] of compose.matchAll(/\$\{([A-Z_]+_PORT):-([0-9]+)\}/g)) addPort(env[key] || fallback, key);
@@ -429,6 +487,7 @@ async function up() {
         : ['run', '--frozen', 'alembic', 'upgrade', 'head'];
       await setup('uv', args, env, resolve(root, 'apps', name));
     }
+    if (tools === 'real') copyToolSecretsToLocalStack(env);
     for (const name of nodeServices.filter(name => !['platform-api', 'background-workers'].includes(name))) {
       const args = name === 'model-gateway' ? ['scripts/run-service-aws.sh', name] : [`dist/apps/${name}/main.js`];
       await start(state, name, name === 'model-gateway' ? 'bash' : process.execPath, args, serviceStartEnvironment(name, env), root, byName.get(name).url);
@@ -451,8 +510,8 @@ async function up() {
     for (const name of ['platform-api', 'background-workers']) await start(state, name, process.execPath, [`dist/apps/${name}/main.js`], env, root, byName.get(name).url);
     await start(state, 'platform-web', 'pnpm', ['exec', 'vite', '--host', '127.0.0.1', '--port', env.PLATFORM_WEB_PORT, '--strictPort'], env, resolve(root, 'apps/platform-web'), byName.get('platform-web').url);
     for (const row of all) await health(row.name, row.url);
-    state.email = email; state.ready = true; save(state);
-    console.log(`MVP ready: http://127.0.0.1:${env.PLATFORM_WEB_PORT}; model-gateway=real Bedrock; email=mock`);
+    state.email = email; state.tools = tools; state.ready = true; save(state);
+    console.log(`MVP ready: http://127.0.0.1:${env.PLATFORM_WEB_PORT}; model-gateway=real Bedrock; email=${email}; tools=${tools}`);
   } catch (error) {
     try { await down(state); } catch { console.error('MVP cleanup incomplete; retained ownership state for mvp-down.sh'); }
     throw error;

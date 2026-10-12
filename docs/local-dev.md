@@ -68,6 +68,14 @@ AWS profile; platform notifications stay mocked. While the account is in the
 SES sandbox, every recipient must be a verified identity too. Smoke refuses a
 stack started this way, since its recipient is a placeholder.
 
+Real tools are opt-in too. `MVP_REAL_TOOLS=1` starts tool-gateway in its real
+runtime: web search calls Tavily and the database tool resolves the connection
+credentials platform-api stored. Its secrets and cost queue stay on LocalStack,
+where platform-api keeps connection credentials, so at startup the stack copies
+the Tavily and Browserbase keys from AWS Secrets Manager into LocalStack (through
+a private temp file, never printed). Its policy comes from AWS AppConfig. Search calls count
+against your Tavily plan.
+
 ## Prerequisites
 
 - Docker Desktop with Compose v2
