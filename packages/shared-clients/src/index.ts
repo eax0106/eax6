@@ -57,7 +57,6 @@ export {
   configProviderContract,
   durableExecutionProviderContract,
   embeddingProviderContract,
-  imageGenProviderContract,
   modelProviderContract,
   cacheProviderContract,
   observabilityProviderContract,
@@ -66,8 +65,6 @@ export {
   piiRedactionProviderContract,
   searchProviderContract,
   secretsProviderContract,
-  speechToTextProviderContract,
-  textToSpeechProviderContract,
 } from "./provider-contracts";
 export {
   CANONICAL_PROVIDER_INTERFACES,
@@ -107,9 +104,6 @@ export {
   type EmbeddingRequest,
   type EmbeddingResult,
   type EmbeddingProvider,
-  type ImageGenProvider,
-  type ImageGenerationRequest,
-  type ImageGenerationResult,
   type ErrorCapture,
   type EventBusProvider,
   type GPUComputeProvider,
@@ -158,12 +152,6 @@ export {
   type SearchRequest,
   type SearchResult,
   type SearchResultItem,
-  type SpeechSynthesisRequest,
-  type SpeechSynthesisResult,
-  type SpeechTranscriptionRequest,
-  type SpeechTranscriptionResult,
-  type SpeechToTextProvider,
-  type TextToSpeechProvider,
   type SemanticCacheLookupRequest,
   type SemanticCacheLookupResult,
   type SemanticCacheStoreRequest,
@@ -334,24 +322,6 @@ export {
   createMockMutableParameterStoreProvider,
   type MockParameterStoreProviderOptions,
 } from "./mocks/parameter-store-provider";
-export {
-  MOCK_IMAGE_GEN_CAPABILITIES,
-  createMockImageGenProvider,
-  type MockImageGenProvider,
-  type MockImageGenProviderOptions,
-} from "./mocks/image-gen-provider";
-export {
-  MOCK_TEXT_TO_SPEECH_CAPABILITIES,
-  createMockTextToSpeechProvider,
-  type MockTextToSpeechProvider,
-  type MockTextToSpeechProviderOptions,
-} from "./mocks/text-to-speech-provider";
-export {
-  MOCK_SPEECH_TO_TEXT_CAPABILITIES,
-  createMockSpeechToTextProvider,
-  type MockSpeechToTextProvider,
-  type MockSpeechToTextProviderOptions,
-} from "./mocks/speech-to-text-provider";
 export type { PackageEcosystem, PackageScanRequest, PackageScanReport, PackageScanProvider, ScanFinding, ScanSeverity, ScanVerdict, RegistryToolVersion, RegistryScanReport, ToolVersionReviewItem } from "./package-scan";
 
 export { resolveEnvironmentSecret } from "./environment-secret";

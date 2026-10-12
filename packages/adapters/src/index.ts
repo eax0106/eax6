@@ -185,32 +185,6 @@ export {
   type TitanEmbeddingProviderConfig,
 } from "./aws/titan-embedding-provider";
 export {
-  TITAN_IMAGE_CAPABILITIES,
-  TITAN_IMAGE_GENERATOR_V2_MODEL_ID,
-  TitanImageProvider,
-  type BedrockRuntimeCommandClient as TitanImageBedrockRuntimeCommandClient,
-  type TitanImageProviderConfig,
-} from "./aws/titan-image-provider";
-export {
-  POLLY_TTS_CAPABILITIES,
-  POLLY_VOICE_IDS,
-  PollyTtsProvider,
-  type PollyCommandClient,
-  type PollyTtsProviderConfig,
-} from "./aws/polly-tts-provider";
-export {
-  TRANSCRIBE_STT_CAPABILITIES,
-  TranscribeSttProvider,
-  type TranscribeCommandClient,
-  type TranscribeSttProviderConfig,
-} from "./aws/transcribe-stt-provider";
-export {
-  resolveImageGenProvider,
-  resolveMediaObjectStorageProvider,
-  resolveSpeechToTextProvider,
-  resolveTextToSpeechProvider,
-} from "./aws/resolve-media-providers";
-export {
   MODELGW_HANDLER,
   ModelgwGrpcController,
   startModelgwGrpcTransport,

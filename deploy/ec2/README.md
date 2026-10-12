@@ -79,7 +79,7 @@ Proven without a host:
 - `check-production-boot.sh` (CI): every container's environment, as
   `docker compose config` resolves it from the generated `.env`, passes the
   checks that only run with `NODE_ENV=production` -- platform-api's schema and
-  its identity, email and media providers, tool-gateway's email provider, and
+  its identity and email providers, tool-gateway's email provider, and
   orchestration's Session Gateway -- by running their own code. Before 6.1d
   six of these refused to start; the check fails when any fix is removed.
 - `check-platform-db-roles.sh` (CI, against the migrated database): the

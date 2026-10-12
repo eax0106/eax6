@@ -343,3 +343,29 @@ Titan re-embed and Polly results stand; unavailable provider behavior is retaine
 | Item | Change and evidence | State | Branch |
 | --- | --- | --- | --- |
 | C151 | Owner authorized20 concurrent Simulate requests plus5 real local Temporal runs, USD0. Request probe stops the owned guarded Gateway, measures three20-request batches, SIGKILLs the owned Engine and verifies restart and restored traces. Separate durable probe uses existing mock Gateway and mock embeddings, creates five real runs with deterministic YAMLImport steps around a persisted HumanApproval wait, kills the owned background worker, sends local approval signals while it is down, restarts it and checks the same Temporal executions finish once. Histories, approval rows/decisions, node attempts, checkpoint revisions and run outcomes detect duplicated fixture effects. No external action or model-quality claim. Four native controls pass; disabling duplicate-effect checks fails normally, restoration passes. Existing mock Gateway starts with real HTTP/gRPC health in an isolated native startup check; no model invoked. An owned isolated Temporal CLI fixture confirms description/history format. Node syntax and all governance checks pass; architecture update leaves baseline byte-identical. | Prepared source; actual M1-stack request metrics and five-run durable recovery remain unexecuted pending healthy M1. Updated exact-head CI and squash merge pending. Request recovery and durable workflow recovery will be reported separately. | codex/local-load-c151 |
+
+### Media removal — owner decision, 12 October 2026
+
+The owner superseded C149/M3 and requested complete removal of image generation,
+text-to-speech and speech-to-text. The dedicated HTTP module, permission grants,
+shared-client interfaces and exports, mocks, AWS adapters, tests, paid media
+check, provider configuration, SDK dependencies and EC2 speech permissions are
+removed. Current component/spec guidance records the removal; earlier measured
+results remain historical. Shared S3 storage, capability registry, Bedrock text
+models, Titan text embeddings and the template spend ceiling remain.
+
+The revised 32-interface surface assertion fails on the old 35-interface code.
+Shared-client tests pass (65); shared-client/adapters builds, typechecks, lint,
+API typecheck and build, boundary/RBAC and spend-guard checks pass. Frozen
+pnpm 9.15.9 lockfile validation passes offline in a manifest-only fixture.
+The initial broad adapter sweep encountered sandbox restrictions, then native
+infrastructure/Temporal timeouts under load; the broad API sweep requires
+DATABASE_URL and MARKETPLACE_DATABASE_URL for its guarded route fixture.
+Focused follow-up passes: retained AWS/package/payment adapters58, API
+permission/configuration/health90, full web549. EC2 bootstrap and production
+configuration pass, including retained negative controls. All architecture
+gates pass after the nine deletion-only baseline reductions. Broad adapter
+follow-up and exact-head CI results belong to the associated pull request.
+Nine architecture baseline findings are removed only because their owning
+media files were deleted. No paid model/media call or deployed infrastructure
+change is made. Exact-head CI and squash merge remain required.
