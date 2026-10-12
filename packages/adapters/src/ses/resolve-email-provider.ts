@@ -31,7 +31,13 @@ export function resolveEmailProvider(resolveSecret: SecretResolver, environment 
   if (provider === "ses") {
     const fromAddress = environment.SES_FROM_ADDRESS;
     const credentialsSecretRef = environment.SES_CREDENTIALS_SECRET_REF;
-    if (!fromAddress || !credentialsSecretRef) {
+    // A local stack may send with the operator's own AWS profile instead of a
+    // stored access key; production always names its credentials secret.
+    const defaultCredentials = environment.SES_USE_DEFAULT_CREDENTIALS === "true";
+    if (defaultCredentials && environment.NODE_ENV === "production") {
+      throw new Error("SES_USE_DEFAULT_CREDENTIALS is not allowed when NODE_ENV=production");
+    }
+    if (!fromAddress || (!credentialsSecretRef && !defaultCredentials)) {
       throw new Error(
         "SES_FROM_ADDRESS and SES_CREDENTIALS_SECRET_REF are required when EMAIL_PROVIDER=ses",
       );
@@ -40,7 +46,7 @@ export function resolveEmailProvider(resolveSecret: SecretResolver, environment 
       {
         region: environment.AWS_REGION ?? "ap-south-1",
         fromAddress,
-        credentialsSecretRef,
+        ...(credentialsSecretRef ? { credentialsSecretRef } : {}),
         ...(environment.SES_CONFIGURATION_SET_NAME ? { configurationSetName: environment.SES_CONFIGURATION_SET_NAME } : {}),
       },
       resolveSecret,

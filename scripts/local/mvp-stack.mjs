@@ -344,7 +344,28 @@ export function serviceEnvironment(base = loadEnvironment()) {
   return env;
 }
 
+/**
+ * Opt-in real email: MVP_EMAIL_PROVIDER=ses with MVP_SES_FROM_ADDRESS in
+ * .env.mvp.local. Only tool-gateway (the email.send tool) sends through SES,
+ * signed with the operator's AWS profile and reaching real SES past LocalStack,
+ * the way Bedrock does. Platform notifications stay mocked. In SES sandbox
+ * mode every recipient must be a verified identity.
+ */
+export function emailMode(env) {
+  const mode = env.MVP_EMAIL_PROVIDER || 'mock';
+  if (mode === 'mock') return 'mock';
+  if (mode !== 'ses') throw new Error('MVP_EMAIL_PROVIDER must be mock or ses');
+  if (!/^[^@\s]+@[^@\s]+$/.test(env.MVP_SES_FROM_ADDRESS || '')) throw new Error('MVP_EMAIL_PROVIDER=ses needs MVP_SES_FROM_ADDRESS, a verified SES sender');
+  return 'ses';
+}
+
 export function serviceStartEnvironment(name, env) {
+  if (name === 'tool-gateway' && emailMode(env) === 'ses') {
+    const ses = { ...env, EMAIL_PROVIDER: 'ses', SES_FROM_ADDRESS: env.MVP_SES_FROM_ADDRESS, SES_USE_DEFAULT_CREDENTIALS: 'true',
+      AWS_ENDPOINT_URL_SESV2: `https://email.${env.ALTER_REGION}.amazonaws.com` };
+    if (env.ALTER_AWS_PROFILE) ses.AWS_PROFILE = env.ALTER_AWS_PROFILE;
+    return ses;
+  }
   if (name !== 'orchestration-service') return env;
   return { ...env, RUNTIME_MODE: 'real',
     APPCONFIG_APPLICATION_ID: env.MODEL_GATEWAY_APPCONFIG_APPLICATION_ID,
@@ -382,6 +403,7 @@ async function up() {
     if (ports.has(number)) throw new Error(`${name}: port ${port} also configured for ${ports.get(number)}`);
     ports.set(number, name);
   };
+  const email = emailMode(env);
   for (const row of all) addPort(row.port, row.name);
   const compose = readFileSync(resolve(root, 'docker-compose.yml'), 'utf8');
   for (const [, key, fallback] of compose.matchAll(/\$\{([A-Z_]+_PORT):-([0-9]+)\}/g)) addPort(env[key] || fallback, key);
@@ -429,7 +451,7 @@ async function up() {
     for (const name of ['platform-api', 'background-workers']) await start(state, name, process.execPath, [`dist/apps/${name}/main.js`], env, root, byName.get(name).url);
     await start(state, 'platform-web', 'pnpm', ['exec', 'vite', '--host', '127.0.0.1', '--port', env.PLATFORM_WEB_PORT, '--strictPort'], env, resolve(root, 'apps/platform-web'), byName.get('platform-web').url);
     for (const row of all) await health(row.name, row.url);
-    state.ready = true; save(state);
+    state.email = email; state.ready = true; save(state);
     console.log(`MVP ready: http://127.0.0.1:${env.PLATFORM_WEB_PORT}; model-gateway=real Bedrock; email=mock`);
   } catch (error) {
     try { await down(state); } catch { console.error('MVP cleanup incomplete; retained ownership state for mvp-down.sh'); }

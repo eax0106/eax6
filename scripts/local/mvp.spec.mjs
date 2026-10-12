@@ -10,7 +10,7 @@ import { createServer } from 'node:http';
 import { createServer as createHttp2Server } from 'node:http2';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
-import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
+import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, emailMode, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
 import { assertSmokeCeiling, pollRunDetail, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
@@ -51,6 +51,22 @@ test('orchestration estimates against the Model Gateway AppConfig policy without
     APPCONFIG_APPLICATION_ID: 'app', APPCONFIG_ENVIRONMENT_ID: 'environment', APPCONFIG_CONFIGURATION_PROFILE_ID: 'profile',
     AWS_ENDPOINT_URL_APPCONFIGDATA: 'https://appconfigdata.ap-south-1.amazonaws.com' });
   assert.equal(env.RUNTIME_MODE, 'mock');
+});
+
+test('real SES email is opt-in, tool-gateway only, and reaches SES past LocalStack', () => {
+  const env = { ALTER_REGION: 'ap-south-1', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566', EMAIL_PROVIDER: 'mock' };
+  assert.equal(emailMode(env), 'mock');
+  assert.equal(serviceStartEnvironment('tool-gateway', env), env);
+  const ses = { ...env, MVP_EMAIL_PROVIDER: 'ses', MVP_SES_FROM_ADDRESS: 'sender@example.test' };
+  assert.equal(emailMode(ses), 'ses');
+  assert.deepEqual(serviceStartEnvironment('tool-gateway', ses), { ...ses, EMAIL_PROVIDER: 'ses',
+    SES_FROM_ADDRESS: 'sender@example.test', SES_USE_DEFAULT_CREDENTIALS: 'true',
+    AWS_ENDPOINT_URL_SESV2: 'https://email.ap-south-1.amazonaws.com' });
+  assert.equal(serviceStartEnvironment('tool-gateway', { ...ses, ALTER_AWS_PROFILE: 'operator' }).AWS_PROFILE, 'operator');
+  assert.equal(serviceStartEnvironment('platform-api', ses), ses, 'notifications stay mocked');
+  for (const broken of [{ ...ses, MVP_SES_FROM_ADDRESS: '' }, { ...ses, MVP_SES_FROM_ADDRESS: 'not-an-address' }, { ...env, MVP_EMAIL_PROVIDER: 'smtp' }]) {
+    assert.throws(() => emailMode(broken), /MVP_EMAIL_PROVIDER/);
+  }
 });
 
 test('gRPC readiness requires a live HTTP/2 acknowledgement, not an open HTTP port', async () => {

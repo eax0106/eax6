@@ -51,4 +51,15 @@ describe("resolveEmailProvider", () => {
     const provider = resolveEmailProvider(unusedResolveSecret);
     expect(provider.metadata.providerId).toBe("aws-ses");
   });
+
+  it("uses the default AWS credentials only when asked to, and never in production", () => {
+    const environment = { EMAIL_PROVIDER: "ses", SES_FROM_ADDRESS: "no-reply@alter.test", SES_USE_DEFAULT_CREDENTIALS: "true" };
+    expect(resolveEmailProvider(unusedResolveSecret, environment).metadata.providerId).toBe("aws-ses");
+    expect(() => resolveEmailProvider(unusedResolveSecret, { ...environment, SES_USE_DEFAULT_CREDENTIALS: "1" })).toThrow(
+      "SES_FROM_ADDRESS and SES_CREDENTIALS_SECRET_REF are required when EMAIL_PROVIDER=ses",
+    );
+    expect(() => resolveEmailProvider(unusedResolveSecret, { ...environment, NODE_ENV: "production" })).toThrow(
+      "SES_USE_DEFAULT_CREDENTIALS is not allowed when NODE_ENV=production",
+    );
+  });
 });

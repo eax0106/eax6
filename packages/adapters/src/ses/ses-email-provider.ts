@@ -10,7 +10,11 @@ import type {
 export interface SesEmailProviderConfig {
   readonly region: string;
   readonly fromAddress: string;
-  readonly credentialsSecretRef: string;
+  /**
+   * A secret holding access-key JSON. Absent, the client uses the AWS default
+   * credential chain; resolveEmailProvider allows that only outside production.
+   */
+  readonly credentialsSecretRef?: string;
   readonly configurationSetName?: string;
 }
 
@@ -151,12 +155,11 @@ export class SesEmailProvider implements EmailProvider {
 
   async #getClient(): Promise<SesCommandClient> {
     if (this.#client) return this.#client;
-    const credentials = parseCredentials(
-      await this.#resolveSecret(this.#config.credentialsSecretRef),
-    );
+    const reference = this.#config.credentialsSecretRef;
+    const credentials = reference === undefined ? undefined : parseCredentials(await this.#resolveSecret(reference));
     this.#client = new SESv2Client({
       region: this.#config.region,
-      credentials,
+      ...(credentials === undefined ? {} : { credentials }),
     }) as unknown as SesCommandClient;
     return this.#client;
   }

@@ -67,6 +67,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   for (const row of grpcServices(env)) await grpcHealth(row.name, row.address);
   console.log('MVP HTTP health identities verified');
   if (healthOnly) return;
+  // The smoke's recipient is a placeholder; it certifies the mocked-email stack only.
+  if ((state.email ?? 'mock') !== 'mock') throw new Error('Smoke needs mocked email; restart the stack without MVP_EMAIL_PROVIDER=ses');
   const ceilingUsd = await smokeCeilingUsd();
   const gateway = state.processes.find(row => row.name === 'model-gateway');
   if (!gateway?.stamp || processStamp(gateway.pid, gateway.stamp) !== gateway.stamp || state.smokeCeilingUsd !== ceilingUsd || state.gatewayDigest !== gatewayDigest()) {
