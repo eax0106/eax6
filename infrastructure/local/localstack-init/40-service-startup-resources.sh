@@ -16,6 +16,7 @@ AUDIT_ARCHIVE_BUCKET_PARAM="${AUDIT_ARCHIVE_BUCKET_PARAM:-/alter/local/audit/arc
 AUDIT_ARCHIVE_BUCKET="${AUDIT_ARCHIVE_BUCKET:-alter-local-audit-archive}"
 ARTIFACTS_BUCKET_PARAM="${ARTIFACTS_BUCKET_PARAM:-/alter/local/orchestration/artifacts-bucket}"
 ARTIFACTS_BUCKET="${ARTIFACTS_BUCKET:-alter-local-artifacts}"
+ADS_UPLOADS_BUCKET="${ADS_UPLOADS_BUCKET:-alter-local-ads-uploads}"
 DELETION_SERVICE_TOKEN_REF="${DELETION_SERVICE_TOKEN_REF:-alter/local/audit-service/deletion-service-token}"
 DELETION_PSEUDONYM_KEY_REF="${DELETION_PSEUDONYM_KEY_REF:-alter/local/audit-service/deletion-pseudonym-key}"
 COST_PSEUDONYM_KEY_REF="${COST_PSEUDONYM_KEY_REF:-/alter/local/cost-ledger-service/pseudonym-key}"
@@ -39,6 +40,8 @@ put_secret() {
 
 awslocal s3 mb "s3://$AUDIT_ARCHIVE_BUCKET" >/dev/null 2>&1 || true
 awslocal s3 mb "s3://$ARTIFACTS_BUCKET" >/dev/null 2>&1 || true
+# Knowledge uploads: ads-core presigns POSTs into this bucket.
+awslocal s3 mb "s3://$ADS_UPLOADS_BUCKET" >/dev/null 2>&1 || true
 put_parameter "$AUDIT_ARCHIVE_BUCKET_PARAM" "$AUDIT_ARCHIVE_BUCKET"
 put_parameter "$ARTIFACTS_BUCKET_PARAM" "$ARTIFACTS_BUCKET"
 

@@ -184,6 +184,19 @@ test('restarted services reuse startup mock identity, token references and disar
   assert.equal(base.ENGINE_M2M_TOKEN_URL, undefined, 'Input env stays unchanged');
 });
 
+test('ads-core uploads go to the LocalStack bucket the init script creates', () => {
+  const init = readFileSync(new URL('../../infrastructure/local/localstack-init/40-service-startup-resources.sh', import.meta.url), 'utf8');
+  const bucket = init.match(/ADS_UPLOADS_BUCKET="\$\{ADS_UPLOADS_BUCKET:-([a-z0-9-]+)\}"/)?.[1];
+  assert.ok(bucket, 'LocalStack init creates no ADS uploads bucket');
+  assert.match(init, /awslocal s3 mb "s3:\/\/\$ADS_UPLOADS_BUCKET"/);
+  const env = serviceEnvironment({ ADS_CORE_PORT: '8100', AWS_ENDPOINT_URL: 'http://127.0.0.1:4566', ALTER_REGION: 'ap-south-1' });
+  assert.equal(env.ADS_UPLOADS_BUCKET_NAME, bucket);
+  assert.equal(env.ADS_UPLOADS_S3_ENDPOINT_URL, 'http://127.0.0.1:4566');
+  assert.equal(env.ADS_UPLOADS_S3_REGION, 'ap-south-1');
+  const example = readFileSync(new URL('../../.env.local.example', import.meta.url), 'utf8');
+  assert.match(example, new RegExp(`^ADS_UPLOADS_BUCKET_NAME=${bucket}$`, 'm'));
+});
+
 test('startup migrates orchestration before seeding and owns the ADS gRPC server', () => {
   const source = readFileSync('scripts/local/mvp-stack.mjs', 'utf8');
   const preflight = 'awsPreflight(env);';
