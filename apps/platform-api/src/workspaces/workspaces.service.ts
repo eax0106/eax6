@@ -99,6 +99,9 @@ export class WorkspacesService {
     ifMatch: string | undefined,
   ): Promise<WorkspaceView> {
     const current = await this.get(actor, workspaceId);
+    if (current.status === "pending_deletion") {
+      throw workspacePendingDeletion(`/api/v1/workspaces/${workspaceId}`);
+    }
     if (!ifMatch) {
       throw new PlatformHttpError(
         428,
@@ -124,6 +127,8 @@ export class WorkspacesService {
           -- microseconds, so an exact comparison never matched and every
           -- rename answered 412. Compare at the precision the ETag has.
           AND date_trunc('milliseconds', updated_at) = $4
+          -- A deletion requested after the read above still blocks the rename.
+          AND status <> 'pending_deletion'
         RETURNING id, tenant_id AS "tenantId", name, status,
                   updated_at AS "updatedAt"`,
       [name.trim(), current.id, actor.tenant_id, current.updatedAt],
@@ -135,6 +140,20 @@ export class WorkspacesService {
       412,
     );
   }
+}
+
+/**
+ * D2: a workspace waiting for deletion cannot be edited; it must be restored
+ * first. Shared by every write that a workspace-role check does not already
+ * refuse.
+ */
+export function workspacePendingDeletion(instance: string): PlatformHttpError {
+  return new PlatformHttpError(
+    409,
+    "WORKSPACE_PENDING_DELETION",
+    "Workspace is pending deletion; restore it to make changes",
+    instance,
+  );
 }
 
 export function workspaceEtag(workspace: WorkspaceView): string {
