@@ -639,8 +639,7 @@ export class ToolGatewayService implements ToolgwHandler {
       result,
       reason_code: "",
       context_json: JSON.stringify({
-        runId: request.run_id,
-        nodeExecutionId: request.node_execution_id,
+        scope: { runId: request.run_id, nodeExecutionId: request.node_execution_id },
       }),
       occurred_at: this.#now().toISOString(),
     });
@@ -746,8 +745,7 @@ export class ToolGatewayService implements ToolgwHandler {
       result,
       reason_code: "",
       context_json: JSON.stringify({
-        runId: request.run_id,
-        nodeExecutionId: request.node_execution_id,
+        scope: { runId: request.run_id, nodeExecutionId: request.node_execution_id },
       }),
       occurred_at: this.#now().toISOString(),
     });

@@ -31,6 +31,7 @@ export {
   AUDIT_STORE_PROVIDER,
   AuditEventNotFoundError,
   AuditValidationError,
+  parseAuditContext,
   auditGenesisHash,
   calculateAuditEntryHash,
   canonicalAuditCheckpoint,

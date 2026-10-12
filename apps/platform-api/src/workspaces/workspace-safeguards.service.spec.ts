@@ -68,7 +68,7 @@ describe("WorkspaceSafeguardsService", () => {
         action: "workspace.safeguards.update",
         target_type: "workspace",
         target_ref: workspaceId,
-        context_json: JSON.stringify({ before: stored.safeguards, after: next.safeguards }),
+        context_json: JSON.stringify({ scope: { before: stored.safeguards, after: next.safeguards } }),
       }),
     );
   });

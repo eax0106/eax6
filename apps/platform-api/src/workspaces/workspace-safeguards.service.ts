@@ -100,7 +100,7 @@ export class WorkspaceSafeguardsService {
         target_ref: id,
         result: "success",
         reason_code: "",
-        context_json: JSON.stringify({ before: before.safeguards, after: after.safeguards }),
+        context_json: JSON.stringify({ scope: { before: before.safeguards, after: after.safeguards } }),
         occurred_at: new Date().toISOString(),
       });
       return after;

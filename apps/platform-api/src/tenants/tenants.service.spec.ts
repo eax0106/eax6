@@ -81,7 +81,7 @@ describe("TenantsService data residency", () => {
         actor_ref: "user",
         action: "tenant.data_residency.update",
         target_ref: "tenant",
-        context_json: JSON.stringify({ before: stored.data_residency, after: next.data_residency }),
+        context_json: JSON.stringify({ scope: { before: stored.data_residency, after: next.data_residency } }),
       }),
     );
   });

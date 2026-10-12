@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ExecutionContext } from "@nestjs/common";
-import type { AuditEventHandler } from "@alterx/shared-clients";
+import { parseAuditContext, type AuditEventHandler } from "@alterx/shared-clients";
 import pg from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EngineClient } from "../engine";
@@ -80,7 +80,8 @@ describe.skipIf(!databaseUrl)("workspace pending deletion, PostgreSQL", () => {
         return { status: 204, body: undefined, headers: {} };
       }),
     };
-    audit = { recordEvent: vi.fn(async (event: { action: string }) => { calls.push(event.action); return {}; }) };
+    // The audit service's own context rules: an event it would refuse fails here too.
+    audit = { recordEvent: vi.fn(async (event: { action: string; context_json: string }) => { parseAuditContext(event.context_json); calls.push(event.action); return {}; }) };
     workspaces = new WorkspacesService(db);
     deletion = new WorkspaceDeletionService(
       db,

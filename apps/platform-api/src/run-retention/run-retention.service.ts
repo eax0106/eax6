@@ -70,7 +70,7 @@ export class RunRetentionRelayService {
       target_ref: actor.workspace_id!,
       result: "success",
       reason_code: "",
-      context_json: JSON.stringify({ before_days: before.retention_days, after_days: after.retention_days }),
+      context_json: JSON.stringify({ scope: { before_days: before.retention_days, after_days: after.retention_days } }),
       occurred_at: new Date().toISOString(),
     });
     return after;

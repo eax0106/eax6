@@ -131,7 +131,7 @@ export class WorkspaceInvitationsService {
 
   private record(actor: ActorContext, id: string, action: string, status: string, role: string): Promise<unknown> {
     return this.audit.recordEvent({ tenant_id: actor.tenant_id, actor_type: "user", actor_ref: actor.user_id, action, target_type: "workspace_invitation", target_ref: id,
-      result: "success", reason_code: "", context_json: JSON.stringify({ status, role }), occurred_at: new Date().toISOString() });
+      result: "success", reason_code: "", context_json: JSON.stringify({ scope: { status, role } }), occurred_at: new Date().toISOString() });
   }
 }
 

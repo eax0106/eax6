@@ -387,7 +387,7 @@ export class RunLauncherService {
         await this.queue!.enqueue(tenantId, { runId, compiledDag: version.compiledDag }, tx);
         await this.audit!.recordEvent({ tenant_id: tenantId, actor_type: "user", actor_ref: replay.actor.userId,
           action: "event.replay.confirmed", target_type: "run", target_ref: runId, result: "success", reason_code: "outside_actions_confirmed",
-          context_json: JSON.stringify({ replayed_from: replay.eventId, workflow_version_id: version.id, actions: replayActions(version.compiledDag) }),
+          context_json: JSON.stringify({ scope: { replayed_from: replay.eventId, workflow_version_id: version.id, actions: replayActions(version.compiledDag) } }),
           occurred_at: new Date().toISOString() });
       }
       return { row, compiledDag: version.compiledDag };

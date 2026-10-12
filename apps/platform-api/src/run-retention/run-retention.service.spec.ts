@@ -55,7 +55,7 @@ describe("RunRetentionRelayService relay (D2)", () => {
     expect(audit.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       action: "workspace.run_retention.update",
       target_ref: actor.workspace_id,
-      context_json: JSON.stringify({ before_days: 90, after_days: 30 }),
+      context_json: JSON.stringify({ scope: { before_days: 90, after_days: 30 } }),
     }));
   });
 

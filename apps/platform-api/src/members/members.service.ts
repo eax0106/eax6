@@ -86,7 +86,7 @@ export class MembersService {
     if (!this.audit) memberError(503, "MEMBERS_AUDIT_UNAVAILABLE", "Membership audit is unavailable");
     await this.audit.recordEvent({ tenant_id: actor.tenant_id, actor_type: "user", actor_ref: actor.user_id, action,
       target_type: "workspace_member", target_ref: member.id, result: "success", reason_code: "",
-      context_json: JSON.stringify({ workspaceId: member.workspaceId, ...context }), occurred_at: new Date().toISOString() });
+      context_json: JSON.stringify({ scope: { workspaceId: member.workspaceId, ...context } }), occurred_at: new Date().toISOString() });
   }
 }
 

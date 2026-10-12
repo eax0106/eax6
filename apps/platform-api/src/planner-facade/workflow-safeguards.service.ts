@@ -150,7 +150,7 @@ export class WorkflowSafeguardsService {
         target_ref: scope.workflowId,
         result: "success",
         reason_code: "",
-        context_json: JSON.stringify({ before: before.additions, after: additions }),
+        context_json: JSON.stringify({ scope: { before: before.additions, after: additions } }),
         occurred_at: new Date().toISOString(),
       });
       return { workspace: before.workspace, additions, effective: effectiveSafeguards(before.workspace, additions) };

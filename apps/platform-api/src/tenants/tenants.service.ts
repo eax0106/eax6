@@ -127,7 +127,7 @@ export class TenantsService {
         target_ref: actor.tenant_id,
         result: "success",
         reason_code: "",
-        context_json: JSON.stringify({ before: before.data_residency, after: after.data_residency }),
+        context_json: JSON.stringify({ scope: { before: before.data_residency, after: after.data_residency } }),
         occurred_at: new Date().toISOString(),
       });
       return after;

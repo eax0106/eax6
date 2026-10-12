@@ -3,10 +3,13 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   AUDIT_GENESIS_HASH_HEX,
+  AuditValidationError,
   calculateAuditEntryHash,
+  parseAuditContext,
   verifyAuditChain,
   type AuditEventToAppend,
 } from "./audit-ports";
+import { createMockAuditEventHandler } from "./mocks/audit-event-handler";
 import { createMockAuditStoreProvider } from "./mocks/audit-store-provider";
 
 function event(actorRef: string): AuditEventToAppend {
@@ -101,5 +104,28 @@ describe("AuditStoreProvider mock", () => {
     );
     await expect(provider.migrate()).resolves.toBeUndefined();
     await expect(provider.close()).resolves.toBeUndefined();
+  });
+});
+
+describe("audit context rules", () => {
+  it("keeps the service's top-level allowlist and nested forbidden keys", () => {
+    expect(parseAuditContext("")).toBeNull();
+    expect(parseAuditContext(JSON.stringify({ scope: { before: { contains_pii: false } }, request_id: "r" })))
+      .toEqual({ scope: { before: { contains_pii: false } }, request_id: "r" });
+    expect(() => parseAuditContext(JSON.stringify({ deletion_due_at: "2026-10-19T00:00:00.000Z" })))
+      .toThrow(new AuditValidationError("context.deletion_due_at is not permitted"));
+    expect(() => parseAuditContext(JSON.stringify({ scope: { secret_ref: "x" } }))).toThrow(AuditValidationError);
+    expect(() => parseAuditContext("[]")).toThrow(AuditValidationError);
+  });
+
+  it("makes the shared mock refuse what the audit service refuses", async () => {
+    const handler = createMockAuditEventHandler();
+    const request = { tenant_id: "ten_x", actor_type: "user", actor_ref: "usr_x", action: "workspace.deletion.request",
+      target_type: "workspace", target_ref: "ws_x", result: "success", reason_code: "", occurred_at: new Date().toISOString() };
+    await expect(handler.recordEvent({ ...request, context_json: JSON.stringify({ deletion_due_at: "later" }) }))
+      .rejects.toThrow(AuditValidationError);
+    expect(handler.getRecordedEvents()).toEqual([]);
+    await expect(handler.recordEvent({ ...request, context_json: JSON.stringify({ scope: { deletion_due_at: "later" } }) }))
+      .resolves.toMatchObject({ id: expect.any(String) });
   });
 });

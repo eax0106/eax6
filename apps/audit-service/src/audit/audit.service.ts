@@ -11,6 +11,7 @@ import {
   auditGenesisHash,
   AuditEventNotFoundError,
   AuditValidationError,
+  parseAuditContext,
   signAuditCheckpoint,
   verifyAuditChain,
   verifyAuditCheckpointSignature,
@@ -21,7 +22,6 @@ import {
   type AuditEventQuery,
   type AuditResult,
   type AuditStoreProvider,
-  type JsonValue,
 } from "@alterx/shared-clients";
 
 import { auditId, createUuidV7 } from "./audit-id";
@@ -37,23 +37,6 @@ const PLATFORM_TENANT_ID_PATTERN =
   /^([0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/i;
 const ISO_8601_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
-const FORBIDDEN_CONTEXT_KEYS = new Set([
-  "body",
-  "content",
-  "conversation",
-  "credential",
-  "file",
-  "input",
-  "message",
-  "output",
-  "password",
-  "payload",
-  "prompt",
-  "secret",
-  "token",
-]);
-const ALLOWED_CONTEXT_KEYS = new Set(["ip_class", "request_id", "scope"]);
-const MAX_CONTEXT_BYTES = 8_192;
 const MAX_TEXT_LENGTH = 512;
 
 /** Injection token for the audit chain signing key (Y2 compaction seals). Optional: absent outside the service. */
@@ -93,55 +76,6 @@ function parseTenantId(value: string): string | null {
     );
   }
   return match[1];
-}
-
-function assertContextKeys(value: unknown, path = "context"): void {
-  if (Array.isArray(value)) {
-    value.forEach((item, index) => assertContextKeys(item, `${path}[${index}]`));
-    return;
-  }
-  if (value === null || typeof value !== "object") {
-    return;
-  }
-  for (const [key, nested] of Object.entries(value)) {
-    const normalizedKey = key.toLowerCase().replaceAll(/[_-]/g, "");
-    if (
-      [...FORBIDDEN_CONTEXT_KEYS].some((forbidden) =>
-        normalizedKey.includes(forbidden),
-      )
-    ) {
-      throw new AuditValidationError(`${path}.${key} is not permitted`);
-    }
-    assertContextKeys(nested, `${path}.${key}`);
-  }
-}
-
-function parseContext(value: string): Readonly<Record<string, JsonValue>> | null {
-  if (value.trim().length === 0) {
-    return null;
-  }
-  if (Buffer.byteLength(value, "utf8") > MAX_CONTEXT_BYTES) {
-    throw new AuditValidationError(
-      `context_json exceeds ${MAX_CONTEXT_BYTES} bytes`,
-    );
-  }
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value) as unknown;
-  } catch {
-    throw new AuditValidationError("context_json must contain valid JSON");
-  }
-  if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
-    throw new AuditValidationError("context_json must contain a JSON object");
-  }
-  for (const key of Object.keys(parsed)) {
-    if (!ALLOWED_CONTEXT_KEYS.has(key)) {
-      throw new AuditValidationError(`context.${key} is not permitted`);
-    }
-  }
-  assertContextKeys(parsed);
-  return parsed as Readonly<Record<string, JsonValue>>;
 }
 
 function parseOccurredAt(value: string): Date {
@@ -204,7 +138,7 @@ function validateRequest(request: RecordEventRequest): ValidatedAuditEvent {
     targetRef,
     result: result as AuditResult,
     reasonCode,
-    context: parseContext(request.context_json),
+    context: parseAuditContext(request.context_json),
     occurredAt: parseOccurredAt(request.occurred_at),
   };
 }
