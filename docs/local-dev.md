@@ -61,6 +61,13 @@ or exhausted allowance refuse the next paid request. A stack restart resets
 the allowance and requires renewed spend approval before another paid smoke.
 Cost Ledger's reported INR charge is distinct from AWS's USD list-price bound.
 
+Real email is opt-in. Set `MVP_EMAIL_PROVIDER=ses` and `MVP_SES_FROM_ADDRESS`
+(a sender verified in SES in `ALTER_REGION`) in `.env.mvp.local`, then restart
+the stack. Only tool-gateway's `email.send` sends through SES, signed with your
+AWS profile; platform notifications stay mocked. While the account is in the
+SES sandbox, every recipient must be a verified identity too. Smoke refuses a
+stack started this way, since its recipient is a placeholder.
+
 ## Prerequisites
 
 - Docker Desktop with Compose v2
