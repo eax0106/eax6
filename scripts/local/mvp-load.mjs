@@ -6,11 +6,11 @@ import { resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
-export function assertStack(state, root, stamp, digest, permitExists) {
+export function assertStack(state, root, stamp, digest, permitExists, ceilingUsd) {
   assert.equal(state.root, root, 'Foreign MVP checkout');
   assert.equal(state.project, `alter-mvp-${createHash('sha256').update(root).digest('hex').slice(0, 10)}`, 'Foreign MVP project');
   assert.equal(state.ready, true, 'MVP stack is not ready');
-  assert.equal(state.smokeCeilingUsd, .25, 'Guarded Gateway required');
+  assert.equal(state.smokeCeilingUsd, ceilingUsd, 'Guarded Gateway required');
   assert.equal(state.gatewayDigest, digest, 'Gateway source/build changed');
   assert.equal(permitExists, false, 'Spend permit exists; load refused');
   for (const name of ['orchestration-service', 'model-gateway', 'background-workers']) {
@@ -129,8 +129,9 @@ export async function load(stackRoot = fileURLToPath(new URL('../../', import.me
   const helpers = await import(pathToFileURL(resolve(root, 'scripts/local/mvp-stack.mjs')).href);
   const dir = resolve(root, 'tmp/local-mvp'), stateFile = resolve(dir, 'state.json');
   const lock = resolve(dir, 'lock'), permit = resolve(dir, 'spend-permit.json');
+  const ceilingUsd = await helpers.smokeCeilingUsd();
   let state = JSON.parse(readFileSync(stateFile, 'utf8'));
-  assertStack(state, root, helpers.processStamp, helpers.gatewayDigest(), existsSync(permit));
+  assertStack(state, root, helpers.processStamp, helpers.gatewayDigest(), existsSync(permit), ceilingUsd);
   const env = helpers.loadEnvironment(resolve(root, '.env.mvp.local'));
   assert.equal(env.ALTER_ENV, 'local', 'Only local MVP allowed');
   const all = helpers.services(env), grpc = helpers.grpcServices(env);
@@ -181,7 +182,7 @@ export async function load(stackRoot = fileURLToPath(new URL('../../', import.me
   try {
     // Recheck inside the lifecycle lock, then keep smoke disarmed throughout.
     state = JSON.parse(readFileSync(stateFile, 'utf8'));
-    assertStack(state, root, helpers.processStamp, helpers.gatewayDigest(), existsSync(permit));
+    assertStack(state, root, helpers.processStamp, helpers.gatewayDigest(), existsSync(permit), ceilingUsd);
     state.ready = false; save(); changed = true;
     await stop('model-gateway');
     const base = `http://127.0.0.1:${env.PLATFORM_API_PORT}`, cookies = new Map();

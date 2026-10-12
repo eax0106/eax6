@@ -27,7 +27,7 @@ describe("local smoke pre-call guard", () => {
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
   it("caps requested output and refuses unknown prices, fallbacks and exhausted shared budget", () => {
-    const budget = new LocalSmokeBudget(() => true);
+    const budget = new LocalSmokeBudget(() => true, 0.25);
     const json = JSON.stringify({ messages: [{ role: "user", content: "hello" }], max_tokens: 5000 });
     const capped = budget.prepareInput(json);
     expect(JSON.parse(capped).max_tokens).toBe(1024);
@@ -42,7 +42,7 @@ describe("local smoke pre-call guard", () => {
     for (let i = 0; i < 3; i++) budget.reserveModel("apac.amazon.nova-pro-v1:0", capped);
     expect(() => budget.reserveModel("apac.amazon.nova-pro-v1:0", capped)).toThrow("exhausted");
     expect(() => budget.reserveEmbedding("x".repeat(100_000))).toThrow("exhausted");
-    expect(() => new LocalSmokeBudget(() => true).reserveEmbedding("x".repeat(2_000_000))).toThrow("exhausted");
+    expect(() => new LocalSmokeBudget(() => true, 0.25).reserveEmbedding("x".repeat(2_000_000))).toThrow("exhausted");
     expect(() => new LocalSmokeBudget().reserveEmbedding("hello")).toThrow("not armed");
     let permitted = false;
     const switched = new LocalSmokeBudget(() => permitted);

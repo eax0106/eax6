@@ -10,7 +10,9 @@ export function localSmokePermitted(file: string, tenantId?: string, runId?: str
   } catch { return false; }
 }
 
-export const LOCAL_SMOKE_CEILING_USD = 0.25;
+// The one place the local spend cap lives: mvp-stack, mvp-smoke and mvp-load
+// read it from the built gateway. USD 1.00 covers the Phase 2 template runs.
+export const LOCAL_SMOKE_CEILING_USD = 1;
 export const LOCAL_SMOKE_MAX_OUTPUT_TOKENS = 1024;
 // Published Mumbai on-demand USD/token, checked 2026-10-06. The 1.5x
 // margin also covers the priced cross-region inference profiles below.
@@ -27,7 +29,10 @@ export const LOCAL_SMOKE_RATES: Readonly<Record<string, readonly [number, number
  */
 export class LocalSmokeBudget {
   #reservedNanoUsd = 0;
-  constructor(private readonly permitted: (tenantId?: string, runId?: string) => boolean = () => false) {}
+  constructor(
+    private readonly permitted: (tenantId?: string, runId?: string) => boolean = () => false,
+    private readonly ceilingUsd = LOCAL_SMOKE_CEILING_USD,
+  ) {}
 
   prepareInput(inputJson: string): string {
     const payload = ModelInvocationPayloadSchema.parse(JSON.parse(inputJson));
@@ -57,7 +62,7 @@ export class LocalSmokeBudget {
     if (!this.permitted(tenantId, runId)) throw new Error("Local smoke spend is not armed; no paid provider call started");
     const nanoUsd = Math.ceil(usd * 1e9);
     if (!Number.isSafeInteger(nanoUsd) || nanoUsd <= 0
-      || this.#reservedNanoUsd + nanoUsd > LOCAL_SMOKE_CEILING_USD * 1e9) {
+      || this.#reservedNanoUsd + nanoUsd > this.ceilingUsd * 1e9) {
       throw new Error("Local smoke budget exhausted; no paid provider call started");
     }
     this.#reservedNanoUsd += nanoUsd;

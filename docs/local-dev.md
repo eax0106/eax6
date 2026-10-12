@@ -54,7 +54,7 @@ invoke, stream, or embedding requests. It starts disarmed; `--apply` creates
 a private permit for the owned Gateway process, seeded tenant and created run,
 then removes it on exit. Embeddings share the tenant's allowance.
 Its entire process lifetime has a
-USD 0.25 allowance, including failed attempts and recovery; smoke prints this
+USD 1.00 allowance (`LOCAL_SMOKE_CEILING_USD` in the gateway, the only copy), including failed attempts and recovery; smoke prints this
 bound first. Output is capped at 1,024 tokens, SDK attempts at one, and direct
 provider failover is unavailable in this local profile. Unknown model prices
 or exhausted allowance refuse the next paid request. A stack restart resets
