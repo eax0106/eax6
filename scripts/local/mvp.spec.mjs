@@ -22,7 +22,7 @@ test('smoke refuses oversized or invalid spend and conflicting execution modes',
 
 test('template runner covers the catalogue it can run locally', async () => {
   const runnable = ['lead-capture-crm-welcome', 'support-email-triage', 'invoice-email-to-sheet', 'weekly-report-digest',
-    'knowledge-qa', 'meeting-notes-summary', 'brand-mention-alert'];
+    'meeting-notes-summary', 'brand-mention-alert'];
   for (const id of runnable) {
     const template = loadTemplate(id);
     // The runner feeds the first test case through the intake join it replaces.
@@ -30,7 +30,7 @@ test('template runner covers the catalogue it can run locally', async () => {
     assert.ok(template.test_cases[0].input, id);
   }
   assert.deepEqual(runnable.filter(id => needsPostgres(loadTemplate(id))), ['lead-capture-crm-welcome', 'invoice-email-to-sheet']);
-  await assert.rejects(runCatalogueTemplate({ templateId: 'whatsapp-faq-responder' }), /cannot run locally/);
+  for (const id of ['whatsapp-faq-responder', 'knowledge-qa']) await assert.rejects(runCatalogueTemplate({ templateId: id }), /cannot run locally/);
   assert.throws(() => loadTemplate('no-such-template'), /Unknown template/);
 });
 

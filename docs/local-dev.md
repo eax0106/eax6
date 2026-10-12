@@ -94,7 +94,7 @@ host can reach. The runner creates the `leads` and `invoices` tables there,
 stores the URL in LocalStack and registers it as the signed-in workspace's
 postgres connection through orchestration's internal registry endpoint (the
 product has no path that creates one yet), then reads the written row back.
-`whatsapp-faq-responder` cannot run locally.
+`whatsapp-faq-responder` and `knowledge-qa` cannot run locally yet.
 
 ## Prerequisites
 

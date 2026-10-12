@@ -12,7 +12,12 @@ import { runTemplate } from './mvp-smoke.mjs';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const templateDir = resolve(root, 'apps/intelligence-service/src/capability_registry/templates/v1');
 
-export const UNSUPPORTED_TEMPLATES = { 'whatsapp-faq-responder': 'it needs an approved WhatsApp Business account' };
+export const UNSUPPORTED_TEMPLATES = {
+  'whatsapp-faq-responder': 'it needs an approved WhatsApp Business account',
+  // knowledge.search sends no scope ids, which ADS Q refuses, and the local
+  // stack has no uploads bucket to ingest a document through.
+  'knowledge-qa': 'knowledge search and upload do not work on the local stack yet',
+};
 
 export function loadTemplate(templateId) {
   for (const file of readdirSync(templateDir).filter(name => name.endsWith('.json')).sort()) {
