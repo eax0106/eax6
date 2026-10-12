@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, openSync, closeSync, readFileSync, 
 import { createServer } from 'node:net';
 import { connect as connectHttp2 } from 'node:http2';
 import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -127,6 +127,14 @@ export function awsPreflight(env) {
     assertConfiguredModelPricing(policy, migrations);
   } finally { rmSync(policyFile, { force: true }); }
   console.log('AWS preflight passed: account, admin secret, AppConfig policy, and model pricing verified');
+}
+
+/** The spend cap the built gateway enforces; scripts never keep their own copy. */
+export async function smokeCeilingUsd() {
+  const built = resolve(root, 'dist/apps/model-gateway/gateway/local-smoke-budget.js');
+  const { LOCAL_SMOKE_CEILING_USD } = await import(pathToFileURL(built).href);
+  if (!Number.isFinite(LOCAL_SMOKE_CEILING_USD) || LOCAL_SMOKE_CEILING_USD <= 0) throw new Error('Built gateway has no spend cap');
+  return LOCAL_SMOKE_CEILING_USD;
 }
 
 export function gatewayDigest() {
@@ -464,7 +472,7 @@ async function up() {
     await setup('pnpm', ['install', '--frozen-lockfile'], env);
   }
   await setup('pnpm', ['exec', 'nx', 'run-many', '-t', 'build', '--all', '--parallel=2'], env);
-  const state = { root, project, processes: [], composeStarted: true, smokeCeilingUsd: 0.25, gatewayDigest: gatewayDigest() };
+  const state = { root, project, processes: [], composeStarted: true, smokeCeilingUsd: await smokeCeilingUsd(), gatewayDigest: gatewayDigest() };
   save(state);
   try {
     await setup('docker', ['compose', '-p', project, '--env-file', envFile, 'up', '-d', '--wait'], env);

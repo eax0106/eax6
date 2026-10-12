@@ -54,7 +54,7 @@ invoke, stream, or embedding requests. It starts disarmed; `--apply` creates
 a private permit for the owned Gateway process, seeded tenant and created run,
 then removes it on exit. Embeddings share the tenant's allowance.
 Its entire process lifetime has a
-USD 0.25 allowance, including failed attempts and recovery; smoke prints this
+USD 1.00 allowance (`LOCAL_SMOKE_CEILING_USD` in the gateway, the only copy), including failed attempts and recovery; smoke prints this
 bound first. Output is capped at 1,024 tokens, SDK attempts at one, and direct
 provider failover is unavailable in this local profile. Unknown model prices
 or exhausted allowance refuse the next paid request. A stack restart resets
@@ -72,8 +72,8 @@ Real tools are opt-in too. `MVP_REAL_TOOLS=1` starts tool-gateway in its real
 runtime: web search calls Tavily and the database tool resolves the connection
 credentials platform-api stored. Its secrets and cost queue stay on LocalStack,
 where platform-api keeps connection credentials, so at startup the stack copies
-the Tavily and Browserbase keys from AWS Secrets Manager into LocalStack (on
-stdin, never printed). Its policy comes from AWS AppConfig. Search calls count
+the Tavily and Browserbase keys from AWS Secrets Manager into LocalStack (through
+a private temp file, never printed). Its policy comes from AWS AppConfig. Search calls count
 against your Tavily plan.
 
 ## Prerequisites
