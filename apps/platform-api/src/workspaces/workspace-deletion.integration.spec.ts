@@ -5,6 +5,7 @@ import type { ExecutionContext } from "@nestjs/common";
 import { parseAuditContext, type AuditEventHandler } from "@alterx/shared-clients";
 import pg from "pg";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { computeEtag } from "../concurrency";
 import type { EngineClient } from "../engine";
 import type { IdentityService } from "../identity/identity.service";
 import { ActorContextGuard } from "../rbac/actor-context.guard";
@@ -12,7 +13,8 @@ import type { ActorContext, RbacRequest } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
 import { WorkspaceDeletionService } from "./workspace-deletion.service";
 import { WorkspaceErasureRunner } from "./workspace-erasure.runner";
-import { WorkspacesService } from "./workspaces.service";
+import { WorkspaceSafeguardsService } from "./workspace-safeguards.service";
+import { workspaceEtag, WorkspacesService } from "./workspaces.service";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const migrationsPath = join(__dirname, "../db/migrations");
@@ -252,5 +254,31 @@ describe.skipIf(!databaseUrl)("workspace pending deletion, PostgreSQL", () => {
     const pending = await resolve();
     expect(pending.workspace_id).toBe(otherWorkspace);
     expect(pending.workspaceRoles).toEqual([{ workspaceId: otherWorkspace, role: "viewer" }]);
+  });
+
+  it("refuses renames and safeguard changes while pending, and allows them again once restored", async () => {
+    const safeguards = new WorkspaceSafeguardsService(db, audit as unknown as AuditEventHandler);
+    const next = { safeguards: { contains_pii: false, approve_external_actions: false } };
+    await deletion.requestDeletion(actor, workspaceId, "Marketing");
+
+    const pendingEtag = workspaceEtag(await workspaces.get(actor, workspaceId));
+    await expect(workspaces.update(actor, workspaceId, "Renamed", pendingEtag)).rejects.toMatchObject({
+      status: 409,
+      response: { error_code: "WORKSPACE_PENDING_DELETION" },
+    });
+    const pendingSafeguardsEtag = computeEtag(await safeguards.get(actor, workspaceId));
+    await expect(safeguards.set(actor, workspaceId, next, pendingSafeguardsEtag)).rejects.toMatchObject({
+      status: 409,
+      response: { error_code: "WORKSPACE_PENDING_DELETION" },
+    });
+    const unchanged = await admin.query("SELECT name, safeguards FROM workspaces WHERE id = $1", [workspaceId]);
+    expect(unchanged.rows[0]).toMatchObject({ name: "Marketing", safeguards: { contains_pii: true, approve_external_actions: true } });
+    expect(calls).not.toContain("workspace.safeguards.update");
+
+    await deletion.restore(actor, workspaceId);
+    const etag = workspaceEtag(await workspaces.get(actor, workspaceId));
+    await expect(workspaces.update(actor, workspaceId, "Renamed", etag)).resolves.toMatchObject({ name: "Renamed" });
+    const safeguardsEtag = computeEtag(await safeguards.get(actor, workspaceId));
+    await expect(safeguards.set(actor, workspaceId, next, safeguardsEtag)).resolves.toEqual(next);
   });
 });
