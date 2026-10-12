@@ -364,8 +364,8 @@ DATABASE_URL and MARKETPLACE_DATABASE_URL for its guarded route fixture.
 Focused follow-up passes: retained AWS/package/payment adapters58, API
 permission/configuration/health90, full web549. EC2 bootstrap and production
 configuration pass, including retained negative controls. All architecture
-gates pass after the nine deletion-only baseline reductions. Broad adapter
-follow-up and exact-head CI results belong to the associated pull request.
+gates pass after the nine deletion-only baseline reductions. Full two-worker adapter follow-up passes81 files,566 tests with1 skip.
+Exact-head CI results belong to the associated pull request.
 Nine architecture baseline findings are removed only because their owning
 media files were deleted. No paid model/media call or deployed infrastructure
 change is made. Exact-head CI and squash merge remain required.
