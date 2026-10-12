@@ -145,7 +145,7 @@ expand() {
     printf 'TEMPORAL_MINIMUM_RETENTION_DAYS=%s\n' "$TEMPORAL_MINIMUM_RETENTION_DAYS"
     printf 'AUTH0_STAFF_DOMAIN=%s\nAUTH0_STAFF_CLIENT_ID=%s\n' "$AUTH0_STAFF_DOMAIN" "$AUTH0_STAFF_CLIENT_ID"
     # Production refuses every mock at boot (task 6.1d, check-production-boot.sh):
-    # real identity and email providers, and the Session Gateway flag.
+    # real identity and email providers, and the Identity & Tenant Gateway flag.
     # platform-api resolves a *_REF as the name of an environment variable
     # (identity.module.ts resolveRuntimeSecret), so the values are resolved
     # from Secrets Manager here and the references point at them.
