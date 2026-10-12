@@ -14,8 +14,8 @@ import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, a
 import { assertSmokeCeiling, pollRunDetail, smoke } from './mvp-smoke.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
-  assertSmokeCeiling(0.25);
-  for (const usd of [0.25000001, -1, NaN, Infinity]) assert.throws(() => assertSmokeCeiling(usd), /no model run started/);
+  assertSmokeCeiling(1, 1);
+  for (const usd of [1.00000001, -1, NaN, Infinity]) assert.throws(() => assertSmokeCeiling(usd, 1), /no model run started/);
   await assert.rejects(smoke({ apply: true, healthOnly: true }), /mutually exclusive/);
 });
 
