@@ -356,7 +356,8 @@ models, Titan text embeddings and the template spend ceiling remain.
 
 The revised 32-interface surface assertion fails on the old 35-interface code.
 Shared-client tests pass (65); shared-client/adapters builds, typechecks, lint,
-API typecheck and build, boundary/RBAC and spend-guard checks pass. Frozen
+Platform build and typecheck, architecture boundaries, role classification
+and spend-guard checks pass. Frozen
 pnpm 9.15.9 lockfile validation passes offline in a manifest-only fixture.
 The initial broad adapter sweep encountered sandbox restrictions, then native
 infrastructure/Temporal timeouts under load; the broad API sweep requires
