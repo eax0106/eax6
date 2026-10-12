@@ -386,24 +386,28 @@ function copyToolSecretsToLocalStack(env) {
     const read = spawnSync('aws', ['secretsmanager', 'get-secret-value', '--secret-id', name, '--query', 'SecretString', '--output', 'text'],
       { cwd: root, env: realAwsEnvironment(env), encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     if (read.error || read.status !== 0 || !read.stdout.trim()) throw new Error(`${key}: secret not readable in AWS; no tools started`);
-    const value = read.stdout.replace(/\n$/, '');
-    // The value goes through a private file that is removed at once, never on
-    // a command line or in a log. Some AWS CLI builds cannot read /dev/stdin.
-    const dir = mkdtempSync(resolve(stateDir, 'tool-secret-'));
-    const file = resolve(dir, 'input.json');
-    const write = (verb, body) => {
-      writeFileSync(file, JSON.stringify(body), { mode: 0o600 });
-      return spawnSync('aws', ['secretsmanager', verb, '--cli-input-json', `file://${file}`],
-        { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
-    };
-    let result;
-    try {
-      result = write('create-secret', { Name: name, SecretString: value });
-      if (result.status !== 0) result = write('put-secret-value', { SecretId: name, SecretString: value });
-    } finally { rmSync(dir, { recursive: true, force: true }); }
-    if (result.error || result.status !== 0) {
-      throw new Error(`${key}: copy to LocalStack failed (${(result.stderr || String(result.error)).trim().split('\n').at(-1)}); no tools started`);
-    }
+    putLocalStackSecret(env, name, read.stdout.replace(/\n$/, ''), `${key}: copy to LocalStack failed`);
+  }
+}
+
+/** Writes one secret into LocalStack, creating it or adding a new version. */
+export function putLocalStackSecret(env, name, value, failure = `${name}: LocalStack write failed`) {
+  // The value goes through a private file that is removed at once, never on
+  // a command line or in a log. Some AWS CLI builds cannot read /dev/stdin.
+  const dir = mkdtempSync(resolve(stateDir, 'tool-secret-'));
+  const file = resolve(dir, 'input.json');
+  const write = (verb, body) => {
+    writeFileSync(file, JSON.stringify(body), { mode: 0o600 });
+    return spawnSync('aws', ['secretsmanager', verb, '--cli-input-json', `file://${file}`],
+      { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
+  };
+  let result;
+  try {
+    result = write('create-secret', { Name: name, SecretString: value });
+    if (result.status !== 0) result = write('put-secret-value', { SecretId: name, SecretString: value });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  if (result.error || result.status !== 0) {
+    throw new Error(`${failure} (${(result.stderr || String(result.error)).trim().split('\n').at(-1)})`);
   }
 }
 
