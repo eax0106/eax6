@@ -4,15 +4,14 @@ import { readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
-import { health, loadEnvironment, services, grpcHealth, grpcServices, processStamp, gatewayDigest } from './mvp-stack.mjs';
+import { health, loadEnvironment, services, grpcHealth, grpcServices, processStamp, gatewayDigest, smokeCeilingUsd } from './mvp-stack.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const userId = '01930000-0000-7000-8000-000000000003';
 const tenantId = 'ten_01930000-0000-7000-8000-000000000001';
-export const MAX_SMOKE_USD = 0.25;
-export function assertSmokeCeiling(usd) {
-  if (!Number.isFinite(usd) || usd < 0 || usd > MAX_SMOKE_USD) {
-    throw new Error(`Upper bound USD ${Number(usd).toFixed(4)} exceeds USD ${MAX_SMOKE_USD}; no model run started`);
+export function assertSmokeCeiling(usd, ceilingUsd) {
+  if (!Number.isFinite(usd) || usd < 0 || usd > ceilingUsd) {
+    throw new Error(`Upper bound USD ${Number(usd).toFixed(4)} exceeds USD ${ceilingUsd}; no model run started`);
   }
 }
 
@@ -70,16 +69,17 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   if (healthOnly) return;
   // The smoke's recipient is a placeholder; it certifies the mocked-email stack only.
   if ((state.email ?? 'mock') !== 'mock') throw new Error('Smoke needs mocked email; restart the stack without MVP_EMAIL_PROVIDER=ses');
+  const ceilingUsd = await smokeCeilingUsd();
   const gateway = state.processes.find(row => row.name === 'model-gateway');
-  if (!gateway?.stamp || processStamp(gateway.pid, gateway.stamp) !== gateway.stamp || state.smokeCeilingUsd !== MAX_SMOKE_USD || state.gatewayDigest !== gatewayDigest()) {
+  if (!gateway?.stamp || processStamp(gateway.pid, gateway.stamp) !== gateway.stamp || state.smokeCeilingUsd !== ceilingUsd || state.gatewayDigest !== gatewayDigest()) {
     throw new Error('Guarded model-gateway ownership not verified; refusing smoke');
   }
   const gatewayLog = readFileSync(resolve(root, 'tmp/local-mvp/model-gateway.log'), 'utf8');
-  if (!gatewayLog.includes(`Local smoke lifetime ceiling: USD ${MAX_SMOKE_USD}`)) throw new Error('Model pre-call budget missing; refusing smoke');
-  const boundUsd = MAX_SMOKE_USD;
+  if (!gatewayLog.includes(`Local smoke lifetime ceiling: USD ${ceilingUsd}`)) throw new Error('Model pre-call budget missing; refusing smoke');
+  const boundUsd = ceilingUsd;
   console.log(JSON.stringify({ upperBoundUsd: boundUsd, scope: 'whole model-gateway process lifetime',
     maxOutputTokens: 1024, awsMaxAttempts: 1, fallbackProviders: 0, apply, email: 'mock' }));
-  assertSmokeCeiling(boundUsd);
+  assertSmokeCeiling(boundUsd, ceilingUsd);
   const base = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;
   const cookies = new Map();
   async function request(path, method = 'GET', body, headers = {}) {
@@ -128,8 +128,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   // The local process allowance includes node reviewers, final outcome,
   // recovery attempts and embeddings; exhaustion stops the next paid call.
   console.log(JSON.stringify({ plan: { workflowId: created.workflowId, template: 'meeting-notes-summary', models: priced.models,
-    policyMaxTokensPerCall: priced.maxTokens, upperBoundUsd: boundUsd, ceilingUsd: MAX_SMOKE_USD, apply, email: 'mock' } }));
-  assertSmokeCeiling(boundUsd);
+    policyMaxTokensPerCall: priced.maxTokens, upperBoundUsd: boundUsd, ceilingUsd, apply, email: 'mock' } }));
+  assertSmokeCeiling(boundUsd, ceilingUsd);
   const estimate = (await request(`/api/v1/runs/estimate?${new URLSearchParams({ workflow_id: created.workflowId, workflow_version_id: compiled.id })}`)).data;
   assert.equal(estimate.unpriced_calls, 0, 'Cost Ledger has unpriced model calls');
   if (!apply) { console.log('MVP smoke plan verified; no model run started. Use --apply only with owner spend approval.'); return; }
@@ -174,7 +174,7 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
     const rates = priced.rates[row.modelId]; assert.ok(rates, 'Unpriced paid model');
     observedListPriceUsd += row.input_tokens * rates[0] + row.output_tokens * rates[1];
   }
-  assertSmokeCeiling(observedListPriceUsd);
+  assertSmokeCeiling(observedListPriceUsd, ceilingUsd);
   const evidence = { recordedAt: new Date().toISOString(), models: priced.models, template: 'meeting-notes-summary', boundUsd,
     gatewayPid: gateway.pid, gatewayStamp: gateway.stamp, gatewayDigest: state.gatewayDigest, smokeDigest: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
     workflowId: created.workflowId, runId: run.id, status: detail.run.status, outcome: detail.outcome,

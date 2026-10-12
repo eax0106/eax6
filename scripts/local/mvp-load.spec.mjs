@@ -8,21 +8,21 @@ import { simulationBatch, assertStack, assertOwnedProcess, validateTrace, summar
 
 const root = '/owned/checkout/';
 const state = { root, ready: true, project: `alter-mvp-${createHash('sha256').update(root).digest('hex').slice(0, 10)}`,
-  smokeCeilingUsd: .25, gatewayDigest: 'guarded-build', processes: [
+  smokeCeilingUsd: 1, gatewayDigest: 'guarded-build', processes: [
     { name: 'orchestration-service', pid: 123, stamp: 'engine-start' },
     { name: 'model-gateway', pid: 124, stamp: 'gateway-start' },
     { name: 'background-workers', pid: 125, stamp: 'worker-start' } ] };
 const stamp = pid => ({123: 'engine-start', 124: 'gateway-start', 125: 'worker-start'})[pid];
 
 test('ownership and zero-spend prerequisites fail closed before lifecycle changes', () => {
-  assert.doesNotThrow(() => assertStack(state, root, stamp, 'guarded-build', false));
+  assert.doesNotThrow(() => assertStack(state, root, stamp, 'guarded-build', false, 1));
   for (const broken of [ {...state, root: '/foreign/'}, {...state, project: 'foreign'}, {...state, ready: false},
-    {...state, smokeCeilingUsd: 1}, {...state, gatewayDigest: 'old-build'}, {...state, processes: []},
+    {...state, smokeCeilingUsd: .25}, {...state, gatewayDigest: 'old-build'}, {...state, processes: []},
     {...state, processes: [...state.processes, state.processes[0]]} ]) {
-    assert.throws(() => assertStack(broken, root, stamp, 'guarded-build', false));
+    assert.throws(() => assertStack(broken, root, stamp, 'guarded-build', false, 1));
   }
-  assert.throws(() => assertStack(state, root, () => 'reused-pid', 'guarded-build', false));
-  assert.throws(() => assertStack(state, root, stamp, 'guarded-build', true));
+  assert.throws(() => assertStack(state, root, () => 'reused-pid', 'guarded-build', false, 1));
+  assert.throws(() => assertStack(state, root, stamp, 'guarded-build', true, 1));
 });
 
 test('twenty native HTTP simulations expose a killed service and restored recovery', async () => {
