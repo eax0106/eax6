@@ -62,14 +62,14 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   if (process.versions.node.split('.')[0] !== '22') throw new Error('MVP smoke requires Node 22');
   const state = JSON.parse(readFileSync(resolve(root, 'tmp/local-mvp/state.json'), 'utf8'));
   if (state.root !== root || !state.ready) throw new Error('This checkout has no ready MVP stack; run scripts/local/mvp-up.sh');
-  // The smoke's recipient is a placeholder; it certifies the mocked-email stack only.
-  if ((state.email ?? 'mock') !== 'mock') throw new Error('Smoke needs mocked email; restart the stack without MVP_EMAIL_PROVIDER=ses');
   const env = loadEnvironment();
   if (env.ALTER_ENV !== 'local') throw new Error('Smoke requires ALTER_ENV=local');
   for (const row of services(env)) await health(row.name, row.url);
   for (const row of grpcServices(env)) await grpcHealth(row.name, row.address);
   console.log('MVP HTTP health identities verified');
   if (healthOnly) return;
+  // The smoke's recipient is a placeholder; it certifies the mocked-email stack only.
+  if ((state.email ?? 'mock') !== 'mock') throw new Error('Smoke needs mocked email; restart the stack without MVP_EMAIL_PROVIDER=ses');
   const gateway = state.processes.find(row => row.name === 'model-gateway');
   if (!gateway?.stamp || processStamp(gateway.pid, gateway.stamp) !== gateway.stamp || state.smokeCeilingUsd !== MAX_SMOKE_USD || state.gatewayDigest !== gatewayDigest()) {
     throw new Error('Guarded model-gateway ownership not verified; refusing smoke');
