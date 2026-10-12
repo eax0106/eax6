@@ -1,7 +1,7 @@
 // Task 6.1d. Proves, without a host, that the .env bootstrap.sh writes lets
 // the services start with NODE_ENV=production. Several components refuse a
 // mock in production and only find out at boot: platform-api's identity,
-// email and media providers, its environment schema, and orchestration's
+// email providers, its environment schema, and orchestration's
 // Identity & Tenant Gateway. This runs each one's own selection code -- not a copy --
 // against each container's own environment, as `docker compose config`
 // resolves it from the generated .env and compose.yml (env_file plus any
@@ -13,13 +13,7 @@
 // "production-config-ok" or one line per failure and exits 1.
 import { readFileSync } from "node:fs";
 
-import {
-  resolveEmailProvider,
-  resolveImageGenProvider,
-  resolveMediaObjectStorageProvider,
-  resolveSpeechToTextProvider,
-  resolveTextToSpeechProvider,
-} from "@alterx/adapters";
+import { resolveEmailProvider } from "@alterx/adapters";
 
 const file = process.argv[2];
 if (!file) {
@@ -92,12 +86,6 @@ async function main(): Promise<void> {
   for (const service of ["platform-api", "tool-gateway"]) {
     await check(service, "email provider", () => resolveEmailProvider(async () => ""));
   }
-  await check("platform-api", "media providers", () => {
-    const objects = resolveMediaObjectStorageProvider();
-    resolveImageGenProvider(objects);
-    resolveTextToSpeechProvider(objects);
-    resolveSpeechToTextProvider(objects);
-  });
   await check("orchestration-service", "Identity & Tenant Gateway", () => identityTenantGatewayEnvironment(process.env));
   await check("orchestration-service", "pre-run estimation", () => buildWorstCaseEstimator(process.env));
   const { runLearningAuditClient } = await import(

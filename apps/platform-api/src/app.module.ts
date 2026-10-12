@@ -42,7 +42,6 @@ import { RegistryModule } from "./registry";
 import { PlatformDeletionModule } from "./deletion/platform-deletion.module";
 import { NotificationModule } from "./notifications";
 import { EngineEventNotificationModule } from "./notifications/engine-events/engine-event-notification.module";
-import { MediaModule } from "./media";
 import { DiscoveryModule } from "./discovery/discovery.module";
 import { SearchModule } from "./search";
 import { StaffModule } from "./staff";
@@ -106,7 +105,6 @@ import { TenantBenchmarksModule } from "./tenant-benchmarks/tenant-benchmarks.mo
     NotificationModule,
     PlatformDeletionModule,
     EngineEventNotificationModule,
-    MediaModule,
     DiscoveryModule,
     SearchModule,
     StaffModule,

@@ -1,67 +1,8 @@
-# C20 Media Services
+# C20 Media Services — removed
 
-**Layer** platform-web · **Plane** platform, as received · **Category** 2 — needs wiring only
+The owner removed image generation, text-to-speech and speech-to-text on
+12 October 2026. The dedicated implementation and provider dependencies are
+removed; this component has no active routes or frontend. M3 media acceptance
+is retired. Shared object storage remains available to its other callers.
 
-> Both ends exist and answer. This is wiring, not repair — the cheapest class of work on the board.
-
-## What it is
-
-Media upload, storage and retrieval for the product surface.
-
-## Blast radius and fail mode
-
-| | |
-|---|---|
-| Blast radius | `nothing` |
-| Fail mode | `fail-closed` |
-
-*No contract covers this component: added after the 54 contracts. These values stay proposed (task C13).*
-
-## Where the code lives
-
-- `apps/platform-api/src/media`
-
-## Current state
-
-### Local MVP policy — 6 October 2026
-
-The owner chose to hide unavailable image generation and transcription while
-keeping speech. Authenticated, valid `POST /api/v1/media/image` and
-`POST /api/v1/media/stt` requests return HTTP 503 with
-`MEDIA_ACTION_UNAVAILABLE`; they do not invoke a provider. Authentication,
-workspace permissions and input validation still apply. Speech remains enabled
-at `POST /api/v1/media/tts`.
-
-The current web app has no image-generation or transcription controls or API
-methods. Its source inventory guards that absence, including endpoint and
-visible-action positive controls. This is source evidence, not a rendered-screen
-test. Demo web behavior and mock provider ports remain unchanged. Restoring an
-unavailable action requires an owner decision and working provider proof.
-
-The earlier assessment below is historical.
-
-*Verbatim from the readiness assessment — engine verified against main 4–6 September 2026; platform reported as received and not independently verified.*
-
-Source read only — **not observed live.** Confirm before counting it.
-
-## Design-log alignment — `ALIGNED`
-
-Design log §6 and §27 say this category should not exist: *UI must never get ahead of real backend wiring* — that is what produced the old build's fake workflow canvas — and each of §27's five surfaces appears only as the backend it exercises becomes real. Remediation, however, is pure wiring: both ends exist and answer.
-
-## What the finished component looks like
-
-- [ ] The screen issues real requests against the answering route.
-- [ ] No control reports success without a call behind it.
-- [ ] Permissions enforced end to end, not just at the route.
-
-## Open issues
-
-None.
-
-## Where this sits in the plan
-
-See [`checklist.md`](../../checklist.md) — task **B3**.
-
----
-
-*Alignment key: `ALIGNED` the design log imposes no requirement this component fails · `NEEDS-LOGIC` the log supplies logic the component is missing · `CONFLICT` the log says something different from the current shape · `SILENT` the log does not cover this component.*
+See [the removal record](../../../ENG-MEDIA.md).

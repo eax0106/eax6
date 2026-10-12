@@ -301,7 +301,7 @@ jobs:
       - name: ec2 production boot config check
         # Task 6.1d. Every container's environment, as compose resolves it
         # from bootstrap.sh's .env, gets past the production-only boot checks
-        # (no mock identity, email or media; Session Gateway flag; schema).
+        # (no mock identity or email; Identity & Tenant Gateway flag; schema).
         run: bash deploy/ec2/check-production-boot.sh
 
       - name: ec2 platform db runtime roles check

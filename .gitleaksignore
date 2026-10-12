@@ -1,0 +1,3 @@
+# Historical false positive: docs/work-queue.md says "boundary/RBAC" in
+# a list of passed checks. This exact finding contains no credential.
+1ce5b4074315196d92dc20f8e18a28fd9755f0f9:docs/work-queue.md:generic-api-key:359

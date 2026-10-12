@@ -16,7 +16,6 @@ import {
   type IdentityProvider,
   type KycProvider,
   type MarketplacePayoutProvider,
-  type ImageGenProvider,
   type ModelProvider,
   type NetworkConnectivityProvider,
   type NotificationProvider,
@@ -28,8 +27,6 @@ import {
   type RepositoryProvider,
   type SandboxProvider,
   type SearchProvider,
-  type SpeechToTextProvider,
-  type TextToSpeechProvider,
   type VectorStoreProvider,
 } from "./provider-types";
 
@@ -47,7 +44,6 @@ type MarkerProviders =
   | IdentityProvider
   | KycProvider
   | MarketplacePayoutProvider
-  | ImageGenProvider
   | ModelProvider
   | NetworkConnectivityProvider
   | NotificationProvider
@@ -59,21 +55,16 @@ type MarkerProviders =
   | RepositoryProvider
   | SandboxProvider
   | SearchProvider
-  | SpeechToTextProvider
-  | TextToSpeechProvider
   | VectorStoreProvider;
 
 describe("canonical provider interface surface", () => {
-  it("locks all 35 provider interface names exactly once", () => {
+  it("locks all 32 provider interface names exactly once", () => {
     expect(CANONICAL_PROVIDER_INTERFACES).toEqual([
       "DurableExecutionProvider",
       "ComputeProvider",
       "IdentityProvider",
       "ModelProvider",
       "EmbeddingProvider",
-      "ImageGenProvider",
-      "TextToSpeechProvider",
-      "SpeechToTextProvider",
       "PIIRedactionProvider",
       "SearchProvider",
       "BrowserProvider",
@@ -102,7 +93,7 @@ describe("canonical provider interface surface", () => {
       "EmailProvider",
       "StatusPageProvider",
     ]);
-    expect(new Set(CANONICAL_PROVIDER_INTERFACES)).toHaveLength(35);
+    expect(new Set(CANONICAL_PROVIDER_INTERFACES)).toHaveLength(32);
     expectTypeOf<MarkerProviders>().toMatchTypeOf<BaseProvider>();
   });
 

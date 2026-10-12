@@ -54,9 +54,9 @@ Status legend: **R** retained · **RN** renamed · **M** merged · **S** split �
 | F19 | Connector Catalog & SaaS Integrations | M | C20+C18+C19 | Sh | Integration Hub | customer |
 | F20 | Community Tool Registry (MCP/tools) | R | C21 | Sh | Tool Registry | customer |
 | F21 | Trigger Management (webhooks + schedules) | M | C22+E26 | W | Trigger Management | customer |
-| F22 | Image Generation Access | R | D23 | Sh | Media Services | customer |
-| F23 | Text-to-Speech | R | D24 | Sh | Media Services | customer |
-| F24 | Speech-to-Text | R | D25 | Sh | Media Services | customer |
+| F22 | Image Generation Access | Removed 12 October 2026 | — | — | — | — |
+| F23 | Text-to-Speech | Removed 12 October 2026 | — | — | — | — |
+| F24 | Speech-to-Text | Removed 12 October 2026 | — | — | — | — |
 | F25 | Email Notifications | R | E27 | Sh | Notification Service | customer |
 | F26 | In-App Notification Centre | R | E28 | Sh | Notification Service | customer |
 | F27 | Authentication, RBAC & Enterprise SSO | R | E29 | Sh | Identity & Session | customer |
@@ -113,7 +113,7 @@ One feature ≠ one component; one component ≠ one deployable. 22 logical comp
 | C17 | Notification Service | in-app centre, email, preferences, severity, deep links, escalation | F25–F26 | notifications, prefs | NotificationProvider, EmailProvider |
 | C18 | Cost & Billing Experience | estimation, spending dashboards, budgets, subscriptions, invoices | F30–F31, F42 | budget configs; billing refs | Engine cost APIs, BillingProvider |
 | C19 | Discovery Service | use-case discovery over authorised data, recommendations w/ evidence + scoring | F6 | recommendations | ADS Q (via Engine/API), run history APIs |
-| C20 | Media Services | image gen, TTS, STT configuration + usage surfaces | F22–F24 | media configs | ImageGeneration/TTS/STT providers |
+| C20 | Media Services | Removed by owner 12 October 2026 | — | — | — |
 | C21 | Communication Channels | WhatsApp account/templates/testing/monitoring; voice channel config | F36–F37 | channel configs | TelephonyProvider, connector APIs, Event Gateway |
 | C22 | Benchmarking Console | agent/model comparisons, eval history, promote/rollback views | F38 | none (eval_db-owned); view state | Engine eval APIs |
 | C23 | Admin & Operator Console | tenant admin, support access, provider mgmt, incidents, policy, billing ops, abuse review, audit explorer, marketplace governance | F11, F43, F44, F48 | admin plane data | audit APIs, all domain services |
@@ -190,7 +190,7 @@ All synchronous connections carry `Authorization` (M2M) + `X-Alter-Actor-Token` 
 | P10 | platform-api → Vercel/Cloudflare/Netlify/Railway/AWS | DeploymentProvider | deploy ops | project deploys | sync+webhook |
 | P11 | Deploy/GitHub/Connector webhooks → Event & Trigger Gateway | HTTPS webhook | canonical event | CI/deploy/channel feedback | async |
 | P12 | platform-api → Razorpay/Stripe | BillingProvider / MarketplacePayoutProvider | subscriptions, orders, Route/Connect payouts | commerce | sync+webhook |
-| P13 | platform-api → Exotel/Twilio/Sarvam/Polly/Transcribe/ElevenLabs/image APIs | media provider interfaces | capability-based requests | channels + media | sync |
+| P13 | platform-api → Exotel/Twilio | telephony provider interfaces | capability-based requests | channels | sync |
 | P14 | platform-workers ↔ Temporal Cloud (`platform` ns) | Temporal SDK via DurableJobProvider | job workflows | background jobs | async |
 | P15 | Platform Jobs → SES/email provider | EmailProvider | templated sends | email notifications | async |
 | P16 | platform-api → cost/billing rollups | Engine cost APIs + billing_db | cost views, invoices | spend surfaces | sync |
@@ -335,8 +335,7 @@ Alter-owned interfaces (Platform set; Engine set in Tech Spec):
 ```
 IdentityProvider        RepositoryProvider      DeploymentProvider
 ObjectStorageProvider   NotificationProvider    EmailProvider
-TelephonyProvider       SpeechToTextProvider    TextToSpeechProvider
-ImageGenerationProvider ObservabilityProvider   ConnectorProvider
+TelephonyProvider       ObservabilityProvider   ConnectorProvider
 KnowledgeProvider(ADS)  VectorStoreProvider     SecretsProvider
 BillingProvider         MarketplacePayoutProvider  SearchProvider
 FeatureFlagProvider     DurableJobProvider      EntitlementProvider
@@ -395,7 +394,7 @@ Every interface defines: capability declarations, configuration schema, health c
 | Search | Postgres FTS | OpenSearch, Algolia, Typesense | C26 | SearchProvider |
 | Preview environments | Vercel previews (web + generated apps); ephemeral CI stacks (api) | — | CI | per Env & Config spec |
 | Payments | Razorpay (+ Route); Stripe (+ Connect) when approved | — | C18/C15 | BillingProvider, MarketplacePayoutProvider |
-| Telephony/media | Exotel, Twilio, Sarvam, Polly, Transcribe, ElevenLabs, Bedrock/OpenAI/Google image | per matrices | C20/C21 | media provider interfaces |
+| Telephony | Exotel, Twilio | per matrices | C21 | telephony provider interfaces |
 | Tool/MCP runtime | E2B / Fargate in `alter-sandbox-exec` | future sandbox providers | C16 | SandboxProvider |
 
 ---

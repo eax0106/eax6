@@ -11,9 +11,6 @@ export const CANONICAL_PROVIDER_INTERFACES = [
   "IdentityProvider",
   "ModelProvider",
   "EmbeddingProvider",
-  "ImageGenProvider",
-  "TextToSpeechProvider",
-  "SpeechToTextProvider",
   "PIIRedactionProvider",
   "SearchProvider",
   "BrowserProvider",
@@ -527,89 +524,6 @@ export interface EmbeddingProvider extends BaseProvider<"EmbeddingProvider"> {
   embed(request: EmbeddingRequest): Promise<EmbeddingResult>;
 }
 
-/**
- * Covers two call shapes through one adapter implementation: a workflow
- * node generating an image mid-run (runId/nodeExecutionId present), and a
- * standalone BFF "test this media config" call with no run to attach to
- * (runId/nodeExecutionId omitted). tenantId is required in both cases.
- */
-export interface ImageGenerationRequest {
-  readonly tenantId: string;
-  readonly runId?: string;
-  readonly nodeExecutionId?: string;
-  readonly prompt: string;
-  readonly options: Readonly<Record<string, JsonValue>>;
-}
-
-export interface ImageGenerationResult {
-  /** Opaque ObjectStorageProvider reference (an S3 key in the AWS adapter). */
-  readonly reference: string;
-  readonly mimeType: string;
-  readonly width: number;
-  readonly height: number;
-  /** The adapter that wrote this exact object; never the preferred provider. */
-  readonly servedBy: string;
-}
-
-export interface ImageGenProvider extends BaseProvider<"ImageGenProvider"> {
-  generateImage(
-    request: ImageGenerationRequest,
-  ): Promise<ImageGenerationResult>;
-}
-
-/**
- * Covers two call shapes through one adapter implementation: a workflow
- * node synthesizing speech mid-run (runId/nodeExecutionId present), and a
- * standalone BFF "test this media config" call with no run to attach to
- * (runId/nodeExecutionId omitted). tenantId is required in both cases.
- */
-export interface SpeechSynthesisRequest {
-  readonly tenantId: string;
-  readonly runId?: string;
-  readonly nodeExecutionId?: string;
-  readonly text: string;
-  readonly voiceConfig: Readonly<Record<string, JsonValue>>;
-}
-
-export interface SpeechSynthesisResult {
-  /** Opaque ObjectStorageProvider reference (an S3 key in the AWS adapter). */
-  readonly reference: string;
-  readonly mimeType: string;
-  readonly durationMs: number;
-}
-
-export interface TextToSpeechProvider
-  extends BaseProvider<"TextToSpeechProvider"> {
-  synthesizeSpeech(
-    request: SpeechSynthesisRequest,
-  ): Promise<SpeechSynthesisResult>;
-}
-
-/**
- * Covers two call shapes through one adapter implementation: a workflow
- * node transcribing audio mid-run (runId/nodeExecutionId present), and a
- * standalone BFF "test this media config" call with no run to attach to
- * (runId/nodeExecutionId omitted). tenantId is required in both cases.
- */
-export interface SpeechTranscriptionRequest {
-  readonly tenantId: string;
-  readonly runId?: string;
-  readonly nodeExecutionId?: string;
-  /** Opaque ObjectStorageProvider reference; audio bytes never cross the RPC. */
-  readonly audioRef: string;
-}
-
-export interface SpeechTranscriptionResult {
-  readonly transcript: string;
-  readonly confidence: number;
-}
-
-export interface SpeechToTextProvider
-  extends BaseProvider<"SpeechToTextProvider"> {
-  transcribe(
-    request: SpeechTranscriptionRequest,
-  ): Promise<SpeechTranscriptionResult>;
-}
 export interface PIIDetectedEntity {
   readonly entityType: string;
   readonly start: number;

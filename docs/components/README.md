@@ -64,7 +64,7 @@ open item never applied to a specific component list.
 | [C17 Notifications](notifications/README.md) | platform-web | `ALIGNED` | `nothing` |
 | [C18 Cost & Billing](cost-billing/README.md) | platform-web | `ALIGNED` | `nothing` |
 | [C19 Discovery](discovery/README.md) | platform-web | `ALIGNED` | `nothing` |
-| [C20 Media Services](media-services/README.md) | platform-web | `ALIGNED` | `nothing` |
+| [C20 Media Services — removed](media-services/README.md) | — | owner removed 12 October 2026 | `nothing` |
 | [C22 Benchmarking](benchmarking/README.md) | platform-web | `ALIGNED` | `nothing` |
 | [C23 Admin Console](admin-console/README.md) | platform-web | `ALIGNED` | `nothing` |
 | [C26 Search](search/README.md) | platform-web | `ALIGNED` | `nothing` |

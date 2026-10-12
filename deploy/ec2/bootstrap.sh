@@ -145,7 +145,7 @@ expand() {
     printf 'TEMPORAL_MINIMUM_RETENTION_DAYS=%s\n' "$TEMPORAL_MINIMUM_RETENTION_DAYS"
     printf 'AUTH0_STAFF_DOMAIN=%s\nAUTH0_STAFF_CLIENT_ID=%s\n' "$AUTH0_STAFF_DOMAIN" "$AUTH0_STAFF_CLIENT_ID"
     # Production refuses every mock at boot (task 6.1d, check-production-boot.sh):
-    # real identity, email and media providers, and the Session Gateway flag.
+    # real identity and email providers, and the Identity & Tenant Gateway flag.
     # platform-api resolves a *_REF as the name of an environment variable
     # (identity.module.ts resolveRuntimeSecret), so the values are resolved
     # from Secrets Manager here and the references point at them.
@@ -160,8 +160,6 @@ expand() {
     printf 'EMAIL_PROVIDER=ses\nSES_FROM_ADDRESS=%s\nSES_CREDENTIALS_SECRET_REF=%s\n' "$SES_FROM_ADDRESS" "$SES_CREDENTIALS_SECRET_REF"
     printf 'SES_CONFIGURATION_SET_NAME=%s\nSES_EVENT_WEBHOOK_SECRET=%s\n' "${SES_CONFIGURATION_SET_NAME:-alterx-delivery}" "$SES_EVENT_WEBHOOK_SECRET"
     printf 'SES_CREDENTIALS_JSON=%s\n' "$(secret "$SES_CREDENTIALS_SECRET_REF")"
-    media_bucket="$(aws ssm get-parameter --name "/alter/$ALTER_ENV/orchestration/artifacts-bucket" --query Parameter.Value --output text)"
-    printf 'MEDIA_OBJECT_STORAGE_PROVIDER=s3\nIMAGE_GEN_PROVIDER=titan\nTEXT_TO_SPEECH_PROVIDER=polly\nSPEECH_TO_TEXT_PROVIDER=transcribe\nMEDIA_BUCKET_NAME=%s\n' "$media_bucket"
     printf 'INGRESS_SESSION_GATEWAY_CORE_ENABLED=true\n'
     # Inside the environment's own parameter path, which the host role can read.
     printf 'SELECTION_BINDING_FAIL_CLOSED_PARAM=/alter/%s/orchestration/selection-binding-fail-closed\n' "$ALTER_ENV"
