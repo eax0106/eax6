@@ -36,7 +36,7 @@ describe("WorkspaceErasureRunner (D2)", () => {
     expect(erasure.executeWorkspaceErasure).toHaveBeenCalledWith(`ten_${TENANT_A}`, "ws_ws-of-a1");
     expect(audit.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       tenant_id: TENANT_A, actor_type: "system", actor_ref: "system:platform-jobs", action: "workspace.deletion.erase",
-      context_json: JSON.stringify({ manifest_id: "del_fixture" }),
+      context_json: JSON.stringify({ scope: { manifest_id: "del_fixture" } }),
     }));
   });
 

@@ -217,6 +217,78 @@ export class AuditValidationError extends Error {
   }
 }
 
+// The audit service's rules for an event's context_json. They live here so
+// the service and every test double (createMockAuditEventHandler) reject the
+// same contexts: a caller tested only against a lenient fake once shipped
+// contexts the service refused at runtime.
+const FORBIDDEN_CONTEXT_KEYS = new Set([
+  "body",
+  "content",
+  "conversation",
+  "credential",
+  "file",
+  "input",
+  "message",
+  "output",
+  "password",
+  "payload",
+  "prompt",
+  "secret",
+  "token",
+]);
+const ALLOWED_CONTEXT_KEYS = new Set(["ip_class", "request_id", "scope"]);
+const MAX_AUDIT_CONTEXT_BYTES = 8_192;
+
+function assertContextKeys(value: unknown, path = "context"): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => assertContextKeys(item, `${path}[${index}]`));
+    return;
+  }
+  if (value === null || typeof value !== "object") {
+    return;
+  }
+  for (const [key, nested] of Object.entries(value)) {
+    const normalizedKey = key.toLowerCase().replaceAll(/[_-]/g, "");
+    if (
+      [...FORBIDDEN_CONTEXT_KEYS].some((forbidden) =>
+        normalizedKey.includes(forbidden),
+      )
+    ) {
+      throw new AuditValidationError(`${path}.${key} is not permitted`);
+    }
+    assertContextKeys(nested, `${path}.${key}`);
+  }
+}
+
+/** Parses context_json as the audit service stores it; throws AuditValidationError when the service would refuse it. */
+export function parseAuditContext(value: string): Readonly<Record<string, JsonValue>> | null {
+  if (value.trim().length === 0) {
+    return null;
+  }
+  if (Buffer.byteLength(value, "utf8") > MAX_AUDIT_CONTEXT_BYTES) {
+    throw new AuditValidationError(
+      `context_json exceeds ${MAX_AUDIT_CONTEXT_BYTES} bytes`,
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch {
+    throw new AuditValidationError("context_json must contain valid JSON");
+  }
+  if (parsed === null || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new AuditValidationError("context_json must contain a JSON object");
+  }
+  for (const key of Object.keys(parsed)) {
+    if (!ALLOWED_CONTEXT_KEYS.has(key)) {
+      throw new AuditValidationError(`context.${key} is not permitted`);
+    }
+  }
+  assertContextKeys(parsed);
+  return parsed as Readonly<Record<string, JsonValue>>;
+}
+
 function serializeCanonical(value: unknown): string {
   if (value === null) {
     return "null";

@@ -6,7 +6,7 @@ import type {
   RecordEventRequest,
   RecordEventResponse,
 } from "@alterx/contracts";
-import { AuditEventNotFoundError, type AuditEventHandler } from "../audit-ports";
+import { AuditEventNotFoundError, parseAuditContext, type AuditEventHandler } from "../audit-ports";
 
 export interface MockAuditEventHandler extends AuditEventHandler {
   getRecordedEvents(): readonly RecordEventRequest[];
@@ -34,6 +34,9 @@ export function createMockAuditEventHandler(
 
   return {
     recordEvent: async (request) => {
+      // Refuse what the audit service refuses, so a caller's test fails
+      // where production would.
+      parseAuditContext(request.context_json);
       events.push({ ...request });
       const response = await recordEvent(request);
       stored.set(response.id, { request: { ...request }, response });

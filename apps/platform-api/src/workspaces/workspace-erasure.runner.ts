@@ -56,7 +56,7 @@ export class WorkspaceErasureRunner {
             target_ref: id,
             result: "success",
             reason_code: "",
-            context_json: JSON.stringify({ manifest_id: result.manifestId }),
+            context_json: JSON.stringify({ scope: { manifest_id: result.manifestId } }),
             occurred_at: new Date().toISOString(),
           });
           workspacesErased += 1;

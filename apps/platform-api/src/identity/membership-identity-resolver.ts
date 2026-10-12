@@ -63,7 +63,7 @@ export class MembershipIdentityResolver {
         await client.query("INSERT INTO workspace_members(id,tenant_id,workspace_id,user_id,role) VALUES($1,$2,$3,$4,$5) ON CONFLICT(workspace_id,user_id) DO NOTHING", [uuidv7(), scope.tenantId, scope.workspaceId, userId, row.role]);
         await client.query("UPDATE workspace_invitations SET status='accepted',accepted_by=$3,accepted_at=now(),delivery_attempt_id=NULL WHERE tenant_id=$1 AND id=$2", [scope.tenantId, row.id, userId]);
         await this.audit.recordEvent({ tenant_id: scope.tenantId, actor_type: "user", actor_ref: userId, action: "workspace.invitation.accepted", target_type: "workspace_invitation", target_ref: row.id,
-          result: "success", reason_code: "", context_json: JSON.stringify({ workspaceId: scope.workspaceId, role: row.role }), occurred_at: new Date().toISOString() });
+          result: "success", reason_code: "", context_json: JSON.stringify({ scope: { workspaceId: scope.workspaceId, role: row.role } }), occurred_at: new Date().toISOString() });
       }
       const memberships = await client.query<ExistingSignup>(`SELECT tm.user_id AS "userId",tm.tenant_id AS "tenantId",wm.workspace_id AS "workspaceId",tm.role AS "tenantRole",wm.role AS "workspaceRole"
         FROM tenant_members tm JOIN workspace_members wm ON wm.tenant_id=tm.tenant_id AND wm.user_id=tm.user_id

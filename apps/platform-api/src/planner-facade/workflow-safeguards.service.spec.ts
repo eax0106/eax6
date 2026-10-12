@@ -116,7 +116,7 @@ describe("WorkflowSafeguardsService", () => {
         action: "workflow.safeguards.update",
         target_type: "workflow",
         target_ref: WORKFLOW,
-        context_json: JSON.stringify({ before: none, after: additions }),
+        context_json: JSON.stringify({ scope: { before: none, after: additions } }),
       }),
     );
   });

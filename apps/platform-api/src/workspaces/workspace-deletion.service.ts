@@ -151,7 +151,7 @@ export class WorkspaceDeletionService {
       target_ref: workspaceId,
       result: "success",
       reason_code: "",
-      context_json: JSON.stringify(context),
+      context_json: JSON.stringify({ scope: context }),
       occurred_at: new Date().toISOString(),
     });
   }
