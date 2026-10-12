@@ -99,6 +99,10 @@ export class WorkspacesService {
     ifMatch: string | undefined,
   ): Promise<WorkspaceView> {
     const current = await this.get(actor, workspaceId);
+    // D2: a workspace waiting for deletion is frozen; restore it to edit it.
+    if (current.status === "pending_deletion") {
+      throw workspacePendingDeletion(`/api/v1/workspaces/${workspaceId}`);
+    }
     if (!ifMatch) {
       throw new PlatformHttpError(
         428,
@@ -119,7 +123,7 @@ export class WorkspacesService {
       actor.tenant_id,
       `UPDATE workspaces
           SET name = $1
-        WHERE id = $2 AND tenant_id = $3
+        WHERE id = $2 AND tenant_id = $3 AND status <> 'pending_deletion'
           -- The ETag carries milliseconds (a JS Date) while updated_at holds
           -- microseconds, so an exact comparison never matched and every
           -- rename answered 412. Compare at the precision the ETag has.
@@ -135,6 +139,15 @@ export class WorkspacesService {
       412,
     );
   }
+}
+
+export function workspacePendingDeletion(instance: string): PlatformHttpError {
+  return new PlatformHttpError(
+    409,
+    "WORKSPACE_PENDING_DELETION",
+    "Workspace is pending deletion; restore it before editing",
+    instance,
+  );
 }
 
 export function workspaceEtag(workspace: WorkspaceView): string {

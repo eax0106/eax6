@@ -67,4 +67,14 @@ describe("WorkspacesService", () => {
       service.update(actor, workspace.id, "Renamed", workspaceEtag(workspace)),
     ).rejects.toMatchObject({ status: 412 });
   });
+
+  it("refuses to rename a workspace pending deletion without writing", async () => {
+    const pending = { ...workspace, status: "pending_deletion" };
+    const queryTenant = vi.fn().mockResolvedValueOnce([pending]);
+    const service = new WorkspacesService({ queryTenant } as unknown as PlatformDb);
+    await expect(
+      service.update(actor, workspace.id, "Renamed", workspaceEtag(pending)),
+    ).rejects.toMatchObject({ status: 409, response: { error_code: "WORKSPACE_PENDING_DELETION" } });
+    expect(queryTenant).toHaveBeenCalledTimes(1);
+  });
 });

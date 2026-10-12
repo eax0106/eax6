@@ -12,7 +12,7 @@ import type { ActorContext, RbacRequest } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
 import { WorkspaceDeletionService } from "./workspace-deletion.service";
 import { WorkspaceErasureRunner } from "./workspace-erasure.runner";
-import { WorkspacesService } from "./workspaces.service";
+import { WorkspacesService, workspaceEtag } from "./workspaces.service";
 
 const databaseUrl = process.env.DATABASE_URL ?? "";
 const migrationsPath = join(__dirname, "../db/migrations");
@@ -140,6 +140,22 @@ describe.skipIf(!databaseUrl)("workspace pending deletion, PostgreSQL", () => {
     await expect(workspaces.list(actor)).resolves.toEqual([]);
     await expect(workspaces.listPendingDeletion(actor)).resolves.toMatchObject([{ id: workspaceId, name: "Marketing" }]);
     await expect(deletion.requestDeletion(actor, workspaceId, "Marketing")).rejects.toMatchObject({ status: 409 });
+  });
+
+  it("refuses a rename while pending deletion and allows it again after restore", async () => {
+    await deletion.requestDeletion(actor, workspaceId, "Marketing");
+    const pending = await workspaces.get(actor, workspaceId);
+    await expect(workspaces.update(actor, workspaceId, "Renamed", workspaceEtag(pending))).rejects.toMatchObject({
+      status: 409,
+      response: { error_code: "WORKSPACE_PENDING_DELETION" },
+    });
+    await expect(workspaces.get(actor, workspaceId)).resolves.toMatchObject({ name: "Marketing" });
+
+    await deletion.restore(actor, workspaceId);
+    const restored = await workspaces.get(actor, workspaceId);
+    await expect(workspaces.update(actor, workspaceId, "Renamed", workspaceEtag(restored))).resolves.toMatchObject({
+      name: "Renamed",
+    });
   });
 
   it("restores within the window: active again, visible, audited, and the engine hold released last", async () => {

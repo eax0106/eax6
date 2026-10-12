@@ -95,6 +95,16 @@ describe("WorkspaceSafeguardsService", () => {
     expect(stale.audit.recordEvent).not.toHaveBeenCalled();
   });
 
+  it("refuses to change a workspace pending deletion without writing", async () => {
+    const { service, query, audit } = writer({ ...stored, status: "pending_deletion" });
+    await expect(service.set(actor, workspaceId, next, computeEtag(stored))).rejects.toMatchObject({
+      status: 409,
+      response: { error_code: "WORKSPACE_PENDING_DELETION" },
+    });
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(audit.recordEvent).not.toHaveBeenCalled();
+  });
+
   it("propagates an audit failure so the transaction rolls back", async () => {
     const { service, audit } = writer();
     audit.recordEvent.mockRejectedValue(new Error("audit unavailable"));

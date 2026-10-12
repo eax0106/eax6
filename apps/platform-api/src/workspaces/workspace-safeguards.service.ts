@@ -5,6 +5,7 @@ import type { ActorContext } from "../rbac/types";
 import { PlatformDb } from "../signup/platform-db";
 import { PlatformHttpError } from "../signup/problem";
 import { bareWorkspaceId } from "./workspace-id";
+import { workspacePendingDeletion } from "./workspaces.service";
 
 /**
  * The safeguards a workspace requires on every run, set by a tenant owner.
@@ -77,11 +78,14 @@ export class WorkspaceSafeguardsService {
       throw new ConcurrencyHttpError(428, "IF_MATCH_REQUIRED", "If-Match header required", instance);
     }
     return this.db.withTenant(actor.tenant_id, async (client) => {
-      const current = await client.query<{ safeguards: unknown }>(
-        "SELECT safeguards FROM workspaces WHERE id = $1 AND tenant_id = $2 FOR UPDATE",
+      const current = await client.query<{ safeguards: unknown; status?: string }>(
+        "SELECT safeguards, status FROM workspaces WHERE id = $1 AND tenant_id = $2 FOR UPDATE",
         [id, actor.tenant_id],
       );
-      const before = view(current.rows[0] ?? workspaceNotFound(instance), instance);
+      const row = current.rows[0] ?? workspaceNotFound(instance);
+      // D2: a workspace waiting for deletion is frozen; restore it to edit it.
+      if (row.status === "pending_deletion") throw workspacePendingDeletion(instance);
+      const before = view(row, instance);
       if (!ifMatchIncludes(ifMatch, computeEtag(before))) {
         throw new ConcurrencyHttpError(412, "ETAG_MISMATCH", "Resource changed since it was read", instance);
       }
