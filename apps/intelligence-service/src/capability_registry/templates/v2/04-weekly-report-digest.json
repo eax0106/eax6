@@ -1,0 +1,103 @@
+{
+  "template_id": "weekly-report-digest",
+  "title": "Weekly report digest by email",
+  "summary": "The week's records sent by your reporting system are counted and totalled by type and emailed as a short digest; a week with no activity says so.",
+  "requirements": [
+    {
+      "kind": "trigger",
+      "purpose": "A weekly schedule or webhook from your reporting system that delivers that week's records: {recipient, records: [{type, amount}]}."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "intake",
+    "success_criteria": [
+      "Counts and totals by type match the delivered records exactly.",
+      "The digest contains no activity that is not in the records; a week with no records is reported as no activity.",
+      "One digest email goes to the stated recipient."
+    ],
+    "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
+      {
+        "key": "summarise",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "The upstream output holds this week's records, each with a type and an amount. Personal details reach you as placeholders such as <PERSON>, <EMAIL_ADDRESS>, <PHONE_NUMBER>, <DATE_TIME>, <LOCATION> or <URL>: the system replaces each detected detail with one before you see it. Treat a placeholder as a value that is present, never try to reconstruct it, and do not repeat personal details in anything you write. Count the records by type and total their amounts by type, to two decimals. Respond with {\"included\": number of records, \"by_type\": {type: {\"count\": n, \"total\": amount}}, \"body\": a plain-text digest listing each type's count and total, when records is nonempty; only when records is empty, state that there was no activity this week}. Never add records, types or figures that are not in the input. Sum amounts exactly by converting each to integer cents, adding the cents per type, then dividing by 100. Do not round intermediate sums or subtract a cent. included counts every supplied record."
+        },
+        "depends_on": [
+          "intake"
+        ],
+        "success_criteria": [
+          "Every count and total is arithmetically correct for the records.",
+          "The body invents no activity, and an empty week is reported as no activity."
+        ]
+      },
+      {
+        "key": "send_digest",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": {
+              "$from": "intake",
+              "path": "recipient"
+            },
+            "subject": "Weekly digest",
+            "body": {
+              "$from": "summarise",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "summarise",
+          "intake"
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "populated week",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": [
+          {
+            "type": "order",
+            "amount": 1200.5
+          },
+          {
+            "type": "order",
+            "amount": 799.5
+          },
+          {
+            "type": "refund",
+            "amount": 150
+          }
+        ]
+      },
+      "success_criteria": [
+        "The digest reports 2 orders totalling 2000.00 and 1 refund totalling 150.00.",
+        "It is sent to the stated recipient and invents no other activity."
+      ]
+    },
+    {
+      "name": "empty week reports no activity",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": []
+      },
+      "success_criteria": [
+        "The digest states there was no activity this week.",
+        "It reports no counts or totals other than zero."
+      ]
+    }
+  ]
+}

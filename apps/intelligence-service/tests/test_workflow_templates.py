@@ -1,7 +1,9 @@
 """The D18 starter set as authored: eight Alter-authored templates, each a
 well-formed definition the engine can instantiate (compilation itself is
-proven by the engine's own spec over the same files)."""
+proven by the engine's own spec over the same files). templates/v2 is the
+current set; v1 stays as revision 0011 seeded it."""
 
+import importlib.util
 import json
 import re
 from pathlib import Path
@@ -11,7 +13,8 @@ import pytest
 from src.capability_registry.canonical_tools import CANONICAL_TOOL_SIDE_EFFECTS
 from src.capability_registry.templates import TemplateDefinition
 
-TEMPLATE_DIR = Path(__file__).parent.parent / "src" / "capability_registry" / "templates" / "v1"
+TEMPLATES = Path(__file__).parent.parent / "src" / "capability_registry" / "templates"
+TEMPLATE_DIR = TEMPLATES / "v2"
 FILES = sorted(TEMPLATE_DIR.glob("*.json"))
 PLACEHOLDER = re.compile(r"\$alter:(credential|connection):([a-z0-9-]+)")
 RUN_SCOPED_CREDENTIALS = {"email-send", "web-search", "knowledge-search", "whatsapp-send"}
@@ -78,3 +81,71 @@ def test_templates_carry_no_tenant_or_workspace_identifiers(path: Path) -> None:
     assert not re.search(r"\b(ten|ws|wf|usr|run)_[0-9a-f]{8}-", raw)
     assert "/alter/integrations/" not in raw
     assert "/tenant/" not in raw
+
+
+def _retrieval_nodes_feeding_a_model(
+    definition: TemplateDefinition,
+) -> list[tuple[dict[str, object], list[str]]]:
+    """Read-only tool nodes (a search) whose output an llm node then judges."""
+    nodes = definition.skeleton["nodes"]
+    found = []
+    for node in _tool_nodes(definition):
+        config = node["config"]
+        assert isinstance(config, dict)
+        if CANONICAL_TOOL_SIDE_EFFECTS[str(config["tool_name"])]:
+            continue
+        consumers = [
+            str(other["key"])
+            for other in nodes
+            if other["type"] == "llm" and node["key"] in other["depends_on"]
+        ]
+        if consumers:
+            found.append((node, consumers))
+    return found
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda path: path.stem)
+def test_a_search_filtered_downstream_is_not_judged_on_the_filter(path: Path) -> None:
+    """Without its own criteria, a search step is reviewed against the run's
+    purpose, so a real result set with a namesake or an unrelated passage fails
+    it (live run_69ef088e: brand-mention-alert's web search failed three times
+    on a namesake company). Its criteria must state its own job and hand
+    relevance to the model step that filters its output."""
+    for node, consumers in _retrieval_nodes_feeding_a_model(_definition(path)):
+        criteria = node.get("success_criteria")
+        assert isinstance(criteria, list) and criteria, (
+            f"{node['key']} feeds {consumers} but states no success criteria of its own"
+        )
+        text = " ".join(str(criterion) for criterion in criteria)
+        assert any(f"the {consumer} step" in text for consumer in consumers), (
+            f"{node['key']}'s criteria must leave relevance to {consumers}"
+        )
+
+
+def test_brand_alert_search_accepts_namesakes() -> None:
+    definition = next(
+        _definition(path)
+        for path in FILES
+        if _definition(path).template_id == "brand-mention-alert"
+    )
+    search = next(node for node in definition.skeleton["nodes"] if node["key"] == "search")
+    text = " ".join(search.get("success_criteria", [])).lower()
+    assert "namesake" in text and "acceptable" in text
+
+
+def test_v2_supersedes_exactly_the_three_search_templates() -> None:
+    """Revision 0012 inserts a new version only for a v2 file that differs
+    from v1; every v2 file has its v1 counterpart."""
+    path = Path(__file__).parent.parent / "alembic" / "versions" / "0012_template_search_criteria.py"
+    spec = importlib.util.spec_from_file_location("revision_0012", path)
+    assert spec is not None and spec.loader is not None
+    revision = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(revision)
+    assert [file.name for file in FILES] == sorted(
+        file.name for file in (TEMPLATES / "v1").glob("*.json")
+    )
+    assert [_definition(file).template_id for file in revision.changed_files()] == [
+        "knowledge-qa",
+        "brand-mention-alert",
+        "whatsapp-faq-responder",
+    ]

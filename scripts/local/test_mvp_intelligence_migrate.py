@@ -135,11 +135,14 @@ def test_restricted_migration_and_repeat_preserve_ownership_and_rls() -> None:
                     == tenant_a
                 )
                 seeds = conn.execute(
-                    sa.text("SELECT count(*) FROM capability_registry_templates")
+                    sa.text(
+                        "SELECT count(*) FROM capability_registry_templates "
+                        "WHERE status = 'active'"
+                    )
                 ).scalar_one()
                 assert (
                     seeds
-                    == len(list((SERVICE / "src/capability_registry/templates/v1").glob("*.json")))
+                    == len(list((SERVICE / "src/capability_registry/templates/v2").glob("*.json")))
                     > 0
                 )
                 conn.execute(
@@ -161,7 +164,10 @@ def test_restricted_migration_and_repeat_preserve_ownership_and_rls() -> None:
             with engine.connect() as conn:
                 assert (
                     conn.execute(
-                        sa.text("SELECT count(*) FROM capability_registry_templates")
+                        sa.text(
+                            "SELECT count(*) FROM capability_registry_templates "
+                            "WHERE status = 'active'"
+                        )
                     ).scalar_one()
                     == seeds
                 )
