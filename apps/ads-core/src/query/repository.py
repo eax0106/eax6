@@ -107,8 +107,10 @@ class SqlAlchemyRetrievalRepository:
     def validate_scopes(self, request: RetrievalRequest) -> None:
         validate_prefixed_id("ten", request.tenant_id)
         validate_prefixed_id("ws", request.workspace_id)
-        if not request.scope_ids:
-            raise ScopeViolationError("ADS Q requires at least one explicit scope")
+        # An empty scope_ids means every scope in the request's workspace: the
+        # retrieval query always filters by tenant and workspace (under RLS) and
+        # only narrows further when scope_ids is non-empty. Explicit scopes are
+        # still checked below to belong to that workspace.
         for scope_id in request.scope_ids:
             validate_prefixed_id(scope_id.split("_", 1)[0], scope_id)
         for source_id in request.source_ids:

@@ -166,8 +166,8 @@ def golden_set_service() -> Generator[tuple[RetrievalService, sa.Engine, str, st
 
 # Fixed so the module-level _GOLDEN_SET cases (which need a real scope_ids
 # value at class-construction time) and the fixture's real INSERT agree on
-# the same scope -- ADS Q requires at least one explicit scope per request
-# (KNOW-10's real scoping rule), there is no "search everything" mode.
+# the same scope. (An empty scope_ids searches the whole workspace; these
+# cases name the scope explicitly so they exercise the narrowing path.)
 _SCOPE_ID = new_prefixed_id("scp")
 
 # 8 real golden documents, each with distinguishing vocabulary, plus 4 real
