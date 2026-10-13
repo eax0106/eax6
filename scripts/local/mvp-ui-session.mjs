@@ -8,6 +8,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const permitFile = resolve(root, 'tmp/local-mvp/spend-permit.json');
 // The gateway refuses a session permit longer than this, whatever the file says.
 export const MAX_UI_SESSION_MINUTES = 120;
+const TENANT_ID = /^ten_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
  * Lets runs a signed-in user starts from the web app make paid model calls for
@@ -18,12 +19,15 @@ export const MAX_UI_SESSION_MINUTES = 120;
  * from the same process-lifetime allowance as every other local run. It is
  * removed by --disarm or by stopping the stack.
  */
-export async function uiSession({ minutes = 60, apply = false, disarm = false, now = Date.now() } = {}) {
+export async function uiSession({ minutes = 60, tenant = LOCAL_TENANT_ID, apply = false, disarm = false, now = Date.now() } = {}) {
   if (apply && disarm) throw new Error('--apply and --disarm are mutually exclusive');
   if (disarm) { rmSync(permitFile, { force: true }); console.log('UI spend session disarmed'); return; }
   if (!Number.isInteger(minutes) || minutes < 1 || minutes > MAX_UI_SESSION_MINUTES) {
     throw new Error(`--minutes must be a whole number from 1 to ${MAX_UI_SESSION_MINUTES}`);
   }
+  // The web app's mock sign-in lands in its own tenant, not the seeded one
+  // the scripts use, so the session names whichever tenant you sign in to.
+  if (!TENANT_ID.test(tenant)) throw new Error('--tenant must be a ten_ id, for example ten_01930000-0000-7000-8000-000000000001');
   const state = JSON.parse(readFileSync(resolve(root, 'tmp/local-mvp/state.json'), 'utf8'));
   if (state.root !== root || !state.ready) throw new Error('This checkout has no ready MVP stack; run scripts/local/mvp-up.sh');
   const ceilingUsd = await smokeCeilingUsd();
@@ -34,20 +38,21 @@ export async function uiSession({ minutes = 60, apply = false, disarm = false, n
   const gatewayLog = readFileSync(resolve(root, 'tmp/local-mvp/model-gateway.log'), 'utf8');
   if (!gatewayLog.includes(`Local smoke lifetime ceiling: USD ${ceilingUsd}`)) throw new Error('Model pre-call budget missing; no session armed');
   const sessionUntil = now + minutes * 60_000;
-  console.log(JSON.stringify({ plan: { tenantId: LOCAL_TENANT_ID, minutes, until: new Date(sessionUntil).toISOString(),
+  console.log(JSON.stringify({ plan: { tenantId: tenant, minutes, until: new Date(sessionUntil).toISOString(),
     upperBoundUsd: ceilingUsd, scope: 'whole model-gateway process lifetime', apply } }));
   if (!apply) { console.log('Plan only; add --apply with owner spend approval.'); return; }
   if (existsSync(permitFile)) throw new Error('A spend permit is already armed (a script run or another session); no session armed');
-  writeFileSync(permitFile, JSON.stringify({ gatewayPid: gateway.pid, tenantId: LOCAL_TENANT_ID, sessionUntil }), { flag: 'wx', mode: 0o600 });
+  writeFileSync(permitFile, JSON.stringify({ gatewayPid: gateway.pid, tenantId: tenant, sessionUntil }), { flag: 'wx', mode: 0o600 });
   console.log(`UI spend session armed until ${new Date(sessionUntil).toISOString()}; run node scripts/local/mvp-ui-session.mjs --disarm when done`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2);
   const minutes = args.find(arg => arg.startsWith('--minutes='));
-  if (args.some(arg => !['--apply', '--disarm'].includes(arg) && arg !== minutes)) {
-    console.error('Usage: mvp-ui-session.mjs [--minutes=60] [--apply] | --disarm'); process.exitCode = 2;
+  const tenant = args.find(arg => arg.startsWith('--tenant='));
+  if (args.some(arg => !['--apply', '--disarm'].includes(arg) && arg !== minutes && arg !== tenant)) {
+    console.error('Usage: mvp-ui-session.mjs [--minutes=60] [--tenant=ten_...] [--apply] | --disarm'); process.exitCode = 2;
   } else uiSession({ apply: args.includes('--apply'), disarm: args.includes('--disarm'),
-    ...(minutes ? { minutes: Number(minutes.slice(10)) } : {}) })
+    ...(minutes ? { minutes: Number(minutes.slice(10)) } : {}), ...(tenant ? { tenant: tenant.slice(9) } : {}) })
     .catch(error => { console.error(error.message); process.exitCode = 1; });
 }

@@ -354,6 +354,9 @@ test('UI spend session refuses an out-of-range length or conflicting modes befor
     await assert.rejects(uiSession({ minutes }), /--minutes must be a whole number/);
   }
   await assert.rejects(uiSession({ apply: true, disarm: true }), /mutually exclusive/);
+  for (const tenant of ['01a11f42-4f98-74f5-bf3b-699ecc874847', 'ten_x', 'ws_01a11f42-4f98-74f5-bf3b-699ecc874847']) {
+    await assert.rejects(uiSession({ tenant }), /--tenant must be a ten_ id/);
+  }
   // The gateway enforces the same bound on whatever the permit file says.
   assert.equal(MAX_UI_SESSION_MINUTES, 120);
 });
