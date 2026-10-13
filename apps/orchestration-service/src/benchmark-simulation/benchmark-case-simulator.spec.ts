@@ -253,7 +253,7 @@ describe("BenchmarkCaseSimulator", () => {
   });
 
   it("holds an invoice whose consistency flag contradicts its calculated sum", async () => {
-    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v2/03-invoice-to-sheet.json", "utf8"));
+    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v3/03-invoice-to-sheet.json", "utf8"));
     const bound = bindTemplateSkeleton(template.skeleton, { tenantId, environment: "local" }, [{
       tenant_id: tenantId.slice(4), workspace_id: workspace, connection_id: workspace,
       connector_type: "postgres", status: "connected", secret_ref: `/alter/integrations/${tenantId.slice(4)}/${workspace}/${workspace}`, source_revision: 1,
@@ -272,7 +272,7 @@ describe("BenchmarkCaseSimulator", () => {
   });
 
   it("escalates a WhatsApp question without FAQ passages before generating a reply", async () => {
-    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v2/08-whatsapp-faq.json", "utf8"));
+    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v3/08-whatsapp-faq.json", "utf8"));
     const bound = bindTemplateSkeleton(template.skeleton, { tenantId, environment: "local" }, []);
     const compiled = compileTaskSkeletonToDag(parseTaskSkeleton(JSON.stringify(bound.skeleton)), "v1");
     let calls = 0;

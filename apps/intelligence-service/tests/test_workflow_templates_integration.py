@@ -20,7 +20,7 @@ from src.db.session import get_db_session
 
 SERVICE_ROOT = Path(__file__).parent.parent
 TEMPLATES = SERVICE_ROOT / "src" / "capability_registry" / "templates"
-TEMPLATE_DIR = TEMPLATES / "v2"
+TEMPLATE_DIR = TEMPLATES / "v3"
 SUPERSEDED = {"knowledge-qa", "brand-mention-alert", "whatsapp-faq-responder"}
 PGVECTOR_IMAGE = "pgvector/pgvector:pg16"
 PLATFORM = "00000000-0000-7000-8000-000000000001"
@@ -93,11 +93,16 @@ def test_seeded_rows_are_exactly_the_reviewed_files(database: tuple[str, str]) -
     superseded = [row for row in rows if row[2] == "superseded"]
     assert len(active) == 8
     assert {row[4] for row in active} == hashes(TEMPLATE_DIR)
-    assert {(row[0], row[1]) for row in superseded} == {(t, 1) for t in SUPERSEDED}
-    assert {(row[0], row[1]) for row in active if row[0] in SUPERSEDED} == {
-        (t, 2) for t in SUPERSEDED
+    # 0012 superseded three v1 rows; 0013 superseded knowledge-qa's v2 row.
+    assert {(row[0], row[1]) for row in superseded} == {(t, 1) for t in SUPERSEDED} | {
+        ("knowledge-qa", 2)
     }
-    assert {row[4] for row in superseded} <= hashes(TEMPLATES / "v1")
+    assert {(row[0], row[1]) for row in active if row[0] in SUPERSEDED} == {
+        ("brand-mention-alert", 2),
+        ("whatsapp-faq-responder", 2),
+        ("knowledge-qa", 3),
+    }
+    assert {row[4] for row in superseded} <= hashes(TEMPLATES / "v1") | hashes(TEMPLATES / "v2")
     assert all(row[3] == PLATFORM and row[5] == "alter-authored" for row in rows)
 
 
@@ -189,12 +194,12 @@ def test_downgrade_removes_the_table_and_upgrade_restores_the_set(
             connection.execute(
                 sa.text("SELECT count(*) FROM capability_registry_templates")
             ).scalar_one()
-            == 11
+            == 12
         )
     engine.dispose()
 
 
-def test_downgrade_of_0012_restores_v1_as_active(database: tuple[str, str]) -> None:
+def test_downgrades_restore_v2_then_v1_as_active(database: tuple[str, str]) -> None:
     owner_url, _ = database
     config = _alembic(owner_url)
     engine = sa.create_engine(owner_url)
@@ -209,7 +214,15 @@ def test_downgrade_of_0012_restores_v1_as_active(database: tuple[str, str]) -> N
             ).all()
         return {row[0]: (row[1], row[2]) for row in rows}
 
-    v1 = {sha256(path.read_bytes()).hexdigest() for path in (TEMPLATES / "v1").glob("*.json")}
+    def digests(version: str) -> set[str]:
+        return {
+            sha256(path.read_bytes()).hexdigest()
+            for path in (TEMPLATES / version).glob("*.json")
+        }
+
+    command.downgrade(config, "0012")
+    assert {sha for _, sha in active().values()} == digests("v2")
+    v1 = digests("v1")
     command.downgrade(config, "0011")
     restored = active()
     assert len(restored) == 8
