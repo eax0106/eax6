@@ -74,7 +74,27 @@ credentials platform-api stored. Its secrets and cost queue stay on LocalStack,
 where platform-api keeps connection credentials, so at startup the stack copies
 the Tavily and Browserbase keys from AWS Secrets Manager into LocalStack (through
 a private temp file, never printed). Its policy comes from AWS AppConfig. Search calls count
-against your Tavily plan.
+against your Tavily plan. Tools the AppConfig policy has no `tool_permissions`
+entry for are refused, so `email.send`, `knowledge.search` and
+`database.insert` (scope `database:*`) need entries there.
+
+Any catalogue template runs the same way, with its own first test case as the
+trigger input and one paid run per `--apply` under the same spend guard:
+
+```bash
+node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=you@example.com
+node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=you@example.com --apply
+```
+
+With real email, `--recipient` (a verified SES identity) replaces every
+`email.send` address in the workflow. The two database templates
+(`lead-capture-crm-welcome`, `invoice-email-to-sheet`) also need
+`MVP_SCRATCH_DATABASE_URL`, a `postgres://` URL for a scratch database the
+host can reach. The runner creates the `leads` and `invoices` tables there,
+stores the URL in LocalStack and registers it as the signed-in workspace's
+postgres connection through orchestration's internal registry endpoint (the
+product has no path that creates one yet), then reads the written row back.
+`whatsapp-faq-responder` and `knowledge-qa` cannot run locally yet.
 
 ## Prerequisites
 

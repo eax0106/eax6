@@ -56,7 +56,30 @@ export async function pollRunDetail(fetchDetail, { attempts = 60, pauseMs = 3000
   return detail;
 }
 
-export async function smoke({ apply = false, healthOnly = false, evidenceFile } = {}) {
+// The notes are the meeting-notes template's own first test case: a decision,
+// an owned and an unowned action item, and an undecided topic, so every
+// success criterion has something real to judge.
+function smokeInput() {
+  return { title: `Local MVP ${randomUUID()}`, recipient: 'probe@local.invalid',
+    notes: 'Agreed: the launch moves to the next release. Marketing lead to update the pricing page before launch. '
+      + 'Someone needs to brief support, no owner yet. Discussed a referral scheme, no conclusion.' };
+}
+
+export function smoke({ apply = false, healthOnly = false, evidenceFile } = {}) {
+  return runTemplate({ templateId: 'meeting-notes-summary', input: smokeInput(), apply, healthOnly, evidenceFile,
+    mockEmailOnly: true, requiredAlias: 'STANDARD' });
+}
+
+/**
+ * Runs one catalogue template through the same API the web app uses, with the
+ * guarded model-gateway's spend permit opened for that run only. With real
+ * email, `recipient` replaces every email.send address, since the SES sandbox
+ * delivers only to verified identities. `prepare` runs after sign-in and
+ * before instantiation (connections, knowledge); `check` reads the side effect
+ * of a verified run.
+ */
+export async function runTemplate({ templateId, input, apply = false, healthOnly = false, evidenceFile, recipient,
+  mockEmailOnly = false, requiredAlias, prepare, check } = {}) {
   if (apply && healthOnly) throw new Error('--apply and --health-only are mutually exclusive');
   if (process.versions.node.split('.')[0] !== '22') throw new Error('MVP smoke requires Node 22');
   const state = JSON.parse(readFileSync(resolve(root, 'tmp/local-mvp/state.json'), 'utf8'));
@@ -67,8 +90,10 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   for (const row of grpcServices(env)) await grpcHealth(row.name, row.address);
   console.log('MVP HTTP health identities verified');
   if (healthOnly) return;
+  const email = state.email ?? 'mock';
   // The smoke's recipient is a placeholder; it certifies the mocked-email stack only.
-  if ((state.email ?? 'mock') !== 'mock') throw new Error('Smoke needs mocked email; restart the stack without MVP_EMAIL_PROVIDER=ses');
+  if (mockEmailOnly && email !== 'mock') throw new Error('Smoke needs mocked email; restart the stack without MVP_EMAIL_PROVIDER=ses');
+  if (email !== 'mock' && !recipient) throw new Error('Real email needs --recipient=<SES-verified address>; no run started');
   const ceilingUsd = await smokeCeilingUsd();
   const gateway = state.processes.find(row => row.name === 'model-gateway');
   if (!gateway?.stamp || processStamp(gateway.pid, gateway.stamp) !== gateway.stamp || state.smokeCeilingUsd !== ceilingUsd || state.gatewayDigest !== gatewayDigest()) {
@@ -78,7 +103,7 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   if (!gatewayLog.includes(`Local smoke lifetime ceiling: USD ${ceilingUsd}`)) throw new Error('Model pre-call budget missing; refusing smoke');
   const boundUsd = ceilingUsd;
   console.log(JSON.stringify({ upperBoundUsd: boundUsd, scope: 'whole model-gateway process lifetime',
-    maxOutputTokens: 1024, awsMaxAttempts: 1, fallbackProviders: 0, apply, email: 'mock' }));
+    maxOutputTokens: 1024, awsMaxAttempts: 1, fallbackProviders: 0, apply, email }));
   assertSmokeCeiling(boundUsd, ceilingUsd);
   const base = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;
   const cookies = new Map();
@@ -103,9 +128,10 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   const query = new URLSearchParams({ code: `user:${userId}`, redirect_uri: redirectUri, code_verifier: verifier });
   const signedIn = await request(`/api/v1/auth/callback?${query}`);
   assert.equal(signedIn.data.userId, userId); assert.ok(cookies.has('alter_access'));
+  const prepared = prepare ? await prepare({ request, env, tenantId }) : undefined;
   const catalogue = (await request('/api/v1/workflow-templates')).data;
-  assert.ok(catalogue.some(row => row.template_id === 'meeting-notes-summary'));
-  const created = (await request('/api/v1/workflow-templates/meeting-notes-summary/instantiate', 'POST', {})).data;
+  assert.ok(catalogue.some(row => row.template_id === templateId), `${templateId} is not in the template catalogue`);
+  const created = (await request(`/api/v1/workflow-templates/${encodeURIComponent(templateId)}/instantiate`, 'POST', {})).data;
   assert.equal(created.status, 'compiled');
   const workflow = await request(`/api/v1/workflows/${created.workflowId}`);
   const dag = workflow.data.dag;
@@ -113,13 +139,14 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   // node. Every remaining template step and its success criteria stay intact.
   const intake = dag.nodes.find(node => node.key === 'intake');
   assert.equal(intake.type, 'Merge');
-  // The notes are the template's own first test case: a decision, an owned
-  // and an unowned action item, and an undecided topic, so every success
-  // criterion has something real to judge.
-  intake.type = 'YAMLImport'; intake.config = { yaml: JSON.stringify({
-    title: `Local MVP ${randomUUID()}`, recipient: 'probe@local.invalid',
-    notes: 'Agreed: the launch moves to the next release. Marketing lead to update the pricing page before launch. '
-      + 'Someone needs to brief support, no owner yet. Discussed a referral scheme, no conclusion.' }) };
+  intake.type = 'YAMLImport'; intake.config = { yaml: JSON.stringify(input) };
+  let emailNodes = 0;
+  if (email !== 'mock') {
+    for (const node of dag.nodes) {
+      if (node.config?.tool_name !== 'email.send') continue;
+      node.config.arguments = { ...node.config.arguments, to: recipient }; emailNodes++;
+    }
+  }
   assert.ok(workflow.etag, 'workflow ETag required');
   await request(`/api/v1/workflows/${created.workflowId}`, 'PATCH', { dag }, { 'if-match': workflow.etag });
   const compiled = (await request(`/api/v1/workflows/${created.workflowId}/actions/compile`, 'POST', {})).data;
@@ -127,8 +154,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   const priced = await policy(env);
   // The local process allowance includes node reviewers, final outcome,
   // recovery attempts and embeddings; exhaustion stops the next paid call.
-  console.log(JSON.stringify({ plan: { workflowId: created.workflowId, template: 'meeting-notes-summary', models: priced.models,
-    policyMaxTokensPerCall: priced.maxTokens, upperBoundUsd: boundUsd, ceilingUsd, apply, email: 'mock' } }));
+  console.log(JSON.stringify({ plan: { workflowId: created.workflowId, template: templateId, models: priced.models,
+    policyMaxTokensPerCall: priced.maxTokens, upperBoundUsd: boundUsd, ceilingUsd, apply, email, emailNodes } }));
   assertSmokeCeiling(boundUsd, ceilingUsd);
   const estimate = (await request(`/api/v1/runs/estimate?${new URLSearchParams({ workflow_id: created.workflowId, workflow_version_id: compiled.id })}`)).data;
   assert.equal(estimate.unpriced_calls, 0, 'Cost Ledger has unpriced model calls');
@@ -142,6 +169,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
   writeFileSync(permitFile, JSON.stringify({ gatewayPid: gateway.pid, tenantId, runId: run.id }), { mode: 0o600 });
   detail = await pollRunDetail(async () => (await request(`/api/v1/runs/${run.id}`)).data);
   assert.ok(detail, `run ${run.id} never became visible to run detail`);
+  console.log(JSON.stringify({ runId: run.id, status: detail.run.status, verdict: detail.outcome?.verdict,
+    failedChecks: (detail.verification_results ?? []).filter(row => row.verdict !== 'pass') }));
   assert.equal(detail.run.status, 'completed', `run ${run.id} did not complete`);
   assert.equal(detail.outcome.verdict, 'completed_verified');
   assert.ok(detail.verification_results.length > 0, 'No persisted verification verdicts');
@@ -165,7 +194,8 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
     try { const row = JSON.parse(line).localSmokeUsage; return row?.runId === run.id ? [row] : []; }
     catch { return []; }
   });
-  assert.ok(modelCalls.some(row => row.modelId === priced.models.STANDARD), 'No real generation call recorded for this run; cache replay cannot certify a paid smoke');
+  assert.ok(requiredAlias ? modelCalls.some(row => row.modelId === priced.models[requiredAlias]) : modelCalls.length > 0,
+    'No real generation call recorded for this run; cache replay cannot certify a paid smoke');
   let observedListPriceUsd = 0;
   for (const row of modelCalls) {
     assert.equal(row.provider, 'aws-bedrock');
@@ -175,14 +205,16 @@ export async function smoke({ apply = false, healthOnly = false, evidenceFile } 
     observedListPriceUsd += row.input_tokens * rates[0] + row.output_tokens * rates[1];
   }
   assertSmokeCeiling(observedListPriceUsd, ceilingUsd);
-  const evidence = { recordedAt: new Date().toISOString(), models: priced.models, template: 'meeting-notes-summary', boundUsd,
+  const sideEffect = check ? await check({ detail, prepared, input }) : undefined;
+  const evidence = { recordedAt: new Date().toISOString(), models: priced.models, template: templateId, boundUsd,
     gatewayPid: gateway.pid, gatewayStamp: gateway.stamp, gatewayDigest: state.gatewayDigest, smokeDigest: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
     workflowId: created.workflowId, runId: run.id, status: detail.run.status, outcome: detail.outcome,
-    verification: detail.verification_results, runCostMinor: detail.run_cost_minor, currency: 'INR', email: 'mock',
+    verification: detail.verification_results, runCostMinor: detail.run_cost_minor, currency: 'INR', email, sideEffect,
     modelCalls, observedListPriceUsd, costScope: 'successful generation/review calls; failed attempts and embeddings remain covered by the lifetime bound' };
   if (evidenceFile) writeFileSync(evidenceFile, JSON.stringify(evidence, null, 2) + '\n', { mode: 0o600 });
-  console.log(JSON.stringify({ runId: run.id, status: detail.run.status, verdict: detail.outcome.verdict, runCostMinor: detail.run_cost_minor, currency: 'INR', email: 'mock' }));
-  console.log('MVP REAL SMOKE VERIFIED');
+  console.log(JSON.stringify({ template: templateId, runId: run.id, status: detail.run.status, verdict: detail.outcome.verdict,
+    runCostMinor: detail.run_cost_minor, currency: 'INR', observedListPriceUsd, email, sideEffect }));
+  console.log(mockEmailOnly ? 'MVP REAL SMOKE VERIFIED' : `TEMPLATE RUN VERIFIED: ${templateId}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

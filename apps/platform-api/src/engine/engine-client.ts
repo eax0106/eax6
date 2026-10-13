@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
+import { prefixedWorkspaceId } from "../workspaces/workspace-id";
 import type { EngineConfig } from "./config";
 import {
   ENGINE_AUTH_PROVIDER,
@@ -156,14 +157,12 @@ export class EngineClient {
               body: body as EngineRequestBody,
             }),
             Authorization: await this.#adsBearer(authorization),
-            "X-Alter-Tenant-Id": context.tenantId.startsWith("ten_") ? context.tenantId : `ten_${context.tenantId}`,
-            "X-Alter-Workspace-Id": context.workspaceId,
-            "X-Alter-Requester": context.userId,
+            ...adsScopeHeaders(context),
           },
           body: JSON.stringify({
             ...body,
-            tenant_id: context.tenantId.startsWith("ten_") ? context.tenantId : `ten_${context.tenantId}`,
-            workspace_id: context.workspaceId,
+            tenant_id: adsTenantId(context),
+            workspace_id: prefixedWorkspaceId(context.workspaceId),
             requester: context.userId,
           }),
         },
@@ -263,11 +262,7 @@ export class EngineClient {
     return {
       ads: true,
       url: `${this.config.adsCoreBaseUrl}${path.slice("/api/v1".length)}`,
-      headers: {
-        "X-Alter-Tenant-Id": context.tenantId.startsWith("ten_") ? context.tenantId : `ten_${context.tenantId}`,
-        "X-Alter-Workspace-Id": context.workspaceId,
-        "X-Alter-Requester": context.userId,
-      },
+      headers: adsScopeHeaders(context),
     };
   }
 
@@ -401,6 +396,24 @@ export class EngineClient {
     }
     throw new Error("Engine stream request exhausted without result");
   }
+}
+
+function adsTenantId(context: EngineCallerContext): string {
+  return context.tenantId.startsWith("ten_") ? context.tenantId : `ten_${context.tenantId}`;
+}
+
+/**
+ * The scope headers every ads-core call carries. ads-core validates the
+ * prefixed forms (`ten_<uuid>`, `ws_<uuid>`) and answers 422 otherwise, while
+ * the actor context holds the bare UUIDs the database stores, so both are
+ * prefixed here, on the one path every `/api/v1/ads/*` call takes.
+ */
+function adsScopeHeaders(context: EngineCallerContext): Record<string, string> {
+  return {
+    "X-Alter-Tenant-Id": adsTenantId(context),
+    "X-Alter-Workspace-Id": prefixedWorkspaceId(context.workspaceId),
+    "X-Alter-Requester": context.userId,
+  };
 }
 
 function requestHeaders(

@@ -3,7 +3,9 @@ from __future__ import annotations
 import uuid
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any, cast
 
+import grpc
 import pytest
 import sqlalchemy as sa
 from alembic.config import Config as AlembicConfig
@@ -13,9 +15,11 @@ from sqlalchemy.orm import Session, sessionmaker
 from testcontainers.community.postgres import PostgresContainer
 
 from alembic import command
+from alter.adsq.v1 import adsq_pb2
 from src.db.ids import new_prefixed_id
 from src.ingestion.embedding_client import EmbeddingDimensions, EmbeddingResult
 from src.memory_namespace.repository import SqlAlchemyMemoryNamespaceRepository
+from src.query.grpc_service import AdsqGrpcService
 from src.query.models import RetrievalRequest
 from src.query.repository import ScopeViolationError, SqlAlchemyRetrievalRepository
 from src.query.router import get_retrieval_service
@@ -395,3 +399,180 @@ def test_redteam_cross_tenant_scope_is_rejected_without_leaking_hits(
     assert audit["outcome"] == "rejected"
     assert audit["result_doc_ids"] == {"document_ids": []}
     assert own_scope.startswith("scp_")
+
+
+def _add_scope_with_document(admin: sa.Engine, tenant: str, workspace: str) -> str:
+    """A second scope in the same workspace, holding its own matching document."""
+    tenant_uuid = tenant.removeprefix("ten_")
+    scope = new_prefixed_id("scp")
+    source = new_prefixed_id("src")
+    document = new_prefixed_id("doc")
+    with admin.begin() as connection:
+        connection.execute(
+            sa.text("SELECT set_config('app.current_tenant_id', :tenant, true)"),
+            {"tenant": tenant_uuid},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO scopes(id,tenant_id,workspace_id) VALUES (:id,:tenant,:workspace)"
+            ),
+            {"id": scope, "tenant": tenant_uuid, "workspace": workspace.removeprefix("ws_")},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO sources(id,tenant_id,scope_id,kind) VALUES (:id,:tenant,:scope,'upload')"  # noqa: E501
+            ),
+            {"id": source, "tenant": tenant_uuid, "scope": scope},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO documents(id,tenant_id,scope_id,source_id,kind,current_version,status) VALUES (:id,:tenant,:scope,:source,'file',1,'active')"  # noqa: E501
+            ),
+            {"id": document, "tenant": tenant_uuid, "scope": scope, "source": source},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO document_versions(document_id,version,content_ref,provenance) VALUES (:id,1,'ref',:provenance)"  # noqa: E501
+            ),
+            {"id": document, "provenance": '{"origin":"test"}'},
+        )
+        connection.execute(
+            sa.text(
+                "INSERT INTO chunks(id,tenant_id,scope_id,document_id,document_version,seq,text_content,metadata,embedding,embedding_provider,embedding_model,embedding_version) VALUES (:id,:tenant,:scope,:document,1,0,:text,'{}'::jsonb,CAST(:embedding AS vector),'test','test','v1')"  # noqa: E501
+            ),
+            {
+                "id": new_prefixed_id("chk"),
+                "tenant": tenant_uuid,
+                "scope": scope,
+                "document": document,
+                "text": "refund escalation runbook",
+                "embedding": "[1," + ",".join(["0"] * 1023) + "]",
+            },
+        )
+    return document
+
+
+def test_empty_scope_ids_search_every_scope_in_the_workspace_only(
+    retrieval_service: tuple[RetrievalService, sa.Engine],
+) -> None:
+    """knowledge.search (tool-gateway, over gRPC) sends no scope_ids: that must
+    search the request's whole workspace, and still only that workspace."""
+    service, admin = retrieval_service
+    # _seed puts `document` in this workspace and a matching document in another
+    # workspace of the same tenant; earlier tests left matching documents in
+    # other tenants too.
+    tenant, workspace, _scope, document, _source, other_workspace = _seed(admin)
+    second_document = _add_scope_with_document(admin, tenant, workspace)
+
+    response = service.retrieve(
+        RetrievalRequest(
+            tenant_id=tenant,
+            workspace_id=workspace,
+            requester="svc_engine",
+            query="refund",
+            top_k=50,
+            scope_ids=(),
+        )
+    )
+
+    assert sorted(hit.document_id for hit in response.hits) == sorted([document, second_document])
+    with admin.connect() as connection:
+        assert (
+            connection.scalar(
+                sa.text("SELECT outcome FROM retrieval_audit ORDER BY created_at DESC LIMIT 1")
+            )
+            == "succeeded"
+        )
+
+    # The other workspace of the same tenant sees only its own document.
+    other = service.retrieve(
+        RetrievalRequest(
+            tenant_id=tenant,
+            workspace_id=other_workspace,
+            requester="svc_engine",
+            query="refund",
+            top_k=50,
+        )
+    )
+    assert [hit.document_id for hit in other.hits] != []
+    assert not {document, second_document} & {hit.document_id for hit in other.hits}
+
+    # A workspace id that is not a valid prefixed id is still refused.
+    with pytest.raises(ValueError):
+        service.retrieve(
+            RetrievalRequest(
+                tenant_id=tenant,
+                workspace_id=workspace.removeprefix("ws_"),
+                requester="svc_engine",
+                query="refund",
+            )
+        )
+
+
+class _AbortingContext:
+    def abort(self, code: grpc.StatusCode, details: str) -> None:
+        raise AssertionError(f"Retrieve aborted with {code.name}: {details}")
+
+
+def test_grpc_retrieve_without_scopes_returns_the_workspace_documents(
+    retrieval_service: tuple[RetrievalService, sa.Engine],
+) -> None:
+    """The exact request shape tool-gateway's ADS Q client sends (scope_ids=[])."""
+    service, admin = retrieval_service
+    tenant, workspace, _scope, document, _source, _other_workspace = _seed(admin)
+
+    response = AdsqGrpcService(service).Retrieve(
+        adsq_pb2.RetrieveRequest(
+            tenant_id=tenant,
+            workspace_id=workspace,
+            query="refund",
+            top_k=50,
+            requester="tool-gateway",
+            scope_ids=[],
+            metadata_filter_json="{}",
+        ),
+        cast(Any, _AbortingContext()),
+    )
+
+    assert [hit.document_id for hit in response.hits] == [document]
+
+
+def test_query_route_without_scopes_returns_only_the_workspace_documents(
+    retrieval_service: tuple[RetrievalService, sa.Engine],
+) -> None:
+    service, admin = retrieval_service
+    tenant, workspace, _scope, document, _source, _other_workspace = _seed(admin)
+    application = FastAPI()
+    application.include_router(query_router)
+    application.dependency_overrides[get_retrieval_service] = lambda: service
+    client = TestClient(application)
+    identity = {
+        "tenant_id": tenant,
+        "workspace_id": workspace,
+        "requester": "usr_retrieval_test",
+    }
+
+    response = client.post(
+        "/ads/query",
+        headers={
+            "X-Alter-Tenant-Id": tenant,
+            "X-Alter-Workspace-Id": workspace,
+            "X-Alter-Requester": "usr_retrieval_test",
+        },
+        json={**identity, "query": "refund", "top_k": 50},
+    )
+
+    assert response.status_code == 200
+    assert [hit["document_id"] for hit in response.json()["hits"]] == [document]
+
+    # workspace_id is still required in the body.
+    missing_workspace = client.post(
+        "/ads/query",
+        headers={
+            "X-Alter-Tenant-Id": tenant,
+            "X-Alter-Workspace-Id": workspace,
+            "X-Alter-Requester": "usr_retrieval_test",
+        },
+        json={"tenant_id": tenant, "requester": "usr_retrieval_test", "query": "refund"},
+    )
+    assert missing_workspace.status_code == 422
