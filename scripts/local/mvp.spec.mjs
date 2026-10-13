@@ -12,11 +12,41 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, emailMode, realTools, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
 import { assertSmokeCeiling, pollRunDetail, smoke } from './mvp-smoke.mjs';
+import { connectionSnapshot, loadTemplate, needsPostgres, runCatalogueTemplate, scratchConnectionId } from './mvp-template.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
   assertSmokeCeiling(1, 1);
   for (const usd of [1.00000001, -1, NaN, Infinity]) assert.throws(() => assertSmokeCeiling(usd, 1), /no model run started/);
   await assert.rejects(smoke({ apply: true, healthOnly: true }), /mutually exclusive/);
+});
+
+test('template runner covers the catalogue it can run locally', async () => {
+  const runnable = ['lead-capture-crm-welcome', 'support-email-triage', 'invoice-email-to-sheet', 'weekly-report-digest',
+    'meeting-notes-summary', 'brand-mention-alert'];
+  for (const id of runnable) {
+    const template = loadTemplate(id);
+    // The runner feeds the first test case through the intake join it replaces.
+    assert.equal(template.skeleton.nodes.find(node => node.key === 'intake')?.type, 'join', id);
+    assert.ok(template.test_cases[0].input, id);
+  }
+  assert.deepEqual(runnable.filter(id => needsPostgres(loadTemplate(id))), ['lead-capture-crm-welcome', 'invoice-email-to-sheet']);
+  for (const id of ['whatsapp-faq-responder', 'knowledge-qa']) await assert.rejects(runCatalogueTemplate({ templateId: id }), /cannot run locally/);
+  assert.throws(() => loadTemplate('no-such-template'), /Unknown template/);
+});
+
+test('scratch Postgres registers as one stable, valid engine connection per workspace', () => {
+  const tenant = '01930000-0000-7000-8000-000000000001';
+  const workspace = '01930000-0000-7000-8000-000000000002', other = '01930000-0000-7000-8000-000000000009';
+  assert.equal(scratchConnectionId(workspace), scratchConnectionId(workspace));
+  assert.notEqual(scratchConnectionId(workspace), scratchConnectionId(other));
+  assert.match(scratchConnectionId(workspace), /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  const snapshot = connectionSnapshot({ tenantUuid: tenant, workspaceUuid: workspace, revision: 1_800_000_000 });
+  // The shape ConnectionRegistrySnapshotSchema (packages/contracts) accepts:
+  // strict keys, and a secret_ref naming this tenant, workspace and connection.
+  assert.deepEqual(Object.keys(snapshot).sort(), ['connection_id', 'connector_type', 'secret_ref', 'source_revision', 'status', 'tenant_id', 'workspace_id']);
+  assert.equal(snapshot.secret_ref, `/alter/integrations/${tenant}/${workspace}/${snapshot.connection_id}`);
+  assert.equal(snapshot.connector_type, 'postgres'); assert.equal(snapshot.status, 'connected');
+  assert.ok(Number.isSafeInteger(snapshot.source_revision) && snapshot.source_revision <= 2_147_483_647);
 });
 
 test('local MVP accepts only the canonical AWS account', () => {
