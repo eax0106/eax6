@@ -49,6 +49,7 @@ class TestMigrationFileStructure:
             "0012_template_search_criteria.py",
             "0013_knowledge_qa_answer_prompt.py",
             "0014_knowledge_qa_run_criteria.py",
+            "0015_digest_amount_units.py",
         ]
 
     def test_all_tables_defined(self) -> None:
