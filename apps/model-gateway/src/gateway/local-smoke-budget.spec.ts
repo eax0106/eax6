@@ -26,6 +26,28 @@ describe("local smoke pre-call guard", () => {
       expect(localSmokePermitted(file, "tenant", "run_real")).toBe(false);
     } finally { rmSync(directory, { recursive: true, force: true }); }
   });
+  it("arms a UI session permit for the recorded process and tenant until it expires", () => {
+    const directory = mkdtempSync(join(tmpdir(), "alter-smoke-permit-")), file = join(directory, "permit.json");
+    const now = 1_800_000_000_000, hour = 60 * 60 * 1000;
+    const write = (change: Record<string, unknown>) =>
+      writeFileSync(file, JSON.stringify({ gatewayPid: process.pid, tenantId: "tenant", sessionUntil: now + hour, ...change }));
+    try {
+      write({});
+      // Any run the signed-in user starts, and tenant-scoped embeddings.
+      expect(localSmokePermitted(file, "tenant", "run_a", now)).toBe(true);
+      expect(localSmokePermitted(file, "tenant", "run_b", now)).toBe(true);
+      expect(localSmokePermitted(file, "tenant", undefined, now)).toBe(true);
+      expect(localSmokePermitted(file, "tenant", "not_a_run", now)).toBe(false);
+      expect(localSmokePermitted(file, "other", "run_a", now)).toBe(false);
+      expect(localSmokePermitted(file, "tenant", "run_a", now + hour)).toBe(false); // expired
+      for (const change of [{ gatewayPid: -1 }, { sessionUntil: now + 3 * hour }, { sessionUntil: String(now + hour) },
+        { runId: "run_a" }]) {
+        write(change);
+        // A run permit with a session field is still only that one run.
+        expect(localSmokePermitted(file, "tenant", "run_b", now)).toBe(false);
+      }
+    } finally { rmSync(directory, { recursive: true, force: true }); }
+  });
   it("caps requested output and refuses unknown prices, fallbacks and exhausted shared budget", () => {
     const budget = new LocalSmokeBudget(() => true, 0.25);
     const json = JSON.stringify({ messages: [{ role: "user", content: "hello" }], max_tokens: 5000 });

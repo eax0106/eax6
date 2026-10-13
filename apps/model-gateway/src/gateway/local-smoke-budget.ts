@@ -1,11 +1,20 @@
 import { ModelInvocationPayloadSchema } from "@alterx/contracts";
 import { readFileSync } from "node:fs";
 
-export function localSmokePermitted(file: string, tenantId?: string, runId?: string): boolean {
+// A UI session permit covers runs a signed-in user starts from the web app,
+// which no script can name in advance. It still names the process and tenant,
+// expires on its own, and spends from the same process-lifetime allowance.
+export const LOCAL_UI_SESSION_MAX_MS = 2 * 60 * 60 * 1000;
+
+export function localSmokePermitted(file: string, tenantId?: string, runId?: string, now = Date.now()): boolean {
   try {
     const permit = JSON.parse(readFileSync(file, "utf8"));
-    return permit.gatewayPid === process.pid && permit.tenantId === tenantId
-      && typeof permit.runId === "string" && permit.runId.startsWith("run_")
+    if (permit.gatewayPid !== process.pid || permit.tenantId !== tenantId) return false;
+    if (permit.runId === undefined && typeof permit.sessionUntil === "number") {
+      return now < permit.sessionUntil && permit.sessionUntil - now <= LOCAL_UI_SESSION_MAX_MS
+        && (runId === undefined || runId.startsWith("run_"));
+    }
+    return typeof permit.runId === "string" && permit.runId.startsWith("run_")
       && (runId === undefined || permit.runId === runId);
   } catch { return false; }
 }
