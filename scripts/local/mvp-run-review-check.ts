@@ -5,7 +5,7 @@
 // gateway's per-tenant cache never replays an earlier verdict, and the guarded
 // gateway's spend permit is opened for that trial only.
 //
-//   pnpm exec tsx scripts/local/mvp-run-review-check.ts --plan=scripts/local/knowledge-qa-run-review.json [--repeat=5] [--apply]
+//   pnpm exec tsx scripts/local/mvp-run-review-check.ts --plan=scripts/local/knowledge-qa-run-review.json [--only=<variant name>] [--repeat=5] [--apply]
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { v7 as uuidv7 } from "uuid";
@@ -23,6 +23,9 @@ const arg = (name: string) => process.argv.find((value) => value.startsWith(`--$
 const apply = process.argv.includes("--apply");
 const repeat = Number(arg("repeat") ?? 5);
 const plan = JSON.parse(readFileSync(arg("plan") ?? "", "utf8")) as Plan;
+const only = arg("only");
+if (only !== undefined) plan.variants = plan.variants.filter((variant) => variant.name === only);
+if (plan.variants.length === 0) throw new Error(`no variant named ${only}`);
 if (!Number.isInteger(repeat) || repeat < 1 || repeat > 10) throw new Error("--repeat must be 1-10");
 
 // Run from the repository root, as the other spend scripts are.
