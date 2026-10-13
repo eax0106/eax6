@@ -69,9 +69,12 @@ approval:
 ```bash
 node scripts/local/mvp-ui-session.mjs --minutes=60          # plan only
 node scripts/local/mvp-ui-session.mjs --minutes=60 --apply  # arm
+node scripts/local/mvp-ui-session.mjs --minutes=60 --tenant=ten_<id> --apply  # arm for another tenant
 node scripts/local/mvp-ui-session.mjs --disarm              # when done
 ```
 
+It covers the seeded local tenant unless `--tenant` names another; the web
+app's mock sign-in lands in its own tenant, so pass that one for UI runs.
 The session names the owned gateway process and tenant, expires on its own
 (the gateway refuses any longer than 120 minutes), and spends from the same
 process-lifetime USD allowance. Stopping the stack also removes it.
