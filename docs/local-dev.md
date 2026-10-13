@@ -111,6 +111,14 @@ node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=
 node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=you@example.com --apply
 ```
 
+The current digest template computes counts and decimal totals in the Engine
+before the model writes its email body. On every machine, update the
+orchestration-service build and apply Intelligence migrations through `0015`
+before instantiating the new template. The local stack startup builds services
+and applies those migrations. Existing compiled workflows keep their original
+definition; create a new workflow from the catalogue to use the corrected
+digest. The arithmetic uses Node's native BigInt on both Windows/WSL2 and macOS.
+
 With real email, `--recipient` (a verified SES identity) replaces every
 `email.send` address in the workflow. The two database templates
 (`lead-capture-crm-welcome`, `invoice-email-to-sheet`) also need

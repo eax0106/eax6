@@ -1,0 +1,230 @@
+{
+  "template_id": "weekly-report-digest",
+  "title": "Weekly report digest by email",
+  "summary": "The week's records sent by your reporting system are counted and totalled by type and emailed as a short digest; a week with no activity says so.",
+  "requirements": [
+    {
+      "kind": "trigger",
+      "purpose": "A weekly schedule or webhook from your reporting system that delivers that week's records: {recipient, records: [{type, amount}]}."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "intake",
+    "success_criteria": [
+      "Counts and totals by type match the delivered records exactly.",
+      "The digest contains no activity that is not in the records; a week with no records is reported as no activity.",
+      "One digest email goes to the stated recipient."
+    ],
+    "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
+      {
+        "key": "totals",
+        "type": "join",
+        "config": {
+          "record_aggregation": {
+            "records_field": "records",
+            "group_field": "type",
+            "amount_field": "amount"
+          }
+        },
+        "depends_on": [
+          "intake"
+        ],
+        "success_criteria": [
+          "The output counts every supplied record and totals amounts by type in the original input units."
+        ]
+      },
+      {
+        "key": "summarise",
+        "type": "llm",
+        "config": {
+          "model_alias": "STANDARD",
+          "prompt": "The upstream totals output contains exact included and by_type counts and totals, already calculated in the original report units. Write a short plain-text digest that lists every type with its count and total to two decimal places. Copy these counts and totals exactly; do not recalculate them, divide them by 100, convert units, or add currency symbols. Keep negative signs and zero totals. When included is zero, state that there was no activity. Personal placeholders are present values; never reconstruct them. Respond with {\"body\": \"the digest\"} only. Never invent records, types, activity or figures."
+        },
+        "depends_on": [
+          "totals"
+        ],
+        "success_criteria": [
+          "The body faithfully copies every type, count and total from the upstream totals in the same units; zero included records are reported as no activity."
+        ]
+      },
+      {
+        "key": "digest",
+        "type": "join",
+        "config": {},
+        "depends_on": [
+          "summarise",
+          "totals"
+        ],
+        "success_criteria": [
+          "The output retains the upstream totals and the upstream digest body unchanged."
+        ]
+      },
+      {
+        "key": "send_digest",
+        "type": "tool",
+        "config": {
+          "tool_name": "email.send",
+          "credential_ref": "$alter:credential:email-send",
+          "arguments": {
+            "to": {
+              "$from": "intake",
+              "path": "recipient"
+            },
+            "subject": "Weekly digest",
+            "body": {
+              "$from": "digest",
+              "path": "body"
+            }
+          }
+        },
+        "depends_on": [
+          "digest",
+          "intake"
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "populated week",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": [
+          {
+            "type": "order",
+            "amount": 1200.5
+          },
+          {
+            "type": "order",
+            "amount": 799.5
+          },
+          {
+            "type": "refund",
+            "amount": 150
+          }
+        ]
+      },
+      "success_criteria": [
+        "The digest reports 2 orders totalling 2000.00 and 1 refund totalling 150.00.",
+        "It is sent to the stated recipient and invents no other activity."
+      ]
+    },
+    {
+      "name": "empty week reports no activity",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": []
+      },
+      "success_criteria": [
+        "The digest states there was no activity this week.",
+        "It reports no counts or totals other than zero."
+      ]
+    },
+    {
+      "name": "whole_units",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": [
+          {
+            "type": "order",
+            "amount": 100
+          },
+          {
+            "type": "order",
+            "amount": 250
+          },
+          {
+            "type": "refund",
+            "amount": 50
+          }
+        ]
+      },
+      "success_criteria": [
+        "The included count and by_type counts and totals equal {\"included\": 3, \"by_type\": {\"order\": {\"count\": 2, \"total\": 350}, \"refund\": {\"count\": 1, \"total\": 50}}}.",
+        "The body states these same totals, or no activity for empty records."
+      ]
+    },
+    {
+      "name": "decimal_units",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": [
+          {
+            "type": "order",
+            "amount": 19.99
+          },
+          {
+            "type": "order",
+            "amount": 0.1
+          },
+          {
+            "type": "order",
+            "amount": 0.2
+          },
+          {
+            "type": "order",
+            "amount": 999.71
+          },
+          {
+            "type": "refund",
+            "amount": 10.01
+          },
+          {
+            "type": "refund",
+            "amount": 0.99
+          },
+          {
+            "type": "subscription",
+            "amount": 49.5
+          }
+        ]
+      },
+      "success_criteria": [
+        "The included count and by_type counts and totals equal {\"included\": 7, \"by_type\": {\"order\": {\"count\": 4, \"total\": 1020}, \"refund\": {\"count\": 2, \"total\": 11}, \"subscription\": {\"count\": 1, \"total\": 49.5}}}.",
+        "The body states these same totals, or no activity for empty records."
+      ]
+    },
+    {
+      "name": "signed_units",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": [
+          {
+            "type": "adjustment",
+            "amount": -12.34
+          },
+          {
+            "type": "adjustment",
+            "amount": 12.35
+          },
+          {
+            "type": "refund",
+            "amount": 0
+          }
+        ]
+      },
+      "success_criteria": [
+        "The included count and by_type counts and totals equal {\"included\": 3, \"by_type\": {\"adjustment\": {\"count\": 2, \"total\": 0.01}, \"refund\": {\"count\": 1, \"total\": 0}}}.",
+        "The body states these same totals, or no activity for empty records."
+      ]
+    },
+    {
+      "name": "empty",
+      "input": {
+        "recipient": "owner@example.com",
+        "records": []
+      },
+      "success_criteria": [
+        "The included count and by_type counts and totals equal {\"included\": 0, \"by_type\": {}}.",
+        "The body states these same totals, or no activity for empty records."
+      ]
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+[
+  {"name":"whole_units","records":[{"type":"order","amount":100},{"type":"order","amount":250},{"type":"refund","amount":50}],"expected":{"included":3,"by_type":{"order":{"count":2,"total":350},"refund":{"count":1,"total":50}}}},
+  {"name":"decimal_units","records":[{"type":"order","amount":19.99},{"type":"order","amount":0.1},{"type":"order","amount":0.2},{"type":"order","amount":999.71},{"type":"refund","amount":10.01},{"type":"refund","amount":0.99},{"type":"subscription","amount":49.5}],"expected":{"included":7,"by_type":{"order":{"count":4,"total":1020},"refund":{"count":2,"total":11},"subscription":{"count":1,"total":49.5}}}},
+  {"name":"signed_units","records":[{"type":"adjustment","amount":-12.34},{"type":"adjustment","amount":12.35},{"type":"refund","amount":0}],"expected":{"included":3,"by_type":{"adjustment":{"count":2,"total":0.01},"refund":{"count":1,"total":0}}}},
+  {"name":"empty","records":[],"expected":{"included":0,"by_type":{}}}
+]
