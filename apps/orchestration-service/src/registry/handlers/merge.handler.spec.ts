@@ -82,6 +82,13 @@ describe("MergeHandler", () => {
     })).rejects.toBeInstanceOf(NodeHandlerValidationError);
   });
 
+  it("rejects a total whose JSON number spelling would lose a cent", async () => {
+    await expect(new MergeHandler().execute({
+      config: { record_aggregation: aggregation },
+      inputs: { intake: { records: [{ type: "a", amount: 90071992547409.9 }, { type: "a", amount: 0.01 }] } },
+    })).rejects.toBeInstanceOf(NodeHandlerValidationError);
+  });
+
   it("handles scientific notation and prototype-shaped group names as data", async () => {
     const result = await new MergeHandler().execute({
       config: { record_aggregation: aggregation },

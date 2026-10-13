@@ -57,5 +57,12 @@ function roundedTotal(units: bigint, scale: number): number {
   if (cents > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new NodeHandlerValidationError("Aggregation total exceeds safe numeric precision");
   }
-  return Number(negative ? -cents : cents) / 100;
+  const total = Number(negative ? -cents : cents) / 100;
+  // Safe integer cents alone do not guarantee a JSON number can retain them
+  // at large magnitudes. Verify the decimal spelling the next node receives.
+  const [whole, fraction = ""] = String(Math.abs(total)).split(".");
+  if (fraction.length > 2 || BigInt(whole!) * 100n + BigInt(fraction.padEnd(2, "0")) !== cents) {
+    throw new NodeHandlerValidationError("Aggregation total exceeds safe numeric precision");
+  }
+  return total;
 }
