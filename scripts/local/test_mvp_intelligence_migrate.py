@@ -142,7 +142,7 @@ def test_restricted_migration_and_repeat_preserve_ownership_and_rls() -> None:
                 ).scalar_one()
                 assert (
                     seeds
-                    == len(list((SERVICE / "src/capability_registry/templates/v3").glob("*.json")))
+                    == len(list((SERVICE / "src/capability_registry/templates/v4").glob("*.json")))
                     > 0
                 )
                 conn.execute(

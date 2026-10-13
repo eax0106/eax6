@@ -53,7 +53,7 @@ const connections: ConnectionRegistrySnapshot[] = [{ tenant_id: tenantId.slice(4
   connector_type: "postgres", status: "connected", secret_ref: `/alter/integrations/${tenantId.slice(4)}/${workspace}/${connection}`, source_revision: 1 }];
 
 interface Template { template_id: string; skeleton: Record<string, unknown>; test_cases: { name: string; input: Record<string, unknown>; success_criteria: string[] }[] }
-const dir = resolve("apps/intelligence-service/src/capability_registry/templates/v3");
+const dir = resolve("apps/intelligence-service/src/capability_registry/templates/v4");
 const only = process.argv.find((arg) => arg.startsWith("--only="))?.slice("--only=".length).split(",");
 const templates: Template[] = readdirSync(dir).filter((file) => file.endsWith(".json")).sort()
   .map((file) => JSON.parse(readFileSync(resolve(dir, file), "utf8")) as Template)
