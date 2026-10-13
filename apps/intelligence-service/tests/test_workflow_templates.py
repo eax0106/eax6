@@ -136,7 +136,8 @@ def test_brand_alert_search_accepts_namesakes() -> None:
 def test_v2_supersedes_exactly_the_three_search_templates() -> None:
     """Revision 0012 inserts a new version only for a v2 file that differs
     from v1; every v2 file has its v1 counterpart."""
-    path = Path(__file__).parent.parent / "alembic" / "versions" / "0012_template_search_criteria.py"
+    versions = Path(__file__).parent.parent / "alembic" / "versions"
+    path = versions / "0012_template_search_criteria.py"
     spec = importlib.util.spec_from_file_location("revision_0012", path)
     assert spec is not None and spec.loader is not None
     revision = importlib.util.module_from_spec(spec)
