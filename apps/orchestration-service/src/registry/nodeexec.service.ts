@@ -335,7 +335,15 @@ export class NodeexecService {
           node_execution_id: request.node_execution_id,
           node_key: request.node_key,
           node_type: request.node_type,
-          config_json: JSON.stringify({ ...executionConfig, upstream_inputs: inputs }),
+          // A write's output is only the database's row count (rows is empty
+          // without RETURNING), which the reviewer misread as no output at all
+          // (live run_e046a9a6). The engine's own check of that count is
+          // trusted context, so it travels with the config, not the output.
+          config_json: JSON.stringify({
+            ...executionConfig,
+            upstream_inputs: inputs,
+            ...(mechanical === undefined ? {} : { mechanical_check: mechanical }),
+          }),
           output_json: outputJson,
           success_criteria: successCriteria,
         });

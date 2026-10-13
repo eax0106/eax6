@@ -1479,6 +1479,28 @@ describe("NodeexecService mechanical check", () => {
     });
   });
 
+  it("tells the reviewer what the engine confirmed about a write whose output is only a row count", async () => {
+    const { call, scoreNodeInline } = run({ rowCount: 1, rows: [] }, "database.insert");
+
+    await call;
+
+    const request = scoreNodeInline.mock.calls[0]![0] as { config_json: string; output_json: string };
+    expect(JSON.parse(request.config_json)).toMatchObject({
+      tool_name: "database.insert",
+      mechanical_check: { confirmed: true, basis: "database reported 1 affected row(s)" },
+    });
+    expect(JSON.parse(request.output_json)).toEqual({ rowCount: 1, rows: [] });
+  });
+
+  it("adds nothing to the review config for a tool without a mechanical check", async () => {
+    const { call, scoreNodeInline } = run({ results: [] }, "search.web");
+
+    await call;
+
+    const request = scoreNodeInline.mock.calls[0]![0] as { config_json: string };
+    expect(JSON.parse(request.config_json)).not.toHaveProperty("mechanical_check");
+  });
+
   it("persists an unconfirmed click as a warning while preserving acceptance", async () => {
     const { call, ledger } = run({ confirmation: { status: "unconfirmed", reason: "No expected page state declared" } }, "browser.click");
     await call;
