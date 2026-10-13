@@ -61,6 +61,21 @@ or exhausted allowance refuse the next paid request. A stack restart resets
 the allowance and requires renewed spend approval before another paid smoke.
 Cost Ledger's reported INR charge is distinct from AWS's USD list-price bound.
 
+Runs you start from the web app have no script to arm a permit, so the guarded
+gateway refuses their first model call. To run templates by clicking in the UI,
+arm a time-limited session for the seeded local tenant, after the same spend
+approval:
+
+```bash
+node scripts/local/mvp-ui-session.mjs --minutes=60          # plan only
+node scripts/local/mvp-ui-session.mjs --minutes=60 --apply  # arm
+node scripts/local/mvp-ui-session.mjs --disarm              # when done
+```
+
+The session names the owned gateway process and tenant, expires on its own
+(the gateway refuses any longer than 120 minutes), and spends from the same
+process-lifetime USD allowance. Stopping the stack also removes it.
+
 Real email is opt-in. Set `MVP_EMAIL_PROVIDER=ses` and `MVP_SES_FROM_ADDRESS`
 (a sender verified in SES in `ALTER_REGION`) in `.env.mvp.local`, then restart
 the stack. Only tool-gateway's `email.send` sends through SES, signed with your

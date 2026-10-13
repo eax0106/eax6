@@ -8,7 +8,8 @@ import { health, loadEnvironment, services, grpcHealth, grpcServices, processSta
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const userId = '01930000-0000-7000-8000-000000000003';
-const tenantId = 'ten_01930000-0000-7000-8000-000000000001';
+export const LOCAL_TENANT_ID = 'ten_01930000-0000-7000-8000-000000000001';
+const tenantId = LOCAL_TENANT_ID;
 export function assertSmokeCeiling(usd, ceilingUsd) {
   if (!Number.isFinite(usd) || usd < 0 || usd > ceilingUsd) {
     throw new Error(`Upper bound USD ${Number(usd).toFixed(4)} exceeds USD ${ceilingUsd}; no model run started`);

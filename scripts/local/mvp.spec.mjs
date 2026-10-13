@@ -12,6 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { assertConfiguredModelPricing, assertLocalMvpAwsAccount, assertNoPnpm, emailMode, realTools, assertPortFree, grpcHealth, grpcServices, health, processStamp, serviceEnvironment, serviceStartEnvironment, services, stopOwnedProcess, validateModelPolicy } from './mvp-stack.mjs';
 import { assertSmokeCeiling, pollRunDetail, smoke } from './mvp-smoke.mjs';
+import { MAX_UI_SESSION_MINUTES, uiSession } from './mvp-ui-session.mjs';
 import { connectionSnapshot, loadTemplate, needsPostgres, runCatalogueTemplate, scratchConnectionId } from './mvp-template.mjs';
 
 test('smoke refuses oversized or invalid spend and conflicting execution modes', async () => {
@@ -346,4 +347,13 @@ test('shutdown still stops a process recorded with the older lstart stamp', asyn
     await stopOwnedProcess({ pid: child.pid, stamp: legacy });
     assert.equal(processStamp(child.pid), '');
   } finally { try { process.kill(-child.pid, 'SIGKILL'); } catch {} }
+});
+
+test('UI spend session refuses an out-of-range length or conflicting modes before reading the stack', async () => {
+  for (const minutes of [0, MAX_UI_SESSION_MINUTES + 1, 1.5, Number.NaN]) {
+    await assert.rejects(uiSession({ minutes }), /--minutes must be a whole number/);
+  }
+  await assert.rejects(uiSession({ apply: true, disarm: true }), /mutually exclusive/);
+  // The gateway enforces the same bound on whatever the permit file says.
+  assert.equal(MAX_UI_SESSION_MINUTES, 120);
 });
