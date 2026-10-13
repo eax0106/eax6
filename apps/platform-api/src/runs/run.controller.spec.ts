@@ -120,6 +120,30 @@ describe("RunController routes", () => {
     );
   });
 
+  it("relays run input to the Engine and refuses input that is not an object", async () => {
+    const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc";
+    const send = (input: unknown, key: string) => app.getHttpAdapter().getInstance().inject({
+      method: "POST",
+      url: "/api/v1/runs",
+      headers: {
+        "x-test-actor": JSON.stringify({ ...actor, roles: ["operator"] }),
+        "idempotency-key": key,
+      },
+      payload: { workflow_id: workflowId, input },
+    });
+
+    expect((await send({ recipient: "a@example.com" }, "run-input-1")).statusCode).toBe(201);
+    expect(engine.post).toHaveBeenCalledWith(
+      "/api/v1/runs",
+      { workflow_id: workflowId, input: { recipient: "a@example.com" } },
+      expect.objectContaining({ tenantId: actor.tenant_id }),
+      { idempotencyKey: "run-input-1" },
+    );
+    engine.post.mockClear();
+    expect((await send(["a"], "run-input-2")).statusCode).toBe(400);
+    expect(engine.post).not.toHaveBeenCalled();
+  });
+
   it("cancels a run through the engine and answers with the run it wrote", async () => {
     const response = await post(`/api/v1/runs/${runId}/actions/cancel`, {
       actor: { ...actor, roles: ["operator"] },

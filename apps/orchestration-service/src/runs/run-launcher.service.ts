@@ -156,7 +156,12 @@ export interface CreateRunOptions {
   /** Internal dispatch priority. Larger values dispatch first. */
   readonly priority?: number;
   readonly replay?: { readonly actor: ReplayActor; readonly eventId: string; readonly confirmationToken: string; readonly requestKey: string };
+  /** Input for the workflow's root nodes, as a hosted form or replay would supply it. */
+  readonly input?: Readonly<Record<string, JsonValue>>;
 }
+
+/** Largest run input accepted, measured as JSON. */
+export const MAX_RUN_INPUT_BYTES = 64 * 1024;
 
 export interface RunPage {
   readonly data: readonly RunRow[];
@@ -165,6 +170,17 @@ export interface RunPage {
     readonly has_more: boolean;
     readonly limit: number;
   };
+}
+
+function runInputJson(input: unknown): string {
+  if (input === null || typeof input !== "object" || Array.isArray(input)) {
+    throw new RunValidationError("input must be a JSON object");
+  }
+  const json = JSON.stringify(input);
+  if (Buffer.byteLength(json, "utf8") > MAX_RUN_INPUT_BYTES) {
+    throw new RunValidationError(`input must be at most ${MAX_RUN_INPUT_BYTES} bytes as JSON`);
+  }
+  return json;
 }
 
 function bareTenantUuid(tenantId: string): string {
@@ -319,6 +335,10 @@ export class RunLauncherService {
       );
     }
     const timeoutMs = normalizeTimeout(options.timeoutMs);
+    if (options.input !== undefined && options.replay !== undefined) {
+      throw new RunValidationError("A replayed run takes its input from the replayed event");
+    }
+    const inputJson = options.input === undefined ? undefined : runInputJson(options.input);
 
     const created = await this.store.withTenant(tenantId, async (tx) => {
       const workflow = await tx.query<{ readonly id: string; readonly workspace_id: string }>(
@@ -389,6 +409,12 @@ export class RunLauncherService {
           action: "event.replay.confirmed", target_type: "run", target_ref: runId, result: "success", reason_code: "outside_actions_confirmed",
           context_json: JSON.stringify({ scope: { replayed_from: replay.eventId, workflow_version_id: version.id, actions: replayActions(version.compiledDag) } }),
           occurred_at: new Date().toISOString() });
+      }
+      if (inputJson !== undefined) {
+        const key = `input.${runId}`;
+        if (version.compiledDag.nodes.some(node => node.key === key)) throw new RunValidationError("Run input key conflicts with a workflow node");
+        await tx.query(`INSERT INTO blackboard_checkpoints (tenant_id, run_id, context_key, value_json)
+          VALUES ($1, $2, $3, $4::jsonb)`, [tenantId, runId, key, inputJson]);
       }
       return { row, compiledDag: version.compiledDag };
     });
@@ -964,6 +990,14 @@ export class RunLauncherService {
     let handle: DurableWorkflowHandle;
     try {
       let initialInputKey = row.replayed_from ? `replay.${row.id}` : undefined;
+      if (!initialInputKey) {
+        // A run created with input stored it beside the run row; a queued run starts here later.
+        const stored = await this.store.withTenant(tenantId, tx => tx.query<{ readonly found: number }>(
+          "SELECT 1 AS found FROM blackboard_checkpoints WHERE tenant_id=$1 AND run_id=$2 AND context_key=$3",
+          [tenantId, row.id, `input.${row.id}`],
+        ));
+        if (stored.rows[0]?.found === 1) initialInputKey = `input.${row.id}`;
+      }
       if (!initialInputKey && row.triggering_event_id && this.triggerInput) {
         const event = await this.store.withTenant(tenantId, tx => tx.query<{ payload: JsonValue }>(
           "SELECT payload FROM events WHERE tenant_id=$1 AND event_id=$2 AND source='alter.public-form' AND event_type='public_form.submitted'",

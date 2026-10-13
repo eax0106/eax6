@@ -11,7 +11,7 @@ vi.mock("./http", () => ({
 }))
 
 import { apiGet, apiPost } from "./http"
-import { getProject, getProjects, retryRun, stopRun } from "./live"
+import { getProject, getProjects, retryRun, startRun, stopRun } from "./live"
 
 const projectId = "prj_018f47a5-7b2c-7d10-8f11-123456789abc"
 const runId = "run_018f47a5-7b2c-7d10-8f11-123456789abc"
@@ -65,6 +65,21 @@ describe("live projects", () => {
 })
 
 describe("live run actions", () => {
+  it("starts a run of one version with the user's input", async () => {
+    const workflowId = "wf_018f47a5-7b2c-7d10-8f11-123456789abc"
+    const versionId = "wfv_018f47a5-7b2c-7d10-8f11-123456789abc"
+    vi.mocked(apiPost).mockResolvedValue({ id: runId, status: "running" })
+
+    const run = await startRun(workflowId, versionId, { recipient: "a@example.com" })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      "/api/v1/runs",
+      { workflow_id: workflowId, workflow_version_id: versionId, input: { recipient: "a@example.com" } },
+      { idempotencyKey: "run-start-test-key" },
+    )
+    expect(run.id).toBe(runId)
+  })
+
   it("cancels a run through its own action route", async () => {
     vi.mocked(apiPost).mockResolvedValue({ run_id: runId, status: "cancelled" })
 

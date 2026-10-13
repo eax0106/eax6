@@ -109,6 +109,19 @@ class ApiClient {
     await delay(MOCK_DELAY)
   }
 
+  async startRun(workflowId: string, workflowVersionId: string, input: Record<string, unknown>): Promise<Run> {
+    if (isLiveApi) return live.startRun(workflowId, workflowVersionId, input)
+    await delay(MOCK_DELAY)
+    return {
+      ...mockRuns[0],
+      id: `run_${Date.now()}`,
+      status: "running",
+      startedAt: new Date().toISOString(),
+      durationMs: undefined,
+      completedAt: undefined
+    }
+  }
+
   async retryRun(_id: string, _nodeKey: string): Promise<Run> {
     if (isLiveApi) return live.retryRun(_id, _nodeKey)
     await delay(MOCK_DELAY)
