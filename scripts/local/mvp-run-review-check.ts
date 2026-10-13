@@ -56,8 +56,11 @@ async function main(): Promise<void> {
             node_key: "__run_outcome__", node_type: "RunOutcome", config_json: "{}",
             output_json: JSON.stringify(testCase.outputs), success_criteria: successCriteria });
           const correct = (scored.verdict === "fail" ? "fail" : "pass") === testCase.expected;
+          const details = JSON.parse(scored.details_json) as { rationale?: string; criteria?: { met: boolean; reason: string }[] };
           rows.push({ variant: variant.name, case: testCase.name, trial, runId, verdict: scored.verdict, score: scored.score, correct,
-            reason: correct ? undefined : String(JSON.parse(scored.details_json).rationale ?? "").slice(0, 300) });
+            // Which criterion the reviewer judged unmet: a run fails on any one, whatever its score.
+            unmet: (details.criteria ?? []).flatMap((row, index) => (row.met ? [] : [{ index, reason: row.reason.slice(0, 300) }])),
+            reason: correct ? undefined : String(details.rationale ?? "").slice(0, 300) });
         } catch (error: unknown) {
           rows.push({ variant: variant.name, case: testCase.name, trial, runId, verdict: "error", correct: false,
             error: error instanceof Error ? error.message : String(error) });

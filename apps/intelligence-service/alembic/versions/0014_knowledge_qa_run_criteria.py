@@ -4,12 +4,14 @@ Revision ID: 0014
 Revises: 0013
 
 templates/v4 is the next reviewed set: the same eight files, one of them
-changed. knowledge-qa's run-level criteria said "when no passage or attached
-text supports an answer, the reply says the documents do not answer". In a live
-local run (run_c582a4c5) the answer was right and cited the attached text, but
-the end-of-run review read the empty search as "no support" and failed the run.
-The criteria now state that attached text is a source on its own and phrase the
-two outcomes as one either/or rule, as the answer step's own criterion does.
+changed. The end-of-run review judges each success criterion on its own and
+fails the run on any one it marks unmet, including a conditional criterion
+whose condition does not hold. knowledge-qa's v3 criteria split the two
+outcomes ("A supported answer..." and "When no passage or attached text
+supports an answer..."): a live local run (run_c582a4c5) answered correctly
+from the attached text after an empty search and failed on the second, and a
+correct "documents do not answer" outcome failed on the first in 5 of 5
+measured trials. One criterion now states both outcomes as meeting it.
 
 For each v4 file that differs from its v3 file, the active row is marked
 superseded and the v4 file is inserted as the next version, active. Unchanged

@@ -16,8 +16,7 @@
     "version": "1",
     "entry_point": "intake",
     "success_criteria": [
-      "The intake's attached text is a source in its own right: an empty search result does not mean the question is unsupported when the attached text answers it.",
-      "Either the answer step reports supported true and states only what the retrieved passages or the attached text say, naming its sources, or it reports supported false and says the documents do not answer the question, making no claim of its own."
+      "Either the answer step reports supported true and states only what the retrieved passages or the intake's attached text say, naming them as its sources, or it reports supported false and says the documents do not answer the question, making no claim of its own; either outcome meets this criterion, whether or not the search returned passages or attached text was given."
     ],
     "nodes": [
       {

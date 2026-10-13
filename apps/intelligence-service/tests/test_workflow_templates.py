@@ -198,13 +198,17 @@ def test_v4_supersedes_only_knowledge_qa() -> None:
     ]
 
 
-def test_knowledge_qa_run_criteria_count_the_attached_text_as_support() -> None:
-    """The end-of-run review read "when no passage or attached text supports an
-    answer" as "the search was empty" and failed a correct answer drawn from the
-    attached text (live run_c582a4c5). The run's criteria must say the attached
-    text is a source on its own and state the two outcomes as one rule."""
+def test_knowledge_qa_run_criteria_hold_for_either_outcome() -> None:
+    """The end-of-run review judges each criterion on its own and fails the run
+    on any one it marks unmet, including a conditional criterion whose condition
+    does not hold. v3 split the outcomes into "a supported answer..." and "when
+    no passage or attached text supports...": the reviewer marked the second
+    unmet on a right answer drawn from the attached text after an empty search
+    (live run_c582a4c5), and the first unmet on a correct decline (5 of 5
+    measured trials). One criterion now covers both outcomes."""
     definition = _definition(TEMPLATE_DIR / "05-knowledge-qa.json")
-    criteria = " ".join(definition.skeleton["success_criteria"]).lower()
-    assert "empty search result does not mean" in criteria
-    assert "either" in criteria and "supported true" in criteria and "supported false" in criteria
-    assert "when no passage or attached text supports" not in criteria
+    criteria = definition.skeleton["success_criteria"]
+    assert len(criteria) == 1
+    text = criteria[0].lower()
+    assert text.startswith("either") and "supported true" in text and "supported false" in text
+    assert "either outcome meets this criterion" in text
