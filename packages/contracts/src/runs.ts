@@ -44,6 +44,8 @@ export const CreateRunRequestSchema = z
     workflow_id: WorkflowIdSchema,
     // Omitted -> resolves to the workflow's currently promoted version.
     workflow_version_id: WorkflowVersionIdSchema.optional(),
+    // Input for the workflow's root nodes, as a hosted form submission would supply it.
+    input: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();
 

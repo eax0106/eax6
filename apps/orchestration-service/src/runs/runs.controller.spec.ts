@@ -102,6 +102,25 @@ describe("RunsController.create", () => {
     );
   });
 
+  it("forwards run input", async () => {
+    const service = launcher();
+    vi.mocked(service.createRun).mockResolvedValue(runRow());
+
+    await new RunsController(service, outcomes(), estimates()).create(
+      request() as never,
+      fakeReply() as never,
+      { workflow_id: WORKFLOW, input: { question: "What is our refund window?" } },
+    );
+
+    expect(service.createRun).toHaveBeenCalledWith(
+      TENANT,
+      WORKFLOW,
+      undefined,
+      undefined,
+      { input: { question: "What is our refund window?" } },
+    );
+  });
+
   it("rejects a missing workflow_id with a 400 ProblemDetails", async () => {
     const service = launcher();
     await expect(

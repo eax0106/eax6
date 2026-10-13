@@ -79,6 +79,13 @@ The session names the owned gateway process and tenant, expires on its own
 (the gateway refuses any longer than 120 minutes), and spends from the same
 process-lifetime USD allowance. Stopping the stack also removes it.
 
+To start a run in the web app, open the workflow (Workflows, or "Open workflow"
+in its chat) and click "Run with input". Pick a compiled version and type the
+input as a JSON object with the template's intake fields, for example
+`{"title": "Weekly sync", "notes": "...", "recipient": "you@example.com"}` for
+meeting notes. The input reaches the workflow's first step the way a hosted
+form submission does (`POST /api/v1/runs` with `input`).
+
 Real email is opt-in. Set `MVP_EMAIL_PROVIDER=ses` and `MVP_SES_FROM_ADDRESS`
 (a sender verified in SES in `ALTER_REGION`) in `.env.mvp.local`, then restart
 the stack. Only tool-gateway's `email.send` sends through SES, signed with your

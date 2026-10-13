@@ -50,6 +50,7 @@ function fakeStore(handlers: {
   explicitVersion?: { readonly id: string; readonly status: string; readonly compiled_dag: unknown } | undefined;
   runRow?: Record<string, unknown>;
   held?: boolean;
+  storedInput?: boolean;
 }): { store: OrchestrationTenantStore; tx: FakeTx } {
   const runRow = handlers.runRow ?? {
     id: RUN,
@@ -87,6 +88,9 @@ function fakeStore(handlers: {
     }
     if (statement.includes("UPDATE runs SET status = 'running'")) {
       return { rowCount: 1, rows: [{ ...runRow, status: "running", started_at: "2026-07-28T00:00:01.000Z" }] };
+    }
+    if (statement.includes("SELECT 1 AS found FROM blackboard_checkpoints")) {
+      return handlers.storedInput === true ? { rowCount: 1, rows: [{ found: 1 }] } : { rowCount: 0, rows: [] };
     }
     if (statement.includes("SELECT")) {
       return { rowCount: 1, rows: [runRow] };
@@ -307,6 +311,64 @@ describe("RunLauncherService.createRun", () => {
     expect(insertCall?.[1]).toEqual(
       expect.arrayContaining([5_000]),
     );
+  });
+
+  it("stores run input beside the new run and hands it to the root nodes", async () => {
+    const { store, tx } = fakeStore({
+      workflowExists: true,
+      promotedVersion: { id: WORKFLOW_VERSION, compiled_dag: compiledDag() },
+      storedInput: true,
+    });
+    const durable = {
+      startWorkflow: vi.fn().mockResolvedValue({ workflowId: RUN, runId: "temporal-run-input" }),
+      terminateWorkflow: vi.fn(),
+    };
+    const launcher = new RunLauncherService(store, durable as never);
+
+    await launcher.createRun(TENANT, WORKFLOW, undefined, undefined, { input: { recipient: "a@example.com", notes: "Ship Friday" } });
+
+    const stored = tx.query.mock.calls.find(([statement]) => String(statement).includes("INSERT INTO blackboard_checkpoints"));
+    const runInsert = tx.query.mock.calls.find(([statement]) => String(statement).includes("INSERT INTO runs"));
+    const newRunId = (runInsert?.[1] as unknown[])[2];
+    expect(stored?.[1]).toEqual([BARE_TENANT, newRunId, `input.${newRunId}`, JSON.stringify({ recipient: "a@example.com", notes: "Ship Friday" })]);
+    expect(durable.startWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ input: expect.objectContaining({ initialInputKey: `input.${RUN}` }) }),
+    );
+  });
+
+  it("starts a run created without input with no initial input", async () => {
+    const { store, tx } = fakeStore({
+      workflowExists: true,
+      promotedVersion: { id: WORKFLOW_VERSION, compiled_dag: compiledDag() },
+    });
+    const durable = {
+      startWorkflow: vi.fn().mockResolvedValue({ workflowId: RUN, runId: "temporal-run-plain" }),
+      terminateWorkflow: vi.fn(),
+    };
+    const launcher = new RunLauncherService(store, durable as never);
+
+    await launcher.createRun(TENANT, WORKFLOW);
+
+    expect(tx.query.mock.calls.some(([statement]) => String(statement).includes("INSERT INTO blackboard_checkpoints"))).toBe(false);
+    expect(durable.startWorkflow.mock.calls[0]?.[0].input).not.toHaveProperty("initialInputKey");
+  });
+
+  it.each([
+    ["an array", ["a"]],
+    ["a string", "hello"],
+    ["null", null],
+    ["oversized input", { text: "x".repeat(64 * 1024) }],
+  ])("rejects %s as run input before writing a run", async (_label, input) => {
+    const { store, tx } = fakeStore({ workflowExists: true });
+    const launcher = new RunLauncherService(
+      store,
+      { startWorkflow: vi.fn(), terminateWorkflow: vi.fn() } as never,
+    );
+
+    await expect(
+      launcher.createRun(TENANT, WORKFLOW, undefined, undefined, { input: input as never }),
+    ).rejects.toBeInstanceOf(RunValidationError);
+    expect(tx.query).not.toHaveBeenCalled();
   });
 
   it("rejects an out-of-range run timeout before writing a run", async () => {

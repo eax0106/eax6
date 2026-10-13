@@ -1,6 +1,7 @@
+import { useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
-import { Play, PenTool, GitCommit, FileCheck } from "lucide-react"
+import { Play, PenTool, GitCommit, FileCheck, Send } from "lucide-react"
 import { api } from "@/api/client"
 import { queryKeys } from "@/api/query-keys"
 import { Button } from "@/components/ui/button"
@@ -10,10 +11,12 @@ import { RequirePermission } from "@/features/permissions/components/require-per
 import { TriggerList } from "@/features/triggers/components/trigger-list"
 import { WorkflowVector } from "@/components/vectors/WorkflowVector"
 import { HealthCard } from "./workflow-health"
+import { RunWithInputDialog } from "../components/run-with-input-dialog"
 
 export function WorkflowDetail() {
   const { workflowId } = useParams()
   const navigate = useNavigate()
+  const [runOpen, setRunOpen] = useState(false)
 
   const { data: workflow, isLoading } = useQuery({
     queryKey: queryKeys.workflows.detail(workflowId!),
@@ -57,6 +60,10 @@ export function WorkflowDetail() {
             <Button variant="primary" onClick={() => navigate(`/app/workflows/${workflow.id}/simulation`)}>
               <Play className="mr-2 h-4 w-4" />
               Simulate
+            </Button>
+            <Button variant="primary" onClick={() => setRunOpen(true)}>
+              <Send className="mr-2 h-4 w-4" />
+              Run with input
             </Button>
           </RequirePermission>
           <RequirePermission permission="workflow.update">
@@ -111,6 +118,8 @@ export function WorkflowDetail() {
       <div className="mt-8 border-t border-border pt-8">
         <TriggerList workflowId={workflow.id} />
       </div>
+
+      <RunWithInputDialog workflowId={workflow.id} open={runOpen} onOpenChange={setRunOpen} />
     </div>
   )
 }

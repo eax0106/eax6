@@ -487,6 +487,20 @@ export async function getRun(id: string): Promise<Run> {
   return mapRun((body as AnyRecord)?.run ?? body)
 }
 
+// The input reaches the workflow's first step, as a hosted form submission would.
+export async function startRun(
+  workflowId: string,
+  workflowVersionId: string,
+  input: Record<string, unknown>,
+): Promise<Run> {
+  const body = await apiPost<unknown>("/api/v1/runs", {
+    workflow_id: workflowId,
+    workflow_version_id: workflowVersionId,
+    input,
+  }, { idempotencyKey: mutationKey("run-start") })
+  return mapRun((body as AnyRecord)?.run ?? body)
+}
+
 export async function retryRun(id: string, nodeKey: string): Promise<Run> {
   await apiPost(`/api/v1/runs/${encodeURIComponent(id)}/actions/retry-node`, { node_key: nodeKey }, {
     idempotencyKey: mutationKey("run-retry"),

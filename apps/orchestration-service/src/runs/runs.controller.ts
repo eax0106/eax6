@@ -15,6 +15,7 @@ import {
 import type { IdentityTenantGatewayRequest } from "@alterx/auth";
 import type { ProblemDetails } from "@alterx/contracts";
 import type { FastifyReply } from "fastify";
+import type { JsonValue } from "@alterx/shared-clients";
 
 import { BudgetExceededError } from "../budgets/budget.service";
 import { BillingAdmissionError } from "../billing/billing-account.service";
@@ -39,6 +40,7 @@ interface CreateRunBody {
   readonly workflow_id: string;
   readonly workflow_version_id?: string;
   readonly timeout_ms?: number;
+  readonly input?: Readonly<Record<string, JsonValue>>;
 }
 
 interface RetryNodeBody {
@@ -147,7 +149,10 @@ export class RunsController {
         body.workflow_id,
         body.workflow_version_id,
         undefined,
-        body.timeout_ms === undefined ? {} : { timeoutMs: body.timeout_ms },
+        {
+          ...(body.timeout_ms === undefined ? {} : { timeoutMs: body.timeout_ms }),
+          ...(body.input === undefined ? {} : { input: body.input }),
+        },
       );
       reply.header("location", `/api/v1/runs/${run.id}`);
       return toRunResponse(run);
