@@ -46,6 +46,7 @@ class TestMigrationFileStructure:
             "0009_agent_owner_tenant.py",
             "0010_register_workspace_tools.py",
             "0011_create_workflow_templates.py",
+            "0012_template_search_criteria.py",
         ]
 
     def test_all_tables_defined(self) -> None:

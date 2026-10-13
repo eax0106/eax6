@@ -3,7 +3,7 @@ import { resolve } from "node:path"
 import { describe, expect, it } from "vitest"
 import { workflowTemplatesService } from "./workflow-templates"
 
-const TEMPLATE_DIR = resolve(__dirname, "../../../../intelligence-service/src/capability_registry/templates/v1")
+const TEMPLATE_DIR = resolve(__dirname, "../../../../intelligence-service/src/capability_registry/templates/v2")
 
 describe("demo-mode starter templates", () => {
   it("mirror the reviewed set's ids, titles and summaries", async () => {

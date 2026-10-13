@@ -1,5 +1,5 @@
-"""Real PostgreSQL: the registry stores exactly the reviewed templates, every
-tenant can read them, and no tenant can write or own one."""
+"""Real PostgreSQL: the registry serves exactly the current reviewed templates,
+every tenant can read them, and no tenant can write or own one."""
 
 from collections.abc import AsyncGenerator, Generator
 from hashlib import sha256
@@ -19,7 +19,9 @@ from src.capability_registry.router import router
 from src.db.session import get_db_session
 
 SERVICE_ROOT = Path(__file__).parent.parent
-TEMPLATE_DIR = SERVICE_ROOT / "src" / "capability_registry" / "templates" / "v1"
+TEMPLATES = SERVICE_ROOT / "src" / "capability_registry" / "templates"
+TEMPLATE_DIR = TEMPLATES / "v2"
+SUPERSEDED = {"knowledge-qa", "brand-mention-alert", "whatsapp-faq-responder"}
 PGVECTOR_IMAGE = "pgvector/pgvector:pg16"
 PLATFORM = "00000000-0000-7000-8000-000000000001"
 TENANT = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa"
@@ -84,12 +86,18 @@ def test_seeded_rows_are_exactly_the_reviewed_files(database: tuple[str, str]) -
             )
         ).all()
     engine.dispose()
-    files = {
-        path.name: sha256(path.read_bytes()).hexdigest() for path in TEMPLATE_DIR.glob("*.json")
+    def hashes(directory: Path) -> set[str]:
+        return {sha256(path.read_bytes()).hexdigest() for path in directory.glob("*.json")}
+
+    active = [row for row in rows if row[2] == "active"]
+    superseded = [row for row in rows if row[2] == "superseded"]
+    assert len(active) == 8
+    assert {row[4] for row in active} == hashes(TEMPLATE_DIR)
+    assert {(row[0], row[1]) for row in superseded} == {(t, 1) for t in SUPERSEDED}
+    assert {(row[0], row[1]) for row in active if row[0] in SUPERSEDED} == {
+        (t, 2) for t in SUPERSEDED
     }
-    assert len(rows) == 8
-    assert {row[4] for row in rows} == set(files.values())
-    assert all(row[1] == 1 and row[2] == "active" for row in rows)
+    assert {row[4] for row in superseded} <= hashes(TEMPLATES / "v1")
     assert all(row[3] == PLATFORM and row[5] == "alter-authored" for row in rows)
 
 
@@ -107,8 +115,10 @@ def test_routes_list_and_read_templates_for_any_caller(database: tuple[str, str]
         detail = client.get("/internal/capability-registry/templates/whatsapp-faq-responder")
         assert detail.status_code == 200
         body = detail.json()
-        assert body["version"] == 1
+        assert body["version"] == 2
         assert body["skeleton"]["entry_point"] == "intake"
+        search = next(node for node in body["skeleton"]["nodes"] if node["key"] == "search")
+        assert search["success_criteria"], "the served template carries v2's search criteria"
         assert len(body["test_cases"]) == 2
         assert (
             client.get("/internal/capability-registry/templates/not-a-template").status_code == 404
@@ -151,7 +161,9 @@ def test_a_tenant_cannot_store_or_own_a_template(database: tuple[str, str]) -> N
                 sa.text("SELECT set_config('app.current_tenant_id', :t, true)"), {"t": TENANT}
             )
             count = connection.execute(
-                sa.text("SELECT count(*) FROM capability_registry_templates")
+                sa.text(
+                    "SELECT count(*) FROM capability_registry_templates WHERE status = 'active'"
+                )
             ).scalar_one()
         assert count == 8
     engine.dispose()
@@ -177,6 +189,34 @@ def test_downgrade_removes_the_table_and_upgrade_restores_the_set(
             connection.execute(
                 sa.text("SELECT count(*) FROM capability_registry_templates")
             ).scalar_one()
-            == 8
+            == 11
         )
+    engine.dispose()
+
+
+def test_downgrade_of_0012_restores_v1_as_active(database: tuple[str, str]) -> None:
+    owner_url, _ = database
+    config = _alembic(owner_url)
+    engine = sa.create_engine(owner_url)
+
+    def active() -> dict[str, tuple[int, str]]:
+        with engine.connect() as connection:
+            rows = connection.execute(
+                sa.text(
+                    "SELECT template_id, version, content_sha256 "
+                    "FROM capability_registry_templates WHERE status = 'active'"
+                )
+            ).all()
+        return {row[0]: (row[1], row[2]) for row in rows}
+
+    v1 = {sha256(path.read_bytes()).hexdigest() for path in (TEMPLATES / "v1").glob("*.json")}
+    command.downgrade(config, "0011")
+    restored = active()
+    assert len(restored) == 8
+    assert {sha for _, sha in restored.values()} == v1
+    assert all(version == 1 for version, _ in restored.values())
+    command.upgrade(config, "head")
+    assert {sha for _, sha in active().values()} == {
+        sha256(path.read_bytes()).hexdigest() for path in TEMPLATE_DIR.glob("*.json")
+    }
     engine.dispose()
