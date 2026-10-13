@@ -48,6 +48,7 @@ class TestMigrationFileStructure:
             "0011_create_workflow_templates.py",
             "0012_template_search_criteria.py",
             "0013_knowledge_qa_answer_prompt.py",
+            "0014_knowledge_qa_run_criteria.py",
         ]
 
     def test_all_tables_defined(self) -> None:

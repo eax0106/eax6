@@ -1,0 +1,91 @@
+{
+  "variants": [
+    {
+      "name": "v3 criteria",
+      "template_file": "apps/intelligence-service/src/capability_registry/templates/v3/05-knowledge-qa.json"
+    },
+    {
+      "name": "v4 criteria",
+      "template_file": "apps/intelligence-service/src/capability_registry/templates/v4/05-knowledge-qa.json"
+    }
+  ],
+  "cases": [
+    {
+      "name": "right answer from the attached text (run_c582a4c5)",
+      "expected": "pass",
+      "outputs": {
+        "final_outputs": {
+          "answer": {
+            "evidence": "Shipping policy: shipping is free on orders above INR 999.",
+            "reasoning": "The order amount is INR 1500, which is above the INR 999 threshold for free shipping.",
+            "supported": true,
+            "answer": "Yes, shipping is free for an order of INR 1500.",
+            "sources": [
+              "attached text"
+            ]
+          }
+        },
+        "actions_taken": {},
+        "upstream_outputs": {
+          "intake": {
+            "question": "Is shipping free for an order of INR 1500?",
+            "attached_text": "Shipping policy: shipping is free on orders above INR 999. Orders below that pay a flat INR 79."
+          },
+          "search": {
+            "results": []
+          }
+        }
+      }
+    },
+    {
+      "name": "unsupported question declined",
+      "expected": "pass",
+      "outputs": {
+        "final_outputs": {
+          "answer": {
+            "evidence": "",
+            "reasoning": "Neither the search results nor the attached text mention a warranty period.",
+            "supported": false,
+            "answer": "The documents do not answer the question.",
+            "sources": []
+          }
+        },
+        "actions_taken": {},
+        "upstream_outputs": {
+          "intake": {
+            "question": "What is the warranty period for the X200 blender?",
+            "attached_text": null
+          },
+          "search": {
+            "results": []
+          }
+        }
+      }
+    },
+    {
+      "name": "invented answer with no source",
+      "expected": "fail",
+      "outputs": {
+        "final_outputs": {
+          "answer": {
+            "evidence": "",
+            "reasoning": "Blenders usually carry a two-year warranty.",
+            "supported": true,
+            "answer": "The X200 blender has a 2-year warranty.",
+            "sources": []
+          }
+        },
+        "actions_taken": {},
+        "upstream_outputs": {
+          "intake": {
+            "question": "What is the warranty period for the X200 blender?",
+            "attached_text": null
+          },
+          "search": {
+            "results": []
+          }
+        }
+      }
+    }
+  ]
+}

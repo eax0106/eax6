@@ -1,0 +1,123 @@
+{
+  "template_id": "invoice-email-to-sheet",
+  "title": "Invoice email to a sheet row",
+  "summary": "Details are extracted from an emailed invoice, the amounts are checked, and one row is added to your invoices table; incomplete or inconsistent invoices are held for review.",
+  "requirements": [
+    {
+      "kind": "connection",
+      "connector_type": "postgres",
+      "purpose": "The invoices table that receives one row per invoice (unique on vendor and invoice number)."
+    },
+    {
+      "kind": "trigger",
+      "purpose": "An inbound email webhook that delivers {from, subject, body} with the invoice text."
+    }
+  ],
+  "skeleton": {
+    "version": "1",
+    "entry_point": "intake",
+    "success_criteria": [
+      "A complete invoice whose net plus tax equals its total adds one row with the invoice number, vendor, currency, net, tax and total exactly as written.",
+      "An invoice with a missing amount or amounts that do not add up adds no row and is held for review with the reason.",
+      "The same vendor and invoice number never adds a second row."
+    ],
+    "nodes": [
+      {
+        "key": "intake",
+        "type": "join",
+        "config": {},
+        "depends_on": []
+      },
+      {
+        "key": "extract",
+        "type": "llm",
+        "config": {
+          "model_alias": "FAST",
+          "prompt": "Extract the invoice from the upstream email. Personal details may already be privacy placeholders: retain them as obscured values, never reconstruct them. Return {\"complete\": bool, \"net_plus_tax\": number or null, \"invoice\": {\"invoice_number\", \"vendor\", \"invoice_date\", \"currency\", \"net\", \"tax\", \"total\"}, \"parameters\": [invoice_number, vendor, invoice_date, currency, net, tax, total]}. Extract only stated values, with null for missing values. invoice_date is optional, including a redacted date as null. complete is true exactly when invoice_number, vendor, currency, net, tax and total are present. All monetary values and their parameter entries are JSON numbers without currency symbols or thousands separators. Calculate net_plus_tax by adding the extracted net and tax; do not change a stated amount or invent an adjustment. The deterministic downstream Gate compares this sum with the stated total; do not return a consistency decision."
+        },
+        "depends_on": [
+          "intake"
+        ],
+        "success_criteria": [
+          "Each extracted field and parameter matches the email; missing values are null, never guessed.",
+          "complete is correct for the six required fields; the date is optional.",
+          "All monetary values and parameters are JSON numbers without separators, and net_plus_tax equals the extracted net plus tax."
+        ]
+      },
+      {
+        "key": "check",
+        "type": "branch",
+        "config": {
+          "conditions": {
+            "add_row": "inputs.extract.complete == true && inputs.extract.net_plus_tax == inputs.extract.invoice.total",
+            "hold_for_review": "!(inputs.extract.complete == true && inputs.extract.net_plus_tax == inputs.extract.invoice.total)"
+          }
+        },
+        "depends_on": [
+          "extract"
+        ]
+      },
+      {
+        "key": "add_row",
+        "type": "tool",
+        "config": {
+          "tool_name": "database.insert",
+          "required_connector": "postgres",
+          "arguments": {
+            "databaseId": "$alter:connection:postgres",
+            "statement": "INSERT INTO invoices (invoice_number, vendor, invoice_date, currency, net, tax, total) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (vendor, invoice_number) DO NOTHING",
+            "parameters": {
+              "$from": "extract",
+              "path": "parameters"
+            }
+          }
+        },
+        "depends_on": [
+          "check",
+          "extract"
+        ]
+      },
+      {
+        "key": "hold_for_review",
+        "type": "llm",
+        "config": {
+          "model_alias": "FAST",
+          "prompt": "The invoice in the upstream output was not added. Respond with {\"status\": \"needs_review\", \"reason\": one sentence naming the missing field or the amounts that do not add up}. The invoice_date is optional and never a reason for review. If net_plus_tax differs from invoice.total, report that arithmetic mismatch even if an upstream consistent flag incorrectly says true. Only invoice_number, vendor, currency, net, tax and total are mandatory."
+        },
+        "depends_on": [
+          "check",
+          "extract"
+        ],
+        "success_criteria": [
+          "reason names the actual missing field or arithmetic mismatch."
+        ]
+      }
+    ]
+  },
+  "test_cases": [
+    {
+      "name": "consistent invoice adds a row",
+      "input": {
+        "from": "accounts@sharmaprint.example",
+        "subject": "Invoice SP-1042",
+        "body": "Sharma Print Works\nInvoice number: SP-1042\nNet: INR 12,000.00\nGST 18%: INR 2,160.00\nTotal due: INR 14,160.00"
+      },
+      "success_criteria": [
+        "One row is added with invoice number SP-1042, vendor Sharma Print Works, currency INR, net 12000.00, tax 2160.00 and total 14160.00.",
+        "The invoice is not held for review."
+      ]
+    },
+    {
+      "name": "amounts that do not add up are held",
+      "input": {
+        "from": "billing@vendor.example",
+        "subject": "Invoice 77",
+        "body": "Northwind Supplies\nInvoice 77\nNet: USD 500.00\nTax: USD 45.00\nTotal: USD 600.00"
+      },
+      "success_criteria": [
+        "The workflow selects hold_for_review and produces zero database.insert actions.",
+        "The invoice is held for review because 500.00 plus 45.00 does not equal 600.00."
+      ]
+    }
+  ]
+}

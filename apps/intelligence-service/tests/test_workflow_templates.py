@@ -1,7 +1,7 @@
 """The D18 starter set as authored: eight Alter-authored templates, each a
 well-formed definition the engine can instantiate (compilation itself is
-proven by the engine's own spec over the same files). templates/v3 is the
-current set; v1 and v2 stay as revisions 0011 and 0012 seeded them."""
+proven by the engine's own spec over the same files). templates/v4 is the
+current set; v1 to v3 stay as revisions 0011 to 0013 seeded them."""
 
 import importlib.util
 import json
@@ -14,7 +14,7 @@ from src.capability_registry.canonical_tools import CANONICAL_TOOL_SIDE_EFFECTS
 from src.capability_registry.templates import TemplateDefinition
 
 TEMPLATES = Path(__file__).parent.parent / "src" / "capability_registry" / "templates"
-TEMPLATE_DIR = TEMPLATES / "v3"
+TEMPLATE_DIR = TEMPLATES / "v4"
 FILES = sorted(TEMPLATE_DIR.glob("*.json"))
 PLACEHOLDER = re.compile(r"\$alter:(credential|connection):([a-z0-9-]+)")
 RUN_SCOPED_CREDENTIALS = {"email-send", "web-search", "knowledge-search", "whatsapp-send"}
@@ -184,3 +184,31 @@ def test_knowledge_qa_answer_compares_against_the_source_before_concluding() -> 
     prompt = str(config["prompt"]).lower()
     assert "word for word" in prompt and "compare" in prompt
     assert "never use outside knowledge" in prompt
+
+
+def test_v4_supersedes_only_knowledge_qa() -> None:
+    """Revision 0014 inserts a new version only for a v4 file that differs
+    from v3; every v4 file has its v3 counterpart."""
+    revision = _revision("0014_knowledge_qa_run_criteria.py")
+    assert [file.name for file in FILES] == sorted(
+        file.name for file in (TEMPLATES / "v3").glob("*.json")
+    )
+    assert [_definition(file).template_id for file in revision.changed_files()] == [
+        "knowledge-qa"
+    ]
+
+
+def test_knowledge_qa_run_criteria_hold_for_either_outcome() -> None:
+    """The end-of-run review judges each criterion on its own and fails the run
+    on any one it marks unmet, including a conditional criterion whose condition
+    does not hold. v3 split the outcomes into "a supported answer..." and "when
+    no passage or attached text supports...": the reviewer marked the second
+    unmet on a right answer drawn from the attached text after an empty search
+    (live run_c582a4c5), and the first unmet on a correct decline (5 of 5
+    measured trials). One criterion now covers both outcomes."""
+    definition = _definition(TEMPLATE_DIR / "05-knowledge-qa.json")
+    criteria = definition.skeleton["success_criteria"]
+    assert len(criteria) == 1
+    text = criteria[0].lower()
+    assert text.startswith("either") and "supported true" in text and "supported false" in text
+    assert "either outcome meets this criterion" in text
