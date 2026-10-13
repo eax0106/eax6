@@ -47,6 +47,7 @@ class TestMigrationFileStructure:
             "0010_register_workspace_tools.py",
             "0011_create_workflow_templates.py",
             "0012_template_search_criteria.py",
+            "0013_knowledge_qa_answer_prompt.py",
         ]
 
     def test_all_tables_defined(self) -> None:

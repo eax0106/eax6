@@ -1,7 +1,7 @@
 """The D18 starter set as authored: eight Alter-authored templates, each a
 well-formed definition the engine can instantiate (compilation itself is
-proven by the engine's own spec over the same files). templates/v2 is the
-current set; v1 stays as revision 0011 seeded it."""
+proven by the engine's own spec over the same files). templates/v3 is the
+current set; v1 and v2 stay as revisions 0011 and 0012 seeded them."""
 
 import importlib.util
 import json
@@ -14,7 +14,7 @@ from src.capability_registry.canonical_tools import CANONICAL_TOOL_SIDE_EFFECTS
 from src.capability_registry.templates import TemplateDefinition
 
 TEMPLATES = Path(__file__).parent.parent / "src" / "capability_registry" / "templates"
-TEMPLATE_DIR = TEMPLATES / "v2"
+TEMPLATE_DIR = TEMPLATES / "v3"
 FILES = sorted(TEMPLATE_DIR.glob("*.json"))
 PLACEHOLDER = re.compile(r"\$alter:(credential|connection):([a-z0-9-]+)")
 RUN_SCOPED_CREDENTIALS = {"email-send", "web-search", "knowledge-search", "whatsapp-send"}
@@ -150,3 +150,37 @@ def test_v2_supersedes_exactly_the_three_search_templates() -> None:
         "brand-mention-alert",
         "whatsapp-faq-responder",
     ]
+
+
+def _revision(name: str):  # type: ignore[no-untyped-def]
+    path = Path(__file__).parent.parent / "alembic" / "versions" / name
+    spec = importlib.util.spec_from_file_location(name.removesuffix(".py"), path)
+    assert spec is not None and spec.loader is not None
+    revision = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(revision)
+    return revision
+
+
+def test_v3_supersedes_only_knowledge_qa() -> None:
+    """Revision 0013 inserts a new version only for a v3 file that differs
+    from v2; every v3 file has its v2 counterpart."""
+    revision = _revision("0013_knowledge_qa_answer_prompt.py")
+    assert [file.name for file in FILES] == sorted(
+        file.name for file in (TEMPLATES / "v2").glob("*.json")
+    )
+    assert [_definition(file).template_id for file in revision.changed_files()] == [
+        "knowledge-qa"
+    ]
+
+
+def test_knowledge_qa_answer_compares_against_the_source_before_concluding() -> None:
+    """The cheap answer model misread "free above INR 999" for INR 1500 until
+    the prompt made it quote the deciding sentence and compare explicitly."""
+    definition = _definition(TEMPLATE_DIR / "05-knowledge-qa.json")
+    answer = next(node for node in definition.skeleton["nodes"] if node["key"] == "answer")
+    config = answer["config"]
+    assert isinstance(config, dict)
+    assert config["model_alias"] == "STANDARD"
+    prompt = str(config["prompt"]).lower()
+    assert "word for word" in prompt and "compare" in prompt
+    assert "never use outside knowledge" in prompt
