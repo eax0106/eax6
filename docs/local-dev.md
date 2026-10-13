@@ -94,7 +94,10 @@ host can reach. The runner creates the `leads` and `invoices` tables there,
 stores the URL in LocalStack and registers it as the signed-in workspace's
 postgres connection through orchestration's internal registry endpoint (the
 product has no path that creates one yet), then reads the written row back.
-`whatsapp-faq-responder` and `knowledge-qa` cannot run locally yet.
+`knowledge-qa` searches the signed-in workspace's documents through ADS (a
+real query embedding) and answers from its test case's attached text when the
+workspace has none. `whatsapp-faq-responder` cannot run locally: it needs an
+approved WhatsApp Business account.
 
 ## Prerequisites
 
