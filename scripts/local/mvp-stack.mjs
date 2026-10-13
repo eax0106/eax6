@@ -316,6 +316,11 @@ export function serviceEnvironment(base = loadEnvironment()) {
     IDENTITY_PROVIDER: 'mock', EMAIL_PROVIDER: 'mock', VITE_API_MODE: 'live',
     PLATFORM_API_PROXY_TARGET: 'http://127.0.0.1:3020', ALTER_LOCAL_ENV_FILE: envFile, COMPOSE_PROJECT_NAME: project };
   env.ADS_CORE_BASE_URL = `http://127.0.0.1:${env.ADS_CORE_PORT}`;
+  // Env files written before the uploads bucket existed lack these; without
+  // them ads-core's presigned upload URL points nowhere.
+  env.ADS_UPLOADS_BUCKET_NAME ||= 'alter-local-ads-uploads';
+  env.ADS_UPLOADS_S3_ENDPOINT_URL ||= env.AWS_ENDPOINT_URL;
+  env.ADS_UPLOADS_S3_REGION ||= env.ALTER_REGION;
   env.COST_LEDGER_BASE_URL = `http://127.0.0.1:${env.COST_PORT}`;
   // background-workers' cost-events consumer reaches the Cost Ledger over
   // gRPC; unset, it falls back to a port memory-service owns locally and
