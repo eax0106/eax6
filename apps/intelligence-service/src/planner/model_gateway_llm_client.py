@@ -58,7 +58,7 @@ browser.session.create step>", "path": "sessionId"}, "url": "<url>"}
 - "browser.extract": {"session_id": "...", "browser_session_id": "...", "selector": \
 "<optional CSS selector>"}
 - "browser.session.close": {"session_id": "...", "browser_session_id": "..."}
-- "email.send": {"to": "<one email address>", "subject": "<subject>", "body": "<body \
+- "email.send": {"to": "<email or list of emails>", "subject": "<subject>", "body": "<body \
 text>", "html": <optional boolean>}
 - "knowledge.search": {"query": "<what to look for>", "topK": <optional integer 1 to 10>}, \
 reads only this workspace's own documents, and its output is {"results": [{"documentId": \

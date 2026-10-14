@@ -464,23 +464,42 @@ export class ToolGatewayService implements ToolgwHandler {
     request: ToolgwInvokeToolRequest,
   ): Promise<ToolgwInvokeToolResponse> {
     const input = parseEmailSendInput(request.input_json);
+    const recipients = typeof input.to === "string" ? [input.to] : input.to;
     const outputJson = await this.#costed(
       request,
       {
         provider: this.emailProvider.metadata.providerId,
         resourceType: `tool_gateway.${EMAIL_SEND_TOOL_NAME}`,
-        units: 1,
+        units: recipients.length,
       },
       async (): Promise<string> => {
-        const result = await this.emailProvider.sendEmail(
-          input.to,
-          input.subject,
-          input.body,
-          {
-            ...(input.html === undefined ? {} : { html: input.html }),
-            tenantId: request.tenant_id,
-          },
-        );
+        const send = (to: string) => this.emailProvider.sendEmail(to, input.subject, input.body, {
+          ...(input.html === undefined ? {} : { html: input.html }),
+          tenantId: request.tenant_id,
+        });
+        let result: unknown;
+        if (typeof input.to === "string") {
+          result = await send(input.to);
+        } else {
+          let firstResult: Awaited<ReturnType<typeof send>> | undefined;
+          let acceptedCount = 0;
+          const unconfirmedIndices: number[] = [];
+          for (const [index, to] of recipients.entries()) {
+            try {
+              const accepted = await send(to);
+              firstResult ??= accepted;
+              acceptedCount++;
+            } catch {
+              // The provider may have accepted a message before losing its reply.
+              // Continue the list, but never claim this address was accepted.
+              if (unconfirmedIndices.length < 100) unconfirmedIndices.push(index);
+            }
+          }
+          if (acceptedCount !== recipients.length) {
+            throw new Error(`email.send could not confirm ${recipients.length - acceptedCount} recipient(s); indices: ${unconfirmedIndices.join(", ")}${recipients.length - acceptedCount > unconfirmedIndices.length ? ", ..." : ""}`);
+          }
+          result = { ...firstResult, acceptedCount };
+        }
         const json = JSON.stringify(result);
         if (Buffer.byteLength(json, "utf8") > MAX_TOOL_OUTPUT_BYTES) {
           throw new ToolGatewayValidationError(
@@ -1256,7 +1275,7 @@ function isRunScopedCredentialReference(reference: string): boolean {
 }
 
 interface EmailSendInput {
-  readonly to: string;
+  readonly to: string | readonly string[];
   readonly subject: string;
   readonly body: string;
   readonly html?: boolean;
@@ -1275,9 +1294,11 @@ function parseEmailSendInput(inputJson: string): EmailSendInput {
     readonly body?: unknown;
     readonly html?: unknown;
   };
-  if (typeof record.to !== "string" || !EMAIL_ADDRESS_PATTERN.test(record.to)) {
+  const recipients = typeof record.to === "string" ? [record.to] : record.to;
+  if (!Array.isArray(recipients) || recipients.length === 0 ||
+      !recipients.every((to): to is string => typeof to === "string" && EMAIL_ADDRESS_PATTERN.test(to))) {
     throw new ToolGatewayValidationError(
-      "email.send input_json must include a valid to email address",
+      "email.send input_json must include a valid to email address or non-empty address list",
     );
   }
   if (typeof record.subject !== "string" || record.subject.trim().length === 0) {
@@ -1312,7 +1333,7 @@ function parseEmailSendInput(inputJson: string): EmailSendInput {
     );
   }
   return {
-    to: record.to,
+    to: typeof record.to === "string" ? record.to : recipients,
     subject: record.subject,
     body: record.body,
     ...(record.html === undefined ? {} : { html: record.html }),

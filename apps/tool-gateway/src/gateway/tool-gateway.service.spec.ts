@@ -929,6 +929,45 @@ describe("ToolGatewayService", () => {
       expect((emailProvider as MockEmailProvider).sentRaw[0]).toMatchObject({ html: true });
     });
 
+    it("sends to every address in a recipient list", async () => {
+      const emailProvider = mockEmailProvider();
+      const service = buildService({ emailProvider });
+      const to = Array.from({ length: 51 }, (_, index) => `recipient${index}@example.com`);
+
+      const response = await service.invokeTool(emailInvokeRequest({}, { to }));
+
+      expect((emailProvider as MockEmailProvider).sentRaw.map((mail) => mail.to)).toEqual(to);
+      expect(JSON.parse(response.output_json)).toMatchObject({
+        messageId: expect.stringMatching(/^mock-email-/), acceptedCount: 51,
+      });
+    });
+
+    it("tries remaining recipients and reports an unconfirmed send", async () => {
+      const emailProvider = mockEmailProvider();
+      const original = emailProvider.sendEmail.bind(emailProvider);
+      vi.spyOn(emailProvider, "sendEmail").mockImplementation(async (to, subject, body, options) => {
+        if (to === "two@example.com") throw new Error("provider response lost");
+        return original(to, subject, body, options);
+      });
+      const service = buildService({ emailProvider });
+
+      await expect(service.invokeTool(emailInvokeRequest({}, {
+        to: ["one@example.com", "two@example.com", "three@example.com"],
+      }))).rejects.toThrow(/could not confirm 1 recipient.*indices: 1/);
+      expect((emailProvider as MockEmailProvider).sentRaw.map((mail) => mail.to)).toEqual([
+        "one@example.com", "three@example.com",
+      ]);
+    });
+
+    it("rejects an invalid recipient list before sending any email", async () => {
+      const emailProvider = mockEmailProvider();
+      const service = buildService({ emailProvider });
+
+      await expect(service.invokeTool(emailInvokeRequest({}, { to: ["one@example.com", "invalid"] })))
+        .rejects.toThrow(/valid to email address/);
+      expect((emailProvider as MockEmailProvider).sentRaw).toEqual([]);
+    });
+
     it("denies email.send when the tenant grant is absent and audits the denial", async () => {
       const auditClient = createMockAuditEventHandler();
       const service = buildService({
