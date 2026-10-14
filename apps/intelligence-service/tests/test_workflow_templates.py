@@ -1,7 +1,7 @@
 """The D18 starter set as authored: eight Alter-authored templates, each a
 well-formed definition the engine can instantiate (compilation itself is
-proven by the engine's own spec over the same files). templates/v4 is the
-current set; v1 to v3 stay as revisions 0011 to 0013 seeded them."""
+proven by the engine's own spec over the same files). templates/v5 is the
+current set; prior sets remain frozen for their migrations."""
 
 import importlib.util
 import json
@@ -14,7 +14,7 @@ from src.capability_registry.canonical_tools import CANONICAL_TOOL_SIDE_EFFECTS
 from src.capability_registry.templates import TemplateDefinition
 
 TEMPLATES = Path(__file__).parent.parent / "src" / "capability_registry" / "templates"
-TEMPLATE_DIR = TEMPLATES / "v4"
+TEMPLATE_DIR = TEMPLATES / "v5"
 FILES = sorted(TEMPLATE_DIR.glob("*.json"))
 PLACEHOLDER = re.compile(r"\$alter:(credential|connection):([a-z0-9-]+)")
 RUN_SCOPED_CREDENTIALS = {"email-send", "web-search", "knowledge-search", "whatsapp-send"}
@@ -196,6 +196,21 @@ def test_v4_supersedes_only_knowledge_qa() -> None:
     assert [_definition(file).template_id for file in revision.changed_files()] == [
         "knowledge-qa"
     ]
+
+
+def test_v5_supersedes_arithmetic_templates_and_computes_before_summarizing() -> None:
+    revision = _revision("0015_digest_amount_units.py")
+    assert [_definition(file).template_id for file in revision.changed_files()] == [
+        "invoice-email-to-sheet", "weekly-report-digest"
+    ]
+    definition = _definition(TEMPLATE_DIR / "04-weekly-report-digest.json")
+    nodes = {node["key"]: node for node in definition.skeleton["nodes"]}
+    assert nodes["totals"]["config"]["record_aggregation"] == {
+        "records_field": "records", "group_field": "type", "amount_field": "amount"
+    }
+    assert nodes["summarise"]["depends_on"] == ["totals"]
+    assert nodes["digest"]["depends_on"] == ["summarise", "totals"]
+    assert nodes["send_digest"]["config"]["arguments"]["body"]["$from"] == "digest"
 
 
 def test_knowledge_qa_run_criteria_hold_for_either_outcome() -> None:

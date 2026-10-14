@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 import {
   CompilerValidationError,
@@ -6,6 +8,23 @@ import {
   parseTaskSkeleton,
   type TaskSkeleton,
 } from "./dag-builder";
+
+it("compiles the deterministic digest with its aggregation and external-action gates", () => {
+  const definition = JSON.parse(readFileSync(resolve(__dirname,
+    "../../../intelligence-service/src/capability_registry/templates/v5/04-weekly-report-digest.json"), "utf8"));
+  // Template instantiation resolves the catalogue placeholder before compile.
+  definition.skeleton.nodes.find((node: { key: string }) => node.key === "send_digest").config.credential_ref =
+    "/alter/local/tenant/ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab/integration/email/access-token";
+  const dag = compileTaskSkeletonToDag(parseTaskSkeleton(JSON.stringify(definition.skeleton)), "v1");
+  expect(dag.nodes.find(node => node.key === "totals")).toMatchObject({
+    type: "Merge", config: { record_aggregation: { records_field: "records" } },
+  });
+  expect(dag.edges).toContainEqual(expect.objectContaining({ from: "totals", to: "summarise" }));
+  expect(dag.nodes.filter(node => node.config.verification)).toHaveLength(2);
+  expect(dag.nodes.find(node => node.key === "send_digest")?.config.arguments).toMatchObject({
+    body: { $from: "digest", path: "body" },
+  });
+});
 
 function sequentialSkeleton(): TaskSkeleton {
   return {
@@ -617,4 +636,24 @@ describe("compileTaskSkeletonToDag branch into a verified action", () => {
     expect(waveOf("verify_step_0")).toBeGreaterThan(Math.max(waveOf("route"), waveOf("draft")));
     expect(waveOf("send")).toBeGreaterThan(waveOf("verify_step_1"));
   });
+});
+
+it.each([
+  { record_aggregation: { records_field: "tickets", group_field: "queue" } },
+  { record_aggregation: { records_field: "readings", amount_field: "usage", decimal_places: 3 } },
+  { decimal_sum: { fields: ["net", "tax"], output_field: "total" } },
+])("compiles arithmetic for custom workflows: %j", (config) => {
+  const skeleton = parseTaskSkeleton(JSON.stringify({ version: "1", entry_point: "calculate",
+    nodes: [{ key: "calculate", type: "join", config, depends_on: [] }],
+  }));
+  expect(compileTaskSkeletonToDag(skeleton, "v1").nodes[0]?.config).toEqual(config);
+});
+
+it.each([
+  { decimal_sum: { fields: [], output_field: "total" } },
+  { record_aggregation: { records_field: "rows", decimal_places: 16 } },
+])("rejects invalid arithmetic before execution: %j", (config) => {
+  expect(() => compileTaskSkeletonToDag({ version: "1", entry_point: "calculate",
+    nodes: [{ key: "calculate", type: "join", config, depends_on: [] }],
+  }, "v1")).toThrow(CompilerValidationError);
 });

@@ -92,7 +92,28 @@ of the tools listed below -- these are the only tools that exist, and a step nam
 other tool cannot run. "arguments" is an object with that tool's fields, each a literal \
 value or a reference to an earlier step (see "Using another step's output" below). \
 Never put passwords, API keys, tokens or other secrets in arguments.
-- "branch" and "join": config can be an empty object {}.
+- "branch" and ordinary "join": config can be an empty object {}.
+- For exact counts or sums, use a "join" step, never LLM arithmetic. Its upstream \
+outputs are shallow-merged before computation. Choose one of these configs:
+  {"record_aggregation": {"records_field": "<array field>", "group_field": "<optional \
+category field in each record>", "amount_field": "<optional numeric field in each \
+record>", "decimal_places": 2}}. Omit group_field for an ungrouped count/sum; omit \
+amount_field for counts only. Output: {"included": <record count>, "by_type": \
+{"<category>": {"count": <count>, "total": <sum>}}} when grouped; otherwise \
+{"included": <count>, "total": <sum>}. No total is emitted for counts only.
+  {"decimal_sum": {"fields": ["<field.path>", "<field.path>"], "output_field": \
+"<result field>", "decimal_places": 2}} adds numeric fields from the merged input \
+and retains its other fields. An explicitly null term produces a null result, \
+never a partial sum; missing paths or non-numeric values fail validation.
+  decimal_places is an integer 0..15 (default 2); set it to the precision required \
+by the user's units, including 0 for whole quantities. Sums retain input units \
+and round only the final sum, half away from zero; never mix currencies or units. \
+Use separate steps for separate sums. Feed these computed values directly into \
+decision gates and tool arguments. A later LLM may write prose using the computed \
+values but must not recalculate them. Reference the computation step for numeric \
+values, rather than trusting numbers returned by the prose step. Unsupported \
+calculations must not be delegated to an LLM as if exact: obtain a supported \
+deterministic data source or leave the calculation for human completion.
 
 Tools (tool_name: arguments):
 """
@@ -510,6 +531,40 @@ def _manager_worker_plan(answer: object) -> ManagerWorkerPlan:
     return ManagerWorkerPlan(manager_config=manager_config, workers=workers)
 
 
+def _valid_arithmetic_config(config: dict[str, object]) -> bool:
+    """Mirror MergeArithmeticConfigSchema at the untrusted model boundary."""
+    operations = [key for key in ("record_aggregation", "decimal_sum") if key in config]
+    if len(operations) > 1:
+        return False
+    for operation in operations:
+        fields = config[operation]
+        if not isinstance(fields, dict):
+            return False
+        places = fields.get("decimal_places", 2)
+        if type(places) is not int or not 0 <= places <= 15:
+            return False
+        if operation == "record_aggregation":
+            if set(fields) - {"records_field", "group_field", "amount_field", "decimal_places"}:
+                return False
+            for key in ("records_field", "group_field", "amount_field"):
+                if key == "records_field" or key in fields:
+                    value = fields.get(key)
+                    if not isinstance(value, str) or not value:
+                        return False
+        else:
+            if set(fields) - {"fields", "output_field", "decimal_places"}:
+                return False
+            terms = fields.get("fields")
+            output = fields.get("output_field")
+            if not isinstance(output, str) or not output:
+                return False
+            if not isinstance(terms, list) or not terms:
+                return False
+            if any(not isinstance(term, str) or not term for term in terms):
+                return False
+    return True
+
+
 def _executable_problems(skeleton: TaskSkeleton) -> list[str]:
     """What would stop this skeleton compiling or its nodes running.
 
@@ -540,6 +595,8 @@ def _executable_problems(skeleton: TaskSkeleton) -> list[str]:
             prompt = node.config.get("prompt")
             if not isinstance(prompt, str) or not prompt.strip():
                 problems.append(f"llm node {node.key!r} has no prompt")
+        if node.type == "join" and not _valid_arithmetic_config(node.config):
+            problems.append(f"join node {node.key!r} has invalid arithmetic configuration")
         if node.type == "tool":
             tool_name = node.config.get("tool_name")
             if not isinstance(tool_name, str):

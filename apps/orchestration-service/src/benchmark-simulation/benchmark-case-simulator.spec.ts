@@ -252,8 +252,8 @@ describe("BenchmarkCaseSimulator", () => {
     await expect(simulator.simulateCase(caseRequest)).rejects.toBeInstanceOf(BenchmarkWorkflowNotInWorkspaceError);
   });
 
-  it("holds an invoice whose consistency flag contradicts its calculated sum", async () => {
-    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v4/03-invoice-to-sheet.json", "utf8"));
+  it("holds an invoice even when the model invents a matching sum", async () => {
+    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v5/03-invoice-to-sheet.json", "utf8"));
     const bound = bindTemplateSkeleton(template.skeleton, { tenantId, environment: "local" }, [{
       tenant_id: tenantId.slice(4), workspace_id: workspace, connection_id: workspace,
       connector_type: "postgres", status: "connected", secret_ref: `/alter/integrations/${tenantId.slice(4)}/${workspace}/${workspace}`, source_revision: 1,
@@ -262,7 +262,7 @@ describe("BenchmarkCaseSimulator", () => {
     let calls = 0;
     const { simulator } = setup({ dag: compiled, invoke: async () => ({
       output_json: JSON.stringify(calls++ === 0
-        ? { complete: true, consistent: true, net_plus_tax: 545, invoice: { net: 500, tax: 45, total: 600 }, parameters: ["77", "Northwind", null, "USD", 500, 45, 600] }
+        ? { complete: true, consistent: true, net_plus_tax: 600, invoice: { net: 500, tax: 45, total: 600 }, parameters: ["77", "Northwind", null, "USD", 500, 45, 600] }
         : { status: "needs_review", reason: "500 plus 45 is 545, not the stated 600." }),
       usage_json: "{}", estimated_cost_usd: "", resolved_capability: "fast",
     }) });

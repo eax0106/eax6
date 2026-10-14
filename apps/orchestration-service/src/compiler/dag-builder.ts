@@ -13,6 +13,8 @@ import { z } from "zod";
 
 import { CompiledDagSchema, type CompiledDag, type NodeType } from "@alterx/contracts";
 
+import { MergeArithmeticConfigSchema } from "../registry/handlers/record-aggregation";
+
 export class CompilerValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -178,6 +180,9 @@ export function compileTaskSkeletonToDag(
   for (const node of skeleton.nodes) {
     if (nodesByKey.has(node.key)) {
       throw new CompilerValidationError(`Duplicate node key in skeleton: ${node.key}`);
+    }
+    if (node.type === "join" && !MergeArithmeticConfigSchema.safeParse(node.config).success) {
+      throw new CompilerValidationError(`Node "${node.key}": invalid Merge arithmetic configuration`);
     }
     nodesByKey.set(node.key, node);
   }
