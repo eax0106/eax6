@@ -1,10 +1,11 @@
-"""Compute weekly digest totals before model summarization (v5).
+"""Compute template arithmetic outside the model (v5).
 
 Input amounts and totals use the same report units. The old LLM arithmetic
 mis-scaled whole amounts and mis-added decimals. Merge record aggregation now
 computes counts and totals before the model writes prose. The final Merge
 retains those computed values. Frozen v4 definitions stay intact; downgrade
-restores the old digest.
+restores the previous definitions. Invoice addition uses the same exact sum
+implementation before its consistency Gate.
 """
 
 import hashlib

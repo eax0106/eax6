@@ -198,10 +198,10 @@ def test_v4_supersedes_only_knowledge_qa() -> None:
     ]
 
 
-def test_v5_supersedes_only_digest_and_computes_before_summarizing() -> None:
+def test_v5_supersedes_arithmetic_templates_and_computes_before_summarizing() -> None:
     revision = _revision("0015_digest_amount_units.py")
     assert [_definition(file).template_id for file in revision.changed_files()] == [
-        "weekly-report-digest"
+        "invoice-email-to-sheet", "weekly-report-digest"
     ]
     definition = _definition(TEMPLATE_DIR / "04-weekly-report-digest.json")
     nodes = {node["key"]: node for node in definition.skeleton["nodes"]}

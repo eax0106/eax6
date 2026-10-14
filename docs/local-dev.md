@@ -111,13 +111,14 @@ node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=
 node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=you@example.com --apply
 ```
 
-The current digest template computes counts and decimal totals in the Engine
-before the model writes its email body. On every machine, update the
+The current digest and invoice templates compute sums in the Engine; the
+digest also computes counts before the model writes its email body. On every machine, update the
 orchestration-service build and apply Intelligence migrations through `0015`
 before instantiating the new template. The local stack startup builds services
 and applies those migrations. Existing compiled workflows keep their original
 definition; create a new workflow from the catalogue to use the corrected
-digest. The arithmetic uses Node's native BigInt on both Windows/WSL2 and macOS.
+digest and invoice. The arithmetic uses Node's native BigInt on both
+Windows/WSL2 and macOS.
 
 With real email, `--recipient` (a verified SES identity) replaces every
 `email.send` address in the workflow. The two database templates
@@ -855,3 +856,19 @@ but real Presidio requires manually starting those containers.
 most of the platform already running (Temporal, SQS, 10+ downstream services
 respectively) â€” they are documented here for completeness but are not
 independently runnable in isolation.
+
+Workflow arithmetic is available to every template and custom skeleton through
+`join` (`Merge`) nodes. Use `record_aggregation` with `records_field`, optional
+`group_field`, and optional `amount_field` for counts and sums. Without grouping,
+output is `{included, total}`; grouped output is `{included, by_type: {<group>:
+{count, total}}}`. Count-only configs omit `total`. Use `decimal_sum` with
+`fields: ["invoice.net", "invoice.tax"]` and `output_field: "net_plus_tax"` to
+add scalar fields, keeping the other input fields. An explicitly null term makes
+the result null; missing fields and non-numeric amounts fail validation.
+Both operations accept `decimal_places` (integer 0–15, default 2), retain the
+input units, and round the final sum half away from zero. Unsafe JSON numeric
+results are rejected. Keep unlike units/currencies in separate groups. Planner
+and recovery prompts describe these configs; refer to the computation node for
+numeric tool arguments or gates so a later prose model cannot replace them.
+Existing compiled versions keep their graph; instantiate/recompile to adopt a
+new computation step. This supports counts and addition, not arbitrary formulas.

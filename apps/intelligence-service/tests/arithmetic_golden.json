@@ -1,0 +1,10 @@
+[
+  {"name":"support_counts","config":{"record_aggregation":{"records_field":"tickets","group_field":"queue"}},"input":{"tickets":[{"queue":"billing"},{"queue":"technical"},{"queue":"billing"}]},"expected":{"included":3,"by_type":{"billing":{"count":2},"technical":{"count":1}}}},
+  {"name":"inventory_units","config":{"record_aggregation":{"records_field":"items","amount_field":"quantity","decimal_places":0}},"input":{"items":[{"quantity":100},{"quantity":250}]},"expected":{"included":2,"total":350}},
+  {"name":"meter_readings","config":{"record_aggregation":{"records_field":"readings","group_field":"meter","amount_field":"usage","decimal_places":3}},"input":{"readings":[{"meter":"water","usage":1.0005},{"meter":"water","usage":0.0005}]},"expected":{"included":2,"by_type":{"water":{"count":2,"total":1.001}}}},
+  {"name":"empty_count","config":{"record_aggregation":{"records_field":"events"}},"input":{"events":[]},"expected":{"included":0}},
+  {"name":"empty_sum","config":{"record_aggregation":{"records_field":"items","amount_field":"quantity"}},"input":{"items":[]},"expected":{"included":0,"total":0}},
+  {"name":"invoice_addition","config":{"decimal_sum":{"fields":["invoice.net","invoice.tax"],"output_field":"net_plus_tax"}},"input":{"invoice":{"net":0.1,"tax":0.2,"total":0.3},"net_plus_tax":999},"expected":{"invoice":{"net":0.1,"tax":0.2,"total":0.3},"net_plus_tax":0.3}},
+  {"name":"missing_invoice_amount","config":{"decimal_sum":{"fields":["invoice.net","invoice.tax"],"output_field":"net_plus_tax"}},"input":{"invoice":{"net":100,"tax":null}},"expected":{"invoice":{"net":100,"tax":null},"net_plus_tax":null}},
+  {"name":"negative_rounding","config":{"decimal_sum":{"fields":["a","b"],"output_field":"total","decimal_places":3}},"input":{"a":-1,"b":-0.0005},"expected":{"a":-1,"b":-0.0005,"total":-1.001}}
+]

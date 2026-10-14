@@ -33,7 +33,7 @@
         "type": "llm",
         "config": {
           "model_alias": "FAST",
-          "prompt": "Extract the invoice from the upstream email. Personal details may already be privacy placeholders: retain them as obscured values, never reconstruct them. Return {\"complete\": bool, \"net_plus_tax\": number or null, \"invoice\": {\"invoice_number\", \"vendor\", \"invoice_date\", \"currency\", \"net\", \"tax\", \"total\"}, \"parameters\": [invoice_number, vendor, invoice_date, currency, net, tax, total]}. Extract only stated values, with null for missing values. invoice_date is optional, including a redacted date as null. complete is true exactly when invoice_number, vendor, currency, net, tax and total are present. All monetary values and their parameter entries are JSON numbers without currency symbols or thousands separators. Calculate net_plus_tax by adding the extracted net and tax; do not change a stated amount or invent an adjustment. The deterministic downstream Gate compares this sum with the stated total; do not return a consistency decision."
+          "prompt": "Extract the invoice from the upstream email. Personal details may already be privacy placeholders: retain them as obscured values, never reconstruct them. Return {\"complete\": bool, \"invoice\": {\"invoice_number\", \"vendor\", \"invoice_date\", \"currency\", \"net\", \"tax\", \"total\"}, \"parameters\": [invoice_number, vendor, invoice_date, currency, net, tax, total]}. Extract only stated values, with null for missing values. invoice_date is optional, including a redacted date as null. complete is true exactly when invoice_number, vendor, currency, net, tax and total are present. All monetary values and their parameter entries are JSON numbers without currency symbols or thousands separators. Do not calculate totals or return a consistency decision; the downstream deterministic sum and Gate do that."
         },
         "depends_on": [
           "intake"
@@ -41,7 +41,23 @@
         "success_criteria": [
           "Each extracted field and parameter matches the email; missing values are null, never guessed.",
           "complete is correct for the six required fields; the date is optional.",
-          "All monetary values and parameters are JSON numbers without separators, and net_plus_tax equals the extracted net plus tax."
+          "All monetary values and parameters are JSON numbers without separators; missing amounts are null."
+        ]
+      },
+      {
+        "key": "compute",
+        "type": "join",
+        "config": {
+          "decimal_sum": {
+            "fields": [
+              "invoice.net",
+              "invoice.tax"
+            ],
+            "output_field": "net_plus_tax"
+          }
+        },
+        "depends_on": [
+          "extract"
         ]
       },
       {
@@ -49,12 +65,12 @@
         "type": "branch",
         "config": {
           "conditions": {
-            "add_row": "inputs.extract.complete == true && inputs.extract.net_plus_tax == inputs.extract.invoice.total",
-            "hold_for_review": "!(inputs.extract.complete == true && inputs.extract.net_plus_tax == inputs.extract.invoice.total)"
+            "add_row": "inputs.compute.complete == true && inputs.compute.net_plus_tax != null && inputs.compute.invoice.total != null && inputs.compute.net_plus_tax == inputs.compute.invoice.total",
+            "hold_for_review": "!(inputs.compute.complete == true && inputs.compute.net_plus_tax != null && inputs.compute.invoice.total != null && inputs.compute.net_plus_tax == inputs.compute.invoice.total)"
           }
         },
         "depends_on": [
-          "extract"
+          "compute"
         ]
       },
       {
@@ -86,7 +102,7 @@
         },
         "depends_on": [
           "check",
-          "extract"
+          "compute"
         ],
         "success_criteria": [
           "reason names the actual missing field or arithmetic mismatch."

@@ -627,3 +627,24 @@ async def test_manager_worker_plan_rejects_plans_that_cannot_run(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         await _plan(answer)
+
+
+def test_planning_and_replanning_advertise_deterministic_arithmetic() -> None:
+    from src.planner.model_gateway_llm_client import _REPLAN_SYSTEM_PROMPT
+
+    for prompt in (_SKELETON_SYSTEM_PROMPT, _REPLAN_SYSTEM_PROMPT):
+        assert "record_aggregation" in prompt
+        assert "decimal_sum" in prompt
+        assert "decimal_places" in prompt
+
+
+@pytest.mark.parametrize("config", [
+    {"record_aggregation": {"records_field": "items", "decimal_places": -1}},
+    {"record_aggregation": {"records_field": "items", "group_field": None}},
+    {"decimal_sum": {"fields": [], "output_field": "total"}},
+    {"decimal_sum": {"fields": ["a"], "output_field": "total", "decimal_places": True}},
+])
+def test_planner_rejects_invalid_arithmetic(config: dict[str, object]) -> None:
+    skeleton = TaskSkeleton(nodes=[TaskNode(key="compute", type="join", config=config)],
+                            entry_point="compute")
+    assert any("arithmetic" in problem for problem in _executable_problems(skeleton))

@@ -94,11 +94,12 @@ def test_seeded_rows_are_exactly_the_reviewed_files(database: tuple[str, str]) -
     assert len(active) == 8
     assert {row[4] for row in active} == hashes(TEMPLATE_DIR)
     # 0012 superseded three v1 rows; 0013/0014 updated knowledge-qa;
-    # 0015 updates only the digest's first version.
+    # 0015 updates the digest and invoice arithmetic.
     assert {(row[0], row[1]) for row in superseded} == {(t, 1) for t in SUPERSEDED} | {
         ("knowledge-qa", 2),
         ("knowledge-qa", 3),
         ("weekly-report-digest", 1),
+        ("invoice-email-to-sheet", 1),
     }
     assert {(row[0], row[1]) for row in active if row[0] in SUPERSEDED} == {
         ("brand-mention-alert", 2),
@@ -205,7 +206,7 @@ def test_downgrade_removes_the_table_and_upgrade_restores_the_set(
             connection.execute(
                 sa.text("SELECT count(*) FROM capability_registry_templates")
             ).scalar_one()
-            == 14
+            == 15
         )
     engine.dispose()
 

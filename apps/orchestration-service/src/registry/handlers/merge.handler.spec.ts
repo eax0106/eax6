@@ -110,3 +110,34 @@ describe("MergeHandler", () => {
     },
   );
 });
+
+const arithmeticCases = JSON.parse(readFileSync(resolve(__dirname,
+  "../../../../intelligence-service/tests/arithmetic_golden.json"), "utf8")) as {
+  name: string; config: Record<string, unknown>; input: Record<string, unknown>; expected: Record<string, unknown>;
+}[];
+
+it.each(arithmeticCases)("shared arithmetic: $name", async ({ config, input, expected }) => {
+  expect((await new MergeHandler().execute({ config, inputs: { source: input } })).output).toEqual(expected);
+});
+
+it.each([
+  { decimal_sum: { fields: [], output_field: "total" } },
+  { decimal_sum: { fields: ["a"], output_field: "total", decimal_places: -1 } },
+  { record_aggregation: { records_field: "items", decimal_places: 16 } },
+])("rejects invalid arithmetic config: %j", async (config) => {
+  await expect(new MergeHandler().execute({ config, inputs: {} })).rejects.toBeInstanceOf(NodeHandlerValidationError);
+});
+
+it.each(["0.1", NaN, Infinity, undefined])("rejects non-numeric scalar terms: %s", async (value) => {
+  await expect(new MergeHandler().execute({
+    config: { decimal_sum: { fields: ["a", "b"], output_field: "total" } },
+    inputs: { source: { a: null, b: value } },
+  })).rejects.toBeInstanceOf(NodeHandlerValidationError);
+});
+
+it("rejects simultaneous arithmetic operations", async () => {
+  await expect(new MergeHandler().execute({ config: {
+    record_aggregation: { records_field: "rows" },
+    decimal_sum: { fields: ["x"], output_field: "total" },
+  }, inputs: {} })).rejects.toBeInstanceOf(NodeHandlerValidationError);
+});

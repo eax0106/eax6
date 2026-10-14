@@ -637,3 +637,23 @@ describe("compileTaskSkeletonToDag branch into a verified action", () => {
     expect(waveOf("send")).toBeGreaterThan(waveOf("verify_step_1"));
   });
 });
+
+it.each([
+  { record_aggregation: { records_field: "tickets", group_field: "queue" } },
+  { record_aggregation: { records_field: "readings", amount_field: "usage", decimal_places: 3 } },
+  { decimal_sum: { fields: ["net", "tax"], output_field: "total" } },
+])("compiles arithmetic for custom workflows: %j", (config) => {
+  const skeleton = parseTaskSkeleton(JSON.stringify({ version: "1", entry_point: "calculate",
+    nodes: [{ key: "calculate", type: "join", config, depends_on: [] }],
+  }));
+  expect(compileTaskSkeletonToDag(skeleton, "v1").nodes[0]?.config).toEqual(config);
+});
+
+it.each([
+  { decimal_sum: { fields: [], output_field: "total" } },
+  { record_aggregation: { records_field: "rows", decimal_places: 16 } },
+])("rejects invalid arithmetic before execution: %j", (config) => {
+  expect(() => compileTaskSkeletonToDag({ version: "1", entry_point: "calculate",
+    nodes: [{ key: "calculate", type: "join", config, depends_on: [] }],
+  }, "v1")).toThrow(CompilerValidationError);
+});
