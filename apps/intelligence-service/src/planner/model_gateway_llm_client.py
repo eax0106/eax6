@@ -451,11 +451,23 @@ def _parsed_skeleton(content: str) -> tuple[TaskSkeleton | None, list[str]]:
     """The model's skeleton and what stops it running; a skeleton that does not
     parse is one more problem for the repair turn rather than an exception."""
     try:
-        skeleton = TaskSkeleton.model_validate(json.loads(content, strict=False))
+        skeleton = TaskSkeleton.model_validate(_skeleton_json_with_literal_backslashes(content))
     except ValueError as error:
         return None, [f"the answer is not a valid skeleton ({error})"]
     skeleton = _entry_point_fixed(_linked_to_referenced_nodes(skeleton))
     return skeleton, _executable_problems(skeleton)
+
+
+def _skeleton_json_with_literal_backslashes(content: str) -> object:
+    """Keep a model's unescaped backslash as text, then validate the full plan."""
+    for _ in range(content.count("\\") + 1):
+        try:
+            return json.loads(content, strict=False)
+        except json.JSONDecodeError as error:
+            if error.msg != "Invalid \\escape" or content[error.pos] != "\\":
+                raise
+            content = content[: error.pos] + "\\" + content[error.pos :]
+    return json.loads(content, strict=False)
 
 
 def _repair_payload(problem_spec_json: str, plan: str, problems: list[str]) -> str:
