@@ -527,6 +527,18 @@ async def test_generate_skeleton_repairs_an_answer_that_is_not_json() -> None:
     )
 
 
+async def test_generate_skeleton_preserves_literal_backslash_from_model_json() -> None:
+    plan = _skeleton_json([_llm("a", [], r"Find \LEGO updates")])
+    # A model can emit the intended backslash without JSON-escaping it.
+    malformed = plan.replace(r"\\LEGO updates", r"\LEGO updates")
+    stub = _SequenceStub(malformed)
+
+    skeleton = await _generate(stub)
+
+    assert skeleton.nodes[0].config["prompt"] == r"Find \LEGO updates"
+    assert len(stub.requests) == 1
+
+
 async def test_generate_skeleton_fails_rather_than_return_a_plan_that_cannot_run() -> None:
     invented = _skeleton_json([_llm("a", []), _tool("b", ["a"], "slack_post")])
     stub = _SequenceStub(invented, invented)
