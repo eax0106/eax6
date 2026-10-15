@@ -20,9 +20,11 @@ export function localSmokePermitted(file: string, tenantId?: string, runId?: str
 }
 
 // The one place the local spend cap lives: mvp-stack, mvp-smoke and mvp-load
-// read it from the built gateway. USD 1.00 covers the Phase 2 template runs.
+// read it from the built gateway. USD 1.00 covers the local MVP run.
 export const LOCAL_SMOKE_CEILING_USD = 1;
-export const LOCAL_SMOKE_MAX_OUTPUT_TOKENS = 1024;
+// Planner skeletons for multi-step workflows can exceed 1024 tokens. The
+// lifetime USD cap still reserves the full per-call upper bound before dispatch.
+export const LOCAL_SMOKE_MAX_OUTPUT_TOKENS = 4096;
 // Published Mumbai on-demand USD/token, checked 2026-10-06. The 1.5x
 // margin also covers the priced cross-region inference profiles below.
 // https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonBedrock/current/ap-south-1/index.json
