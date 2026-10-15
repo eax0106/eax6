@@ -1,0 +1,224 @@
+{
+  "variants": [
+    {
+      "name": "v5 criteria",
+      "template_file": "apps/intelligence-service/src/capability_registry/templates/v5/06-meeting-notes-summary.json"
+    },
+    {
+      "name": "v6 criteria",
+      "template_file": "apps/intelligence-service/src/capability_registry/templates/v6/06-meeting-notes-summary.json"
+    }
+  ],
+  "cases": [
+    {
+      "name": "one recipient, summary sent to it",
+      "expected": "pass",
+      "outputs": {
+        "final_outputs": {
+          "send_summary": {
+            "messageId": "msg-1",
+            "acceptedAt": "2026-10-15T05:00:00.000Z"
+          }
+        },
+        "actions_taken": {
+          "send_summary": {
+            "tool_name": "email.send",
+            "arguments": {
+              "to": "lead@example.com",
+              "subject": "Meeting summary",
+              "body": "Decisions\n- Open the backend role this month.\n\nAction items\n- Post the backend role listing (owner: Recruiter, due: Friday)\n\nOpen questions\n- Whether to offer a referral bonus."
+            }
+          }
+        },
+        "upstream_outputs": {
+          "intake": {
+            "title": "Hiring sync",
+            "notes": "Agreed: we open the backend role this month. Recruiter to post the listing by Friday. Discussed a referral bonus, no conclusion.",
+            "recipient": "lead@example.com"
+          },
+          "summarise": {
+            "decisions": [
+              "Open the backend role this month."
+            ],
+            "action_items": [
+              {
+                "task": "Post the backend role listing",
+                "owner": "Recruiter",
+                "due": "Friday"
+              }
+            ],
+            "open_questions": [
+              "Whether to offer a referral bonus."
+            ],
+            "subject": "Meeting summary",
+            "body": "Decisions\n- Open the backend role this month.\n\nAction items\n- Post the backend role listing (owner: Recruiter, due: Friday)\n\nOpen questions\n- Whether to offer a referral bonus."
+          }
+        }
+      }
+    },
+    {
+      "name": "five listed recipients, summary sent to all five (run_addffb10)",
+      "expected": "pass",
+      "outputs": {
+        "final_outputs": {
+          "send_summary": {
+            "messageId": "msg-1",
+            "acceptedAt": "2026-10-15T05:00:00.000Z",
+            "acceptedCount": 5
+          }
+        },
+        "actions_taken": {
+          "send_summary": {
+            "tool_name": "email.send",
+            "arguments": {
+              "to": [
+                "a@example.com",
+                "b@example.com",
+                "c@example.com",
+                "d@example.com",
+                "e@example.com"
+              ],
+              "subject": "Meeting summary",
+              "body": "Decisions\n- Open the backend role this month.\n\nAction items\n- Post the backend role listing (owner: Recruiter, due: Friday)\n\nOpen questions\n- Whether to offer a referral bonus."
+            }
+          }
+        },
+        "upstream_outputs": {
+          "intake": {
+            "title": "Hiring sync",
+            "notes": "Agreed: we open the backend role this month. Recruiter to post the listing by Friday. Discussed a referral bonus, no conclusion.",
+            "recipient": [
+              "a@example.com",
+              "b@example.com",
+              "c@example.com",
+              "d@example.com",
+              "e@example.com"
+            ]
+          },
+          "summarise": {
+            "decisions": [
+              "Open the backend role this month."
+            ],
+            "action_items": [
+              {
+                "task": "Post the backend role listing",
+                "owner": "Recruiter",
+                "due": "Friday"
+              }
+            ],
+            "open_questions": [
+              "Whether to offer a referral bonus."
+            ],
+            "subject": "Meeting summary",
+            "body": "Decisions\n- Open the backend role this month.\n\nAction items\n- Post the backend role listing (owner: Recruiter, due: Friday)\n\nOpen questions\n- Whether to offer a referral bonus."
+          }
+        }
+      }
+    },
+    {
+      "name": "three listed recipients, summary sent only to the first",
+      "expected": "fail",
+      "outputs": {
+        "final_outputs": {
+          "send_summary": {
+            "messageId": "msg-1",
+            "acceptedAt": "2026-10-15T05:00:00.000Z"
+          }
+        },
+        "actions_taken": {
+          "send_summary": {
+            "tool_name": "email.send",
+            "arguments": {
+              "to": "a@example.com",
+              "subject": "Meeting summary",
+              "body": "Decisions\n- Open the backend role this month.\n\nAction items\n- Post the backend role listing (owner: Recruiter, due: Friday)\n\nOpen questions\n- Whether to offer a referral bonus."
+            }
+          }
+        },
+        "upstream_outputs": {
+          "intake": {
+            "title": "Hiring sync",
+            "notes": "Agreed: we open the backend role this month. Recruiter to post the listing by Friday. Discussed a referral bonus, no conclusion.",
+            "recipient": [
+              "a@example.com",
+              "b@example.com",
+              "c@example.com"
+            ]
+          },
+          "summarise": {
+            "decisions": [
+              "Open the backend role this month."
+            ],
+            "action_items": [
+              {
+                "task": "Post the backend role listing",
+                "owner": "Recruiter",
+                "due": "Friday"
+              }
+            ],
+            "open_questions": [
+              "Whether to offer a referral bonus."
+            ],
+            "subject": "Meeting summary",
+            "body": "Decisions\n- Open the backend role this month.\n\nAction items\n- Post the backend role listing (owner: Recruiter, due: Friday)\n\nOpen questions\n- Whether to offer a referral bonus."
+          }
+        }
+      }
+    },
+    {
+      "name": "three listed recipients, email leaves out the action item",
+      "expected": "fail",
+      "outputs": {
+        "final_outputs": {
+          "send_summary": {
+            "messageId": "msg-1",
+            "acceptedAt": "2026-10-15T05:00:00.000Z",
+            "acceptedCount": 3
+          }
+        },
+        "actions_taken": {
+          "send_summary": {
+            "tool_name": "email.send",
+            "arguments": {
+              "to": [
+                "a@example.com",
+                "b@example.com",
+                "c@example.com"
+              ],
+              "subject": "Meeting summary",
+              "body": "Decisions\n- Open the backend role this month.\n\nAction items\nNone recorded\n\nOpen questions\n- Whether to offer a referral bonus."
+            }
+          }
+        },
+        "upstream_outputs": {
+          "intake": {
+            "title": "Hiring sync",
+            "notes": "Agreed: we open the backend role this month. Recruiter to post the listing by Friday. Discussed a referral bonus, no conclusion.",
+            "recipient": [
+              "a@example.com",
+              "b@example.com",
+              "c@example.com"
+            ]
+          },
+          "summarise": {
+            "decisions": [
+              "Open the backend role this month."
+            ],
+            "action_items": [
+              {
+                "task": "Post the backend role listing",
+                "owner": "Recruiter",
+                "due": "Friday"
+              }
+            ],
+            "open_questions": [
+              "Whether to offer a referral bonus."
+            ],
+            "subject": "Meeting summary",
+            "body": "Decisions\n- Open the backend role this month.\n\nAction items\nNone recorded\n\nOpen questions\n- Whether to offer a referral bonus."
+          }
+        }
+      }
+    }
+  ]
+}

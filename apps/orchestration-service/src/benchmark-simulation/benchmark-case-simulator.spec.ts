@@ -253,7 +253,7 @@ describe("BenchmarkCaseSimulator", () => {
   });
 
   it("holds an invoice even when the model invents a matching sum", async () => {
-    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v5/03-invoice-to-sheet.json", "utf8"));
+    const template = JSON.parse(readFileSync("apps/intelligence-service/src/capability_registry/templates/v6/03-invoice-to-sheet.json", "utf8"));
     const bound = bindTemplateSkeleton(template.skeleton, { tenantId, environment: "local" }, [{
       tenant_id: tenantId.slice(4), workspace_id: workspace, connection_id: workspace,
       connector_type: "postgres", status: "connected", secret_ref: `/alter/integrations/${tenantId.slice(4)}/${workspace}/${workspace}`, source_revision: 1,

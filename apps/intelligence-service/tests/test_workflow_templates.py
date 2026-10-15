@@ -1,6 +1,6 @@
 """The D18 starter set as authored: eight Alter-authored templates, each a
 well-formed definition the engine can instantiate (compilation itself is
-proven by the engine's own spec over the same files). templates/v5 is the
+proven by the engine's own spec over the same files). templates/v6 is the
 current set; prior sets remain frozen for their migrations."""
 
 import importlib.util
@@ -14,7 +14,7 @@ from src.capability_registry.canonical_tools import CANONICAL_TOOL_SIDE_EFFECTS
 from src.capability_registry.templates import TemplateDefinition
 
 TEMPLATES = Path(__file__).parent.parent / "src" / "capability_registry" / "templates"
-TEMPLATE_DIR = TEMPLATES / "v5"
+TEMPLATE_DIR = TEMPLATES / "v6"
 FILES = sorted(TEMPLATE_DIR.glob("*.json"))
 PLACEHOLDER = re.compile(r"\$alter:(credential|connection):([a-z0-9-]+)")
 RUN_SCOPED_CREDENTIALS = {"email-send", "web-search", "knowledge-search", "whatsapp-send"}
@@ -227,3 +227,35 @@ def test_knowledge_qa_run_criteria_hold_for_either_outcome() -> None:
     text = criteria[0].lower()
     assert text.startswith("either") and "supported true" in text and "supported false" in text
     assert "either outcome meets this criterion" in text
+
+
+def test_v6_supersedes_only_meeting_notes() -> None:
+    """Revision 0016 inserts a new version only for a v6 file that differs
+    from v5; every v6 file has its v5 counterpart."""
+    revision = _revision("0016_meeting_notes_recipients.py")
+    assert [file.name for file in FILES] == sorted(
+        file.name for file in (TEMPLATES / "v5").glob("*.json")
+    )
+    assert [_definition(file).template_id for file in revision.changed_files()] == [
+        "meeting-notes-summary"
+    ]
+
+
+def test_meeting_notes_send_reaches_one_address_or_every_listed_address() -> None:
+    """email.send takes one address or a list (#201) and the send step passes
+    the intake's recipient through unchanged. The run criterion asked for "one
+    summary email" to "the stated recipient", so the end-of-run review failed a
+    run that had sent to five listed addresses (run_addffb10). It now asks for
+    every address, one or many, and the test cases cover both forms."""
+    definition = _definition(TEMPLATE_DIR / "06-meeting-notes-summary.json")
+    send = next(node for node in definition.skeleton["nodes"] if node["key"] == "send_summary")
+    config = send["config"]
+    assert isinstance(config, dict)
+    assert config["tool_name"] == "email.send"
+    assert config["arguments"]["to"] == {"$from": "intake", "path": "recipient"}
+    criteria = " ".join(definition.skeleton["success_criteria"]).lower()
+    assert "one summary email" not in criteria
+    assert "every address" in criteria and "one address or a list" in criteria
+    recipients = [case.input["recipient"] for case in definition.test_cases]
+    assert any(isinstance(value, str) for value in recipients)
+    assert any(isinstance(value, list) and len(value) > 1 for value in recipients)
