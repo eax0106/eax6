@@ -21,7 +21,7 @@ import { WorkflowTemplatesService } from "./workflow-templates.service";
  * applies), with the eight reviewed template files served over HTTP in the
  * shape the Capability Registry returns them.
  */
-const TEMPLATE_DIR = resolve("apps/intelligence-service/src/capability_registry/templates/v5");
+const TEMPLATE_DIR = resolve("apps/intelligence-service/src/capability_registry/templates/v6");
 const templates: WorkflowTemplate[] = readdirSync(TEMPLATE_DIR).filter((file) => file.endsWith(".json")).sort().map((file) => {
   const definition = JSON.parse(readFileSync(resolve(TEMPLATE_DIR, file), "utf8")) as Record<string, unknown>;
   return { ...definition, version: 1, content_sha256: "a".repeat(64) } as unknown as WorkflowTemplate;

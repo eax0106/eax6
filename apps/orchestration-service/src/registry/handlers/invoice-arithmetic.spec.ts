@@ -6,7 +6,7 @@ import { GateHandler } from "./gate.handler";
 import { MergeHandler } from "./merge.handler";
 
 const definition = JSON.parse(readFileSync(resolve(__dirname,
-  "../../../../intelligence-service/src/capability_registry/templates/v5/03-invoice-to-sheet.json"), "utf8"));
+  "../../../../intelligence-service/src/capability_registry/templates/v6/03-invoice-to-sheet.json"), "utf8"));
 const skeleton = parseTaskSkeleton(JSON.stringify(definition.skeleton));
 const compute = skeleton.nodes.find(node => node.key === "compute")!;
 const check = skeleton.nodes.find(node => node.key === "check")!;

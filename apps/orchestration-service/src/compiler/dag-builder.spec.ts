@@ -11,7 +11,7 @@ import {
 
 it("compiles the deterministic digest with its aggregation and external-action gates", () => {
   const definition = JSON.parse(readFileSync(resolve(__dirname,
-    "../../../intelligence-service/src/capability_registry/templates/v5/04-weekly-report-digest.json"), "utf8"));
+    "../../../intelligence-service/src/capability_registry/templates/v6/04-weekly-report-digest.json"), "utf8"));
   // Template instantiation resolves the catalogue placeholder before compile.
   definition.skeleton.nodes.find((node: { key: string }) => node.key === "send_digest").config.credential_ref =
     "/alter/local/tenant/ten_018f4d6e-2b4a-7a3e-8c1a-1234567890ab/integration/email/access-token";

@@ -20,7 +20,7 @@ from src.db.session import get_db_session
 
 SERVICE_ROOT = Path(__file__).parent.parent
 TEMPLATES = SERVICE_ROOT / "src" / "capability_registry" / "templates"
-TEMPLATE_DIR = TEMPLATES / "v5"
+TEMPLATE_DIR = TEMPLATES / "v6"
 SUPERSEDED = {"knowledge-qa", "brand-mention-alert", "whatsapp-faq-responder"}
 PGVECTOR_IMAGE = "pgvector/pgvector:pg16"
 PLATFORM = "00000000-0000-7000-8000-000000000001"
@@ -94,12 +94,13 @@ def test_seeded_rows_are_exactly_the_reviewed_files(database: tuple[str, str]) -
     assert len(active) == 8
     assert {row[4] for row in active} == hashes(TEMPLATE_DIR)
     # 0012 superseded three v1 rows; 0013/0014 updated knowledge-qa;
-    # 0015 updates the digest and invoice arithmetic.
+    # 0015 updates the digest and invoice arithmetic; 0016 meeting-notes recipients.
     assert {(row[0], row[1]) for row in superseded} == {(t, 1) for t in SUPERSEDED} | {
         ("knowledge-qa", 2),
         ("knowledge-qa", 3),
         ("weekly-report-digest", 1),
         ("invoice-email-to-sheet", 1),
+        ("meeting-notes-summary", 1),
     }
     assert {(row[0], row[1]) for row in active if row[0] in SUPERSEDED} == {
         ("brand-mention-alert", 2),
@@ -111,10 +112,14 @@ def test_seeded_rows_are_exactly_the_reviewed_files(database: tuple[str, str]) -
         | hashes(TEMPLATES / "v2")
         | hashes(TEMPLATES / "v3")
         | hashes(TEMPLATES / "v4")
+        | hashes(TEMPLATES / "v5")
     )
     assert all(row[3] == PLATFORM and row[5] == "alter-authored" for row in rows)
     assert [(row[0], row[1]) for row in active if row[0] == "weekly-report-digest"] == [
         ("weekly-report-digest", 2)
+    ]
+    assert [(row[0], row[1]) for row in active if row[0] == "meeting-notes-summary"] == [
+        ("meeting-notes-summary", 2)
     ]
 
 
@@ -206,7 +211,7 @@ def test_downgrade_removes_the_table_and_upgrade_restores_the_set(
             connection.execute(
                 sa.text("SELECT count(*) FROM capability_registry_templates")
             ).scalar_one()
-            == 15
+            == 16
         )
     engine.dispose()
 
@@ -232,6 +237,8 @@ def test_downgrades_restore_each_previous_template_set(database: tuple[str, str]
             for path in (TEMPLATES / version).glob("*.json")
         }
 
+    command.downgrade(config, "0015")
+    assert {sha for _, sha in active().values()} == digests("v5")
     command.downgrade(config, "0014")
     assert {sha for _, sha in active().values()} == digests("v4")
     command.downgrade(config, "0013")

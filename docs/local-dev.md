@@ -111,9 +111,14 @@ node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=
 node scripts/local/mvp-template.mjs --template=weekly-report-digest --recipient=you@example.com --apply
 ```
 
+The meeting-notes template (v6, migration `0016`) takes `recipient` as one
+address or a list, for example `"recipient": ["a@example.com", "b@example.com"]`
+in "Run with input"; its run review passes when the summary reached every
+listed address. In the SES sandbox each address must be a verified identity.
+
 The current digest and invoice templates compute sums in the Engine; the
 digest also computes counts before the model writes its email body. On every machine, update the
-orchestration-service build and apply Intelligence migrations through `0015`
+orchestration-service build and apply Intelligence migrations through `0016`
 before instantiating the new template. The local stack startup builds services
 and applies those migrations. Existing compiled workflows keep their original
 definition; create a new workflow from the catalogue to use the corrected

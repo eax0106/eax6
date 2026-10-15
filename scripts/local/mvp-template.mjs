@@ -10,7 +10,7 @@ import { runTemplate } from './mvp-smoke.mjs';
 // the smoke). Usage and prerequisites: docs/local-dev.md.
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-const templateDir = resolve(root, 'apps/intelligence-service/src/capability_registry/templates/v5');
+const templateDir = resolve(root, 'apps/intelligence-service/src/capability_registry/templates/v6');
 
 export const UNSUPPORTED_TEMPLATES = {
   'whatsapp-faq-responder': 'it needs an approved WhatsApp Business account',

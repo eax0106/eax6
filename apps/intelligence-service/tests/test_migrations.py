@@ -50,6 +50,7 @@ class TestMigrationFileStructure:
             "0013_knowledge_qa_answer_prompt.py",
             "0014_knowledge_qa_run_criteria.py",
             "0015_digest_amount_units.py",
+            "0016_meeting_notes_recipients.py",
         ]
 
     def test_all_tables_defined(self) -> None:
