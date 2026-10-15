@@ -52,15 +52,15 @@ describe("local smoke pre-call guard", () => {
     const budget = new LocalSmokeBudget(() => true, 0.25);
     const json = JSON.stringify({ messages: [{ role: "user", content: "hello" }], max_tokens: 5000 });
     const capped = budget.prepareInput(json);
-    expect(JSON.parse(capped).max_tokens).toBe(1024);
+    expect(JSON.parse(capped).max_tokens).toBe(4096);
     expect(JSON.parse(budget.prepareInput(json.replace("5000", "100"))).max_tokens).toBe(100);
     expect(() => budget.prepareInput("{}" )).toThrow();
     expect(() => budget.reserveModel("unpriced", capped)).toThrow("unpriced");
     expect(() => budget.reserveModel("apac.amazon.nova-pro-v1:0", capped, [{}])).toThrow("fallback");
     expect(() => budget.reserveModel("apac.amazon.nova-pro-v1:0", json)).toThrow("cap missing");
-    // One embedding can reserve ~$0.225. Three short Pro calls fit; a fourth
+    // One embedding can reserve ~$0.173. Three short Pro calls fit; a fourth
     // exceeds $0.25. Both types debit the same allowance before dispatch.
-    budget.reserveEmbedding("x".repeat(1_500_000));
+    budget.reserveEmbedding("x".repeat(1_150_000));
     for (let i = 0; i < 3; i++) budget.reserveModel("apac.amazon.nova-pro-v1:0", capped);
     expect(() => budget.reserveModel("apac.amazon.nova-pro-v1:0", capped)).toThrow("exhausted");
     expect(() => budget.reserveEmbedding("x".repeat(100_000))).toThrow("exhausted");

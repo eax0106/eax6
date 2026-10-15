@@ -103,8 +103,9 @@ export async function runTemplate({ templateId, input, apply = false, healthOnly
   const gatewayLog = readFileSync(resolve(root, 'tmp/local-mvp/model-gateway.log'), 'utf8');
   if (!gatewayLog.includes(`Local smoke lifetime ceiling: USD ${ceilingUsd}`)) throw new Error('Model pre-call budget missing; refusing smoke');
   const boundUsd = ceilingUsd;
+  const { LOCAL_SMOKE_MAX_OUTPUT_TOKENS } = await import('../../dist/apps/model-gateway/gateway/local-smoke-budget.js');
   console.log(JSON.stringify({ upperBoundUsd: boundUsd, scope: 'whole model-gateway process lifetime',
-    maxOutputTokens: 1024, awsMaxAttempts: 1, fallbackProviders: 0, apply, email }));
+    maxOutputTokens: LOCAL_SMOKE_MAX_OUTPUT_TOKENS, awsMaxAttempts: 1, fallbackProviders: 0, apply, email }));
   assertSmokeCeiling(boundUsd, ceilingUsd);
   const base = `http://127.0.0.1:${env.PLATFORM_API_PORT}`;
   const cookies = new Map();
